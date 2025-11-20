@@ -1,0 +1,139 @@
+.equipment-plate {
+  background: white;
+  border: 2px solid #333;
+  border-radius: 8px;
+  padding: 30px;
+  max-width: 800px;
+  margin: 20px auto;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  page-break-inside: avoid;
+}
+
+.plate-header {
+  text-align: center;
+  margin-bottom: 30px;
+  border-bottom: 2px solid #333;
+  padding: 20px 15px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 6px;
+  margin-left: -30px;
+  margin-right: -30px;
+  margin-top: -30px;
+  margin-bottom: 30px;
+  padding-top: 30px;
+  padding-bottom: 20px;
+}
+
+.equipment-name {
+  font-size: 24px;
+  font-weight: bold;
+  color: white;
+  margin-bottom: 10px;
+}
+
+.filter-number {
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 600;
+}
+
+.plate-content {
+  display: flex;
+  gap: 40px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.specs-table {
+  flex: 1;
+}
+
+.specs-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.specs-table tr {
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.specs-table tr:last-child {
+  border-bottom: none;
+}
+
+.spec-label {
+  padding: 12px 15px;
+  font-weight: 600;
+  color: #333;
+  width: 50%;
+  vertical-align: top;
+}
+
+.spec-value {
+  padding: 12px 15px;
+  color: #555;
+  width: 50%;
+}
+
+.date-row {
+  background-color: #f9f9f9;
+}
+
+.date-row .spec-label {
+  font-weight: 700;
+  color: #333;
+}
+
+.date-row .spec-value {
+  font-weight: 600;
+  color: #444;
+}
+
+.qr-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+  padding: 20px;
+  background: #f9f9f9;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+}
+
+.qr-label {
+  font-size: 12px;
+  color: #666;
+  text-align: center;
+  max-width: 200px;
+  margin: 0;
+}
+
+@media print {
+  .equipment-plate {
+    box-shadow: none;
+    border: 2px solid #000;
+    page-break-after: always;
+  }
+  
+  .plate-content {
+    gap: 30px;
+  }
+  
+  .plate-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+@media (max-width: 768px) {
+  .plate-content {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .specs-table {
+    width: 100%;
+  }
+}
+
