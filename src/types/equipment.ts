@@ -38,6 +38,46 @@ export interface FilterSpecs extends EquipmentSpecs {
   fillingVolume?: string;
 }
 
+/**
+ * Основной интерфейс оборудования
+ * Представляет полную информацию об единице оборудования в базе данных
+ * Соответствует структуре данных в Google Sheets таблице
+ */
+export interface Equipment {
+  /** Уникальный идентификатор оборудования (UUID) */
+  id: string;
+  
+  /** Название оборудования */
+  name: string;
+  
+  /** Тип оборудования (filter, pump, tank, valve, other) */
+  type: EquipmentType;
+  
+  /** Характеристики оборудования (JSON объект, структура зависит от типа) */
+  specs: EquipmentSpecs;
+  
+  /** URL папки в Google Drive с документацией */
+  googleDriveUrl: string;
+  
+  /** URL для QR-кода (обычно совпадает с googleDriveUrl или ссылка на страницу оборудования) */
+  qrCodeUrl: string;
+  
+  /** Дата ввода в эксплуатацию (формат: YYYY-MM-DD) */
+  commissioningDate?: string;
+  
+  /** Дата последнего обслуживания (формат: YYYY-MM-DD) */
+  lastMaintenanceDate?: string;
+  
+  /** Статус оборудования (active, inactive, archived) */
+  status: EquipmentStatus;
+  
+  /** Дата и время создания записи (ISO 8601) */
+  createdAt: string;
+  
+  /** Дата и время последнего обновления (ISO 8601) */
+  updatedAt: string;
+}
+
 export const filterSpecs: FilterSpecs = {
   name: 'Фильтр обезжелезивания ФО-0,8-1,5',
   height: '1,5 м',
