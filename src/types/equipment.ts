@@ -28,7 +28,8 @@ export interface EquipmentSpecs {
  * Расширяет базовый EquipmentSpecs
  */
 export interface FilterSpecs extends EquipmentSpecs {
-  name?: string;
+  /** Название фильтра (используется в EquipmentPlate) */
+  name: string;
   height?: string;
   diameter?: string;
   capacity?: string;
