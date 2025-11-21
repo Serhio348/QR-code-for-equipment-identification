@@ -29,6 +29,27 @@
 // ============================================================================
 
 /**
+ * Обработка OPTIONS запросов (CORS preflight)
+ * 
+ * Браузер отправляет OPTIONS запрос перед POST запросами для проверки CORS
+ * Эта функция обрабатывает preflight запросы и возвращает необходимые заголовки
+ * 
+ * @param {Object} e - объект события
+ * @returns {TextOutput} Ответ с CORS заголовками
+ */
+function doOptions(e) {
+  return ContentService
+    .createTextOutput('')
+    .setMimeType(ContentService.MimeType.JSON)
+    .setHeaders({
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Max-Age': '3600'
+    });
+}
+
+/**
  * Обработка GET запросов
  * 
  * GET запросы используются для чтения данных из таблицы
@@ -734,5 +755,10 @@ function createErrorResponse(message) {
       success: false,
       error: message
     }))
-    .setMimeType(ContentService.MimeType.JSON);
+    .setMimeType(ContentService.MimeType.JSON)
+    .setHeaders({
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type'
+    });
 }
