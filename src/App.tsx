@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import EquipmentPlate from './components/EquipmentPlate';
-import ApiTest from './components/ApiTest';
 import { filterSpecs, Equipment, FilterSpecs } from './types/equipment';
 import { getEquipmentByType, updateEquipment, addEquipment } from './services/equipmentApi';
 import { exportToPDF } from './utils/pdfExport';
@@ -207,10 +206,6 @@ const App: React.FC = () => {
         <p>Фильтры обезжелезивания</p>
       </header>
 
-      <div className="plate-container">
-        <ApiTest />
-      </div>
-      
       <div className="plate-container">
         {/* Индикаторы состояния сохранения */}
         {saving && (
