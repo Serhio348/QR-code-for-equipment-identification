@@ -17,14 +17,14 @@ export const API_CONFIG = {
    * 
    * Пример: 'https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec'
    */
-  EQUIPMENT_API_URL: '',
+  EQUIPMENT_API_URL: 'https://script.google.com/macros/s/AKfycby5T0QWXdbDr8sevMpeLzrNeRURzad3TdNb7BMfRavbn_Wn_OteTUi1YfKY9B73rEiIwg/exec',
 
   /**
    * URL веб-приложения для журнала обслуживания (существующий)
    * 
    * Если у вас уже есть URL для журнала обслуживания, вставьте его сюда
    */
-  MAINTENANCE_API_URL: '',
+  MAINTENANCE_API_URL: 'https://script.google.com/macros/s/AKfycbyt7M8596y4rn9IDihwRu73fzdXV6MpkqmAI0D9lNrW7AObWPyoOKsk1YmxX_6xAsZ_lw/exec',
 
   /**
    * Таймаут запросов в миллисекундах
