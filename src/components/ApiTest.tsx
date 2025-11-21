@@ -13,6 +13,7 @@ import {
   deleteEquipment
 } from '../services/equipmentApi';
 import { Equipment, EquipmentType } from '../types/equipment';
+import { API_CONFIG } from '../config/api';
 import './ApiTest.css';
 
 const ApiTest: React.FC = () => {
@@ -52,7 +53,27 @@ const ApiTest: React.FC = () => {
       
       return data;
     } catch (error: any) {
-      setResult(prev => prev + `❌ Ошибка: ${error.message}\n\n`);
+      let errorMessage = error.message;
+      
+      // Детальная информация об ошибке
+      if (error.message.includes('Failed to fetch') || error.message.includes('fetch')) {
+        errorMessage = `❌ Ошибка подключения к API\n\n` +
+          `Возможные причины:\n` +
+          `1. API не развернут как веб-приложение\n` +
+          `2. Неправильный URL в src/config/api.ts\n` +
+          `3. Проблемы с CORS (нужно настроить в Google Apps Script)\n` +
+          `4. Нет доступа к интернету\n\n` +
+          `Проверьте:\n` +
+          `- Откройте backend/equipment-db/Code.gs в Google Apps Script\n` +
+          `- Разверните как веб-приложение (Развернуть > Новое развертывание)\n` +
+          `- Выберите тип: Веб-приложение\n` +
+          `- Укажите: "Выполнять от имени: Меня"\n` +
+          `- Укажите: "У кого есть доступ: Все"\n` +
+          `- Скопируйте URL и вставьте в src/config/api.ts\n\n` +
+          `Текущий URL: ${import.meta.env.VITE_EQUIPMENT_API_URL || 'Не настроен'}\n`;
+      }
+      
+      setResult(prev => prev + `${errorMessage}\n\n`);
       console.error('Test error:', error);
     } finally {
       setLoading(false);
@@ -112,6 +133,15 @@ const ApiTest: React.FC = () => {
   return (
     <div className="api-test">
       <h2>Тестирование API базы данных оборудования</h2>
+      
+      <div className="api-info">
+        <p><strong>URL API:</strong> {API_CONFIG.EQUIPMENT_API_URL || 'Не настроен'}</p>
+        {!API_CONFIG.EQUIPMENT_API_URL && (
+          <p className="warning">
+            ⚠️ URL не настроен! Установите EQUIPMENT_API_URL в src/config/api.ts
+          </p>
+        )}
+      </div>
       
       <div className="test-buttons">
         <button onClick={testGetAll} disabled={loading}>
