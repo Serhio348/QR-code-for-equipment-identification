@@ -276,22 +276,30 @@ export async function addEquipment(
           // Игнорируем ошибки no-cors запросов, они ожидаемы
         });
         
-        // Ждем немного, чтобы запрос обработался
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Ждем немного, чтобы запрос обработался, и делаем несколько попыток
+        let added: Equipment | undefined;
+        const maxAttempts = 3;
         
-        // Получаем все оборудование и ищем последнее добавленное
-        const allEquipment = await getAllEquipment();
-        const added = allEquipment.find(eq => 
-          eq.name === equipment.name && 
-          eq.type === equipment.type &&
-          eq.status === equipment.status
-        );
-        
-        if (added) {
-          return added;
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+          // Увеличиваем время ожидания с каждой попыткой
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+          
+          // Получаем все оборудование и ищем последнее добавленное
+          const allEquipment = await getAllEquipment();
+          added = allEquipment.find(eq => 
+            eq.name === equipment.name && 
+            eq.type === equipment.type &&
+            eq.status === equipment.status
+          );
+          
+          if (added) {
+            return added;
+          }
         }
         
-        throw new Error('Оборудование не найдено после добавления');
+        // Если после всех попыток не найдено, все равно считаем успешным
+        // (запрос был отправлен, возможно просто задержка на сервере)
+        throw new Error('Оборудование не найдено после добавления, но запрос был отправлен');
       } catch (fallbackError: any) {
         throw new Error(`Ошибка при добавлении оборудования: ${fallbackError.message}`);
       }
