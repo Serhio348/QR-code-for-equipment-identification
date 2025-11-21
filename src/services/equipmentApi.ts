@@ -42,6 +42,7 @@ async function apiRequest<T>(
     headers: {
       'Content-Type': 'application/json',
     },
+    mode: 'cors', // Явно указываем CORS режим
     signal: AbortSignal.timeout(API_CONFIG.TIMEOUT), // Таймаут запроса
   };
 
