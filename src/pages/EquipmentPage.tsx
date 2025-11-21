@@ -7,7 +7,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import EquipmentPlate from '../components/EquipmentPlate';
 import { filterSpecs, Equipment, FilterSpecs } from '../types/equipment';
-import { getEquipmentById, updateEquipment, addEquipment, getEquipmentByType } from '../services/equipmentApi';
+import { getEquipmentById, updateEquipment } from '../services/equipmentApi';
 import { exportToPDF } from '../utils/pdfExport';
 import './EquipmentPage.css';
 
@@ -19,6 +19,7 @@ const EquipmentPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState<boolean>(false);
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
+  const [archiving, setArchiving] = useState<boolean>(false);
   
   const [commissioningDate, setCommissioningDate] = useState<string>('');
   const [lastMaintenanceDate, setLastMaintenanceDate] = useState<string>('');
@@ -113,6 +114,39 @@ const EquipmentPage: React.FC = () => {
     }
   };
 
+  // Архивирование оборудования
+  const handleArchive = async () => {
+    if (!currentEquipment) return;
+
+    const confirmMessage = currentEquipment.status === 'archived'
+      ? 'Вы уверены, что хотите восстановить это оборудование из архива?'
+      : 'Вы уверены, что хотите архивировать это оборудование?';
+
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    setArchiving(true);
+    setError(null);
+
+    try {
+      const newStatus = currentEquipment.status === 'archived' ? 'active' : 'archived';
+      const updated = await updateEquipment(currentEquipment.id, { status: newStatus });
+      setCurrentEquipment(updated);
+      setSaveSuccess(true);
+      setTimeout(() => {
+        setSaveSuccess(false);
+        // Перенаправляем на список после архивирования
+        navigate('/');
+      }, 2000);
+    } catch (err: any) {
+      console.error('Ошибка архивирования:', err);
+      setError(`Ошибка архивирования: ${err.message || 'Не удалось архивировать оборудование'}`);
+    } finally {
+      setArchiving(false);
+    }
+  };
+
   // Извлечение номера фильтра из названия
   const getFilterNumber = (): number => {
     if (!currentEquipment) return 1;
@@ -125,6 +159,27 @@ const EquipmentPage: React.FC = () => {
       <div className="page-header">
         <Link to="/" className="back-link">← Назад к списку</Link>
         <h1>{currentEquipment?.name || 'Оборудование'}</h1>
+        {currentEquipment && (
+          <div className="header-actions">
+            <button
+              className="edit-button"
+              onClick={() => navigate(`/equipment/${currentEquipment.id}/edit`)}
+            >
+              Редактировать
+            </button>
+            <button
+              className={`archive-button ${currentEquipment.status === 'archived' ? 'restore' : ''}`}
+              onClick={handleArchive}
+              disabled={archiving}
+            >
+              {archiving 
+                ? '...' 
+                : currentEquipment.status === 'archived' 
+                  ? '↩ Восстановить' 
+                  : '📦 Архивировать'}
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="plate-container">
