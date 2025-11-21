@@ -12,7 +12,7 @@ import {
   updateEquipment,
   deleteEquipment
 } from '../services/equipmentApi';
-import { Equipment, EquipmentType } from '../types/equipment';
+import { Equipment } from '../types/equipment';
 import { API_CONFIG } from '../config/api';
 import './ApiTest.css';
 
@@ -70,7 +70,7 @@ const ApiTest: React.FC = () => {
           `- Укажите: "Выполнять от имени: Меня"\n` +
           `- Укажите: "У кого есть доступ: Все"\n` +
           `- Скопируйте URL и вставьте в src/config/api.ts\n\n` +
-          `Текущий URL: ${import.meta.env.VITE_EQUIPMENT_API_URL || 'Не настроен'}\n`;
+          `Текущий URL: ${API_CONFIG.EQUIPMENT_API_URL || 'Не настроен'}\n`;
       }
       
       setResult(prev => prev + `${errorMessage}\n\n`);
