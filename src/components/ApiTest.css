@@ -13,6 +13,25 @@
   text-align: center;
 }
 
+.api-info {
+  background: #e3f2fd;
+  padding: 15px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+  border-left: 4px solid #2196f3;
+}
+
+.api-info p {
+  margin: 5px 0;
+  color: #333;
+}
+
+.api-info .warning {
+  color: #d32f2f;
+  font-weight: 600;
+  margin-top: 10px;
+}
+
 .test-buttons {
   display: flex;
   flex-wrap: wrap;

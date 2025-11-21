@@ -56,7 +56,8 @@ async function apiRequest<T>(
 
     // Проверяем статус ответа
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const errorText = await response.text();
+      throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
     }
 
     // Парсим JSON ответ
@@ -68,9 +69,20 @@ async function apiRequest<T>(
     }
 
     return data;
-  } catch (error) {
-    // Логируем ошибку для отладки
-    console.error('API request error:', error);
+  } catch (error: any) {
+    // Логируем детальную информацию об ошибке
+    console.error('API request error:', {
+      url: url.toString(),
+      method,
+      action,
+      error: error.message,
+      stack: error.stack
+    });
+    
+    // Улучшенные сообщения об ошибках
+    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+      throw new Error(`Не удалось подключиться к API. Проверьте:\n1. URL в src/config/api.ts\n2. Доступность интернета\n3. Настройки CORS в Google Apps Script\n\nURL: ${API_CONFIG.EQUIPMENT_API_URL}`);
+    }
     
     // Пробрасываем ошибку дальше
     throw error;
