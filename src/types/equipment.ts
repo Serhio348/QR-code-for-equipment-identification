@@ -78,6 +78,35 @@ export interface Equipment {
   updatedAt: string;
 }
 
+/**
+ * Интерфейс ответа API
+ * Используется для всех запросов к Google Apps Script API
+ * 
+ * @template T - Тип данных в поле data
+ * 
+ * Пример успешного ответа:
+ * {
+ *   success: true,
+ *   data: Equipment или Equipment[]
+ * }
+ * 
+ * Пример ответа с ошибкой:
+ * {
+ *   success: false,
+ *   error: "Описание ошибки"
+ * }
+ */
+export interface ApiResponse<T> {
+  /** Успешность выполнения запроса */
+  success: boolean;
+  
+  /** Данные ответа (присутствует только при success: true) */
+  data?: T;
+  
+  /** Сообщение об ошибке (присутствует только при success: false) */
+  error?: string;
+}
+
 export const filterSpecs: FilterSpecs = {
   name: 'Фильтр обезжелезивания ФО-0,8-1,5',
   height: '1,5 м',
