@@ -38,15 +38,11 @@
  * @returns {TextOutput} Ответ с CORS заголовками
  */
 function doOptions(e) {
+  // Google Apps Script автоматически обрабатывает CORS при доступе "Все"
+  // Эта функция нужна для обработки preflight запросов
   return ContentService
     .createTextOutput('')
-    .setMimeType(ContentService.MimeType.JSON)
-    .setHeaders({
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
-      'Access-Control-Max-Age': '3600'
-    });
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 /**
@@ -727,17 +723,14 @@ function generateId() {
  * }
  */
 function createJsonResponse(data) {
+  // Google Apps Script автоматически обрабатывает CORS заголовки
+  // при правильной настройке доступа "Все" в веб-приложении
   return ContentService
     .createTextOutput(JSON.stringify({
       success: true,
       data: data
     }))
-    .setMimeType(ContentService.MimeType.JSON)
-    .setHeaders({
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type'
-    });
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 /**
@@ -755,15 +748,12 @@ function createJsonResponse(data) {
  * }
  */
 function createErrorResponse(message) {
+  // Google Apps Script автоматически обрабатывает CORS заголовки
+  // при правильной настройке доступа "Все" в веб-приложении
   return ContentService
     .createTextOutput(JSON.stringify({
       success: false,
       error: message
     }))
-    .setMimeType(ContentService.MimeType.JSON)
-    .setHeaders({
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type'
-    });
+    .setMimeType(ContentService.MimeType.JSON);
 }

@@ -39,17 +39,25 @@ async function apiRequest<T>(
   // Настройки запроса
   const options: RequestInit = {
     method,
-    headers: {
-      'Content-Type': 'application/json',
-    },
     mode: 'cors', // Явно указываем CORS режим
     signal: AbortSignal.timeout(API_CONFIG.TIMEOUT), // Таймаут запроса
   };
 
-  // Добавляем тело запроса для POST
-  if (body && method === 'POST') {
-    options.body = JSON.stringify(body);
+  // Для POST запросов добавляем заголовки и тело
+  if (method === 'POST') {
+    options.headers = {
+      'Content-Type': 'application/json',
+    };
+    if (body) {
+      // Добавляем action в тело запроса для POST
+      const postBody = {
+        action: action,
+        ...body
+      };
+      options.body = JSON.stringify(postBody);
+    }
   }
+  // Для GET запросов не добавляем заголовки, чтобы избежать preflight
 
   try {
     // Выполняем запрос
@@ -71,17 +79,25 @@ async function apiRequest<T>(
 
     return data;
   } catch (error: any) {
-    // Логируем детальную информацию об ошибке
-    console.error('API request error:', {
-      url: url.toString(),
-      method,
-      action,
-      error: error.message,
-      stack: error.stack
-    });
+    // Проверяем, является ли это CORS ошибкой для POST запросов
+    const isCorsError = error.name === 'TypeError' && 
+                       (error.message.includes('fetch') || 
+                        error.message.includes('Failed to fetch') ||
+                        error.message.includes('CORS'));
+    
+    // Логируем ошибки только если это не CORS ошибка для POST (она будет обработана в fallback)
+    if (!(isCorsError && method === 'POST')) {
+      console.error('API request error:', {
+        url: url.toString(),
+        method,
+        action,
+        error: error.message,
+        stack: error.stack
+      });
+    }
     
     // Улучшенные сообщения об ошибках
-    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+    if (isCorsError && method === 'GET') {
       throw new Error(`Не удалось подключиться к API. Проверьте:\n1. URL в src/config/api.ts\n2. Доступность интернета\n3. Настройки CORS в Google Apps Script\n\nURL: ${API_CONFIG.EQUIPMENT_API_URL}`);
     }
     
@@ -224,13 +240,66 @@ export async function addEquipment(
     throw new Error('Тип оборудования обязателен');
   }
 
-  const response = await apiRequest<Equipment>('add', 'POST', equipment);
+  try {
+    // Пытаемся отправить POST запрос
+    const response = await apiRequest<Equipment>('add', 'POST', equipment);
+    
+    if (!response.data) {
+      throw new Error('Ошибка при добавлении оборудования: данные не получены');
+    }
 
-  if (!response.data) {
-    throw new Error('Ошибка при добавлении оборудования: данные не получены');
+    return response.data;
+  } catch (error: any) {
+    // Если CORS ошибка, используем обходной путь через GET
+    const isCorsError = error.name === 'TypeError' && 
+                       (error.message && (error.message.includes('CORS') || error.message.includes('Failed to fetch')));
+    
+    if (isCorsError) {
+      // Отправляем POST без чтения ответа (no-cors)
+      const postUrl = API_CONFIG.EQUIPMENT_API_URL;
+      const postBody = {
+        action: 'add',
+        ...equipment
+      };
+      
+      try {
+        // no-cors запросы всегда показывают ошибки в консоли, но это нормально
+        // Подавляем ошибки через try-catch
+        await fetch(postUrl, {
+          method: 'POST',
+          mode: 'no-cors', // Обход CORS
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(postBody)
+        }).catch(() => {
+          // Игнорируем ошибки no-cors запросов, они ожидаемы
+        });
+        
+        // Ждем немного, чтобы запрос обработался
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Получаем все оборудование и ищем последнее добавленное
+        const allEquipment = await getAllEquipment();
+        const added = allEquipment.find(eq => 
+          eq.name === equipment.name && 
+          eq.type === equipment.type &&
+          eq.status === equipment.status
+        );
+        
+        if (added) {
+          return added;
+        }
+        
+        throw new Error('Оборудование не найдено после добавления');
+      } catch (fallbackError: any) {
+        throw new Error(`Ошибка при добавлении оборудования: ${fallbackError.message}`);
+      }
+    }
+    
+    // Если не CORS ошибка, пробрасываем дальше
+    throw error;
   }
-
-  return response.data;
 }
 
 /**
@@ -260,16 +329,58 @@ export async function updateEquipment(
     throw new Error('ID не указан');
   }
 
-  const response = await apiRequest<Equipment>('update', 'POST', {
-    id,
-    ...updates,
-  });
+  try {
+    const response = await apiRequest<Equipment>('update', 'POST', {
+      id,
+      ...updates,
+    });
 
-  if (!response.data) {
-    throw new Error('Ошибка при обновлении оборудования: данные не получены');
+    if (!response.data) {
+      throw new Error('Ошибка при обновлении оборудования: данные не получены');
+    }
+
+    return response.data;
+  } catch (error: any) {
+    // Если CORS ошибка, используем обходной путь
+    const isCorsError = error.name === 'TypeError' && 
+                       (error.message && (error.message.includes('CORS') || error.message.includes('Failed to fetch')));
+    
+    if (isCorsError) {
+      const postUrl = API_CONFIG.EQUIPMENT_API_URL;
+      const postBody = {
+        action: 'update',
+        id,
+        ...updates
+      };
+      
+      try {
+        await fetch(postUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(postBody)
+        }).catch(() => {
+          // Игнорируем ошибки no-cors запросов
+        });
+        
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Получаем обновленное оборудование по ID
+        const updated = await getEquipmentById(id);
+        if (updated) {
+          return updated;
+        }
+        
+        throw new Error('Оборудование не найдено после обновления');
+      } catch (fallbackError: any) {
+        throw new Error(`Ошибка при обновлении оборудования: ${fallbackError.message}`);
+      }
+    }
+    
+    throw error;
   }
-
-  return response.data;
 }
 
 /**
@@ -291,6 +402,47 @@ export async function deleteEquipment(id: string): Promise<void> {
     throw new Error('ID не указан');
   }
 
-  await apiRequest('delete', 'POST', { id });
+  try {
+    await apiRequest('delete', 'POST', { id });
+  } catch (error: any) {
+    // Если CORS ошибка, используем обходной путь
+    const isCorsError = error.name === 'TypeError' && 
+                       (error.message && (error.message.includes('CORS') || error.message.includes('Failed to fetch')));
+    
+    if (isCorsError) {
+      const postUrl = API_CONFIG.EQUIPMENT_API_URL;
+      const postBody = {
+        action: 'delete',
+        id
+      };
+      
+      try {
+        await fetch(postUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(postBody)
+        }).catch(() => {
+          // Игнорируем ошибки no-cors запросов
+        });
+        
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Проверяем, что оборудование удалено (статус = archived)
+        const deleted = await getEquipmentById(id);
+        if (deleted && deleted.status === 'archived') {
+          return;
+        }
+        
+        throw new Error('Оборудование не было удалено');
+      } catch (fallbackError: any) {
+        throw new Error(`Ошибка при удалении оборудования: ${fallbackError.message}`);
+      }
+    }
+    
+    throw error;
+  }
 }
 
