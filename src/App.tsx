@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import EquipmentPlate from './components/EquipmentPlate';
+import ApiTest from './components/ApiTest';
 import { filterSpecs } from './types/equipment';
 import { exportToPDF } from './utils/pdfExport';
 import './App.css';
@@ -55,6 +56,10 @@ const App: React.FC = () => {
         <p>Фильтры обезжелезивания</p>
       </header>
 
+      <div className="plate-container">
+        <ApiTest />
+      </div>
+      
       <div className="plate-container">
         <div className="controls">
           <div className="controls-left">
