@@ -89,17 +89,6 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
     }
   };
 
-  const getTypeLabel = (type: string) => {
-    const labels: { [key: string]: string } = {
-      filter: 'Фильтр',
-      pump: 'Насос',
-      tank: 'Резервуар',
-      valve: 'Клапан',
-      other: 'Другое'
-    };
-    return labels[type] || type;
-  };
-
   if (loading) {
     return (
       <div className="equipment-list">
@@ -197,8 +186,7 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
               
               <div className="card-body">
                 <div className="card-info">
-                  <span className="info-label">Тип:</span>
-                  <span className="info-value">{getTypeLabel(equipment.type)}</span>
+                  <span className="info-value info-value-bold">{equipment.name}</span>
                 </div>
                 
                 {equipment.commissioningDate && (

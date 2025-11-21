@@ -137,6 +137,10 @@
   color: #333;
 }
 
+.info-value-bold {
+  font-weight: 600;
+}
+
 .card-footer {
   padding-top: 15px;
   border-top: 1px solid #e0e0e0;
