@@ -148,6 +148,21 @@
   font-family: monospace;
 }
 
+.show-archived-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #333;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.show-archived-checkbox input[type="checkbox"] {
+  width: auto;
+  cursor: pointer;
+}
+
 .empty-message {
   text-align: center;
   padding: 40px 20px;

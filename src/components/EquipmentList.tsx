@@ -19,6 +19,7 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
   const [filterType, setFilterType] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [showArchived, setShowArchived] = useState<boolean>(false);
 
   // Загрузка оборудования при монтировании компонента
   useEffect(() => {
@@ -49,6 +50,11 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
     
     // Фильтр по статусу
     if (filterStatus !== 'all' && eq.status !== filterStatus) {
+      return false;
+    }
+    
+    // Фильтр архивных
+    if (!showArchived && eq.status === 'archived') {
       return false;
     }
     
@@ -153,6 +159,16 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
             <option value="inactive">Неактивные</option>
             <option value="archived">Архивные</option>
           </select>
+          
+          {/* Чекбокс показа архивных */}
+          <label className="show-archived-checkbox">
+            <input
+              type="checkbox"
+              checked={showArchived}
+              onChange={(e) => setShowArchived(e.target.checked)}
+            />
+            Показать архивные
+          </label>
         </div>
       </div>
 
