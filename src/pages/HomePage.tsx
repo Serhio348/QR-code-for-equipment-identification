@@ -6,6 +6,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import EquipmentList from '../components/EquipmentList';
 import { Equipment } from '../types/equipment';
+import { ROUTES, getEquipmentViewUrl } from '../utils/routes';
 import './HomePage.css';
 
 const HomePage: React.FC = () => {
@@ -13,7 +14,7 @@ const HomePage: React.FC = () => {
 
   const handleSelectEquipment = (equipment: Equipment) => {
     // Переход на страницу оборудования
-    navigate(`/equipment/${equipment.id}`);
+    navigate(getEquipmentViewUrl(equipment.id));
   };
 
   return (
@@ -22,7 +23,7 @@ const HomePage: React.FC = () => {
         <h1>Список оборудования</h1>
         <button 
           className="add-button"
-          onClick={() => navigate('/equipment/new')}
+          onClick={() => navigate(ROUTES.EQUIPMENT_NEW)}
         >
           + Добавить оборудование
         </button>

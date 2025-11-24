@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { Equipment, EquipmentType, EquipmentStatus, EquipmentSpecs } from '../types/equipment';
 import { addEquipment, updateEquipment, getEquipmentById } from '../services/equipmentApi';
 import { generateQRCodeUrl } from '../utils/urlGenerator';
+import { getEquipmentViewUrl } from '../utils/routes';
 import './EquipmentForm.css';
 
 interface EquipmentFormProps {
@@ -215,7 +216,7 @@ const EquipmentForm: React.FC<EquipmentFormProps> = ({ equipmentId, onSave, onCa
 
       // Перенаправляем на страницу оборудования через 1 секунду
       setTimeout(() => {
-        navigate(`/equipment/${savedEquipment.id}`);
+        navigate(getEquipmentViewUrl(savedEquipment.id));
       }, 1000);
 
     } catch (err: any) {
