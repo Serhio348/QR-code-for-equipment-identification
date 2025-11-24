@@ -5,8 +5,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Equipment, EquipmentType, EquipmentStatus, EquipmentSpecs, FilterSpecs } from '../types/equipment';
+import { Equipment, EquipmentType, EquipmentStatus, EquipmentSpecs } from '../types/equipment';
 import { addEquipment, updateEquipment, getEquipmentById } from '../services/equipmentApi';
+import { generateQRCodeUrl } from '../utils/urlGenerator';
 import './EquipmentForm.css';
 
 interface EquipmentFormProps {
@@ -89,12 +90,16 @@ const EquipmentForm: React.FC<EquipmentFormProps> = ({ equipmentId, onSave, onCa
       setError('Название оборудования обязательно');
       return false;
     }
-    if (!googleDriveUrl.trim()) {
-      setError('URL Google Drive обязателен');
+    // Google Drive URL обязателен только при редактировании
+    // При создании он может быть создан автоматически
+    if (isEditMode && !googleDriveUrl.trim()) {
+      setError('URL Google Drive обязателен при редактировании');
       return false;
     }
-    if (!qrCodeUrl.trim()) {
-      setError('URL для QR-кода обязателен');
+    // QR Code URL обязателен только при редактировании
+    // При создании он будет сгенерирован автоматически
+    if (isEditMode && !qrCodeUrl.trim()) {
+      setError('URL для QR-кода обязателен при редактировании');
       return false;
     }
     return true;
@@ -113,13 +118,33 @@ const EquipmentForm: React.FC<EquipmentFormProps> = ({ equipmentId, onSave, onCa
     setSuccess(false);
 
     try {
+      let finalGoogleDriveUrl = googleDriveUrl.trim();
+      let finalQrCodeUrl = qrCodeUrl.trim();
+
+      // Если это создание нового оборудования и не указан Google Drive URL,
+      // backend автоматически создаст папку в Google Drive при добавлении оборудования.
+      // Это решает проблему CORS, так как вся логика выполняется на сервере.
+      // Нам не нужно делать отдельный запрос на создание папки.
+
+      // Если URL для QR-кода не указан, используем Google Drive URL или генерируем
+      if (!finalQrCodeUrl) {
+        if (finalGoogleDriveUrl) {
+          finalQrCodeUrl = finalGoogleDriveUrl;
+        } else if (isEditMode && equipmentId) {
+          finalQrCodeUrl = generateQRCodeUrl(equipmentId, finalGoogleDriveUrl);
+        } else {
+          // Для нового оборудования URL будет установлен после создания
+          finalQrCodeUrl = '';
+        }
+      }
+
       const equipmentData: Partial<Equipment> = {
         name: name.trim(),
         type,
         status,
         specs,
-        googleDriveUrl: googleDriveUrl.trim(),
-        qrCodeUrl: qrCodeUrl.trim(),
+        googleDriveUrl: finalGoogleDriveUrl,
+        qrCodeUrl: finalQrCodeUrl,
         commissioningDate: commissioningDate || undefined,
       };
 
@@ -130,7 +155,24 @@ const EquipmentForm: React.FC<EquipmentFormProps> = ({ equipmentId, onSave, onCa
         savedEquipment = await updateEquipment(equipmentId, equipmentData);
       } else {
         // Режим создания
+        // Backend автоматически создаст папку в Google Drive, если googleDriveUrl не указан
         savedEquipment = await addEquipment(equipmentData as any);
+        
+        // После создания обновляем QR-код URL с правильным ID, если нужно
+        // Используем URL из ответа backend (может быть создан автоматически)
+        const driveUrl = savedEquipment.googleDriveUrl || finalGoogleDriveUrl;
+        if (!savedEquipment.qrCodeUrl && driveUrl) {
+          // Если backend создал папку, используем её URL для QR-кода
+          savedEquipment = await updateEquipment(savedEquipment.id, {
+            qrCodeUrl: driveUrl
+          });
+        } else if (!savedEquipment.qrCodeUrl) {
+          // Если папка не была создана, генерируем URL на основе ID оборудования
+          const generatedUrl = generateQRCodeUrl(savedEquipment.id, driveUrl);
+          savedEquipment = await updateEquipment(savedEquipment.id, {
+            qrCodeUrl: generatedUrl
+          });
+        }
       }
 
       setSuccess(true);
@@ -403,26 +445,34 @@ const EquipmentForm: React.FC<EquipmentFormProps> = ({ equipmentId, onSave, onCa
           </div>
 
           <div className="form-group">
-            <label>URL Google Drive *</label>
+            <label>URL Google Drive {isEditMode ? '*' : '(оставьте пустым для автоматического создания)'}</label>
             <input
               type="url"
               value={googleDriveUrl}
               onChange={(e) => setGoogleDriveUrl(e.target.value)}
-              placeholder="https://drive.google.com/drive/folders/..."
-              required
+              placeholder={isEditMode 
+                ? "https://drive.google.com/drive/folders/..." 
+                : "Оставьте пустым - папка создастся автоматически на сервере"}
+              required={isEditMode}
             />
+            {!isEditMode && (
+              <small>Если оставить пустым, папка будет создана автоматически на сервере с названием оборудования. Это решает проблему CORS.</small>
+            )}
           </div>
 
           <div className="form-group">
-            <label>URL для QR-кода *</label>
+            <label>URL для QR-кода {isEditMode ? '*' : '(заполнится автоматически)'}</label>
             <input
               type="url"
               value={qrCodeUrl}
               onChange={(e) => setQrCodeUrl(e.target.value)}
-              placeholder="https://drive.google.com/drive/folders/..."
-              required
+              placeholder={isEditMode 
+                ? "https://drive.google.com/drive/folders/..." 
+                : "Заполнится автоматически на основе Google Drive URL"}
+              required={isEditMode}
+              disabled={!isEditMode && !googleDriveUrl.trim()}
             />
-            <small>Обычно совпадает с URL Google Drive</small>
+            <small>Обычно совпадает с URL Google Drive. {!isEditMode && 'Заполнится автоматически при создании папки.'}</small>
           </div>
 
           <div className="form-group">

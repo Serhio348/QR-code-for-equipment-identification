@@ -241,6 +241,16 @@ export async function addEquipment(
   }
 
   try {
+    // Логируем данные перед отправкой для отладки
+    console.log('📤 Отправка данных оборудования:', {
+      name: equipment.name,
+      type: equipment.type,
+      status: equipment.status,
+      hasSpecs: !!equipment.specs,
+      googleDriveUrl: equipment.googleDriveUrl || 'не указан',
+      qrCodeUrl: equipment.qrCodeUrl || 'не указан'
+    });
+    
     // Пытаемся отправить POST запрос
     const response = await apiRequest<Equipment>('add', 'POST', equipment);
     
@@ -261,6 +271,14 @@ export async function addEquipment(
         action: 'add',
         ...equipment
       };
+      
+      // Логируем тело запроса для отладки
+      console.log('📤 Отправка через no-cors fallback:', {
+        action: postBody.action,
+        name: postBody.name,
+        type: postBody.type,
+        bodyString: JSON.stringify(postBody)
+      });
       
       try {
         // no-cors запросы всегда показывают ошибки в консоли, но это нормально
@@ -447,6 +465,107 @@ export async function deleteEquipment(id: string): Promise<void> {
         throw new Error('Оборудование не было удалено');
       } catch (fallbackError: any) {
         throw new Error(`Ошибка при удалении оборудования: ${fallbackError.message}`);
+      }
+    }
+    
+    throw error;
+  }
+}
+
+/**
+ * Интерфейс результата создания папки в Google Drive
+ */
+export interface DriveFolderResult {
+  folderId: string;
+  folderUrl: string;
+  folderName: string;
+}
+
+/**
+ * Создать папку в Google Drive для оборудования
+ * 
+ * Создает новую папку в Google Drive с названием оборудования.
+ * Папка будет использоваться для хранения документации и журнала обслуживания.
+ * 
+ * @param {string} equipmentName - Название оборудования (будет использовано как имя папки)
+ * @param {string} parentFolderId - (Опционально) ID родительской папки, в которой создать папку
+ * @returns {Promise<DriveFolderResult>} Объект с информацией о созданной папке
+ * 
+ * @throws {Error} Если не удалось создать папку
+ * 
+ * Пример использования:
+ * const folder = await createDriveFolder("Фильтр обезжелезивания ФО-0,8-1,5 №1");
+ * console.log(folder.folderUrl); // URL созданной папки
+ */
+export async function createDriveFolder(
+  equipmentName: string,
+  parentFolderId?: string
+): Promise<DriveFolderResult> {
+  if (!equipmentName || !equipmentName.trim()) {
+    throw new Error('Название оборудования не указано');
+  }
+
+  try {
+    const body: any = {
+      name: equipmentName.trim()
+    };
+    
+    // Добавляем parentFolderId если указан
+    if (parentFolderId) {
+      body.parentFolderId = parentFolderId;
+    }
+
+    const response = await apiRequest<DriveFolderResult>('createFolder', 'POST', body);
+    
+    if (!response.data) {
+      throw new Error('Ошибка при создании папки: данные не получены');
+    }
+
+    return response.data;
+  } catch (error: any) {
+    // Если CORS ошибка, используем обходной путь
+    const isCorsError = error.name === 'TypeError' && 
+                       (error.message && (error.message.includes('CORS') || error.message.includes('Failed to fetch')));
+    
+    if (isCorsError) {
+      const postUrl = API_CONFIG.EQUIPMENT_API_URL;
+      const postBody = {
+        action: 'createFolder',
+        name: equipmentName.trim(),
+        ...(parentFolderId && { parentFolderId })
+      };
+      
+      try {
+        // Отправляем no-cors запрос
+        await fetch(postUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(postBody)
+        }).catch(() => {
+          // Игнорируем ошибки no-cors запросов
+        });
+        
+        // Ждем немного для обработки запроса на сервере
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Пытаемся найти созданную папку через поиск в Google Drive
+        // К сожалению, это невозможно без доступа к Drive API с клиента
+        // Поэтому просто предполагаем, что папка была создана
+        
+        // Создаем специальный тип ошибки, который не является критическим
+        const warningError: any = new Error('Папка может быть создана, но подтверждение недоступно из-за CORS. Проверьте Google Drive вручную или создайте папку позже.');
+        warningError.isWarning = true; // Флаг для отличия от критических ошибок
+        warningError.folderName = equipmentName.trim();
+        throw warningError;
+      } catch (fallbackError: any) {
+        // Если это наше предупреждение, пробрасываем его как есть
+        if (fallbackError.isWarning) {
+          throw fallbackError;
+        }
+        throw new Error(`Ошибка при создании папки: ${fallbackError.message}`);
       }
     }
     

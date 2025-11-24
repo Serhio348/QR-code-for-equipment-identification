@@ -240,6 +240,7 @@ const EquipmentPage: React.FC = () => {
               filterNumber={getFilterNumber()}
               commissioningDate={commissioningDate}
               lastMaintenanceDate={lastMaintenanceDate}
+              qrCodeUrl={currentEquipment?.qrCodeUrl}
             />
           </>
         )}
