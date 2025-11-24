@@ -9,6 +9,7 @@ import EquipmentPlate from '../components/EquipmentPlate';
 import { filterSpecs, Equipment, FilterSpecs } from '../types/equipment';
 import { getEquipmentById, updateEquipment, deleteEquipment } from '../services/equipmentApi';
 import { exportToPDF } from '../utils/pdfExport';
+import { ROUTES, getEquipmentEditUrl } from '../utils/routes';
 import './EquipmentPage.css';
 
 const EquipmentPage: React.FC = () => {
@@ -89,6 +90,8 @@ const EquipmentPage: React.FC = () => {
         setLastMaintenanceDate(normalizedMaintenance);
       } else {
         setError('Оборудование не найдено');
+        // Оборудование не найдено - будет показана ошибка, но не редиректим автоматически
+        // Пользователь может вернуться назад
       }
     } catch (err: any) {
       console.error('Ошибка загрузки оборудования:', err);
@@ -164,7 +167,7 @@ const EquipmentPage: React.FC = () => {
       setTimeout(() => {
         setSaveSuccess(false);
         // Перенаправляем на список после удаления
-        navigate('/');
+        navigate(ROUTES.HOME);
       }, 1500);
     } catch (err: any) {
       console.error('Ошибка удаления:', err);
@@ -184,13 +187,13 @@ const EquipmentPage: React.FC = () => {
   return (
     <div className="equipment-page">
       <div className="page-header">
-        <Link to="/" className="back-link">← Назад к списку</Link>
+        <Link to={ROUTES.HOME} className="back-link">← Назад к списку</Link>
         <h1>{currentEquipment?.name || 'Оборудование'}</h1>
         {currentEquipment && (
           <div className="header-actions">
             <button
               className="edit-button"
-              onClick={() => navigate(`/equipment/${currentEquipment.id}/edit`)}
+              onClick={() => navigate(getEquipmentEditUrl(currentEquipment.id))}
             >
               Редактировать
             </button>
