@@ -44,6 +44,28 @@ const EquipmentForm: React.FC<EquipmentFormProps> = ({ equipmentId, onSave, onCa
     }
   }, [equipmentId, isEditMode]);
 
+  // Нормализация даты в формат YYYY-MM-DD
+  // ВАЖНО: Не используем new Date() для парсинга, чтобы избежать проблем с часовыми поясами
+  const normalizeDate = (dateString?: string): string => {
+    if (!dateString) return '';
+    
+    // Убираем возможное время из строки даты
+    const dateOnly = dateString.split('T')[0].split(' ')[0].trim();
+    
+    // Проверяем, что это формат YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) {
+      return dateOnly;
+    }
+    
+    // Если формат не YYYY-MM-DD, пытаемся извлечь дату
+    const match = dateOnly.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (match) {
+      return match[0];
+    }
+    
+    return '';
+  };
+
   const loadEquipment = async () => {
     setLoading(true);
     setError(null);
@@ -56,7 +78,8 @@ const EquipmentForm: React.FC<EquipmentFormProps> = ({ equipmentId, onSave, onCa
         setStatus(equipment.status);
         setGoogleDriveUrl(equipment.googleDriveUrl);
         setQrCodeUrl(equipment.qrCodeUrl);
-        setCommissioningDate(equipment.commissioningDate || '');
+        // Нормализуем дату перед установкой в state
+        setCommissioningDate(normalizeDate(equipment.commissioningDate));
         setSpecs(equipment.specs || {});
       } else {
         setError('Оборудование не найдено');
@@ -138,6 +161,14 @@ const EquipmentForm: React.FC<EquipmentFormProps> = ({ equipmentId, onSave, onCa
         }
       }
 
+      // input type="date" уже возвращает YYYY-MM-DD, просто убираем возможное время для гарантии
+      const normalizedCommissioningDate = commissioningDate ? commissioningDate.split('T')[0].trim() : undefined;
+      
+      console.log('💾 Сохранение оборудования:', {
+        исходная_дата: commissioningDate,
+        нормализованная_дата: normalizedCommissioningDate
+      });
+      
       const equipmentData: Partial<Equipment> = {
         name: name.trim(),
         type,
@@ -145,7 +176,7 @@ const EquipmentForm: React.FC<EquipmentFormProps> = ({ equipmentId, onSave, onCa
         specs,
         googleDriveUrl: finalGoogleDriveUrl,
         qrCodeUrl: finalQrCodeUrl,
-        commissioningDate: commissioningDate || undefined,
+        commissioningDate: normalizedCommissioningDate,
       };
 
       let savedEquipment: Equipment;
@@ -480,7 +511,10 @@ const EquipmentForm: React.FC<EquipmentFormProps> = ({ equipmentId, onSave, onCa
             <input
               type="date"
               value={commissioningDate}
-              onChange={(e) => setCommissioningDate(e.target.value)}
+              onChange={(e) => {
+                // input type="date" всегда возвращает YYYY-MM-DD, просто сохраняем как есть
+                setCommissioningDate(e.target.value || '');
+              }}
             />
           </div>
         </div>

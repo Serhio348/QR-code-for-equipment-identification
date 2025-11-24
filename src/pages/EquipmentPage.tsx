@@ -3,11 +3,11 @@
  * Отображает табличку оборудования с возможностью редактирования дат
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import EquipmentPlate from '../components/EquipmentPlate';
 import { filterSpecs, Equipment, FilterSpecs } from '../types/equipment';
-import { getEquipmentById, updateEquipment } from '../services/equipmentApi';
+import { getEquipmentById, updateEquipment, deleteEquipment } from '../services/equipmentApi';
 import { exportToPDF } from '../utils/pdfExport';
 import './EquipmentPage.css';
 
@@ -19,13 +19,10 @@ const EquipmentPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState<boolean>(false);
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
-  const [archiving, setArchiving] = useState<boolean>(false);
+  const [deleting, setDeleting] = useState<boolean>(false);
   
   const [commissioningDate, setCommissioningDate] = useState<string>('');
   const [lastMaintenanceDate, setLastMaintenanceDate] = useState<string>('');
-  
-  const saveTimeoutRef = useRef<number | null>(null);
-  const isInitialLoadRef = useRef<boolean>(true);
 
   // Загрузка оборудования при монтировании
   useEffect(() => {
@@ -38,17 +35,58 @@ const EquipmentPage: React.FC = () => {
     }
   }, [id]);
 
+  // Нормализация даты в формат YYYY-MM-DD для input type="date"
+  // ВАЖНО: Не используем new Date() для парсинга, чтобы избежать проблем с часовыми поясами
+  const normalizeDate = (dateString?: string): string => {
+    if (!dateString) return '';
+    
+    // Убираем возможное время из строки даты
+    // Например: "2024-01-15T00:00:00.000Z" -> "2024-01-15"
+    // Или: "2024-01-15 12:00:00" -> "2024-01-15"
+    const dateOnly = dateString.split('T')[0].split(' ')[0].trim();
+    
+    // Проверяем, что это формат YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) {
+      // Просто возвращаем как есть, без использования new Date()
+      return dateOnly;
+    }
+    
+    // Если формат не YYYY-MM-DD, пытаемся извлечь дату другим способом
+    // Но НЕ используем new Date(), чтобы избежать смещения из-за часовых поясов
+    const match = dateOnly.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (match) {
+      return match[0]; // Возвращаем YYYY-MM-DD
+    }
+    
+    // Если не удалось распарсить, возвращаем пустую строку
+    console.warn('Не удалось нормализовать дату:', dateString);
+    return '';
+  };
+
   const loadEquipment = async (equipmentId: string) => {
     setLoading(true);
     setError(null);
-    isInitialLoadRef.current = true;
     
     try {
       const equipment = await getEquipmentById(equipmentId);
       if (equipment) {
         setCurrentEquipment(equipment);
-        setCommissioningDate(equipment.commissioningDate || '');
-        setLastMaintenanceDate(equipment.lastMaintenanceDate || '');
+        // Нормализуем даты перед установкой в state
+        const normalizedCommissioning = normalizeDate(equipment.commissioningDate);
+        const normalizedMaintenance = normalizeDate(equipment.lastMaintenanceDate);
+        
+        // Логируем для отладки
+        if (equipment.commissioningDate) {
+          console.log('📅 Обработка даты на странице:', {
+            id: equipment.id,
+            name: equipment.name,
+            исходная_дата: equipment.commissioningDate,
+            нормализованная_дата: normalizedCommissioning
+          });
+        }
+        
+        setCommissioningDate(normalizedCommissioning);
+        setLastMaintenanceDate(normalizedMaintenance);
       } else {
         setError('Оборудование не найдено');
       }
@@ -60,50 +98,43 @@ const EquipmentPage: React.FC = () => {
     }
   };
 
-  // Сохранение дат через API
-  const saveDatesToAPI = async (commissioning: string, maintenance: string) => {
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
+  // Сохранение дат через API (ручное сохранение по кнопке)
+  const saveDatesToAPI = async () => {
+    if (!currentEquipment) {
+      return;
     }
     
-    saveTimeoutRef.current = window.setTimeout(async () => {
-      setSaving(true);
-      setSaveSuccess(false);
-      setError(null);
+    setSaving(true);
+    setSaveSuccess(false);
+    setError(null);
+    
+    try {
+      // input type="date" уже возвращает YYYY-MM-DD, просто убираем возможное время для гарантии
+      const normalizedCommissioning = commissioningDate ? commissioningDate.split('T')[0].trim() : undefined;
+      const normalizedMaintenance = lastMaintenanceDate ? lastMaintenanceDate.split('T')[0].trim() : undefined;
       
-      try {
-        if (currentEquipment) {
-          const updated = await updateEquipment(currentEquipment.id, {
-            commissioningDate: commissioning || undefined,
-            lastMaintenanceDate: maintenance || undefined
-          });
-          setCurrentEquipment(updated);
-          setSaveSuccess(true);
-          setTimeout(() => setSaveSuccess(false), 3000);
-        }
-      } catch (error: any) {
-        console.error('Ошибка сохранения:', error);
-        setError(`Ошибка сохранения: ${error.message || 'Не удалось сохранить данные'}`);
-        setTimeout(() => setError(null), 5000);
-      } finally {
-        setSaving(false);
-      }
-    }, 1000);
+      console.log('💾 Сохранение дат:', {
+        исходная_commissioning: commissioningDate,
+        нормализованная_commissioning: normalizedCommissioning,
+        исходная_maintenance: lastMaintenanceDate,
+        нормализованная_maintenance: normalizedMaintenance
+      });
+      
+      const updated = await updateEquipment(currentEquipment.id, {
+        commissioningDate: normalizedCommissioning,
+        lastMaintenanceDate: normalizedMaintenance
+      });
+      setCurrentEquipment(updated);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (error: any) {
+      console.error('Ошибка сохранения:', error);
+      setError(`Ошибка сохранения: ${error.message || 'Не удалось сохранить данные'}`);
+      setTimeout(() => setError(null), 5000);
+    } finally {
+      setSaving(false);
+    }
   };
-
-  // Сохраняем даты при изменении
-  useEffect(() => {
-    if (isInitialLoadRef.current) {
-      isInitialLoadRef.current = false;
-      return;
-    }
-    
-    if (loading || !currentEquipment) {
-      return;
-    }
-    
-    saveDatesToAPI(commissioningDate, lastMaintenanceDate);
-  }, [commissioningDate, lastMaintenanceDate, loading]);
 
   const handleExportPDF = async () => {
     try {
@@ -114,36 +145,32 @@ const EquipmentPage: React.FC = () => {
     }
   };
 
-  // Архивирование оборудования
-  const handleArchive = async () => {
+  // Удаление оборудования
+  const handleDelete = async () => {
     if (!currentEquipment) return;
 
-    const confirmMessage = currentEquipment.status === 'archived'
-      ? 'Вы уверены, что хотите восстановить это оборудование из архива?'
-      : 'Вы уверены, что хотите архивировать это оборудование?';
+    const confirmMessage = `Вы уверены, что хотите удалить оборудование "${currentEquipment.name}"?\n\nЭто действие удалит оборудование и папку в Google Drive. Это действие нельзя отменить.`;
 
     if (!window.confirm(confirmMessage)) {
       return;
     }
 
-    setArchiving(true);
+    setDeleting(true);
     setError(null);
 
     try {
-      const newStatus = currentEquipment.status === 'archived' ? 'active' : 'archived';
-      const updated = await updateEquipment(currentEquipment.id, { status: newStatus });
-      setCurrentEquipment(updated);
+      await deleteEquipment(currentEquipment.id);
       setSaveSuccess(true);
       setTimeout(() => {
         setSaveSuccess(false);
-        // Перенаправляем на список после архивирования
+        // Перенаправляем на список после удаления
         navigate('/');
-      }, 2000);
+      }, 1500);
     } catch (err: any) {
-      console.error('Ошибка архивирования:', err);
-      setError(`Ошибка архивирования: ${err.message || 'Не удалось архивировать оборудование'}`);
+      console.error('Ошибка удаления:', err);
+      setError(`Ошибка удаления: ${err.message || 'Не удалось удалить оборудование'}`);
     } finally {
-      setArchiving(false);
+      setDeleting(false);
     }
   };
 
@@ -168,15 +195,11 @@ const EquipmentPage: React.FC = () => {
               Редактировать
             </button>
             <button
-              className={`archive-button ${currentEquipment.status === 'archived' ? 'restore' : ''}`}
-              onClick={handleArchive}
-              disabled={archiving}
+              className="delete-button"
+              onClick={handleDelete}
+              disabled={deleting}
             >
-              {archiving 
-                ? '...' 
-                : currentEquipment.status === 'archived' 
-                  ? '↩ Восстановить' 
-                  : '📦 Архивировать'}
+              {deleting ? 'Удаление...' : '🗑️ Удалить'}
             </button>
           </div>
         )}
@@ -211,7 +234,10 @@ const EquipmentPage: React.FC = () => {
                   <input
                     type="date"
                     value={commissioningDate}
-                    onChange={(e) => setCommissioningDate(e.target.value)}
+                    onChange={(e) => {
+                      // input type="date" всегда возвращает YYYY-MM-DD, просто сохраняем как есть
+                      setCommissioningDate(e.target.value || '');
+                    }}
                     className="date-input"
                     disabled={saving}
                   />
@@ -221,11 +247,21 @@ const EquipmentPage: React.FC = () => {
                   <input
                     type="date"
                     value={lastMaintenanceDate}
-                    onChange={(e) => setLastMaintenanceDate(e.target.value)}
+                    onChange={(e) => {
+                      // input type="date" всегда возвращает YYYY-MM-DD, просто сохраняем как есть
+                      setLastMaintenanceDate(e.target.value || '');
+                    }}
                     className="date-input"
                     disabled={saving}
                   />
                 </label>
+                <button 
+                  onClick={saveDatesToAPI} 
+                  className="save-button"
+                  disabled={saving}
+                >
+                  {saving ? 'Сохранение...' : '💾 Сохранить даты'}
+                </button>
               </div>
               <button 
                 onClick={handleExportPDF} 
@@ -237,6 +273,7 @@ const EquipmentPage: React.FC = () => {
             </div>
             <EquipmentPlate 
               specs={(currentEquipment?.specs as FilterSpecs) || filterSpecs} 
+              equipmentName={currentEquipment?.name}
               filterNumber={getFilterNumber()}
               commissioningDate={commissioningDate}
               lastMaintenanceDate={lastMaintenanceDate}

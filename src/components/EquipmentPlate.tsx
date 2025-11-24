@@ -5,6 +5,7 @@ import './EquipmentPlate.css';
 
 interface EquipmentPlateProps {
   specs: FilterSpecs;
+  equipmentName?: string; // Название оборудования (если не указано, используется specs.name)
   filterNumber?: number;
   commissioningDate?: string;
   lastMaintenanceDate?: string;
@@ -13,7 +14,7 @@ interface EquipmentPlateProps {
 
 const EquipmentPlate: React.FC<EquipmentPlateProps> = ({ 
   specs, 
-  filterNumber, 
+  equipmentName,
   commissioningDate, 
   lastMaintenanceDate,
   qrCodeUrl
@@ -22,21 +23,57 @@ const EquipmentPlate: React.FC<EquipmentPlateProps> = ({
   const defaultUrl = 'https://drive.google.com/drive/folders/1t90itk12veviwYM1LH7DZ15G4slpPnon';
   const urlForQR = qrCodeUrl || defaultUrl;
   
+  // Используем переданное название оборудования или название из specs
+  const displayName = equipmentName || specs.name || 'Оборудование';
+  
   const formatDate = (dateString?: string) => {
     if (!dateString) return '—';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('ru-RU', { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    });
+    
+    // Убираем возможное время из строки даты (если есть)
+    // Например: "2024-01-15T00:00:00.000Z" -> "2024-01-15"
+    const dateOnly = dateString.split('T')[0].split(' ')[0].trim();
+    
+    // Проверяем, что это формат YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) {
+      const [year, month, day] = dateOnly.split('-').map(Number);
+      
+      // ВАЖНО: НЕ используем new Date() для создания даты, так как это может вызвать проблемы
+      // Вместо этого форматируем напрямую из компонентов строки
+      // Это гарантирует, что дата не будет сдвигаться из-за часовых поясов
+      const months = [
+        'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+        'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
+      ];
+      
+      // Проверяем валидность месяца и дня
+      if (month < 1 || month > 12 || day < 1 || day > 31) {
+        return '—';
+      }
+      
+      return `${day} ${months[month - 1]} ${year} г.`;
+    }
+    
+    // Для других форматов пытаемся извлечь дату без использования new Date()
+    const match = dateString.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (match) {
+      const [, year, month, day] = match.map(Number);
+      const months = [
+        'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+        'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
+      ];
+      
+      if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+        return `${day} ${months[month - 1]} ${year} г.`;
+      }
+    }
+    
+    return '—';
   };
   
   return (
     <div className="equipment-plate" id="equipment-plate">
       <div className="plate-header">
-        <h1 className="equipment-name">{specs.name}</h1>
-        {filterNumber && <div className="filter-number">Фильтр №{filterNumber}</div>}
+        <h1 className="equipment-name">{displayName}</h1>
       </div>
       
       <div className="plate-content">

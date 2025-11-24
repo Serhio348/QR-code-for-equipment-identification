@@ -149,22 +149,59 @@ function doPost(e) {
     Logger.log('  - postData.type: ' + (e.postData ? e.postData.type : 'НЕТ'));
     Logger.log('  - parameters: ' + JSON.stringify(e.parameter || {}));
     
-    // Парсим JSON данные из тела запроса
+    // Парсим данные из тела запроса
     let data;
     
     // Проверяем, есть ли данные в postData
     if (e.postData && e.postData.contents) {
-      try {
-        data = JSON.parse(e.postData.contents);
-      } catch (parseError) {
-        Logger.log('❌ Ошибка парсинга JSON из postData.contents: ' + parseError);
-        Logger.log('  - Содержимое: ' + e.postData.contents);
-        return createErrorResponse('Ошибка парсинга JSON: ' + parseError.toString());
+      const contentType = e.postData.type || '';
+      Logger.log('  - Content-Type: ' + contentType);
+      
+      // Если это JSON
+      if (contentType.includes('application/json')) {
+        try {
+          data = JSON.parse(e.postData.contents);
+        } catch (parseError) {
+          Logger.log('❌ Ошибка парсинга JSON из postData.contents: ' + parseError);
+          Logger.log('  - Содержимое: ' + e.postData.contents);
+          return createErrorResponse('Ошибка парсинга JSON: ' + parseError.toString());
+        }
+      } 
+      // Если это URL-encoded
+      else if (contentType.includes('application/x-www-form-urlencoded') || contentType.includes('form-urlencoded')) {
+        Logger.log('📝 Обнаружен URL-encoded формат, парсим...');
+        // URL-encoded данные приходят в e.parameter, но проверим и postData.contents
+        if (e.parameter && Object.keys(e.parameter).length > 0) {
+          data = e.parameter;
+          Logger.log('  - Данные из e.parameter: ' + JSON.stringify(data));
+        } else {
+          // Пытаемся распарсить вручную
+          const params = new URLSearchParams(e.postData.contents);
+          data = {};
+          for (const [key, value] of params.entries()) {
+            data[key] = value;
+          }
+          Logger.log('  - Данные из postData.contents (распарсены): ' + JSON.stringify(data));
+        }
+      } else {
+        // Пытаемся распарсить как JSON по умолчанию
+        try {
+          data = JSON.parse(e.postData.contents);
+        } catch (parseError) {
+          Logger.log('⚠️ Не удалось распарсить как JSON, пробуем как URL-encoded');
+          // Пробуем как URL-encoded
+          if (e.parameter && Object.keys(e.parameter).length > 0) {
+            data = e.parameter;
+          } else {
+            return createErrorResponse('Не удалось распарсить данные запроса. Content-Type: ' + contentType);
+          }
+        }
       }
     } else if (e.parameter && Object.keys(e.parameter).length > 0) {
       // Если postData пустое, пытаемся получить данные из параметров URL
       Logger.log('⚠️ postData пустое, пытаемся получить данные из параметров');
       data = e.parameter;
+      Logger.log('  - Данные из e.parameter: ' + JSON.stringify(data));
       // Преобразуем строковые значения в нужные типы
       if (data.specs && typeof data.specs === 'string') {
         try {
@@ -175,7 +212,9 @@ function doPost(e) {
       }
     } else {
       Logger.log('❌ Нет данных в запросе (ни postData, ни parameters)');
-      return createErrorResponse('Нет данных в запросе. Проверьте, что данные отправляются в теле запроса как JSON.');
+      Logger.log('  - e.postData: ' + (e.postData ? 'есть' : 'НЕТ'));
+      Logger.log('  - e.parameter: ' + (e.parameter ? JSON.stringify(e.parameter) : 'НЕТ'));
+      return createErrorResponse('Нет данных в запросе. Проверьте, что данные отправляются в теле запроса.');
     }
     
     const action = data.action;
@@ -197,12 +236,19 @@ function doPost(e) {
         return createJsonResponse(updateEquipment(data.id, data));
       
       case 'delete':
-        // Удалить оборудование (мягкое удаление)
+        // Удалить оборудование (физическое удаление с удалением папки в Google Drive)
         if (!data.id) {
           return createErrorResponse('ID не указан');
         }
-        deleteEquipment(data.id);
-        return createJsonResponse({ success: true, message: 'Оборудование удалено' });
+        try {
+          deleteEquipment(data.id);
+          Logger.log('✅ deleteEquipment выполнена успешно');
+          return createJsonResponse({ success: true, message: 'Оборудование и папка в Google Drive удалены' });
+        } catch (deleteError) {
+          Logger.log('❌ Ошибка в deleteEquipment: ' + deleteError);
+          Logger.log('   Стек: ' + (deleteError.stack || 'нет стека'));
+          return createErrorResponse('Ошибка при удалении оборудования: ' + deleteError.toString());
+        }
       
       case 'createFolder':
         // Создать папку в Google Drive для оборудования
@@ -478,8 +524,8 @@ function addEquipment(data) {
       JSON.stringify(data.specs || {}),      // D: Характеристики (JSON строка)
       googleDriveUrl,                        // E: Google Drive URL
       qrCodeUrl,                             // F: QR Code URL
-      data.commissioningDate || '',          // G: Дата ввода
-      data.lastMaintenanceDate || '',        // H: Последнее обслуживание
+      data.commissioningDate ? String(data.commissioningDate).split('T')[0] : '',          // G: Дата ввода (только YYYY-MM-DD)
+      data.lastMaintenanceDate ? String(data.lastMaintenanceDate).split('T')[0] : '',        // H: Последнее обслуживание (только YYYY-MM-DD)
       data.status || 'active',               // I: Статус (по умолчанию active)
       now,                                   // J: Создано (дата и время)
       now                                    // K: Обновлено (дата и время)
@@ -568,10 +614,16 @@ function updateEquipment(id, data) {
           sheet.getRange(rowIndex, 6).setValue(data.qrCodeUrl); // Колонка F
         }
         if (data.commissioningDate !== undefined) {
-          sheet.getRange(rowIndex, 7).setValue(data.commissioningDate); // Колонка G
+          // Сохраняем дату как строку в формате YYYY-MM-DD
+          // Это гарантирует, что Google Sheets не будет автоматически конвертировать её в Date объект
+          // и дата не будет сдвигаться из-за часовых поясов
+          const dateStr = data.commissioningDate ? String(data.commissioningDate).split('T')[0] : '';
+          sheet.getRange(rowIndex, 7).setValue(dateStr); // Колонка G
         }
         if (data.lastMaintenanceDate !== undefined) {
-          sheet.getRange(rowIndex, 8).setValue(data.lastMaintenanceDate); // Колонка H
+          // Сохраняем дату как строку в формате YYYY-MM-DD
+          const dateStr = data.lastMaintenanceDate ? String(data.lastMaintenanceDate).split('T')[0] : '';
+          sheet.getRange(rowIndex, 8).setValue(dateStr); // Колонка H
         }
         if (data.status !== undefined) {
           sheet.getRange(rowIndex, 9).setValue(data.status); // Колонка I
@@ -606,12 +658,182 @@ function updateEquipment(id, data) {
  * Пример использования:
  * deleteEquipment('uuid');
  */
+/**
+ * Удалить оборудование (физическое удаление)
+ * 
+ * Удаляет оборудование из таблицы и папку в Google Drive (если она была создана)
+ * 
+ * @param {string} id - UUID оборудования для удаления
+ * @returns {void}
+ * 
+ * @throws {Error} Если оборудование не найдено или произошла ошибка
+ */
 function deleteEquipment(id) {
   try {
-    // Используем функцию updateEquipment для изменения статуса
-    updateEquipment(id, { status: 'archived' });
+    Logger.log('🗑️ Удаление оборудования с ID: ' + id);
+    
+    const sheet = getEquipmentSheet();
+    const dataRange = sheet.getDataRange();
+    const values = dataRange.getValues();
+    
+    // Ищем строку с нужным ID
+    let rowIndex = -1;
+    let equipment = null;
+    
+    for (let i = 1; i < values.length; i++) {
+      if (values[i][0] === id) {
+        rowIndex = i + 1; // Индекс строки в Sheets (начинается с 1)
+        // Получаем данные оборудования перед удалением
+        const headers = values[0];
+        equipment = parseRowToEquipment(values[i], headers);
+        break;
+      }
+    }
+    
+    if (rowIndex === -1) {
+      throw new Error('Оборудование с ID ' + id + ' не найдено');
+    }
+    
+    // Удаляем папку в Google Drive, если она была создана
+    // Делаем это ПЕРЕД удалением строки, чтобы в случае ошибки мы могли откатить
+    if (equipment && equipment.googleDriveUrl && equipment.googleDriveUrl.trim()) {
+      try {
+        Logger.log('📁 Попытка удалить папку в Google Drive: ' + equipment.googleDriveUrl);
+        deleteDriveFolder(equipment.googleDriveUrl);
+        Logger.log('✅ Папка в Google Drive успешно удалена');
+      } catch (folderError) {
+        Logger.log('⚠️ Предупреждение: Не удалось удалить папку в Google Drive: ' + folderError);
+        Logger.log('   Ошибка: ' + folderError.toString());
+        Logger.log('   Оборудование все равно будет удалено из базы данных');
+        // Продолжаем удаление оборудования даже если папка не удалилась
+        // Это не критическая ошибка - главное удалить оборудование из базы
+      }
+    } else {
+      Logger.log('ℹ️ Папка в Google Drive не указана или пуста, пропускаем удаление папки');
+    }
+    
+    // Удаляем строку из таблицы
+    Logger.log('🗑️ Удаление строки из таблицы (строка ' + rowIndex + ')');
+    try {
+      sheet.deleteRow(rowIndex);
+      Logger.log('✅ Оборудование успешно удалено из таблицы');
+    } catch (deleteError) {
+      Logger.log('❌ Ошибка при удалении строки из таблицы: ' + deleteError);
+      throw new Error('Не удалось удалить строку из таблицы: ' + deleteError.toString());
+    }
   } catch (error) {
-    Logger.log('Ошибка при удалении оборудования: ' + error);
+    Logger.log('❌ Ошибка при удалении оборудования: ' + error);
+    throw error;
+  }
+}
+
+/**
+ * Удалить папку в Google Drive по URL
+ * 
+ * Извлекает ID папки из URL и удаляет её
+ * 
+ * @param {string} folderUrl - URL папки в Google Drive
+ * @returns {void}
+ * 
+ * @throws {Error} Если папка не найдена или не удалось удалить
+ */
+function deleteDriveFolder(folderUrl) {
+  try {
+    Logger.log('🗑️ Удаление папки в Google Drive');
+    Logger.log('  - URL: ' + folderUrl);
+    Logger.log('  - URL type: ' + typeof folderUrl);
+    
+    if (!folderUrl || !folderUrl.trim()) {
+      Logger.log('⚠️ URL папки не указан, пропускаем удаление');
+      return;
+    }
+    
+    const trimmedUrl = folderUrl.trim();
+    Logger.log('  - Trimmed URL: ' + trimmedUrl);
+    
+    // Извлекаем ID папки из URL
+    // Поддерживаем разные форматы URL:
+    // - https://drive.google.com/drive/folders/FOLDER_ID
+    // - https://drive.google.com/open?id=FOLDER_ID
+    // - FOLDER_ID (если передан напрямую ID)
+    let folderId = null;
+    
+    // Формат 1: /folders/FOLDER_ID
+    const foldersMatch = trimmedUrl.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+    if (foldersMatch && foldersMatch[1]) {
+      folderId = foldersMatch[1];
+      Logger.log('  - Извлечен ID из формата /folders/: ' + folderId);
+    } else {
+      // Формат 2: ?id=FOLDER_ID
+      const idMatch = trimmedUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+      if (idMatch && idMatch[1]) {
+        folderId = idMatch[1];
+        Logger.log('  - Извлечен ID из формата ?id=: ' + folderId);
+      } else {
+        // Формат 3: возможно это уже сам ID (проверяем длину и формат)
+        const idPattern = /^[a-zA-Z0-9_-]{20,}$/;
+        if (idPattern.test(trimmedUrl) && !trimmedUrl.includes('/') && !trimmedUrl.includes('?')) {
+          folderId = trimmedUrl;
+          Logger.log('  - Используется URL как ID: ' + folderId);
+        }
+      }
+    }
+    
+    if (!folderId) {
+      Logger.log('⚠️ Не удалось извлечь ID папки из URL: ' + trimmedUrl);
+      Logger.log('   Поддерживаемые форматы:');
+      Logger.log('   - https://drive.google.com/drive/folders/FOLDER_ID');
+      Logger.log('   - https://drive.google.com/open?id=FOLDER_ID');
+      Logger.log('   - FOLDER_ID (прямой ID)');
+      throw new Error('Неверный формат URL папки: ' + trimmedUrl);
+    }
+    
+    Logger.log('  - Folder ID для удаления: ' + folderId);
+    
+    try {
+      // Проверяем доступ к DriveApp
+      Logger.log('🔍 Проверка доступа к Google Drive...');
+      DriveApp.getRootFolder();
+      Logger.log('✅ Доступ к Google Drive получен');
+      
+      // Получаем папку по ID
+      Logger.log('📁 Получение папки по ID...');
+      const folder = DriveApp.getFolderById(folderId);
+      const folderName = folder.getName();
+      Logger.log('  - Название папки: "' + folderName + '"');
+      Logger.log('  - Folder ID подтвержден: ' + folder.getId());
+      
+      // Удаляем папку (перемещаем в корзину)
+      Logger.log('🗑️ Перемещение папки в корзину...');
+      folder.setTrashed(true);
+      
+      Logger.log('✅ Папка "' + folderName + '" успешно удалена (перемещена в корзину)');
+      Logger.log('  - Folder ID: ' + folderId);
+      Logger.log('  - Folder URL: ' + trimmedUrl);
+    } catch (driveError) {
+      Logger.log('❌ Ошибка при удалении папки');
+      Logger.log('  - Error: ' + driveError);
+      Logger.log('  - Error type: ' + typeof driveError);
+      Logger.log('  - Error message: ' + driveError.toString());
+      Logger.log('  - Error stack: ' + (driveError.stack || 'нет стека'));
+      
+      // Проверяем тип ошибки для более понятного сообщения
+      const errorMessage = driveError.toString();
+      if (errorMessage.includes('not found') || errorMessage.includes('не найдена')) {
+        Logger.log('⚠️ Папка не найдена - возможно, она уже удалена');
+        // Не пробрасываем ошибку, если папка уже удалена
+        return;
+      } else if (errorMessage.includes('permission') || errorMessage.includes('access')) {
+        throw new Error('Нет прав на удаление папки в Google Drive. Убедитесь, что веб-приложение имеет полные права на Google Drive.');
+      } else {
+        throw new Error('Не удалось удалить папку в Google Drive: ' + driveError.toString());
+      }
+    }
+  } catch (error) {
+    Logger.log('❌ Ошибка в deleteDriveFolder: ' + error);
+    Logger.log('  - Error type: ' + typeof error);
+    Logger.log('  - Error message: ' + error.toString());
+    Logger.log('  - Error stack: ' + (error.stack || 'нет стека'));
     throw error;
   }
 }
@@ -736,14 +958,43 @@ function parseRowToEquipment(row, headers) {
         case 'Дата ввода':
           // Форматируем дату в ISO формат (YYYY-MM-DD)
           // Обрабатываем пустые значения: null, undefined, пустая строка
-          equipment.commissioningDate = (value && value !== '') ? formatDate(value) : '';
+          if (value && value !== '') {
+            Logger.log('📅 Чтение даты ввода из таблицы:');
+            Logger.log('  - value: ' + value);
+            Logger.log('  - typeof value: ' + typeof value);
+            Logger.log('  - value instanceof Date: ' + (value instanceof Date));
+            
+            // Если значение уже строка в формате YYYY-MM-DD, возвращаем как есть
+            if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+              Logger.log('  - Это строка YYYY-MM-DD, возвращаем как есть: ' + value);
+              equipment.commissioningDate = value;
+            } else {
+              // Иначе форматируем через formatDate
+              Logger.log('  - Форматируем через formatDate...');
+              const formatted = formatDate(value);
+              Logger.log('  - Результат formatDate: ' + formatted);
+              equipment.commissioningDate = formatted;
+            }
+          } else {
+            equipment.commissioningDate = '';
+          }
           break;
           
         case 'Последнее обслуживание':
           // Форматируем дату в ISO формат (YYYY-MM-DD)
           // Обрабатываем пустые значения: null, undefined, пустая строка
           // Если обслуживание не проводилось, ячейка может быть пустой - это нормально
-          equipment.lastMaintenanceDate = (value && value !== '') ? formatDate(value) : '';
+          if (value && value !== '') {
+            // Если значение уже строка в формате YYYY-MM-DD, возвращаем как есть
+            if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+              equipment.lastMaintenanceDate = value;
+            } else {
+              // Иначе форматируем через formatDate
+              equipment.lastMaintenanceDate = formatDate(value);
+            }
+          } else {
+            equipment.lastMaintenanceDate = '';
+          }
           break;
           
         case 'Статус':
@@ -791,20 +1042,49 @@ function formatDate(dateValue) {
   }
   
   try {
-    // Создаем объект Date из переданного значения
-    const date = new Date(dateValue);
+    // Если значение уже в формате YYYY-MM-DD, возвращаем как есть
+    if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+      return dateValue;
+    }
+    
+    // Если это объект Date (из Google Sheets), используем его напрямую
+    let date;
+    if (dateValue instanceof Date) {
+      date = dateValue;
+      Logger.log('  - Это объект Date из Google Sheets');
+      Logger.log('  - date.toString(): ' + date.toString());
+      Logger.log('  - date.toISOString(): ' + date.toISOString());
+      Logger.log('  - date.getFullYear(): ' + date.getFullYear());
+      Logger.log('  - date.getMonth(): ' + date.getMonth());
+      Logger.log('  - date.getDate(): ' + date.getDate());
+    } else {
+      // Создаем объект Date из переданного значения
+      date = new Date(dateValue);
+      Logger.log('  - Создан объект Date из: ' + dateValue);
+      Logger.log('  - date.toString(): ' + date.toString());
+    }
     
     // Проверяем, что дата валидна (не Invalid Date)
     if (isNaN(date.getTime())) {
+      Logger.log('  - ❌ Невалидная дата');
       return '';
     }
     
-    // Преобразуем в ISO строку и берем только часть с датой (до 'T')
-    // Например: "2024-01-15T10:30:00.000Z" -> "2024-01-15"
-    return date.toISOString().split('T')[0];
+    // ВАЖНО: Используем локальные компоненты даты (getFullYear, getMonth, getDate)
+    // вместо UTC компонентов, чтобы избежать проблем с часовыми поясами
+    // Google Sheets хранит даты в локальном времени, поэтому мы должны использовать
+    // локальные компоненты для форматирования
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0'); // месяцы начинаются с 0
+    const day = String(date.getDate()).padStart(2, '0');
+    
+    const result = year + '-' + month + '-' + day;
+    Logger.log('  - ✅ Результат форматирования: ' + result);
+    return result;
   } catch (e) {
     // При любой ошибке возвращаем пустую строку
     // Это безопасно - пустая дата не вызовет проблем в приложении
+    Logger.log('Ошибка форматирования даты: ' + e + ', значение: ' + dateValue);
     return '';
   }
 }
@@ -1119,6 +1399,38 @@ function requestDrivePermissions() {
     Logger.log('❌ Ошибка: ' + error.toString());
     Logger.log('   Это нормально - Google должен показать окно авторизации');
     throw error; // Пробрасываем, чтобы вызвать окно авторизации
+  }
+}
+
+/**
+ * Тестовая функция для проверки удаления папки
+ * 
+ * Запустите эту функцию для тестирования удаления папки
+ * В меню: Выполнить → testDeleteDriveFolder
+ * 
+ * ВАЖНО: Укажите URL папки в переменной testFolderUrl перед запуском
+ */
+function testDeleteDriveFolder() {
+  try {
+    // УКАЖИТЕ URL ПАПКИ ДЛЯ ТЕСТИРОВАНИЯ
+    const testFolderUrl = 'https://drive.google.com/drive/folders/YOUR_FOLDER_ID';
+    
+    Logger.log('🧪 Тестирование удаления папки');
+    Logger.log('  - URL: ' + testFolderUrl);
+    
+    if (testFolderUrl.includes('YOUR_FOLDER_ID')) {
+      Logger.log('❌ Ошибка: Укажите реальный URL папки в переменной testFolderUrl');
+      Logger.log('   Пример: https://drive.google.com/drive/folders/1a2b3c4d5e6f7g8h9i0j');
+      return;
+    }
+    
+    deleteDriveFolder(testFolderUrl);
+    
+    Logger.log('✅ Тест успешен! Папка удалена');
+  } catch (error) {
+    Logger.log('❌ Ошибка при тестировании: ' + error.toString());
+    Logger.log('Стек ошибки: ' + (error.stack || 'нет стека'));
+    throw error;
   }
 }
 

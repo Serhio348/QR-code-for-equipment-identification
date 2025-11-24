@@ -32,7 +32,23 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
     
     try {
       const allEquipment = await getAllEquipment();
-      setEquipmentList(allEquipment);
+      
+      // НЕ нормализуем даты - используем их как есть с сервера
+      // Нормализация может привести к потере данных или изменению даты
+      // Если дата приходит в формате YYYY-MM-DD, она уже правильная
+      const normalizedEquipment = allEquipment.map(eq => {
+        // Просто убираем время, если оно есть, но не меняем саму дату
+        const commissioningDate = eq.commissioningDate ? String(eq.commissioningDate).split('T')[0].split(' ')[0].trim() : '';
+        const lastMaintenanceDate = eq.lastMaintenanceDate ? String(eq.lastMaintenanceDate).split('T')[0].split(' ')[0].trim() : '';
+        
+        return {
+          ...eq,
+          commissioningDate: commissioningDate,
+          lastMaintenanceDate: lastMaintenanceDate
+        };
+      });
+      
+      setEquipmentList(normalizedEquipment);
     } catch (err: any) {
       console.error('Ошибка загрузки оборудования:', err);
       setError('Не удалось загрузить список оборудования');
@@ -68,12 +84,48 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return '—';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('ru-RU', { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    });
+    
+    // Убираем возможное время из строки даты (если есть)
+    // Например: "2024-01-15T00:00:00.000Z" -> "2024-01-15"
+    const dateOnly = dateString.split('T')[0].split(' ')[0].trim();
+    
+    // Проверяем, что это формат YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) {
+      const [year, month, day] = dateOnly.split('-').map(Number);
+      
+      // ВАЖНО: НЕ используем new Date() для создания даты, так как это может вызвать проблемы
+      // Вместо этого форматируем напрямую из компонентов строки
+      // Это гарантирует, что дата не будет сдвигаться из-за часовых поясов
+      const months = [
+        'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+        'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
+      ];
+      
+      // Проверяем валидность месяца и дня
+      if (month < 1 || month > 12 || day < 1 || day > 31) {
+        console.warn('⚠️ Невалидная дата:', { year, month, day, dateOnly });
+        return '—';
+      }
+      
+      return `${day} ${months[month - 1]} ${year} г.`;
+    }
+    
+    // Для других форматов пытаемся извлечь дату без использования new Date()
+    const match = dateString.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (match) {
+      const [, year, month, day] = match.map(Number);
+      const months = [
+        'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+        'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
+      ];
+      
+      if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+        return `${day} ${months[month - 1]} ${year} г.`;
+      }
+    }
+    
+    console.warn('⚠️ Не удалось распарсить дату:', dateString);
+    return '—';
   };
 
   const getStatusBadge = (status: string) => {
