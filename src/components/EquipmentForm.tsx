@@ -74,6 +74,14 @@ const EquipmentForm: React.FC<EquipmentFormProps> = ({ equipmentId, onSave, onCa
     try {
       const equipment = await getEquipmentById(equipmentId!);
       if (equipment) {
+        console.log('📦 Загружено оборудование для редактирования:', {
+          id: equipment.id,
+          name: equipment.name,
+          type: equipment.type,
+          specs: equipment.specs,
+          specsType: typeof equipment.specs
+        });
+        
         setName(equipment.name);
         setType(equipment.type);
         setStatus(equipment.status);
@@ -81,7 +89,20 @@ const EquipmentForm: React.FC<EquipmentFormProps> = ({ equipmentId, onSave, onCa
         setQrCodeUrl(equipment.qrCodeUrl);
         // Нормализуем дату перед установкой в state
         setCommissioningDate(normalizeDate(equipment.commissioningDate));
-        setSpecs(equipment.specs || {});
+        
+        // Убеждаемся, что specs это объект, а не строка
+        let specsToSet = equipment.specs || {};
+        if (typeof specsToSet === 'string') {
+          try {
+            specsToSet = JSON.parse(specsToSet);
+          } catch (e) {
+            console.warn('⚠️ Не удалось распарсить specs как JSON:', e);
+            specsToSet = {};
+          }
+        }
+        
+        console.log('📋 Устанавливаем specs:', specsToSet);
+        setSpecs(specsToSet);
       } else {
         setError('Оборудование не найдено');
       }
@@ -107,6 +128,32 @@ const EquipmentForm: React.FC<EquipmentFormProps> = ({ equipmentId, onSave, onCa
       [key]: value
     }));
   };
+
+  // Рендер поля "Наименование" (общее для всех типов оборудования)
+  const renderNameField = () => (
+    <div className="form-group">
+      <label>Наименование:</label>
+      <input
+        type="text"
+        value={specs.name || ''}
+        onChange={(e) => handleSpecChange('name', e.target.value)}
+        placeholder="Например: Фильтр обезжелезивания ФО-0,8-1,5"
+      />
+    </div>
+  );
+
+  // Рендер поля "Инвентарный номер" (общее для всех типов оборудования)
+  const renderInventoryNumberField = () => (
+    <div className="form-group">
+      <label>Инвентарный номер:</label>
+      <input
+        type="text"
+        value={specs.inventoryNumber || ''}
+        onChange={(e) => handleSpecChange('inventoryNumber', e.target.value)}
+        placeholder="Например: ИНВ-001234"
+      />
+    </div>
+  );
 
   // Валидация формы
   const validateForm = (): boolean => {
@@ -242,6 +289,8 @@ const EquipmentForm: React.FC<EquipmentFormProps> = ({ equipmentId, onSave, onCa
       case 'filter':
         return (
           <>
+            {renderNameField()}
+            {renderInventoryNumberField()}
             <div className="form-group">
               <label>Высота:</label>
               <input
@@ -310,6 +359,8 @@ const EquipmentForm: React.FC<EquipmentFormProps> = ({ equipmentId, onSave, onCa
       case 'pump':
         return (
           <>
+            {renderNameField()}
+            {renderInventoryNumberField()}
             <div className="form-group">
               <label>Производительность:</label>
               <input
@@ -342,6 +393,8 @@ const EquipmentForm: React.FC<EquipmentFormProps> = ({ equipmentId, onSave, onCa
       case 'tank':
         return (
           <>
+            {renderNameField()}
+            {renderInventoryNumberField()}
             <div className="form-group">
               <label>Объем:</label>
               <input
@@ -374,6 +427,8 @@ const EquipmentForm: React.FC<EquipmentFormProps> = ({ equipmentId, onSave, onCa
       case 'valve':
         return (
           <>
+            {renderNameField()}
+            {renderInventoryNumberField()}
             <div className="form-group">
               <label>Диаметр:</label>
               <input
@@ -390,6 +445,187 @@ const EquipmentForm: React.FC<EquipmentFormProps> = ({ equipmentId, onSave, onCa
                 value={specs.valveType || ''}
                 onChange={(e) => handleSpecChange('valveType', e.target.value)}
                 placeholder="Например: Шаровой"
+              />
+            </div>
+          </>
+        );
+      case 'electrical':
+        return (
+          <>
+            {renderNameField()}
+            {renderInventoryNumberField()}
+            <div className="form-group">
+              <label>Мощность:</label>
+              <input
+                type="text"
+                value={specs.power || ''}
+                onChange={(e) => handleSpecChange('power', e.target.value)}
+                placeholder="Например: 5,5 кВт"
+              />
+            </div>
+            <div className="form-group">
+              <label>Напряжение:</label>
+              <input
+                type="text"
+                value={specs.voltage || ''}
+                onChange={(e) => handleSpecChange('voltage', e.target.value)}
+                placeholder="Например: 380 В"
+              />
+            </div>
+            <div className="form-group">
+              <label>Ток:</label>
+              <input
+                type="text"
+                value={specs.current || ''}
+                onChange={(e) => handleSpecChange('current', e.target.value)}
+                placeholder="Например: 10 А"
+              />
+            </div>
+            <div className="form-group">
+              <label>Тип оборудования:</label>
+              <input
+                type="text"
+                value={specs.equipmentType || ''}
+                onChange={(e) => handleSpecChange('equipmentType', e.target.value)}
+                placeholder="Например: Электродвигатель, Щит управления"
+              />
+            </div>
+            <div className="form-group">
+              <label>Класс защиты:</label>
+              <input
+                type="text"
+                value={specs.protectionClass || ''}
+                onChange={(e) => handleSpecChange('protectionClass', e.target.value)}
+                placeholder="Например: IP54"
+              />
+            </div>
+          </>
+        );
+      case 'ventilation':
+        return (
+          <>
+            {renderNameField()}
+            {renderInventoryNumberField()}
+            <div className="form-group">
+              <label>Производительность:</label>
+              <input
+                type="text"
+                value={specs.capacity || ''}
+                onChange={(e) => handleSpecChange('capacity', e.target.value)}
+                placeholder="Например: 1000 м³/ч"
+              />
+            </div>
+            <div className="form-group">
+              <label>Мощность:</label>
+              <input
+                type="text"
+                value={specs.power || ''}
+                onChange={(e) => handleSpecChange('power', e.target.value)}
+                placeholder="Например: 1,5 кВт"
+              />
+            </div>
+            <div className="form-group">
+              <label>Тип вентилятора:</label>
+              <input
+                type="text"
+                value={specs.fanType || ''}
+                onChange={(e) => handleSpecChange('fanType', e.target.value)}
+                placeholder="Например: Осевой, Центробежный"
+              />
+            </div>
+            <div className="form-group">
+              <label>Диаметр:</label>
+              <input
+                type="text"
+                value={specs.diameter || ''}
+                onChange={(e) => handleSpecChange('diameter', e.target.value)}
+                placeholder="Например: 315 мм"
+              />
+            </div>
+            <div className="form-group">
+              <label>Напор:</label>
+              <input
+                type="text"
+                value={specs.pressure || ''}
+                onChange={(e) => handleSpecChange('pressure', e.target.value)}
+                placeholder="Например: 200 Па"
+              />
+            </div>
+          </>
+        );
+      case 'plumbing':
+        return (
+          <>
+            {renderNameField()}
+            {renderInventoryNumberField()}
+            <div className="form-group">
+              <label>Диаметр:</label>
+              <input
+                type="text"
+                value={specs.diameter || ''}
+                onChange={(e) => handleSpecChange('diameter', e.target.value)}
+                placeholder="Например: DN50, 1/2 дюйма"
+              />
+            </div>
+            <div className="form-group">
+              <label>Материал:</label>
+              <input
+                type="text"
+                value={specs.material || ''}
+                onChange={(e) => handleSpecChange('material', e.target.value)}
+                placeholder="Например: Полипропилен, Металл"
+              />
+            </div>
+            <div className="form-group">
+              <label>Тип оборудования:</label>
+              <input
+                type="text"
+                value={specs.equipmentType || ''}
+                onChange={(e) => handleSpecChange('equipmentType', e.target.value)}
+                placeholder="Например: Смеситель, Кран, Труба"
+              />
+            </div>
+            <div className="form-group">
+              <label>Рабочее давление:</label>
+              <input
+                type="text"
+                value={specs.workingPressure || ''}
+                onChange={(e) => handleSpecChange('workingPressure', e.target.value)}
+                placeholder="Например: 6 бар"
+              />
+            </div>
+            <div className="form-group">
+              <label>Температура:</label>
+              <input
+                type="text"
+                value={specs.temperature || ''}
+                onChange={(e) => handleSpecChange('temperature', e.target.value)}
+                placeholder="Например: до 95°C"
+              />
+            </div>
+          </>
+        );
+      case 'industrial':
+        return (
+          <>
+            {renderNameField()}
+            {renderInventoryNumberField()}
+            <div className="form-group">
+              <label>Заводской номер:</label>
+              <input
+                type="text"
+                value={specs.serialNumber || ''}
+                onChange={(e) => handleSpecChange('serialNumber', e.target.value)}
+                placeholder="Например: SN-123456"
+              />
+            </div>
+            <div className="form-group">
+              <label>Производительность:</label>
+              <input
+                type="text"
+                value={specs.capacity || ''}
+                onChange={(e) => handleSpecChange('capacity', e.target.value)}
+                placeholder="Например: 1000 ед/ч, 50 т/ч"
               />
             </div>
           </>
@@ -459,6 +695,10 @@ const EquipmentForm: React.FC<EquipmentFormProps> = ({ equipmentId, onSave, onCa
               <option value="pump">Насос</option>
               <option value="tank">Резервуар</option>
               <option value="valve">Клапан</option>
+              <option value="electrical">Электрооборудование</option>
+              <option value="ventilation">Вентиляционное оборудование</option>
+              <option value="plumbing">Сантехническое оборудование</option>
+              <option value="industrial">Прочее промышленное оборудование</option>
               <option value="other">Другое</option>
             </select>
           </div>

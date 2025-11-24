@@ -68,6 +68,7 @@ function doOptions(e) {
  * - ?action=getAll - получить все записи
  * - ?action=getById&id=123 - получить запись с ID 123
  * - ?action=getByType&type=filter - получить все фильтры
+ * - ?action=getByType&type=industrial - получить все промышленное оборудование
  */
 function doGet(e) {
   try {
@@ -89,7 +90,7 @@ function doGet(e) {
         return createJsonResponse(getEquipmentById(id));
       
       case 'getByType':
-        // Получить оборудование определенного типа (filter, pump, tank и т.д.)
+        // Получить оборудование определенного типа (filter, pump, tank, electrical, ventilation, plumbing, industrial, other)
         const type = e.parameter.type;
         if (!type) {
           return createErrorResponse('Тип не указан');
@@ -374,7 +375,7 @@ function getEquipmentById(id) {
 /**
  * Получить оборудование по типу
  * 
- * Фильтрует все оборудование по типу (filter, pump, tank, valve, other)
+ * Фильтрует все оборудование по типу (filter, pump, tank, valve, electrical, ventilation, plumbing, industrial, other)
  * 
  * @param {string} type - Тип оборудования для фильтрации
  * @returns {Array} Массив объектов Equipment указанного типа

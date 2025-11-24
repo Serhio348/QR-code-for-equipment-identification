@@ -186,6 +186,10 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
             <option value="pump">Насосы</option>
             <option value="tank">Резервуары</option>
             <option value="valve">Клапаны</option>
+            <option value="electrical">Электрооборудование</option>
+            <option value="ventilation">Вентиляционное оборудование</option>
+            <option value="plumbing">Сантехническое оборудование</option>
+            <option value="industrial">Прочее промышленное оборудование</option>
             <option value="other">Другое</option>
           </select>
           
@@ -240,6 +244,13 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
                 <div className="card-info">
                   <span className="info-value info-value-bold">{equipment.name}</span>
                 </div>
+                
+                {equipment.specs?.inventoryNumber && (
+                  <div className="card-info">
+                    <span className="info-label">Инвентарный номер:</span>
+                    <span className="info-value">{equipment.specs.inventoryNumber}</span>
+                  </div>
+                )}
                 
                 {equipment.commissioningDate && (
                   <div className="card-info">
