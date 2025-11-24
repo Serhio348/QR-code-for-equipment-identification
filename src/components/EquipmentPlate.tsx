@@ -8,16 +8,19 @@ interface EquipmentPlateProps {
   filterNumber?: number;
   commissioningDate?: string;
   lastMaintenanceDate?: string;
+  qrCodeUrl?: string; // Уникальный URL для QR-кода
 }
 
 const EquipmentPlate: React.FC<EquipmentPlateProps> = ({ 
   specs, 
   filterNumber, 
   commissioningDate, 
-  lastMaintenanceDate 
+  lastMaintenanceDate,
+  qrCodeUrl
 }) => {
-  // Прямая ссылка на Google Drive с документацией
-  const googleDriveUrl = 'https://drive.google.com/drive/folders/1t90itk12veviwYM1LH7DZ15G4slpPnon';
+  // Используем переданный URL или дефолтный
+  const defaultUrl = 'https://drive.google.com/drive/folders/1t90itk12veviwYM1LH7DZ15G4slpPnon';
+  const urlForQR = qrCodeUrl || defaultUrl;
   
   const formatDate = (dateString?: string) => {
     if (!dateString) return '—';
@@ -81,7 +84,7 @@ const EquipmentPlate: React.FC<EquipmentPlateProps> = ({
         </div>
         
         <div className="qr-section">
-          <QRCodeComponent url={googleDriveUrl} />
+          <QRCodeComponent url={urlForQR} />
           <p className="qr-label">Отсканируйте для получения полной информации</p>
         </div>
       </div>

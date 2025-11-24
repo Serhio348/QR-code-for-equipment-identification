@@ -38,8 +38,9 @@
  * @returns {TextOutput} Ответ с CORS заголовками
  */
 function doOptions(e) {
-  // Google Apps Script автоматически обрабатывает CORS при доступе "Все"
-  // Эта функция нужна для обработки preflight запросов
+  // Обработка CORS preflight запросов
+  // Браузер отправляет OPTIONS запрос перед POST запросами для проверки CORS
+  // Google Apps Script автоматически устанавливает CORS заголовки при настройке "У кого есть доступ: Все"
   return ContentService
     .createTextOutput('')
     .setMimeType(ContentService.MimeType.JSON);
@@ -134,9 +135,53 @@ function doGet(e) {
  */
 function doPost(e) {
   try {
+    // Проверяем, что объект события передан
+    if (!e) {
+      Logger.log('❌ Ошибка: объект события (e) не передан в doPost');
+      return createErrorResponse('Ошибка: объект события не передан');
+    }
+    
+    // Логируем входящий запрос для отладки
+    Logger.log('📨 Получен POST запрос');
+    Logger.log('  - e: ' + (e ? 'есть' : 'НЕТ'));
+    Logger.log('  - postData: ' + (e.postData ? 'есть' : 'НЕТ'));
+    Logger.log('  - postData.contents: ' + (e.postData ? e.postData.contents : 'НЕТ ДАННЫХ'));
+    Logger.log('  - postData.type: ' + (e.postData ? e.postData.type : 'НЕТ'));
+    Logger.log('  - parameters: ' + JSON.stringify(e.parameter || {}));
+    
     // Парсим JSON данные из тела запроса
-    const data = JSON.parse(e.postData.contents);
+    let data;
+    
+    // Проверяем, есть ли данные в postData
+    if (e.postData && e.postData.contents) {
+      try {
+        data = JSON.parse(e.postData.contents);
+      } catch (parseError) {
+        Logger.log('❌ Ошибка парсинга JSON из postData.contents: ' + parseError);
+        Logger.log('  - Содержимое: ' + e.postData.contents);
+        return createErrorResponse('Ошибка парсинга JSON: ' + parseError.toString());
+      }
+    } else if (e.parameter && Object.keys(e.parameter).length > 0) {
+      // Если postData пустое, пытаемся получить данные из параметров URL
+      Logger.log('⚠️ postData пустое, пытаемся получить данные из параметров');
+      data = e.parameter;
+      // Преобразуем строковые значения в нужные типы
+      if (data.specs && typeof data.specs === 'string') {
+        try {
+          data.specs = JSON.parse(data.specs);
+        } catch (e) {
+          // Игнорируем ошибку парсинга specs
+        }
+      }
+    } else {
+      Logger.log('❌ Нет данных в запросе (ни postData, ни parameters)');
+      return createErrorResponse('Нет данных в запросе. Проверьте, что данные отправляются в теле запроса как JSON.');
+    }
+    
     const action = data.action;
+    Logger.log('  - action: ' + (action || 'НЕ УКАЗАНО'));
+    Logger.log('  - data.name: ' + (data.name || 'НЕ УКАЗАНО'));
+    Logger.log('  - Полный объект data: ' + JSON.stringify(data));
     
     // Выполняем действие в зависимости от параметра
     switch(action) {
@@ -159,9 +204,16 @@ function doPost(e) {
         deleteEquipment(data.id);
         return createJsonResponse({ success: true, message: 'Оборудование удалено' });
       
+      case 'createFolder':
+        // Создать папку в Google Drive для оборудования
+        if (!data.name) {
+          return createErrorResponse('Название оборудования не указано');
+        }
+        return createJsonResponse(createDriveFolder(data.name, data.parentFolderId));
+      
       default:
         // Если действие не распознано, возвращаем ошибку
-        return createErrorResponse('Неизвестное действие. Используйте: add, update, delete');
+        return createErrorResponse('Неизвестное действие. Используйте: add, update, delete, createFolder');
     }
   } catch (error) {
     // Логируем ошибку для отладки
@@ -331,11 +383,27 @@ function getEquipmentByType(type) {
  */
 function addEquipment(data) {
   try {
+    // Проверяем, что данные переданы
+    if (!data) {
+      Logger.log('❌ Ошибка: данные не переданы в addEquipment');
+      throw new Error('Данные оборудования не переданы');
+    }
+    
+    // Логируем входящие данные для отладки
+    Logger.log('📥 Получены данные для создания оборудования:');
+    Logger.log('  - data: ' + (data ? 'есть' : 'НЕТ'));
+    Logger.log('  - typeof data: ' + typeof data);
+    Logger.log('  - name: ' + (data.name || 'НЕ УКАЗАНО'));
+    Logger.log('  - type: ' + (data.type || 'НЕ УКАЗАНО'));
+    Logger.log('  - googleDriveUrl: ' + (data.googleDriveUrl || 'не указан'));
+    
     // Валидация обязательных полей
     if (!data.name) {
+      Logger.log('❌ Ошибка валидации: название не указано');
       throw new Error('Название обязательно');
     }
     if (!data.type) {
+      Logger.log('❌ Ошибка валидации: тип не указан');
       throw new Error('Тип обязателен');
     }
     
@@ -347,6 +415,59 @@ function addEquipment(data) {
     // Получаем текущую дату и время
     const now = new Date();
     
+    // Автоматически создаем папку в Google Drive, если URL не указан
+    let googleDriveUrl = data.googleDriveUrl || '';
+    let qrCodeUrl = data.qrCodeUrl || '';
+    
+    if (!googleDriveUrl) {
+      // Проверяем, что название оборудования есть перед созданием папки
+      Logger.log('🔍 Проверка данных перед созданием папки:');
+      Logger.log('  - data.name: ' + (data.name !== undefined ? '"' + data.name + '"' : 'undefined'));
+      Logger.log('  - typeof data.name: ' + typeof data.name);
+      Logger.log('  - data.name после trim: ' + (data.name ? '"' + String(data.name).trim() + '"' : 'пусто'));
+      
+      // Более строгая проверка
+      const equipmentName = data.name;
+      if (!equipmentName) {
+        Logger.log('⚠️ Предупреждение: Не указано название оборудования (equipmentName is falsy), папка не будет создана');
+      } else if (typeof equipmentName !== 'string') {
+        Logger.log('⚠️ Предупреждение: Название оборудования не является строкой (type: ' + typeof equipmentName + '), папка не будет создана');
+      } else {
+        const trimmedName = equipmentName.trim();
+        if (!trimmedName) {
+          Logger.log('⚠️ Предупреждение: Название оборудования пустое после trim, папка не будет создана');
+        } else {
+          try {
+            // Создаем папку с названием оборудования
+            Logger.log('📁 Вызываем createDriveFolder с названием: "' + trimmedName + '"');
+            Logger.log('📁 parentFolderId: ' + (data.parentFolderId || 'не указан'));
+            const folderResult = createDriveFolder(trimmedName, data.parentFolderId);
+            googleDriveUrl = folderResult.folderUrl;
+            // Используем URL папки для QR-кода, если не указан отдельный URL
+            if (!qrCodeUrl) {
+              qrCodeUrl = folderResult.folderUrl;
+            }
+            Logger.log('✅ УСПЕШНО создана папка для оборудования: ' + trimmedName);
+            Logger.log('✅ URL папки: ' + googleDriveUrl);
+            Logger.log('✅ Folder ID: ' + folderResult.folderId);
+          } catch (folderError) {
+            // Если не удалось создать папку, логируем ошибку с подробностями
+            const errorMessage = folderError.toString();
+            const errorStack = folderError.stack || 'нет стека';
+            Logger.log('❌ ОШИБКА при создании папки для оборудования "' + trimmedName + '"');
+            Logger.log('❌ Сообщение ошибки: ' + errorMessage);
+            Logger.log('❌ Стек ошибки: ' + errorStack);
+            Logger.log('⚠️ Оборудование будет создано без папки. Пользователь сможет добавить ссылку на папку позже при редактировании.');
+            // Продолжаем создание оборудования без папки
+            // Пользователь сможет добавить ссылку на папку позже при редактировании
+          }
+        }
+      }
+    } else if (!qrCodeUrl) {
+      // Если Google Drive URL указан, но QR Code URL нет, используем Google Drive URL
+      qrCodeUrl = googleDriveUrl;
+    }
+    
     // Формируем строку для добавления в таблицу
     // Порядок колонок: ID, Название, Тип, Характеристики, Google Drive URL, 
     // QR Code URL, Дата ввода, Последнее обслуживание, Статус, Создано, Обновлено
@@ -355,8 +476,8 @@ function addEquipment(data) {
       data.name,                             // B: Название
       data.type || '',                       // C: Тип
       JSON.stringify(data.specs || {}),      // D: Характеристики (JSON строка)
-      data.googleDriveUrl || '',             // E: Google Drive URL
-      data.qrCodeUrl || '',                  // F: QR Code URL
+      googleDriveUrl,                        // E: Google Drive URL
+      qrCodeUrl,                             // F: QR Code URL
       data.commissioningDate || '',          // G: Дата ввода
       data.lastMaintenanceDate || '',        // H: Последнее обслуживание
       data.status || 'active',               // I: Статус (по умолчанию active)
@@ -373,8 +494,8 @@ function addEquipment(data) {
       name: data.name,
       type: data.type,
       specs: data.specs || {},
-      googleDriveUrl: data.googleDriveUrl || '',
-      qrCodeUrl: data.qrCodeUrl || '',
+      googleDriveUrl: googleDriveUrl,
+      qrCodeUrl: qrCodeUrl,
       commissioningDate: data.commissioningDate || '',
       lastMaintenanceDate: data.lastMaintenanceDate || '',
       status: data.status || 'active',
@@ -705,6 +826,143 @@ function generateId() {
 }
 
 // ============================================================================
+// ФУНКЦИИ РАБОТЫ С GOOGLE DRIVE
+// ============================================================================
+
+/**
+ * Создать папку в Google Drive для оборудования
+ * 
+ * Создает новую папку в Google Drive с названием оборудования.
+ * Папка будет содержать документацию и журнал обслуживания для оборудования.
+ * 
+ * @param {string} equipmentName - Название оборудования (будет использовано как имя папки)
+ * @param {string} parentFolderId - (Опционально) ID родительской папки, в которой создать папку
+ * @returns {Object} Объект с URL созданной папки
+ * 
+ * Формат возвращаемого объекта:
+ * {
+ *   folderId: "1a2b3c4d5e6f7g8h9i0j",
+ *   folderUrl: "https://drive.google.com/drive/folders/1a2b3c4d5e6f7g8h9i0j",
+ *   folderName: "Фильтр обезжелезивания ФО-0,8-1,5 №1"
+ * }
+ * 
+ * @throws {Error} Если не удалось создать папку
+ * 
+ * Пример использования:
+ * const result = createDriveFolder("Фильтр обезжелезивания ФО-0,8-1,5 №1");
+ * // result.folderUrl можно использовать для googleDriveUrl и qrCodeUrl
+ */
+function createDriveFolder(equipmentName, parentFolderId) {
+  try {
+    Logger.log('📁 createDriveFolder вызвана');
+    Logger.log('  - equipmentName: ' + (equipmentName !== undefined ? '"' + equipmentName + '"' : 'undefined'));
+    Logger.log('  - typeof equipmentName: ' + typeof equipmentName);
+    Logger.log('  - parentFolderId: ' + (parentFolderId || 'не указан'));
+    
+    // Проверяем, что название оборудования передано
+    if (!equipmentName) {
+      Logger.log('❌ Ошибка: equipmentName is falsy');
+      throw new Error('Название оборудования не указано (equipmentName is undefined or null)');
+    }
+    
+    // Преобразуем в строку на случай, если передано не строковое значение
+    const nameString = String(equipmentName);
+    Logger.log('  - nameString: "' + nameString + '"');
+    
+    // Очищаем название от недопустимых символов для имени папки
+    // Google Drive не допускает некоторые символы: / \ : * ? " < > |
+    const folderName = nameString
+      .replace(/[/\\:*?"<>|]/g, '_') // Заменяем недопустимые символы на подчеркивание
+      .trim();
+    
+    Logger.log('  - folderName после обработки: "' + folderName + '"');
+    
+    if (!folderName || folderName === '') {
+      Logger.log('❌ Ошибка: folderName пустое после обработки');
+      throw new Error('Название папки не может быть пустым после обработки');
+    }
+    
+    // Проверяем доступность DriveApp
+    Logger.log('🔍 Проверка доступа к Google Drive...');
+    try {
+      // Пробуем получить корневую папку для проверки доступа
+      const rootFolder = DriveApp.getRootFolder();
+      Logger.log('✅ Доступ к Google Drive получен');
+      Logger.log('  - Root folder name: ' + rootFolder.getName());
+      Logger.log('  - Root folder ID: ' + rootFolder.getId());
+    } catch (accessError) {
+      Logger.log('❌ Ошибка доступа к Google Drive: ' + accessError);
+      Logger.log('  - Error type: ' + typeof accessError);
+      Logger.log('  - Error message: ' + accessError.toString());
+      Logger.log('  - Error stack: ' + (accessError.stack || 'нет стека'));
+      // Не прерываем выполнение - возможно, доступ есть, но проверка не прошла
+      // Попробуем создать папку напрямую
+      Logger.log('⚠️ Предупреждение: Проверка доступа не прошла, но попробуем создать папку');
+    }
+    
+    let folder;
+    
+    // Если указана родительская папка, создаем в ней
+    if (parentFolderId) {
+      try {
+        const parentFolder = DriveApp.getFolderById(parentFolderId);
+        folder = parentFolder.createFolder(folderName);
+      } catch (error) {
+        // Если родительская папка не найдена, создаем в корне
+        Logger.log('Родительская папка не найдена, создаем в корне: ' + error);
+        try {
+          folder = DriveApp.createFolder(folderName);
+        } catch (createError) {
+          Logger.log('Ошибка создания папки в корне: ' + createError);
+          throw new Error('Не удалось создать папку в Google Drive. Возможные причины: нет прав на создание папок, недостаточно места в Drive, или проблема с авторизацией. Проверьте логи в Google Apps Script.');
+        }
+      }
+    } else {
+      // Создаем папку в корне Google Drive
+      Logger.log('📁 Создание папки в корне Google Drive: "' + folderName + '"');
+      try {
+        folder = DriveApp.createFolder(folderName);
+        Logger.log('✅ Папка успешно создана в корне');
+      } catch (createError) {
+        Logger.log('❌ Ошибка создания папки в корне');
+        Logger.log('  - Error: ' + createError);
+        Logger.log('  - Error type: ' + typeof createError);
+        Logger.log('  - Error message: ' + createError.toString());
+        Logger.log('  - Error stack: ' + (createError.stack || 'нет стека'));
+        // Проверяем тип ошибки для более понятного сообщения
+        const errorMessage = createError.toString();
+        if (errorMessage.includes('permission') || errorMessage.includes('access')) {
+          throw new Error('Нет прав на создание папок в Google Drive. Убедитесь, что веб-приложение развернуто "от имени" правильного аккаунта и имеет доступ к Google Drive.');
+        } else if (errorMessage.includes('quota') || errorMessage.includes('storage')) {
+          throw new Error('Недостаточно места в Google Drive для создания папки.');
+        } else {
+          throw new Error('Не удалось создать папку в Google Drive: ' + createError.toString() + '. Проверьте логи в Google Apps Script для подробностей.');
+        }
+      }
+    }
+    
+    // Получаем URL папки
+    const folderUrl = folder.getUrl();
+    const folderId = folder.getId();
+    
+    // Логируем для отладки
+    Logger.log('✅ Успешно создана папка: ' + folderName + ' | URL: ' + folderUrl + ' | ID: ' + folderId);
+    
+    return {
+      folderId: folderId,
+      folderUrl: folderUrl,
+      folderName: folderName
+    };
+  } catch (error) {
+    // Логируем ошибку с подробностями
+    Logger.log('❌ Ошибка при создании папки "' + equipmentName + '": ' + error.toString());
+    Logger.log('Стек ошибки: ' + (error.stack || 'недоступен'));
+    // Пробрасываем ошибку дальше с понятным сообщением
+    throw error;
+  }
+}
+
+// ============================================================================
 // ФУНКЦИИ ФОРМИРОВАНИЯ ОТВЕТОВ
 // ============================================================================
 
@@ -723,8 +981,8 @@ function generateId() {
  * }
  */
 function createJsonResponse(data) {
-  // Google Apps Script автоматически обрабатывает CORS заголовки
-  // при правильной настройке доступа "Все" в веб-приложении
+  // Создаем JSON ответ
+  // Google Apps Script автоматически устанавливает CORS заголовки при настройке "У кого есть доступ: Все"
   return ContentService
     .createTextOutput(JSON.stringify({
       success: true,
@@ -748,12 +1006,167 @@ function createJsonResponse(data) {
  * }
  */
 function createErrorResponse(message) {
-  // Google Apps Script автоматически обрабатывает CORS заголовки
-  // при правильной настройке доступа "Все" в веб-приложении
+  // Создаем JSON ответ с ошибкой
+  // Google Apps Script автоматически устанавливает CORS заголовки при настройке "У кого есть доступ: Все"
   return ContentService
     .createTextOutput(JSON.stringify({
       success: false,
       error: message
     }))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ============================================================================
+// ТЕСТОВЫЕ ФУНКЦИИ
+// ============================================================================
+
+/**
+ * Тестовая функция для проверки addEquipment
+ * 
+ * Запустите эту функцию для тестирования создания оборудования
+ * В меню: Выполнить → testAddEquipment
+ */
+function testAddEquipment() {
+  try {
+    const testData = {
+      name: 'Тестовое оборудование',
+      type: 'filter',
+      specs: {
+        height: '1,5 м',
+        diameter: '0,8 м'
+      },
+      status: 'active'
+    };
+    
+    Logger.log('🧪 Тестирование addEquipment с данными:');
+    Logger.log(JSON.stringify(testData, null, 2));
+    
+    const result = addEquipment(testData);
+    
+    Logger.log('✅ Тест успешен! Создано оборудование:');
+    Logger.log(JSON.stringify(result, null, 2));
+    
+    return result;
+  } catch (error) {
+    Logger.log('❌ Ошибка при тестировании: ' + error.toString());
+    Logger.log('Стек ошибки: ' + (error.stack || 'нет стека'));
+    throw error;
+  }
+}
+
+/**
+ * Тестовая функция для проверки createDriveFolder
+ * 
+ * Запустите эту функцию для тестирования создания папки
+ * В меню: Выполнить → testCreateDriveFolder
+ * 
+ * ВАЖНО: При первом запуске Google запросит разрешения.
+ * Нажмите "Разрешить" и выберите ваш аккаунт.
+ */
+function testCreateDriveFolder() {
+  try {
+    const testName = 'Тестовая папка ' + new Date().getTime();
+    
+    Logger.log('🧪 Тестирование createDriveFolder с названием: "' + testName + '"');
+    
+    const result = createDriveFolder(testName);
+    
+    Logger.log('✅ Тест успешен! Создана папка:');
+    Logger.log(JSON.stringify(result, null, 2));
+    
+    // Удаляем тестовую папку
+    try {
+      const folder = DriveApp.getFolderById(result.folderId);
+      folder.setTrashed(true);
+      Logger.log('🗑️ Тестовая папка удалена');
+    } catch (deleteError) {
+      Logger.log('⚠️ Не удалось удалить тестовую папку: ' + deleteError);
+    }
+    
+    return result;
+  } catch (error) {
+    Logger.log('❌ Ошибка при тестировании: ' + error.toString());
+    Logger.log('Стек ошибки: ' + (error.stack || 'нет стека'));
+    throw error;
+  }
+}
+
+/**
+ * Функция для принудительного запроса разрешений на ЧТЕНИЕ
+ * 
+ * Запустите эту функцию, чтобы Google запросил разрешения на чтение
+ * В меню: Выполнить → requestDrivePermissions
+ */
+function requestDrivePermissions() {
+  try {
+    Logger.log('🔐 Запрос разрешений на доступ к Google Drive (чтение)...');
+    
+    // Пытаемся выполнить простую операцию с Drive, чтобы запросить разрешения
+    try {
+      const rootFolder = DriveApp.getRootFolder();
+      Logger.log('✅ Разрешения на чтение уже предоставлены!');
+      Logger.log('   Root folder name: ' + rootFolder.getName());
+      return 'Разрешения на чтение уже предоставлены';
+    } catch (error) {
+      Logger.log('⚠️ Разрешения не предоставлены. Google должен запросить их автоматически.');
+      Logger.log('   Если окно авторизации не появилось, попробуйте:');
+      Logger.log('   1. Обновить страницу Google Apps Script');
+      Logger.log('   2. Запустить функцию testCreateDriveFolder');
+      Logger.log('   3. Проверить настройки проекта');
+      throw error; // Пробрасываем ошибку, чтобы Google показал окно авторизации
+    }
+  } catch (error) {
+    Logger.log('❌ Ошибка: ' + error.toString());
+    Logger.log('   Это нормально - Google должен показать окно авторизации');
+    throw error; // Пробрасываем, чтобы вызвать окно авторизации
+  }
+}
+
+/**
+ * Функция для запроса ПОЛНЫХ разрешений на Google Drive (чтение + запись)
+ * 
+ * ВАЖНО: Эта функция запросит полные права на Google Drive, включая создание папок
+ * Запустите эту функцию, чтобы Google запросил разрешения на запись
+ * В меню: Выполнить → requestFullDrivePermissions
+ */
+function requestFullDrivePermissions() {
+  try {
+    Logger.log('🔐 Запрос ПОЛНЫХ разрешений на Google Drive (чтение + запись)...');
+    Logger.log('⚠️ Эта функция попытается создать тестовую папку для запроса разрешений');
+    
+    // Пытаемся создать тестовую папку - это запросит полные права
+    try {
+      const testFolderName = 'Тест разрешений ' + new Date().getTime();
+      Logger.log('📁 Попытка создать тестовую папку: "' + testFolderName + '"');
+      
+      const testFolder = DriveApp.createFolder(testFolderName);
+      Logger.log('✅ ПОЛНЫЕ разрешения получены!');
+      Logger.log('   Тестовая папка создана: ' + testFolder.getName());
+      Logger.log('   Folder ID: ' + testFolder.getId());
+      Logger.log('   Folder URL: ' + testFolder.getUrl());
+      
+      // Удаляем тестовую папку
+      try {
+        testFolder.setTrashed(true);
+        Logger.log('🗑️ Тестовая папка удалена');
+      } catch (deleteError) {
+        Logger.log('⚠️ Не удалось удалить тестовую папку: ' + deleteError);
+      }
+      
+      return 'Полные разрешения получены!';
+    } catch (error) {
+      Logger.log('❌ Ошибка при создании папки: ' + error.toString());
+      Logger.log('⚠️ Google должен показать окно авторизации для запроса полных прав');
+      Logger.log('   Если окно не появилось:');
+      Logger.log('   1. Обновите страницу Google Apps Script (F5)');
+      Logger.log('   2. Запустите функцию еще раз');
+      Logger.log('   3. Проверьте настройки проекта');
+      throw error; // Пробрасываем ошибку, чтобы Google показал окно авторизации
+    }
+  } catch (error) {
+    Logger.log('❌ Ошибка: ' + error.toString());
+    Logger.log('   Это нормально - Google должен показать окно авторизации');
+    Logger.log('   В окне авторизации выберите аккаунт и разрешите доступ к Google Drive');
+    throw error; // Пробрасываем, чтобы вызвать окно авторизации
+  }
 }
