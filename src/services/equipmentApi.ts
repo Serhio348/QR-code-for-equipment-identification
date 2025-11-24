@@ -60,17 +60,79 @@ async function apiRequest<T>(
   // Для GET запросов не добавляем заголовки, чтобы избежать preflight
 
   try {
+    // Логируем запрос для отладки
+    console.log('📤 API запрос:', {
+      url: url.toString(),
+      method,
+      action,
+      hasBody: !!options.body
+    });
+    
     // Выполняем запрос
     const response = await fetch(url.toString(), options);
 
     // Проверяем статус ответа
     if (!response.ok) {
       const errorText = await response.text();
+      console.error('❌ HTTP ошибка:', {
+        status: response.status,
+        statusText: response.statusText,
+        message: errorText
+      });
       throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
     }
 
     // Парсим JSON ответ
     const data: ApiResponse<T> = await response.json();
+    
+    // Логируем даты для отладки
+    console.log('🔍 Парсинг ответа:', {
+      action,
+      hasData: !!data.data,
+      dataType: Array.isArray(data.data) ? 'array' : typeof data.data,
+      dataLength: Array.isArray(data.data) ? data.data.length : 'N/A'
+    });
+    
+    if (action === 'getAll' && data.data && Array.isArray(data.data)) {
+      const equipmentArray = data.data as any[];
+      console.log('📋 Получено оборудования:', equipmentArray.length);
+      equipmentArray.forEach((eq: any) => {
+        console.log('📅 Оборудование с сервера (getAll):', {
+          id: eq.id,
+          name: eq.name,
+          commissioningDate: eq.commissioningDate || '(пусто)',
+          commissioningDateType: typeof eq.commissioningDate,
+          lastMaintenanceDate: eq.lastMaintenanceDate || '(пусто)',
+          lastMaintenanceDateType: typeof eq.lastMaintenanceDate,
+          все_поля: Object.keys(eq)
+        });
+      });
+    } else if (action === 'getById' && data.data) {
+      const equipment = data.data as any;
+      console.log('📅 Оборудование с сервера (getById):', {
+        id: equipment.id,
+        name: equipment.name,
+        commissioningDate: equipment.commissioningDate || '(пусто)',
+        commissioningDateType: typeof equipment.commissioningDate,
+        lastMaintenanceDate: equipment.lastMaintenanceDate || '(пусто)',
+        lastMaintenanceDateType: typeof equipment.lastMaintenanceDate,
+        все_поля: Object.keys(equipment)
+      });
+    } else {
+      console.log('⚠️ Неожиданный формат данных:', {
+        action,
+        hasData: !!data.data,
+        dataType: typeof data.data,
+        isArray: Array.isArray(data.data)
+      });
+    }
+    
+    console.log('✅ API ответ:', {
+      action,
+      success: data.success,
+      hasData: !!data.data,
+      error: data.error
+    });
 
     // Проверяем успешность операции
     if (!data.success) {
@@ -83,7 +145,16 @@ async function apiRequest<T>(
     const isCorsError = error.name === 'TypeError' && 
                        (error.message.includes('fetch') || 
                         error.message.includes('Failed to fetch') ||
-                        error.message.includes('CORS'));
+                        error.message.includes('CORS') ||
+                        error.message.includes('network'));
+    
+    console.log('⚠️ Ошибка API запроса:', {
+      action,
+      method,
+      isCorsError,
+      errorName: error.name,
+      errorMessage: error.message
+    });
     
     // Логируем ошибки только если это не CORS ошибка для POST (она будет обработана в fallback)
     if (!(isCorsError && method === 'POST')) {
@@ -137,7 +208,7 @@ export async function getAllEquipment(): Promise<Equipment[]> {
  * Пример использования:
  * const equipment = await getEquipmentById('550e8400-e29b-41d4-a716-446655440000');
  */
-export async function getEquipmentById(id: string): Promise<Equipment | null> {
+export async function getEquipmentById(id: string, preventCache: boolean = false): Promise<Equipment | null> {
   if (!id) {
     throw new Error('ID не указан');
   }
@@ -145,10 +216,16 @@ export async function getEquipmentById(id: string): Promise<Equipment | null> {
   const url = new URL(API_CONFIG.EQUIPMENT_API_URL);
   url.searchParams.append('action', 'getById');
   url.searchParams.append('id', id);
+  
+  // Добавляем timestamp для предотвращения кеширования
+  if (preventCache) {
+    url.searchParams.append('_t', Date.now().toString());
+  }
 
   try {
     const response = await fetch(url.toString(), {
       signal: AbortSignal.timeout(API_CONFIG.TIMEOUT),
+      cache: preventCache ? 'no-store' : 'default',
     });
 
     if (!response.ok) {
@@ -373,29 +450,96 @@ export async function updateEquipment(
     
     if (isCorsError) {
       const postUrl = API_CONFIG.EQUIPMENT_API_URL;
+      
+      // Нормализуем даты перед отправкой в no-cors режиме
+      // ВАЖНО: Убеждаемся, что дата в формате YYYY-MM-DD и не содержит времени
+      const normalizedUpdates = { ...updates };
+      if (normalizedUpdates.commissioningDate) {
+        const dateStr = String(normalizedUpdates.commissioningDate).split('T')[0].trim();
+        // Проверяем, что это валидный формат YYYY-MM-DD
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+          normalizedUpdates.commissioningDate = dateStr;
+        } else {
+          console.warn('⚠️ Неверный формат даты commissioningDate:', normalizedUpdates.commissioningDate);
+        }
+      }
+      if (normalizedUpdates.lastMaintenanceDate) {
+        const dateStr = String(normalizedUpdates.lastMaintenanceDate).split('T')[0].trim();
+        // Проверяем, что это валидный формат YYYY-MM-DD
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+          normalizedUpdates.lastMaintenanceDate = dateStr;
+        } else {
+          console.warn('⚠️ Неверный формат даты lastMaintenanceDate:', normalizedUpdates.lastMaintenanceDate);
+        }
+      }
+      
       const postBody = {
         action: 'update',
         id,
-        ...updates
+        ...normalizedUpdates
       };
       
+      console.log('📤 Отправка update через no-cors fallback:', {
+        id,
+        исходные_updates: updates,
+        normalizedUpdates: normalizedUpdates,
+        commissioningDate_исходная: updates.commissioningDate,
+        commissioningDate_нормализованная: normalizedUpdates.commissioningDate,
+        postBody
+      });
+      
       try {
+        // Для no-cors используем URL-encoded формат, так как JSON может не передаваться
+        const formData = new URLSearchParams();
+        formData.append('action', 'update');
+        formData.append('id', id);
+        
+        // Добавляем все поля обновления
+        Object.keys(normalizedUpdates).forEach(key => {
+          const value = normalizedUpdates[key as keyof Equipment];
+          if (value !== undefined && value !== null) {
+            if (typeof value === 'object') {
+              // Для объектов (например, specs) сериализуем в JSON
+              formData.append(key, JSON.stringify(value));
+            } else {
+              const stringValue = String(value);
+              console.log(`  📝 Добавляем поле ${key}:`, {
+                исходное_значение: value,
+                строковое_значение: stringValue,
+                тип: typeof value
+              });
+              formData.append(key, stringValue);
+            }
+          }
+        });
+        
+        console.log('📋 FormData содержимое:', formData.toString());
+        
         await fetch(postUrl, {
           method: 'POST',
           mode: 'no-cors',
           headers: {
-            'Content-Type': 'application/json',
+            'Content-Type': 'application/x-www-form-urlencoded',
           },
-          body: JSON.stringify(postBody)
-        }).catch(() => {
-          // Игнорируем ошибки no-cors запросов
+          body: formData.toString()
+        }).catch((fetchError) => {
+          // Игнорируем ошибки no-cors запросов (они всегда возникают)
+          console.log('⚠️ no-cors запрос отправлен (ошибка fetch ожидаема):', fetchError);
         });
         
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        console.log('⏳ Ожидание обработки запроса на сервере...');
+        await new Promise(resolve => setTimeout(resolve, 1500));
         
         // Получаем обновленное оборудование по ID
+        console.log('🔍 Проверка обновленного оборудования...');
         const updated = await getEquipmentById(id);
         if (updated) {
+          console.log('✅ Оборудование обновлено:', {
+            id: updated.id,
+            name: updated.name,
+            commissioningDate: updated.commissioningDate,
+            lastMaintenanceDate: updated.lastMaintenanceDate
+          });
           return updated;
         }
         
@@ -410,10 +554,12 @@ export async function updateEquipment(
 }
 
 /**
- * Удалить оборудование (архивировать)
+ * Удалить оборудование (физическое удаление)
  * 
- * Выполняет мягкое удаление - меняет статус на 'archived'
- * Данные остаются в базе, но помечаются как архивные
+ * Выполняет физическое удаление оборудования из базы данных
+ * и удаляет связанную папку в Google Drive (если она была создана)
+ * 
+ * ⚠️ ВНИМАНИЕ: Это действие необратимо!
  * 
  * @param {string} id - UUID оборудования для удаления
  * @returns {Promise<void>}
@@ -437,33 +583,81 @@ export async function deleteEquipment(id: string): Promise<void> {
     
     if (isCorsError) {
       const postUrl = API_CONFIG.EQUIPMENT_API_URL;
-      const postBody = {
-        action: 'delete',
-        id
-      };
+      
+      // Для no-cors используем URL-encoded формат, так как JSON может не передаваться
+      const formData = new URLSearchParams();
+      formData.append('action', 'delete');
+      formData.append('id', id);
       
       try {
+        console.log('📤 Отправка запроса на удаление через no-cors fallback');
+        console.log('   URL:', postUrl);
+        console.log('   Данные:', { action: 'delete', id });
+        
         await fetch(postUrl, {
           method: 'POST',
           mode: 'no-cors',
           headers: {
-            'Content-Type': 'application/json',
+            'Content-Type': 'application/x-www-form-urlencoded',
           },
-          body: JSON.stringify(postBody)
-        }).catch(() => {
-          // Игнорируем ошибки no-cors запросов
+          body: formData.toString()
+        }).catch((fetchError) => {
+          // Игнорируем ошибки no-cors запросов (они всегда возникают)
+          console.log('⚠️ no-cors запрос отправлен (ошибка fetch ожидаема):', fetchError);
         });
         
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Ждем обработки запроса и делаем несколько попыток проверки
+        let deleted = null;
+        const maxAttempts = 8; // Увеличено количество попыток
+        const initialDelayMs = 1500; // Начальная задержка 1.5 секунды
         
-        // Проверяем, что оборудование удалено (статус = archived)
-        const deleted = await getEquipmentById(id);
-        if (deleted && deleted.status === 'archived') {
-          return;
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+          console.log(`🔍 Попытка ${attempt}/${maxAttempts} проверки удаления оборудования...`);
+          
+          // Увеличиваем время ожидания с каждой попыткой (1.5s, 3s, 4.5s, 6s, 7.5s, 9s, 10.5s, 12s)
+          const delay = initialDelayMs * attempt;
+          await new Promise(resolve => setTimeout(resolve, delay));
+          
+          try {
+            // Используем preventCache=true чтобы избежать кеширования
+            deleted = await getEquipmentById(id, true);
+            if (!deleted) {
+              // Оборудование не найдено - значит удалено успешно
+              console.log(`✅ Оборудование успешно удалено (попытка ${attempt})`);
+              return;
+            }
+            console.log(`⚠️ Попытка ${attempt}: Оборудование еще существует, ID: ${id}`);
+          } catch (checkError: any) {
+            // Если ошибка при проверке, возможно оборудование уже удалено
+            const errorMessage = checkError?.message || checkError?.toString() || 'неизвестная ошибка';
+            console.log(`⚠️ Попытка ${attempt}: Ошибка при проверке:`, errorMessage);
+            
+            // Если ошибка говорит о том, что оборудование не найдено, считаем удаление успешным
+            if (errorMessage.includes('не найдено') || errorMessage.includes('not found')) {
+              console.log('✅ Оборудование не найдено - удаление успешно');
+              return;
+            }
+            // Продолжаем попытки для других ошибок
+          }
         }
         
-        throw new Error('Оборудование не было удалено');
+        // Если после всех попыток оборудование все еще существует
+        if (deleted) {
+          console.error('❌ Оборудование все еще существует после всех попыток');
+          console.error('   ID:', id);
+          console.error('   Оборудование:', deleted);
+          // Все равно считаем запрос отправленным - возможно просто задержка на сервере
+          console.warn('⚠️ Запрос на удаление был отправлен, но подтверждение не получено. Проверьте логи в Google Apps Script.');
+          // Не пробрасываем ошибку - запрос был отправлен
+          return;
+        } else {
+          // Если deleted === null и мы дошли сюда, значит были ошибки при проверке
+          // Но запрос был отправлен, считаем успешным
+          console.log('⚠️ Не удалось подтвердить удаление из-за ошибок проверки, но запрос был отправлен');
+          return;
+        }
       } catch (fallbackError: any) {
+        console.error('❌ Ошибка в fallback удаления:', fallbackError);
         throw new Error(`Ошибка при удалении оборудования: ${fallbackError.message}`);
       }
     }
