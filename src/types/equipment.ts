@@ -2,7 +2,16 @@
  * Типы оборудования
  * Определяет возможные типы оборудования в системе
  */
-export type EquipmentType = 'filter' | 'pump' | 'tank' | 'valve' | 'other';
+export type EquipmentType = 
+  | 'filter'           // Фильтры
+  | 'pump'             // Насосы
+  | 'tank'             // Резервуары
+  | 'valve'            // Клапаны
+  | 'electrical'       // Электрооборудование
+  | 'ventilation'      // Вентиляционное оборудование
+  | 'plumbing'         // Сантехническое оборудование
+  | 'industrial'       // Прочее промышленное оборудование
+  | 'other';           // Другое
 
 /**
  * Статусы оборудования
@@ -51,7 +60,7 @@ export interface Equipment {
   /** Название оборудования */
   name: string;
   
-  /** Тип оборудования (filter, pump, tank, valve, other) */
+  /** Тип оборудования (filter, pump, tank, valve, electrical, ventilation, plumbing, industrial, other) */
   type: EquipmentType;
   
   /** Характеристики оборудования (JSON объект, структура зависит от типа) */
