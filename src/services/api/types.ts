@@ -2,8 +2,6 @@
  * Типы для API
  */
 
-import { Equipment } from '../../types/equipment';
-
 /**
  * Интерфейс ответа API
  */
