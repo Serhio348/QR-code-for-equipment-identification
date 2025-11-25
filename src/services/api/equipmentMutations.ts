@@ -7,8 +7,7 @@
 import { Equipment } from '../../types/equipment';
 import { apiRequest } from './apiRequest';
 import { isCorsError, sendNoCorsRequest, waitForEquipmentUpdate, waitForEquipmentDeletion } from './corsFallback';
-import { getAllEquipment, getEquipmentById } from './equipmentQueries';
-import { API_CONFIG } from '../../config/api';
+import { getAllEquipment } from './equipmentQueries';
 
 /**
  * Добавить новое оборудование
