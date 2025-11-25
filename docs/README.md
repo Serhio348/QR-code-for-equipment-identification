@@ -8,7 +8,7 @@
 
 ### Для настройки и развертывания
 - **[../backend/equipment-db/README.md](../backend/equipment-db/README.md)** - Инструкции по настройке Google Apps Script API
-- **[../CORS_TROUBLESHOOTING.md](../CORS_TROUBLESHOOTING.md)** - Решение проблем с CORS
+- **[CORS_TROUBLESHOOTING.md](CORS_TROUBLESHOOTING.md)** - Решение проблем с CORS
 
 ### Основная документация
 - **[../README.md](../README.md)** - Главный README с описанием проекта
@@ -25,5 +25,5 @@
 - **Начать работу:** [../README.md](../README.md)
 - **Настроить backend:** [../backend/equipment-db/README.md](../backend/equipment-db/README.md)
 - **План развития:** [NEXT_STEPS_PLAN.md](NEXT_STEPS_PLAN.md)
-- **Решение проблем:** [../CORS_TROUBLESHOOTING.md](../CORS_TROUBLESHOOTING.md)
+- **Решение проблем:** [CORS_TROUBLESHOOTING.md](CORS_TROUBLESHOOTING.md)
 
