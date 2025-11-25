@@ -169,7 +169,7 @@ QR-code-for-equipment-identification/
 ## 🐛 Решение проблем
 
 ### CORS ошибки
-Если возникают проблемы с CORS, см. [CORS_TROUBLESHOOTING.md](CORS_TROUBLESHOOTING.md)
+Если возникают проблемы с CORS, см. [docs/CORS_TROUBLESHOOTING.md](docs/CORS_TROUBLESHOOTING.md)
 
 ### Проблемы с загрузкой файлов
 - Убедитесь, что Google Apps Script развернут с доступом "Все"
