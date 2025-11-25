@@ -712,7 +712,6 @@ const EquipmentForm: React.FC<EquipmentFormProps> = ({ equipmentId, onSave, onCa
             >
               <option value="active">Активен</option>
               <option value="inactive">Неактивен</option>
-              <option value="archived">Архив</option>
             </select>
           </div>
 

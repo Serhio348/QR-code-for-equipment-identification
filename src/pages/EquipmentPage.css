@@ -106,36 +106,6 @@
   transform: translateY(-1px);
 }
 
-.archive-button {
-  padding: 10px 20px;
-  background: #ff9800;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.3s, transform 0.2s;
-  white-space: nowrap;
-}
-
-.archive-button:hover:not(:disabled) {
-  background: #f57c00;
-  transform: translateY(-1px);
-}
-
-.archive-button.restore {
-  background: #4caf50;
-}
-
-.archive-button.restore:hover:not(:disabled) {
-  background: #388e3c;
-}
-
-.archive-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
 
 .plate-container {
   max-width: 1200px;
