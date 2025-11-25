@@ -767,3 +767,90 @@ export async function createDriveFolder(
   }
 }
 
+/**
+ * Интерфейс информации о файле в Google Drive
+ */
+export interface DriveFile {
+  id: string;
+  name: string;
+  url: string;
+  size: number;
+  mimeType: string;
+  modifiedTime: string;
+}
+
+/**
+ * Получить список файлов из папки Google Drive
+ * 
+ * Загружает список всех файлов из указанной папки Google Drive
+ * 
+ * @param {string} folderUrl - URL папки в Google Drive
+ * @returns {Promise<DriveFile[]>} Массив файлов в папке
+ * 
+ * @throws {Error} Если папка не найдена или произошла ошибка
+ * 
+ * Пример использования:
+ * const files = await getFolderFiles('https://drive.google.com/drive/folders/...');
+ * console.log(files); // [{ id: '...', name: '...', ... }, ...]
+ */
+export async function getFolderFiles(folderUrl: string): Promise<DriveFile[]> {
+  if (!folderUrl || !folderUrl.trim()) {
+    throw new Error('URL папки не указан');
+  }
+
+  try {
+    const url = new URL(API_CONFIG.EQUIPMENT_API_URL);
+    url.searchParams.append('action', 'getFolderFiles');
+    url.searchParams.append('folderUrl', folderUrl.trim());
+
+    console.log('📤 Запрос списка файлов:', url.toString());
+
+    const response = await fetch(url.toString(), {
+      signal: AbortSignal.timeout(API_CONFIG.TIMEOUT),
+    });
+
+    console.log('📥 Ответ получен:', {
+      status: response.status,
+      ok: response.ok,
+      statusText: response.statusText
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ HTTP ошибка:', {
+        status: response.status,
+        statusText: response.statusText,
+        body: errorText
+      });
+      throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+    }
+
+    const data: ApiResponse<DriveFile[]> = await response.json();
+    
+    console.log('📋 Данные ответа:', {
+      success: data.success,
+      dataLength: data.data ? data.data.length : 0,
+      data: data.data
+    });
+
+    if (!data.success) {
+      console.warn('⚠️ Ответ не успешен:', data);
+      return [];
+    }
+
+    if (!data.data) {
+      console.warn('⚠️ Данные отсутствуют в ответе');
+      return [];
+    }
+
+    return data.data;
+  } catch (error: any) {
+    console.error('❌ Ошибка получения списка файлов:', error);
+    console.error('  - URL папки:', folderUrl);
+    console.error('  - Тип ошибки:', error.name);
+    console.error('  - Сообщение:', error.message);
+    throw error;
+  }
+}
+
+

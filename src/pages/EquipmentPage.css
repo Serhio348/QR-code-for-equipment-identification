@@ -88,6 +88,24 @@
   cursor: not-allowed;
 }
 
+.drive-button {
+  padding: 10px 20px;
+  background: #34a853;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.3s, transform 0.2s;
+  white-space: nowrap;
+}
+
+.drive-button:hover {
+  background: #2d8f47;
+  transform: translateY(-1px);
+}
+
 .archive-button {
   padding: 10px 20px;
   background: #ff9800;
