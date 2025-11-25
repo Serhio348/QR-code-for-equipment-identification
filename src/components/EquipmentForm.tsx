@@ -9,6 +9,7 @@ import { Equipment, EquipmentType, EquipmentStatus, EquipmentSpecs } from '../ty
 import { addEquipment, updateEquipment, getEquipmentById } from '../services/equipmentApi';
 import { generateQRCodeUrl } from '../utils/urlGenerator';
 import { getEquipmentViewUrl } from '../utils/routes';
+import { normalizeDate } from '../utils/dateNormalization';
 import './EquipmentForm.css';
 
 interface EquipmentFormProps {
@@ -45,27 +46,6 @@ const EquipmentForm: React.FC<EquipmentFormProps> = ({ equipmentId, onSave, onCa
     }
   }, [equipmentId, isEditMode]);
 
-  // Нормализация даты в формат YYYY-MM-DD
-  // ВАЖНО: Не используем new Date() для парсинга, чтобы избежать проблем с часовыми поясами
-  const normalizeDate = (dateString?: string): string => {
-    if (!dateString) return '';
-    
-    // Убираем возможное время из строки даты
-    const dateOnly = dateString.split('T')[0].split(' ')[0].trim();
-    
-    // Проверяем, что это формат YYYY-MM-DD
-    if (/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) {
-      return dateOnly;
-    }
-    
-    // Если формат не YYYY-MM-DD, пытаемся извлечь дату
-    const match = dateOnly.match(/(\d{4})-(\d{2})-(\d{2})/);
-    if (match) {
-      return match[0];
-    }
-    
-    return '';
-  };
 
   const loadEquipment = async () => {
     setLoading(true);
