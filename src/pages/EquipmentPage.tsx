@@ -6,6 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import EquipmentPlate from '../components/EquipmentPlate';
+import DriveFilesList from '../components/DriveFilesList';
 import { filterSpecs, Equipment, FilterSpecs } from '../types/equipment';
 import { getEquipmentById, updateEquipment, deleteEquipment } from '../services/equipmentApi';
 import { exportToPDF } from '../utils/pdfExport';
@@ -282,6 +283,13 @@ const EquipmentPage: React.FC = () => {
               lastMaintenanceDate={lastMaintenanceDate}
               qrCodeUrl={currentEquipment?.qrCodeUrl}
             />
+            
+            {currentEquipment?.googleDriveUrl && (
+              <DriveFilesList 
+                folderUrl={currentEquipment.googleDriveUrl}
+                equipmentName={currentEquipment.name}
+              />
+            )}
           </>
         )}
       </div>

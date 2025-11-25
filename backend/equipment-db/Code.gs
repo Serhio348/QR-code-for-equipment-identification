@@ -55,6 +55,7 @@ function doOptions(e) {
  * - getAll - получить все оборудование
  * - getById - получить оборудование по ID
  * - getByType - получить оборудование по типу
+ * - getFolderFiles - получить список файлов из папки Google Drive
  * 
  * @param {Object} e - объект события с параметрами запроса
  * @param {Object} e.parameter - параметры URL запроса
@@ -69,11 +70,16 @@ function doOptions(e) {
  * - ?action=getById&id=123 - получить запись с ID 123
  * - ?action=getByType&type=filter - получить все фильтры
  * - ?action=getByType&type=industrial - получить все промышленное оборудование
+ * - ?action=getFolderFiles&folderUrl=https://... - получить список файлов из папки
  */
 function doGet(e) {
   try {
     // Получаем параметр action из URL
     const action = e.parameter.action;
+    
+    Logger.log('📥 GET запрос получен');
+    Logger.log('  - action: ' + action);
+    Logger.log('  - parameters: ' + JSON.stringify(e.parameter));
     
     // Выполняем действие в зависимости от параметра
     switch(action) {
@@ -97,9 +103,25 @@ function doGet(e) {
         }
         return createJsonResponse(getEquipmentByType(type));
       
+      case 'getFolderFiles':
+        // Получить список файлов из папки Google Drive
+        Logger.log('📁 Обработка getFolderFiles');
+        const folderUrl = e.parameter.folderUrl || e.parameter.folderId;
+        Logger.log('  - folderUrl: ' + folderUrl);
+        if (!folderUrl) {
+          Logger.log('❌ URL папки не указан');
+          return createErrorResponse('URL или ID папки не указан');
+        }
+        Logger.log('✅ Вызов getFolderFiles с URL: ' + folderUrl);
+        const files = getFolderFiles(folderUrl);
+        Logger.log('✅ getFolderFiles вернул ' + files.length + ' файлов');
+        return createJsonResponse(files);
+      
       default:
         // Если действие не распознано, возвращаем ошибку
-        return createErrorResponse('Неизвестное действие. Используйте: getAll, getById, getByType');
+        Logger.log('❌ Неизвестное действие: ' + action);
+        Logger.log('  - Доступные действия: getAll, getById, getByType, getFolderFiles');
+        return createErrorResponse('Неизвестное действие. Используйте: getAll, getById, getByType, getFolderFiles');
     }
   } catch (error) {
     // Логируем ошибку для отладки
@@ -117,7 +139,8 @@ function doGet(e) {
  * Поддерживаемые действия:
  * - add - добавить новое оборудование
  * - update - обновить существующее оборудование
- * - delete - удалить оборудование (мягкое удаление - меняет статус на archived)
+ * - delete - удалить оборудование (физическое удаление с удалением папки в Google Drive)
+ * - createFolder - создать папку в Google Drive для оборудования
  * 
  * @param {Object} e - объект события с данными запроса
  * @param {string} e.postData.contents - тело запроса в формате JSON
@@ -146,9 +169,21 @@ function doPost(e) {
     Logger.log('📨 Получен POST запрос');
     Logger.log('  - e: ' + (e ? 'есть' : 'НЕТ'));
     Logger.log('  - postData: ' + (e.postData ? 'есть' : 'НЕТ'));
-    Logger.log('  - postData.contents: ' + (e.postData ? e.postData.contents : 'НЕТ ДАННЫХ'));
+    if (e.postData && e.postData.contents) {
+      const contentsLength = e.postData.contents.length;
+      Logger.log('  - postData.contents length: ' + contentsLength + ' символов');
+      // Для больших данных показываем только первые и последние 200 символов
+      if (contentsLength > 400) {
+        Logger.log('  - postData.contents (первые 200): ' + e.postData.contents.substring(0, 200));
+        Logger.log('  - postData.contents (последние 200): ' + e.postData.contents.substring(contentsLength - 200));
+      } else {
+        Logger.log('  - postData.contents: ' + e.postData.contents);
+      }
+    } else {
+      Logger.log('  - postData.contents: НЕТ ДАННЫХ');
+    }
     Logger.log('  - postData.type: ' + (e.postData ? e.postData.type : 'НЕТ'));
-    Logger.log('  - parameters: ' + JSON.stringify(e.parameter || {}));
+    Logger.log('  - parameters count: ' + (e.parameter ? Object.keys(e.parameter).length : 0));
     
     // Парсим данные из тела запроса
     let data;
@@ -168,6 +203,18 @@ function doPost(e) {
           return createErrorResponse('Ошибка парсинга JSON: ' + parseError.toString());
         }
       } 
+      // Если это FormData (multipart/form-data)
+      else if (contentType.includes('multipart/form-data')) {
+        Logger.log('📝 Обнаружен multipart/form-data формат, парсим...');
+        // FormData данные приходят в e.parameter
+        if (e.parameter && Object.keys(e.parameter).length > 0) {
+          data = e.parameter;
+          Logger.log('  - Данные из e.parameter: ' + JSON.stringify(Object.keys(data)));
+        } else {
+          Logger.log('⚠️ e.parameter пуст для multipart/form-data');
+          return createErrorResponse('Не удалось получить данные из FormData');
+        }
+      }
       // Если это URL-encoded
       else if (contentType.includes('application/x-www-form-urlencoded') || contentType.includes('form-urlencoded')) {
         Logger.log('📝 Обнаружен URL-encoded формат, парсим...');
@@ -1239,6 +1286,103 @@ function createDriveFolder(equipmentName, parentFolderId) {
     Logger.log('❌ Ошибка при создании папки "' + equipmentName + '": ' + error.toString());
     Logger.log('Стек ошибки: ' + (error.stack || 'недоступен'));
     // Пробрасываем ошибку дальше с понятным сообщением
+    throw error;
+  }
+}
+
+/**
+ * Получить список файлов из папки Google Drive
+ * 
+ * Извлекает ID папки из URL и возвращает список всех файлов в папке
+ * 
+ * @param {string} folderUrlOrId - URL папки или ID папки
+ * @returns {Array} Массив объектов с информацией о файлах
+ * 
+ * Формат возвращаемого объекта:
+ * {
+ *   id: "file_id",
+ *   name: "Название файла.pdf",
+ *   url: "https://drive.google.com/file/d/...",
+ *   size: 12345, // размер в байтах
+ *   mimeType: "application/pdf",
+ *   modifiedTime: "2024-01-15T10:30:00.000Z"
+ * }
+ * 
+ * @throws {Error} Если папка не найдена или произошла ошибка
+ */
+function getFolderFiles(folderUrlOrId) {
+  try {
+    Logger.log('📁 Получение списка файлов из папки');
+    Logger.log('  - folderUrlOrId: ' + folderUrlOrId);
+    
+    if (!folderUrlOrId || !folderUrlOrId.trim()) {
+      throw new Error('URL или ID папки не указан');
+    }
+    
+    const trimmed = folderUrlOrId.trim();
+    let folderId = null;
+    
+    // Извлекаем ID папки из URL
+    // Формат 1: /folders/FOLDER_ID
+    const foldersMatch = trimmed.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+    if (foldersMatch && foldersMatch[1]) {
+      folderId = foldersMatch[1];
+      Logger.log('  - Извлечен ID из формата /folders/: ' + folderId);
+    } else {
+      // Формат 2: ?id=FOLDER_ID
+      const idMatch = trimmed.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+      if (idMatch && idMatch[1]) {
+        folderId = idMatch[1];
+        Logger.log('  - Извлечен ID из формата ?id=: ' + folderId);
+      } else {
+        // Формат 3: возможно это уже сам ID
+        const idPattern = /^[a-zA-Z0-9_-]{20,}$/;
+        if (idPattern.test(trimmed) && !trimmed.includes('/') && !trimmed.includes('?')) {
+          folderId = trimmed;
+          Logger.log('  - Используется как ID: ' + folderId);
+        }
+      }
+    }
+    
+    if (!folderId) {
+      throw new Error('Неверный формат URL папки: ' + trimmed);
+    }
+    
+    Logger.log('  - Folder ID для получения файлов: ' + folderId);
+    
+    // Получаем папку по ID
+    const folder = DriveApp.getFolderById(folderId);
+    const folderName = folder.getName();
+    Logger.log('  - Название папки: "' + folderName + '"');
+    
+    // Получаем все файлы из папки
+    const files = folder.getFiles();
+    const filesList = [];
+    
+    while (files.hasNext()) {
+      const file = files.next();
+      const fileData = {
+        id: file.getId(),
+        name: file.getName(),
+        url: file.getUrl(),
+        size: file.getSize(),
+        mimeType: file.getMimeType(),
+        modifiedTime: file.getLastUpdated().toISOString()
+      };
+      filesList.push(fileData);
+    }
+    
+    Logger.log('  - Найдено файлов: ' + filesList.length);
+    
+    // Сортируем по дате изменения (новые сначала)
+    filesList.sort((a, b) => {
+      return new Date(b.modifiedTime) - new Date(a.modifiedTime);
+    });
+    
+    return filesList;
+  } catch (error) {
+    Logger.log('❌ Ошибка при получении списка файлов: ' + error.toString());
+    Logger.log('  - Error stack: ' + (error.stack || 'нет стека'));
     throw error;
   }
 }
