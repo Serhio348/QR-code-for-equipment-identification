@@ -6,6 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { getAllEquipment } from '../services/equipmentApi';
 import { Equipment } from '../types/equipment';
+import { formatDate } from '../utils/dateFormatting';
 import './EquipmentList.css';
 
 interface EquipmentListProps {
@@ -81,51 +82,6 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
     return true;
   });
 
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return '—';
-    
-    // Убираем возможное время из строки даты (если есть)
-    // Например: "2024-01-15T00:00:00.000Z" -> "2024-01-15"
-    const dateOnly = dateString.split('T')[0].split(' ')[0].trim();
-    
-    // Проверяем, что это формат YYYY-MM-DD
-    if (/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) {
-      const [year, month, day] = dateOnly.split('-').map(Number);
-      
-      // ВАЖНО: НЕ используем new Date() для создания даты, так как это может вызвать проблемы
-      // Вместо этого форматируем напрямую из компонентов строки
-      // Это гарантирует, что дата не будет сдвигаться из-за часовых поясов
-      const months = [
-        'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
-        'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
-      ];
-      
-      // Проверяем валидность месяца и дня
-      if (month < 1 || month > 12 || day < 1 || day > 31) {
-        console.warn('⚠️ Невалидная дата:', { year, month, day, dateOnly });
-        return '—';
-      }
-      
-      return `${day} ${months[month - 1]} ${year} г.`;
-    }
-    
-    // Для других форматов пытаемся извлечь дату без использования new Date()
-    const match = dateString.match(/(\d{4})-(\d{2})-(\d{2})/);
-    if (match) {
-      const [, year, month, day] = match.map(Number);
-      const months = [
-        'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
-        'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
-      ];
-      
-      if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
-        return `${day} ${months[month - 1]} ${year} г.`;
-      }
-    }
-    
-    console.warn('⚠️ Не удалось распарсить дату:', dateString);
-    return '—';
-  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {

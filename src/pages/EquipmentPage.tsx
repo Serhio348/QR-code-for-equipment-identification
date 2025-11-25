@@ -11,6 +11,7 @@ import { filterSpecs, Equipment, FilterSpecs } from '../types/equipment';
 import { getEquipmentById, updateEquipment, deleteEquipment } from '../services/equipmentApi';
 import { exportToPDF } from '../utils/pdfExport';
 import { ROUTES, getEquipmentEditUrl } from '../utils/routes';
+import { normalizeDate } from '../utils/dateNormalization';
 import './EquipmentPage.css';
 
 const EquipmentPage: React.FC = () => {
@@ -37,33 +38,6 @@ const EquipmentPage: React.FC = () => {
     }
   }, [id]);
 
-  // Нормализация даты в формат YYYY-MM-DD для input type="date"
-  // ВАЖНО: Не используем new Date() для парсинга, чтобы избежать проблем с часовыми поясами
-  const normalizeDate = (dateString?: string): string => {
-    if (!dateString) return '';
-    
-    // Убираем возможное время из строки даты
-    // Например: "2024-01-15T00:00:00.000Z" -> "2024-01-15"
-    // Или: "2024-01-15 12:00:00" -> "2024-01-15"
-    const dateOnly = dateString.split('T')[0].split(' ')[0].trim();
-    
-    // Проверяем, что это формат YYYY-MM-DD
-    if (/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) {
-      // Просто возвращаем как есть, без использования new Date()
-      return dateOnly;
-    }
-    
-    // Если формат не YYYY-MM-DD, пытаемся извлечь дату другим способом
-    // Но НЕ используем new Date(), чтобы избежать смещения из-за часовых поясов
-    const match = dateOnly.match(/(\d{4})-(\d{2})-(\d{2})/);
-    if (match) {
-      return match[0]; // Возвращаем YYYY-MM-DD
-    }
-    
-    // Если не удалось распарсить, возвращаем пустую строку
-    console.warn('Не удалось нормализовать дату:', dateString);
-    return '';
-  };
 
   const loadEquipment = async (equipmentId: string) => {
     setLoading(true);
