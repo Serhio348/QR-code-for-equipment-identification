@@ -1,149 +1,163 @@
 # Структура проекта
 
-## Текущая структура
+## Текущая структура проекта
 
 ```
 QR-code-for-equipment-identification/
 ├── src/                          # Frontend (React приложение)
-│   ├── components/
-│   ├── pages/
-│   ├── services/                 # API клиенты для работы с backend
-│   ├── types/
-│   └── utils/
-├── google-sheets-setup/          # Backend для журнала обслуживания
-│   ├── Code.gs
-│   └── Index.html
-└── docs/                         # Документация
-```
-
-## Предлагаемая структура после Фазы 1
-
-```
-QR-code-for-equipment-identification/
-├── src/                          # Frontend (React приложение)
-│   ├── components/
-│   ├── pages/
-│   ├── services/
-│   │   ├── equipmentApi.ts      # Клиент для API оборудования
-│   │   └── maintenanceApi.ts    # Клиент для API журнала (если нужно)
-│   ├── types/
-│   ├── utils/
-│   └── config/
-│       └── api.ts               # Конфигурация API URLs
-│
-├── backend/                      # Backend (Google Apps Script)
-│   ├── equipment-db/             # API для базы данных оборудования
-│   │   ├── Code.gs               # Основной код API
-│   │   └── README.md             # Инструкции по развертыванию
+│   ├── components/              # React компоненты
+│   │   ├── EquipmentList.tsx    # Список оборудования
+│   │   ├── EquipmentForm.tsx    # Форма добавления/редактирования
+│   │   ├── EquipmentPlate.tsx   # Табличка оборудования
+│   │   ├── DriveFilesList.tsx   # Список файлов из Google Drive
+│   │   └── NotFoundPage.tsx     # Страница 404
 │   │
-│   └── maintenance-log/          # API для журнала обслуживания (существующий)
-│       ├── Code.gs
-│       └── Index.html
+│   ├── pages/                   # Страницы приложения
+│   │   ├── HomePage.tsx         # Главная страница (список оборудования)
+│   │   ├── EquipmentPage.tsx    # Страница просмотра оборудования
+│   │   ├── EquipmentFormPage.tsx # Страница формы
+│   │   └── NotFoundPage.tsx    # Страница 404
+│   │
+│   ├── services/                # API клиенты
+│   │   └── equipmentApi.ts      # Клиент для работы с Google Apps Script API
+│   │
+│   ├── types/                   # TypeScript типы
+│   │   └── equipment.ts         # Типы данных оборудования
+│   │
+│   ├── utils/                   # Утилиты
+│   │   ├── routes.ts            # Управление маршрутами
+│   │   ├── pdfExport.ts         # Экспорт в PDF
+│   │   └── logger.ts            # Утилита для логирования
+│   │
+│   ├── config/                  # Конфигурация
+│   │   └── api.ts               # URL API endpoints
+│   │
+│   ├── App.tsx                  # Главный компонент приложения
+│   ├── main.tsx                 # Точка входа
+│   └── vite-env.d.ts            # Типы Vite
 │
-├── google-sheets-setup/          # (можно переименовать или оставить)
-│   └── ...                      # Существующие файлы журнала
+├── backend/                     # Backend (Google Apps Script)
+│   └── equipment-db/            # API для базы данных оборудования
+│       ├── Code.gs              # Основной код API
+│       ├── README.md            # Инструкции по развертыванию
+│       └── UPDATE_INSTRUCTIONS.md # Инструкции по обновлению
 │
-└── docs/                         # Документация
-    ├── DEVELOPMENT_ROADMAP.md
-    ├── PHASE1_IMPLEMENTATION_PLAN.md
-    └── PROJECT_STRUCTURE.md
-```
-
-## Объяснение структуры
-
-### Frontend (src/)
-- React приложение
-- Компоненты, страницы, сервисы
-- Работает в браузере пользователя
-
-### Backend (backend/)
-- Google Apps Script проекты
-- Каждый проект - отдельное веб-приложение
-- Развертывается независимо
-- Предоставляет REST API для frontend
-
-### Почему отдельная папка?
-
-1. **Разделение ответственности**
-   - Frontend и Backend - разные технологии
-   - Разные процессы развертывания
-   - Разные настройки
-
-2. **Независимое развертывание**
-   - Google Apps Script развертывается через Google Cloud
-   - React приложение развертывается отдельно (Vercel, Netlify и т.д.)
-
-3. **Организация кода**
-   - Легче найти нужные файлы
-   - Понятная структура проекта
-   - Удобно для команды
-
-4. **Масштабируемость**
-   - Легко добавить новые backend сервисы
-   - Можно мигрировать на другой backend (Firebase, Supabase)
-   - Frontend остается неизменным
-
-## Альтернативная структура (если предпочитаете)
-
-```
-QR-code-for-equipment-identification/
-├── frontend/                     # React приложение
-│   └── src/
+├── docs/                        # Документация
+│   ├── README.md               # Навигация по документации
+│   ├── NEXT_STEPS_PLAN.md      # План дальнейшего развития
+│   ├── PROJECT_STRUCTURE.md    # Этот файл
+│   └── archive/                # Архив устаревших документов
+│       ├── PHASE1_IMPLEMENTATION_PLAN.md
+│       ├── DEVELOPMENT_ROADMAP.md
+│       └── IMPLEMENTATION_EXAMPLES.md
 │
-├── backend/                      # Google Apps Script
-│   ├── equipment-api/
-│   └── maintenance-api/
-│
-└── docs/
+├── README.md                    # Главный README
+├── CORS_TROUBLESHOOTING.md      # Решение проблем с CORS
+├── package.json                 # Зависимости проекта
+├── tsconfig.json                # Конфигурация TypeScript
+├── vite.config.ts               # Конфигурация Vite
+└── .gitignore                   # Игнорируемые файлы
 ```
 
-## Рекомендация
+## Описание основных папок
 
-**Использовать структуру с папкой `backend/`**
+### `src/` - Frontend приложение
 
-Преимущества:
-- ✅ Четкое разделение frontend/backend
-- ✅ Легко найти backend код
-- ✅ Удобно для документации
-- ✅ Готово к масштабированию
+#### `components/`
+React компоненты для переиспользования:
+- **EquipmentList** - отображение списка оборудования с фильтрацией
+- **EquipmentForm** - форма для добавления и редактирования оборудования
+- **EquipmentPlate** - табличка с характеристиками и QR-кодом
+- **DriveFilesList** - список файлов из Google Drive
 
-## Файлы в backend/
+#### `pages/`
+Страницы приложения (маршруты):
+- **HomePage** - главная страница со списком оборудования
+- **EquipmentPage** - страница просмотра конкретного оборудования
+- **EquipmentFormPage** - страница формы (создание/редактирование)
+- **NotFoundPage** - страница 404
 
-### backend/equipment-db/Code.gs
-```javascript
-// Google Apps Script код для API базы данных оборудования
-// Развертывается как отдельное веб-приложение
-// Предоставляет REST API для работы с Google Sheets
+#### `services/`
+API клиенты для взаимодействия с backend:
+- **equipmentApi.ts** - все функции для работы с API (CRUD операции)
+
+#### `types/`
+TypeScript определения типов:
+- **equipment.ts** - типы для оборудования, характеристик, статусов
+
+#### `utils/`
+Вспомогательные утилиты:
+- **routes.ts** - централизованное управление маршрутами
+- **pdfExport.ts** - экспорт таблички в PDF
+- **logger.ts** - утилита для условного логирования
+
+#### `config/`
+Конфигурационные файлы:
+- **api.ts** - URL endpoints для API
+
+### `backend/` - Backend (Google Apps Script)
+
+#### `equipment-db/`
+API для работы с базой данных оборудования:
+- **Code.gs** - основной код Google Apps Script API
+- **README.md** - подробные инструкции по развертыванию
+- **UPDATE_INSTRUCTIONS.md** - инструкции по обновлению кода
+
+### `docs/` - Документация
+
+- **README.md** - навигация по документации
+- **NEXT_STEPS_PLAN.md** - план дальнейшего развития
+- **PROJECT_STRUCTURE.md** - описание структуры проекта
+- **archive/** - архив устаревших документов
+
+## Архитектура приложения
+
+### Поток данных
+
+```
+Пользователь → React компонент → equipmentApi.ts → Google Apps Script → Google Sheets
+                                                      ↓
+                                                 Google Drive (папки)
 ```
 
-### backend/equipment-db/README.md
-```markdown
-# API для базы данных оборудования
-
-## Развертывание
-1. Создайте Google Sheets таблицу
-2. Откройте Apps Script
-3. Скопируйте код из Code.gs
-4. Опубликуйте как веб-приложение
-5. Скопируйте URL в src/config/api.ts
-```
-
-## Связь Frontend и Backend
+### Маршрутизация
 
 ```
-Frontend (React) 
-    ↓ HTTP запросы
-    ↓
-Backend (Google Apps Script)
-    ↓ API вызовы
-    ↓
-Google Sheets (База данных)
+/ → HomePage (список оборудования)
+/equipment/new → EquipmentFormPage (создание)
+/equipment/:id → EquipmentPage (просмотр)
+/equipment/:id/edit → EquipmentFormPage (редактирование)
+* → NotFoundPage (404)
 ```
 
-## Важно
+### Типы оборудования
 
-- Google Apps Script код **не компилируется** вместе с React
-- Каждый Google Apps Script проект развертывается **отдельно**
-- URL веб-приложений хранятся в конфигурации frontend
-- Backend код в репозитории - для версионирования и документации
+Система поддерживает следующие типы:
+- `filter` - Фильтры
+- `pump` - Насосы
+- `tank` - Резервуары
+- `valve` - Клапаны
+- `electrical` - Электрооборудование
+- `ventilation` - Вентиляционное оборудование
+- `plumbing` - Сантехническое оборудование
+- `industrial` - Прочее промышленное оборудование
+- `other` - Другое
 
+## Технологический стек
+
+### Frontend
+- **React 18** - UI библиотека
+- **TypeScript** - типизация
+- **Vite** - сборщик и dev-сервер
+- **React Router DOM** - маршрутизация
+- **QRCode.react** - генерация QR-кодов
+- **jsPDF + html2canvas** - экспорт в PDF
+
+### Backend
+- **Google Apps Script** - серверная логика
+- **Google Sheets** - база данных
+- **Google Drive API** - управление папками и файлами
+
+## Следующие шаги
+
+Для планов развития см. [NEXT_STEPS_PLAN.md](NEXT_STEPS_PLAN.md)
