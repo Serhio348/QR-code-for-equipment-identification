@@ -62,6 +62,21 @@ const EquipmentPage: React.FC = () => {
     }
   }, [currentEquipment, isMaintenanceLogOpen, isDocumentationOpen]);
 
+  // Отладочное логирование для диагностики проблемы с характеристиками
+  useEffect(() => {
+    if (currentEquipment) {
+      console.log('🔍 Отладочная информация об оборудовании:', {
+        id: currentEquipment.id,
+        name: currentEquipment.name,
+        type: currentEquipment.type,
+        specs: currentEquipment.specs,
+        specsType: typeof currentEquipment.specs,
+        specsKeys: currentEquipment.specs ? Object.keys(currentEquipment.specs) : [],
+        specsStringified: JSON.stringify(currentEquipment.specs, null, 2)
+      });
+    }
+  }, [currentEquipment]);
+
   /**
    * Удаление оборудования
    */
@@ -176,6 +191,7 @@ const EquipmentPage: React.FC = () => {
               <MaintenanceLogModal
                 equipmentId={currentEquipment.id}
                 equipmentName={currentEquipment.name}
+                maintenanceSheetId={currentEquipment.maintenanceSheetId}
                 onClose={() => setMaintenanceLogOpen(false)}
               />
             )}

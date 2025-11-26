@@ -5,12 +5,14 @@ import './MaintenanceLogModal.css';
 interface MaintenanceLogModalProps {
   equipmentId: string;
   equipmentName?: string;
+  maintenanceSheetId?: string;
   onClose: () => void;
 }
 
 const MaintenanceLogModal: React.FC<MaintenanceLogModalProps> = ({
   equipmentId,
   equipmentName,
+  maintenanceSheetId,
   onClose
 }) => {
   useEffect(() => {
@@ -45,7 +47,10 @@ const MaintenanceLogModal: React.FC<MaintenanceLogModalProps> = ({
           </button>
         </div>
         <div className="maintenance-modal__content">
-          <MaintenanceLog equipmentId={equipmentId} />
+          <MaintenanceLog 
+            equipmentId={equipmentId} 
+            maintenanceSheetId={maintenanceSheetId}
+          />
         </div>
       </div>
     </div>

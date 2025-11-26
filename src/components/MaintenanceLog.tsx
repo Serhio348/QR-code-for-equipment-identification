@@ -18,9 +18,11 @@ import './MaintenanceLog.css';
 interface MaintenanceLogProps {
   /** ID оборудования, для которого отображается журнал */
   equipmentId: string;
+  /** Опциональный ID общего журнала обслуживания (для нескольких единиц оборудования) */
+  maintenanceSheetId?: string;
 }
 
-const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId }) => {
+const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanceSheetId }) => {
   const [entries, setEntries] = useState<MaintenanceEntry[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +42,7 @@ const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId }) => {
    */
   useEffect(() => {
     loadMaintenanceLog();
-  }, [equipmentId]);
+  }, [equipmentId, maintenanceSheetId]);
 
   /**
    * Загрузить журнал обслуживания с сервера
@@ -52,7 +54,7 @@ const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId }) => {
     setError(null);
 
     try {
-      const log = await getMaintenanceLog(equipmentId);
+      const log = await getMaintenanceLog(equipmentId, maintenanceSheetId);
       setEntries(log);
     } catch (err: any) {
       console.error('Ошибка загрузки журнала:', err);
@@ -77,7 +79,7 @@ const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId }) => {
     setError(null);
 
     try {
-      const newEntry = await addMaintenanceEntry(equipmentId, formData);
+      const newEntry = await addMaintenanceEntry(equipmentId, formData, maintenanceSheetId);
       // Добавляем новую запись в начало списка
       setEntries([newEntry, ...entries]);
       // Очищаем форму
