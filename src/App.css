@@ -6,19 +6,57 @@
 .app-header {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
-  padding: 30px 20px;
-  text-align: center;
+  padding: 20px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.app-header h1 {
-  font-size: 32px;
-  margin-bottom: 10px;
+.header-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
-.app-header p {
-  font-size: 18px;
+.header-title {
+  text-decoration: none;
+  color: white;
+  text-align: left;
+}
+
+.header-title:hover {
   opacity: 0.9;
+}
+
+.header-title h1 {
+  font-size: 28px;
+  margin: 0 0 5px 0;
+}
+
+.header-title p {
+  font-size: 16px;
+  opacity: 0.9;
+  margin: 0;
+}
+
+.header-nav {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+}
+
+.nav-link {
+  color: white;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 16px;
+  padding: 8px 16px;
+  border-radius: 4px;
+  transition: background 0.3s;
+}
+
+.nav-link:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .plate-container {
@@ -103,5 +141,84 @@
   .date-input {
     width: 100%;
   }
+}
+
+.loading-message,
+.error-message,
+.saving-message,
+.success-message {
+  max-width: 800px;
+  margin: 0 auto 20px;
+  padding: 15px 20px;
+  border-radius: 8px;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.loading-message {
+  background: #e3f2fd;
+  color: #1976d2;
+  border: 1px solid #90caf9;
+}
+
+.saving-message {
+  background: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffc107;
+}
+
+.saving-spinner {
+  display: inline-block;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.success-message {
+  background: #d4edda;
+  color: #155724;
+  border: 1px solid #28a745;
+}
+
+.success-icon {
+  color: #28a745;
+  font-weight: bold;
+  font-size: 18px;
+}
+
+.error-message {
+  background: #ffebee;
+  color: #c62828;
+  border: 1px solid #ef5350;
+}
+
+.error-icon {
+  color: #c62828;
+  font-weight: bold;
+  font-size: 18px;
 }
 

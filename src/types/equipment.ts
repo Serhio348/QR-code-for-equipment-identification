@@ -1,12 +1,120 @@
-export interface FilterSpecs {
+/**
+ * Типы оборудования
+ * Определяет возможные типы оборудования в системе
+ */
+export type EquipmentType = 
+  | 'filter'           // Фильтры
+  | 'pump'             // Насосы
+  | 'tank'             // Резервуары
+  | 'valve'            // Клапаны
+  | 'electrical'       // Электрооборудование
+  | 'ventilation'      // Вентиляционное оборудование
+  | 'plumbing'         // Сантехническое оборудование
+  | 'industrial'       // Прочее промышленное оборудование
+  | 'other';           // Другое
+
+/**
+ * Статусы оборудования
+ * Определяет возможные статусы оборудования
+ * - active: Активно используется
+ * - inactive: Неактивно (временно не используется)
+ * - archived: Архивировано (мягкое удаление)
+ */
+export type EquipmentStatus = 'active' | 'inactive' | 'archived';
+
+/**
+ * Базовый интерфейс для характеристик оборудования
+ * Использует индексную сигнатуру для гибкости - разные типы оборудования
+ * могут иметь разные характеристики
+ */
+export interface EquipmentSpecs {
+  [key: string]: any;
+}
+
+/**
+ * Характеристики фильтра
+ * Специфичные характеристики для фильтров обезжелезивания
+ * Расширяет базовый EquipmentSpecs
+ */
+export interface FilterSpecs extends EquipmentSpecs {
+  /** Название фильтра (используется в EquipmentPlate) */
   name: string;
-  height: string;
-  diameter: string;
-  capacity: string;
-  filtrationArea: string;
-  filtrationSpeed: string;
-  fillingMaterial: string;
-  fillingVolume: string;
+  height?: string;
+  diameter?: string;
+  capacity?: string;
+  filtrationArea?: string;
+  filtrationSpeed?: string;
+  fillingMaterial?: string;
+  fillingVolume?: string;
+}
+
+/**
+ * Основной интерфейс оборудования
+ * Представляет полную информацию об единице оборудования в базе данных
+ * Соответствует структуре данных в Google Sheets таблице
+ */
+export interface Equipment {
+  /** Уникальный идентификатор оборудования (UUID) */
+  id: string;
+  
+  /** Название оборудования */
+  name: string;
+  
+  /** Тип оборудования (filter, pump, tank, valve, electrical, ventilation, plumbing, industrial, other) */
+  type: EquipmentType;
+  
+  /** Характеристики оборудования (JSON объект, структура зависит от типа) */
+  specs: EquipmentSpecs;
+  
+  /** URL папки в Google Drive с документацией */
+  googleDriveUrl: string;
+  
+  /** URL для QR-кода (обычно совпадает с googleDriveUrl или ссылка на страницу оборудования) */
+  qrCodeUrl: string;
+  
+  /** Дата ввода в эксплуатацию (формат: YYYY-MM-DD) */
+  commissioningDate?: string;
+  
+  /** Дата последнего обслуживания (формат: YYYY-MM-DD) */
+  lastMaintenanceDate?: string;
+  
+  /** Статус оборудования (active, inactive, archived) */
+  status: EquipmentStatus;
+  
+  /** Дата и время создания записи (ISO 8601) */
+  createdAt: string;
+  
+  /** Дата и время последнего обновления (ISO 8601) */
+  updatedAt: string;
+}
+
+/**
+ * Интерфейс ответа API
+ * Используется для всех запросов к Google Apps Script API
+ * 
+ * @template T - Тип данных в поле data
+ * 
+ * Пример успешного ответа:
+ * {
+ *   success: true,
+ *   data: Equipment или Equipment[]
+ * }
+ * 
+ * Пример ответа с ошибкой:
+ * {
+ *   success: false,
+ *   error: "Описание ошибки"
+ * }
+ */
+export interface ApiResponse<T> {
+  /** Успешность выполнения запроса */
+  success: boolean;
+  
+  /** Данные ответа (присутствует только при success: true) */
+  data?: T;
+  
+  /** Сообщение об ошибке (присутствует только при success: false) */
+  error?: string;
 }
 
 export const filterSpecs: FilterSpecs = {

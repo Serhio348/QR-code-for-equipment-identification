@@ -1,0 +1,165 @@
+/**
+ * Страница просмотра конкретного оборудования
+ * Отображает табличку оборудования с возможностью редактирования дат
+ */
+
+import React, { useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import EquipmentPlate from '../components/EquipmentPlate';
+import DriveFilesList from '../components/DriveFilesList';
+import EquipmentPageHeader from '../components/EquipmentPage/EquipmentPageHeader';
+import DateEditor from '../components/EquipmentPage/DateEditor';
+import StatusMessages from '../components/EquipmentPage/StatusMessages';
+import { filterSpecs, FilterSpecs } from '../types/equipment';
+import { deleteEquipment } from '../services/equipmentApi';
+import { useEquipmentData, clearEquipmentCache } from '../hooks/useEquipmentData';
+import { useEquipmentDates } from '../hooks/useEquipmentDates';
+import { exportToPDF } from '../utils/pdfExport';
+import { ROUTES } from '../utils/routes';
+import './EquipmentPage.css';
+
+const EquipmentPage: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  
+  // Используем хук для загрузки данных (с кешированием)
+  const { data: equipmentData, loading, error: loadError } = useEquipmentData(id && id !== 'new' ? id : undefined);
+  
+  // Преобразуем данные в один объект (если это одно оборудование)
+  const currentEquipment = equipmentData && !Array.isArray(equipmentData) ? equipmentData : null;
+  
+  // Используем хук для управления датами
+  const {
+    commissioningDate,
+    lastMaintenanceDate,
+    setCommissioningDate,
+    setLastMaintenanceDate,
+    saveDates,
+    saving: datesSaving,
+    success: datesSuccess,
+    error: datesError
+  } = useEquipmentDates({ equipment: currentEquipment });
+  
+  // Локальные состояния для операций удаления
+  const [deleting, setDeleting] = useState<boolean>(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  
+  // Объединяем ошибки загрузки, сохранения дат и удаления
+  const error = loadError || datesError || deleteError;
+  const saving = datesSaving;
+  const saveSuccess = datesSuccess;
+
+  /**
+   * Удаление оборудования
+   */
+  const handleDelete = async () => {
+    if (!currentEquipment) return;
+
+    const confirmMessage = `Вы уверены, что хотите удалить оборудование "${currentEquipment.name}"?\n\nЭто действие удалит оборудование и папку в Google Drive. Это действие нельзя отменить.`;
+
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    setDeleting(true);
+    setDeleteError(null);
+
+    try {
+      await deleteEquipment(currentEquipment.id);
+      // Очищаем кеш после удаления
+      clearEquipmentCache(currentEquipment.id);
+      // Перенаправляем на список после удаления
+      setTimeout(() => {
+        navigate(ROUTES.HOME);
+      }, 1500);
+    } catch (err: any) {
+      console.error('Ошибка удаления:', err);
+      setDeleteError(`Ошибка удаления: ${err.message || 'Не удалось удалить оборудование'}`);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  /**
+   * Извлечение номера фильтра из названия
+   */
+  const getFilterNumber = (): number => {
+    if (!currentEquipment) return 1;
+    const match = currentEquipment.name.match(/№(\d+)/);
+    return match ? parseInt(match[1]) : 1;
+  };
+
+  /**
+   * Экспорт таблички в PDF
+   */
+  const handleExportPDF = async () => {
+    try {
+      await exportToPDF('equipment-plate', `${currentEquipment?.name || 'Оборудование'}-табличка.pdf`);
+    } catch (error) {
+      alert('Ошибка при экспорте в PDF. Попробуйте еще раз.');
+      console.error(error);
+    }
+  };
+
+  return (
+    <div className="equipment-page">
+      <EquipmentPageHeader
+        equipment={currentEquipment}
+        onDelete={handleDelete}
+        deleting={deleting}
+      />
+
+      <div className="plate-container">
+        <StatusMessages
+          saving={saving}
+          success={saveSuccess}
+          error={error}
+          loading={loading}
+        />
+        
+        {loading ? (
+          <div className="loading-message">Загрузка данных оборудования...</div>
+        ) : (
+          <>
+            <div className="controls">
+              <DateEditor
+                commissioningDate={commissioningDate}
+                lastMaintenanceDate={lastMaintenanceDate}
+                onCommissioningDateChange={setCommissioningDate}
+                onLastMaintenanceDateChange={setLastMaintenanceDate}
+                onSave={saveDates}
+                saving={saving}
+              />
+              <button 
+                onClick={handleExportPDF} 
+                className="export-button"
+                disabled={saving}
+              >
+                Экспортировать в PDF
+              </button>
+            </div>
+            
+            <EquipmentPlate 
+              specs={(currentEquipment?.specs as FilterSpecs) || filterSpecs} 
+              equipmentName={currentEquipment?.name}
+              filterNumber={getFilterNumber()}
+              commissioningDate={commissioningDate}
+              lastMaintenanceDate={lastMaintenanceDate}
+              qrCodeUrl={currentEquipment?.qrCodeUrl}
+            />
+            
+            {currentEquipment?.googleDriveUrl && (
+              <DriveFilesList 
+                folderUrl={currentEquipment.googleDriveUrl}
+                equipmentName={currentEquipment.name}
+              />
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default EquipmentPage;
+
