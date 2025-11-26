@@ -28,25 +28,27 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      <Routes>
-        {/* Главная страница - список оборудования */}
-        <Route path={ROUTES.HOME} element={<HomePage />} />
-        
-        {/* Создание нового оборудования */}
-        <Route path={ROUTES.EQUIPMENT_NEW} element={<EquipmentFormPage />} />
-        
-        {/* Редактирование оборудования (должен быть выше /equipment/:id) */}
-        <Route path="/equipment/:id/edit" element={<EquipmentFormPage />} />
-        
-        {/* Просмотр конкретного оборудования */}
-        <Route path="/equipment/:id" element={<EquipmentPage />} />
-        
-        {/* Обработка неверных путей */}
-        <Route path="/equipment" element={<Navigate to={ROUTES.HOME} replace />} />
-        
-        {/* Страница 404 - должна быть последней */}
-        <Route path="*" element={<NotFoundPage />} />
-      </Routes>
+      <main className="app-content">
+        <Routes>
+          {/* Главная страница - список оборудования */}
+          <Route path={ROUTES.HOME} element={<HomePage />} />
+          
+          {/* Создание нового оборудования */}
+          <Route path={ROUTES.EQUIPMENT_NEW} element={<EquipmentFormPage />} />
+          
+          {/* Редактирование оборудования (должен быть выше /equipment/:id) */}
+          <Route path="/equipment/:id/edit" element={<EquipmentFormPage />} />
+          
+          {/* Просмотр конкретного оборудования */}
+          <Route path="/equipment/:id" element={<EquipmentPage />} />
+          
+          {/* Обработка неверных путей */}
+          <Route path="/equipment" element={<Navigate to={ROUTES.HOME} replace />} />
+          
+          {/* Страница 404 - должна быть последней */}
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </main>
     </div>
   );
 };

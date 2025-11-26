@@ -9,7 +9,7 @@ import EquipmentPlate from '../components/EquipmentPlate';
 import MaintenanceLogModal from '../components/MaintenanceLogModal';
 import DocumentationModal from '../components/DocumentationModal';
 import EquipmentPageHeader from '../components/EquipmentPage/EquipmentPageHeader';
-import DateEditor from '../components/EquipmentPage/DateEditor';
+import EquipmentSidebar from '../components/EquipmentPage/EquipmentSidebar';
 import StatusMessages from '../components/EquipmentPage/StatusMessages';
 import { filterSpecs, FilterSpecs } from '../types/equipment';
 import { deleteEquipment } from '../services/equipmentApi';
@@ -46,6 +46,7 @@ const EquipmentPage: React.FC = () => {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isMaintenanceLogOpen, setMaintenanceLogOpen] = useState(false);
   const [isDocumentationOpen, setDocumentationOpen] = useState(false);
+  const [isSidebarOpen, setSidebarOpen] = useState(false);
   
   // Объединяем ошибки загрузки, сохранения дат и удаления
   const error = loadError || datesError || deleteError;
@@ -117,15 +118,37 @@ const EquipmentPage: React.FC = () => {
     <div className="equipment-page">
       <EquipmentPageHeader
         equipment={currentEquipment}
+        loading={loading}
+        onToggleSidebar={() => setSidebarOpen(!isSidebarOpen)}
+      />
+
+      <EquipmentSidebar
+        equipment={currentEquipment}
         onDelete={handleDelete}
         deleting={deleting}
         onOpenMaintenanceLog={
-          currentEquipment ? () => setMaintenanceLogOpen(true) : undefined
+          currentEquipment ? () => {
+            setMaintenanceLogOpen(true);
+            setSidebarOpen(false); // Закрываем панель на мобильных после открытия модального окна
+          } : undefined
         }
         onOpenDocumentation={
-          currentEquipment?.googleDriveUrl ? () => setDocumentationOpen(true) : undefined
+          currentEquipment?.googleDriveUrl ? () => {
+            setDocumentationOpen(true);
+            setSidebarOpen(false); // Закрываем панель на мобильных после открытия модального окна
+          } : undefined
         }
         documentationAvailable={!!currentEquipment?.googleDriveUrl}
+        loading={loading}
+        commissioningDate={commissioningDate}
+        lastMaintenanceDate={lastMaintenanceDate}
+        onCommissioningDateChange={setCommissioningDate}
+        onLastMaintenanceDateChange={setLastMaintenanceDate}
+        onSaveDates={saveDates}
+        savingDates={saving}
+        onExportPDF={handleExportPDF}
+        isOpen={isSidebarOpen}
+        onToggle={() => setSidebarOpen(!isSidebarOpen)}
       />
 
       <div className="plate-container">
@@ -140,24 +163,6 @@ const EquipmentPage: React.FC = () => {
           <div className="loading-message">Загрузка данных оборудования...</div>
         ) : (
           <>
-            <div className="controls">
-              <DateEditor
-                commissioningDate={commissioningDate}
-                lastMaintenanceDate={lastMaintenanceDate}
-                onCommissioningDateChange={setCommissioningDate}
-                onLastMaintenanceDateChange={setLastMaintenanceDate}
-                onSave={saveDates}
-                saving={saving}
-              />
-              <button 
-                onClick={handleExportPDF} 
-                className="export-button"
-                disabled={saving}
-              >
-                Экспортировать в PDF
-              </button>
-            </div>
-            
             <EquipmentPlate 
               specs={(currentEquipment?.specs as FilterSpecs) || filterSpecs} 
               equipmentName={currentEquipment?.name}

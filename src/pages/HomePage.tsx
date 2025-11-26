@@ -19,7 +19,7 @@ const HomePage: React.FC = () => {
 
   return (
     <div className="home-page">
-      <div className="page-header">
+      <div className="home-page-header">
         <h1>Список оборудования</h1>
         <button 
           className="add-button"
@@ -28,7 +28,9 @@ const HomePage: React.FC = () => {
           + Добавить оборудование
         </button>
       </div>
-      <EquipmentList onSelectEquipment={handleSelectEquipment} />
+      <div className="home-page-content">
+        <EquipmentList onSelectEquipment={handleSelectEquipment} />
+      </div>
     </div>
   );
 };

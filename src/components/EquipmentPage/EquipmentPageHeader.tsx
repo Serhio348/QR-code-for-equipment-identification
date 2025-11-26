@@ -12,18 +12,13 @@
  */
 
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Equipment } from '../../types/equipment';
-import { getEquipmentEditUrl } from '../../utils/routes';
 import './EquipmentPageHeader.css';
 
 interface EquipmentPageHeaderProps {
   equipment: Equipment | null;
-  onDelete: () => void;
-  deleting: boolean;
-  onOpenMaintenanceLog?: () => void;
-  onOpenDocumentation?: () => void;
-  documentationAvailable?: boolean;
+  loading?: boolean;
+  onToggleSidebar: () => void;
 }
 
 /**
@@ -31,55 +26,25 @@ interface EquipmentPageHeaderProps {
  * 
  * ЛОГИКА:
  * - Отображает название оборудования или заглушку
- * - Кнопка "Редактировать" открывает форму редактирования
- * - Кнопка "Удалить" вызывает onDelete с подтверждением
+ * - Кнопка для открытия/закрытия боковой панели на мобильных устройствах
  */
 export const EquipmentPageHeader: React.FC<EquipmentPageHeaderProps> = ({
   equipment,
-  onDelete,
-  deleting,
-  onOpenMaintenanceLog,
-  onOpenDocumentation,
-  documentationAvailable = true
+  loading = false,
+  onToggleSidebar
 }) => {
-  const navigate = useNavigate();
+  const title = loading ? 'Загрузка...' : (equipment?.name || '');
 
   return (
     <div className="page-header">
-      <h1>{equipment?.name || 'Оборудование'}</h1>
-      
-      {equipment && (
-        <div className="header-actions">
-          <button
-            className="header-button documentation-button"
-            onClick={onOpenDocumentation}
-            type="button"
-            disabled={!onOpenDocumentation || !documentationAvailable}
-          >
-            Документация
-          </button>
-          <button
-            className="header-button maintenance-button"
-            onClick={onOpenMaintenanceLog}
-            type="button"
-          >
-            Журнал обслуживания
-          </button>
-          <button
-            className="header-button edit-button"
-            onClick={() => navigate(getEquipmentEditUrl(equipment.id))}
-          >
-            Редактировать
-          </button>
-          <button
-            className="header-button delete-button"
-            onClick={onDelete}
-            disabled={deleting}
-          >
-            {deleting ? 'Удаление...' : '🗑️ Удалить'}
-          </button>
-        </div>
-      )}
+      <button 
+        className="sidebar-toggle"
+        onClick={onToggleSidebar}
+        aria-label="Открыть панель управления"
+      >
+        ☰
+      </button>
+      <h1>{title}</h1>
     </div>
   );
 };
