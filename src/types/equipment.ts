@@ -117,6 +117,65 @@ export interface ApiResponse<T> {
   error?: string;
 }
 
+/**
+ * Статусы записей журнала обслуживания
+ * - completed: Работа выполнена
+ * - planned: Работа запланирована
+ */
+export type MaintenanceStatus = 'completed' | 'planned';
+
+/**
+ * Интерфейс записи журнала обслуживания
+ * Представляет одну запись в журнале обслуживания оборудования
+ * Соответствует структуре данных в таблице "Журнал обслуживания"
+ */
+export interface MaintenanceEntry {
+  /** Уникальный идентификатор записи (UUID) */
+  id: string;
+  
+  /** ID оборудования, к которому относится запись */
+  equipmentId: string;
+  
+  /** Дата обслуживания (формат: YYYY-MM-DD) */
+  date: string;
+  
+  /** Тип работы (Промывка, Замена засыпки, Проверка, Ремонт, Другое) */
+  type: string;
+  
+  /** Описание выполненной работы */
+  description: string;
+  
+  /** ФИО исполнителя */
+  performedBy: string;
+  
+  /** Статус записи (completed/planned) */
+  status: MaintenanceStatus;
+  
+  /** Дата и время создания записи (ISO 8601) */
+  createdAt: string;
+}
+
+/**
+ * Данные для создания новой записи в журнале обслуживания
+ * Используется при добавлении записи (некоторые поля опциональны)
+ */
+export interface MaintenanceEntryInput {
+  /** Дата обслуживания (формат: YYYY-MM-DD) */
+  date: string;
+  
+  /** Тип работы */
+  type: string;
+  
+  /** Описание выполненной работы */
+  description: string;
+  
+  /** ФИО исполнителя */
+  performedBy: string;
+  
+  /** Статус записи (по умолчанию: completed) */
+  status?: MaintenanceStatus;
+}
+
 export const filterSpecs: FilterSpecs = {
   name: 'Фильтр обезжелезивания ФО-0,8-1,5',
   height: '1,5 м',
