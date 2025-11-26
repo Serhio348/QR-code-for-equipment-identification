@@ -13,28 +13,41 @@ import { MaintenanceEntry, MaintenanceEntryInput } from '../../types/equipment';
  * Получить журнал обслуживания для оборудования
  * 
  * Загружает все записи журнала обслуживания для указанного оборудования
- * из таблицы "Журнал обслуживания" в Google Sheets
+ * из таблицы "Журнал обслуживания" в Google Sheets.
+ * Если указан maintenanceSheetId, загружает общий журнал для нескольких единиц оборудования.
  * 
  * @param {string} equipmentId - ID оборудования
+ * @param {string} [maintenanceSheetId] - Опциональный ID общего журнала обслуживания (для нескольких единиц оборудования)
  * @returns {Promise<MaintenanceEntry[]>} Массив записей журнала обслуживания
  * 
  * @throws {Error} Если не удалось загрузить журнал
  * 
  * @example
+ * // Обычный журнал для одного оборудования
  * const log = await getMaintenanceLog('equipment-123');
- * console.log(log); // [{ id: '...', date: '2024-01-15', ... }, ...]
+ * 
+ * // Общий журнал для нескольких единиц оборудования
+ * const sharedLog = await getMaintenanceLog('equipment-123', 'shared-sheet-id');
  */
-export async function getMaintenanceLog(equipmentId: string): Promise<MaintenanceEntry[]> {
+export async function getMaintenanceLog(
+  equipmentId: string,
+  maintenanceSheetId?: string
+): Promise<MaintenanceEntry[]> {
   if (!equipmentId) {
     throw new Error('ID оборудования не указан');
   }
 
   try {
+    const params: Record<string, string> = { equipmentId };
+    if (maintenanceSheetId) {
+      params.maintenanceSheetId = maintenanceSheetId;
+    }
+    
     const response = await apiRequest<MaintenanceEntry[]>(
       'getMaintenanceLog',
       'GET',
       undefined,
-      { equipmentId }
+      params
     );
     return response.data || [];
   } catch (error: any) {
@@ -46,10 +59,12 @@ export async function getMaintenanceLog(equipmentId: string): Promise<Maintenanc
 /**
  * Добавить запись в журнал обслуживания
  * 
- * Создает новую запись в журнале обслуживания для указанного оборудования
+ * Создает новую запись в журнале обслуживания для указанного оборудования.
+ * Если указан maintenanceSheetId, добавляет запись в общий журнал для нескольких единиц оборудования.
  * 
  * @param {string} equipmentId - ID оборудования
  * @param {MaintenanceEntryInput} entry - Данные новой записи
+ * @param {string} [maintenanceSheetId] - Опциональный ID общего журнала обслуживания
  * @returns {Promise<MaintenanceEntry>} Созданная запись
  * 
  * @throws {Error} Если не удалось добавить запись
@@ -65,7 +80,8 @@ export async function getMaintenanceLog(equipmentId: string): Promise<Maintenanc
  */
 export async function addMaintenanceEntry(
   equipmentId: string,
-  entry: MaintenanceEntryInput
+  entry: MaintenanceEntryInput,
+  maintenanceSheetId?: string
 ): Promise<MaintenanceEntry> {
   if (!equipmentId) {
     throw new Error('ID оборудования не указан');
@@ -76,14 +92,20 @@ export async function addMaintenanceEntry(
   }
 
   try {
+    const requestData: any = {
+      action: 'addMaintenanceEntry',
+      equipmentId,
+      ...entry
+    };
+    
+    if (maintenanceSheetId) {
+      requestData.maintenanceSheetId = maintenanceSheetId;
+    }
+    
     const response = await apiRequest<MaintenanceEntry>(
       'addMaintenanceEntry',
       'POST',
-      {
-        action: 'addMaintenanceEntry',
-        equipmentId,
-        ...entry
-      }
+      requestData
     );
     return response.data!;
   } catch (error: any) {
@@ -92,10 +114,16 @@ export async function addMaintenanceEntry(
       console.log('⚠️ CORS ошибка при добавлении записи, пробуем fallback...');
       try {
         // Отправляем через no-cors режим
-        await sendNoCorsRequest('addMaintenanceEntry', {
+        const fallbackData: any = {
           equipmentId,
           ...entry
-        });
+        };
+        
+        if (maintenanceSheetId) {
+          fallbackData.maintenanceSheetId = maintenanceSheetId;
+        }
+        
+        await sendNoCorsRequest('addMaintenanceEntry', fallbackData);
         
         // Ждем немного и проверяем, что запись добавилась
         await new Promise(resolve => setTimeout(resolve, 2000));
@@ -112,11 +140,16 @@ export async function addMaintenanceEntry(
           
           try {
             // Используем прямой вызов API, чтобы избежать циклической зависимости
+            const logParams: Record<string, string> = { equipmentId };
+            if (maintenanceSheetId) {
+              logParams.maintenanceSheetId = maintenanceSheetId;
+            }
+            
             const logResponse = await apiRequest<MaintenanceEntry[]>(
               'getMaintenanceLog',
               'GET',
               undefined,
-              { equipmentId }
+              logParams
             );
             const log = logResponse.data || [];
             
