@@ -6,8 +6,8 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import EquipmentPlate from '../components/EquipmentPlate';
-import DriveFilesList from '../components/DriveFilesList';
 import MaintenanceLogModal from '../components/MaintenanceLogModal';
+import DocumentationModal from '../components/DocumentationModal';
 import EquipmentPageHeader from '../components/EquipmentPage/EquipmentPageHeader';
 import DateEditor from '../components/EquipmentPage/DateEditor';
 import StatusMessages from '../components/EquipmentPage/StatusMessages';
@@ -45,6 +45,7 @@ const EquipmentPage: React.FC = () => {
   const [deleting, setDeleting] = useState<boolean>(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isMaintenanceLogOpen, setMaintenanceLogOpen] = useState(false);
+  const [isDocumentationOpen, setDocumentationOpen] = useState(false);
   
   // Объединяем ошибки загрузки, сохранения дат и удаления
   const error = loadError || datesError || deleteError;
@@ -55,7 +56,10 @@ const EquipmentPage: React.FC = () => {
     if (!currentEquipment && isMaintenanceLogOpen) {
       setMaintenanceLogOpen(false);
     }
-  }, [currentEquipment, isMaintenanceLogOpen]);
+    if (!currentEquipment && isDocumentationOpen) {
+      setDocumentationOpen(false);
+    }
+  }, [currentEquipment, isMaintenanceLogOpen, isDocumentationOpen]);
 
   /**
    * Удаление оборудования
@@ -118,6 +122,10 @@ const EquipmentPage: React.FC = () => {
         onOpenMaintenanceLog={
           currentEquipment ? () => setMaintenanceLogOpen(true) : undefined
         }
+        onOpenDocumentation={
+          currentEquipment?.googleDriveUrl ? () => setDocumentationOpen(true) : undefined
+        }
+        documentationAvailable={!!currentEquipment?.googleDriveUrl}
       />
 
       <div className="plate-container">
@@ -159,18 +167,19 @@ const EquipmentPage: React.FC = () => {
               qrCodeUrl={currentEquipment?.qrCodeUrl}
             />
             
-            {currentEquipment?.googleDriveUrl && (
-              <DriveFilesList 
-                folderUrl={currentEquipment.googleDriveUrl}
-                equipmentName={currentEquipment.name}
-              />
-            )}
-
             {currentEquipment && isMaintenanceLogOpen && (
               <MaintenanceLogModal
                 equipmentId={currentEquipment.id}
                 equipmentName={currentEquipment.name}
                 onClose={() => setMaintenanceLogOpen(false)}
+              />
+            )}
+
+            {currentEquipment?.googleDriveUrl && isDocumentationOpen && (
+              <DocumentationModal
+                folderUrl={currentEquipment.googleDriveUrl}
+                equipmentName={currentEquipment.name}
+                onClose={() => setDocumentationOpen(false)}
               />
             )}
           </>

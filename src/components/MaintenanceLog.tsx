@@ -172,11 +172,9 @@ const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId }) => {
               disabled={saving}
             >
               <option value="">Выберите тип</option>
-              <option value="Промывка">Промывка</option>
-              <option value="Замена засыпки">Замена засыпки</option>
-              <option value="Проверка">Проверка</option>
+              <option value="Техническое обслуживание">Техническое обслуживание</option>
               <option value="Ремонт">Ремонт</option>
-              <option value="Другое">Другое</option>
+              <option value="Осмотр">Осмотр</option>
             </select>
           </div>
         </div>
