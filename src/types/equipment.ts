@@ -86,6 +86,12 @@ export interface Equipment {
   
   /** Дата и время последнего обновления (ISO 8601) */
   updatedAt: string;
+
+  /** ID файла журнала обслуживания в папке оборудования (если создан) */
+  maintenanceSheetId?: string;
+
+  /** URL файла журнала обслуживания (Google Sheets) */
+  maintenanceSheetUrl?: string;
 }
 
 /**
