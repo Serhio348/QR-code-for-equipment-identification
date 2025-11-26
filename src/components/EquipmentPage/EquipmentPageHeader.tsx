@@ -3,19 +3,18 @@
  * 
  * НАЗНАЧЕНИЕ:
  * Компонент заголовка страницы оборудования.
- * Содержит навигацию назад, название оборудования и кнопки действий.
+ * Содержит название оборудования и кнопки действий.
  * 
  * АРХИТЕКТУРА:
  * - Отображает название оборудования
- * - Кнопка "Назад к списку"
  * - Кнопки "Редактировать" и "Удалить"
  * - Обрабатывает удаление оборудования
  */
 
 import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Equipment } from '../../types/equipment';
-import { ROUTES, getEquipmentEditUrl } from '../../utils/routes';
+import { getEquipmentEditUrl } from '../../utils/routes';
 import './EquipmentPageHeader.css';
 
 interface EquipmentPageHeaderProps {
@@ -29,7 +28,6 @@ interface EquipmentPageHeaderProps {
  * 
  * ЛОГИКА:
  * - Отображает название оборудования или заглушку
- * - Кнопка "Назад" ведет на главную страницу
  * - Кнопка "Редактировать" открывает форму редактирования
  * - Кнопка "Удалить" вызывает onDelete с подтверждением
  */
@@ -42,10 +40,6 @@ export const EquipmentPageHeader: React.FC<EquipmentPageHeaderProps> = ({
 
   return (
     <div className="page-header">
-      <Link to={ROUTES.HOME} className="back-link">
-        ← Назад к списку
-      </Link>
-      
       <h1>{equipment?.name || 'Оборудование'}</h1>
       
       {equipment && (
