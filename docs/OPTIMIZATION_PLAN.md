@@ -146,8 +146,10 @@ src/utils/
 
 ### Этап 4: Мелкие оптимизации (1 час)
 1. ✅ Вынести `StatusBadge` в отдельный компонент
-2. ✅ Вынести общие стили в отдельные файлы (если нужно)
-3. ✅ Оптимизировать импорты
+2. ✅ Вынести константы типов оборудования в `constants/equipmentTypes.ts`
+3. ✅ Создать хук `useEquipmentData` для загрузки и кеширования данных
+4. ✅ Разбить `EquipmentPage.tsx` на компоненты (EquipmentPageHeader, DateEditor, StatusMessages)
+5. ✅ Создать хук `useEquipmentDates` для управления датами
 
 ---
 
