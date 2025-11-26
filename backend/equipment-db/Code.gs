@@ -764,7 +764,9 @@ function addEquipment(data) {
       data.lastMaintenanceDate ? String(data.lastMaintenanceDate).split('T')[0] : '',        // H: Последнее обслуживание (только YYYY-MM-DD)
       data.status || 'active',               // I: Статус (по умолчанию active)
       now,                                   // J: Создано (дата и время)
-      now                                    // K: Обновлено (дата и время)
+      now,                                   // K: Обновлено (дата и время)
+      data.maintenanceSheetId || '',         // L: Maintenance Sheet ID
+      data.maintenanceSheetUrl || ''         // M: Maintenance Sheet URL
     ];
     
     // Добавляем строку в конец таблицы
@@ -782,7 +784,9 @@ function addEquipment(data) {
       lastMaintenanceDate: data.lastMaintenanceDate || '',
       status: data.status || 'active',
       createdAt: now.toISOString(),
-      updatedAt: now.toISOString()
+      updatedAt: now.toISOString(),
+      maintenanceSheetId: data.maintenanceSheetId || '',
+      maintenanceSheetUrl: data.maintenanceSheetUrl || ''
     };
   } catch (error) {
     Logger.log('Ошибка при добавлении оборудования: ' + error);
@@ -863,6 +867,12 @@ function updateEquipment(id, data) {
         }
         if (data.status !== undefined) {
           sheet.getRange(rowIndex, 9).setValue(data.status); // Колонка I
+        }
+        if (data.maintenanceSheetId !== undefined) {
+          sheet.getRange(rowIndex, 12).setValue(data.maintenanceSheetId); // Колонка L
+        }
+        if (data.maintenanceSheetUrl !== undefined) {
+          sheet.getRange(rowIndex, 13).setValue(data.maintenanceSheetUrl); // Колонка M
         }
         
         // Всегда обновляем дату обновления (колонка K, индекс 11)
@@ -987,33 +997,7 @@ function deleteDriveFolder(folderUrl) {
     const trimmedUrl = folderUrl.trim();
     Logger.log('  - Trimmed URL: ' + trimmedUrl);
     
-    // Извлекаем ID папки из URL
-    // Поддерживаем разные форматы URL:
-    // - https://drive.google.com/drive/folders/FOLDER_ID
-    // - https://drive.google.com/open?id=FOLDER_ID
-    // - FOLDER_ID (если передан напрямую ID)
-    let folderId = null;
-    
-    // Формат 1: /folders/FOLDER_ID
-    const foldersMatch = trimmedUrl.match(/\/folders\/([a-zA-Z0-9_-]+)/);
-    if (foldersMatch && foldersMatch[1]) {
-      folderId = foldersMatch[1];
-      Logger.log('  - Извлечен ID из формата /folders/: ' + folderId);
-    } else {
-      // Формат 2: ?id=FOLDER_ID
-      const idMatch = trimmedUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-      if (idMatch && idMatch[1]) {
-        folderId = idMatch[1];
-        Logger.log('  - Извлечен ID из формата ?id=: ' + folderId);
-      } else {
-        // Формат 3: возможно это уже сам ID (проверяем длину и формат)
-        const idPattern = /^[a-zA-Z0-9_-]{20,}$/;
-        if (idPattern.test(trimmedUrl) && !trimmedUrl.includes('/') && !trimmedUrl.includes('?')) {
-          folderId = trimmedUrl;
-          Logger.log('  - Используется URL как ID: ' + folderId);
-        }
-      }
-    }
+    const folderId = extractDriveIdFromUrl(trimmedUrl);
     
     if (!folderId) {
       Logger.log('⚠️ Не удалось извлечь ID папки из URL: ' + trimmedUrl);
@@ -1092,46 +1076,46 @@ function deleteDriveFolder(folderUrl) {
  * - Первая строка заморожена (остается видимой при прокрутке)
  */
 function getEquipmentSheet() {
-  // Получаем текущую таблицу (та, в которой открыт Apps Script)
+  const headers = [
+    'ID',                    // Колонка A
+    'Название',              // Колонка B
+    'Тип',                   // Колонка C
+    'Характеристики',        // Колонка D
+    'Google Drive URL',      // Колонка E
+    'QR Code URL',           // Колонка F
+    'Дата ввода',            // Колонка G
+    'Последнее обслуживание', // Колонка H
+    'Статус',                // Колонка I
+    'Создано',               // Колонка J
+    'Обновлено',             // Колонка K
+    'Maintenance Sheet ID',  // Колонка L
+    'Maintenance Sheet URL'  // Колонка M
+  ];
+
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  
-  // Пытаемся получить лист с именем "Оборудование"
   let sheet = spreadsheet.getSheetByName('Оборудование');
-  
-  // Если лист не существует, создаем его
+
   if (!sheet) {
-    // Создаем новый лист
     sheet = spreadsheet.insertSheet('Оборудование');
-    
-    // Создаем массив заголовков в правильном порядке
-    const headers = [
-      'ID',                    // Колонка A
-      'Название',              // Колонка B
-      'Тип',                   // Колонка C
-      'Характеристики',        // Колонка D
-      'Google Drive URL',      // Колонка E
-      'QR Code URL',           // Колонка F
-      'Дата ввода',            // Колонка G
-      'Последнее обслуживание', // Колонка H
-      'Статус',                // Колонка I
-      'Создано',               // Колонка J
-      'Обновлено'              // Колонка K
-    ];
-    
-    // Записываем заголовки в первую строку
-    // getRange(строка, колонка, количество_строк, количество_колонок)
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-    
-    // Форматируем заголовки для лучшей читаемости
     const headerRange = sheet.getRange(1, 1, 1, headers.length);
-    headerRange.setFontWeight('bold');        // Жирный шрифт
-    headerRange.setBackground('#4285f4');     // Синий фон (цвет Google)
-    headerRange.setFontColor('#ffffff');       // Белый текст
-    
-    // Замораживаем первую строку, чтобы она оставалась видимой при прокрутке
+    headerRange.setFontWeight('bold');
+    headerRange.setBackground('#4285f4');
+    headerRange.setFontColor('#ffffff');
     sheet.setFrozenRows(1);
+    return sheet;
   }
-  
+
+  const currentLastColumn = sheet.getLastColumn();
+  if (currentLastColumn < headers.length) {
+    const missingHeaders = headers.slice(currentLastColumn);
+    const newHeaderRange = sheet.getRange(1, currentLastColumn + 1, 1, missingHeaders.length);
+    newHeaderRange.setValues([missingHeaders]);
+    newHeaderRange.setFontWeight('bold');
+    newHeaderRange.setBackground('#4285f4');
+    newHeaderRange.setFontColor('#ffffff');
+  }
+
   return sheet;
 }
 
@@ -1245,6 +1229,14 @@ function parseRowToEquipment(row, headers) {
           
         case 'Обновлено':
           equipment.updatedAt = value ? new Date(value).toISOString() : '';
+          break;
+
+        case 'Maintenance Sheet ID':
+          equipment.maintenanceSheetId = value || '';
+          break;
+
+        case 'Maintenance Sheet URL':
+          equipment.maintenanceSheetUrl = value || '';
           break;
       }
     });
@@ -1507,33 +1499,10 @@ function getFolderFiles(folderUrlOrId) {
       throw new Error('URL или ID папки не указан');
     }
     
-    const trimmed = folderUrlOrId.trim();
-    let folderId = null;
-    
-    // Извлекаем ID папки из URL
-    // Формат 1: /folders/FOLDER_ID
-    const foldersMatch = trimmed.match(/\/folders\/([a-zA-Z0-9_-]+)/);
-    if (foldersMatch && foldersMatch[1]) {
-      folderId = foldersMatch[1];
-      Logger.log('  - Извлечен ID из формата /folders/: ' + folderId);
-    } else {
-      // Формат 2: ?id=FOLDER_ID
-      const idMatch = trimmed.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-      if (idMatch && idMatch[1]) {
-        folderId = idMatch[1];
-        Logger.log('  - Извлечен ID из формата ?id=: ' + folderId);
-      } else {
-        // Формат 3: возможно это уже сам ID
-        const idPattern = /^[a-zA-Z0-9_-]{20,}$/;
-        if (idPattern.test(trimmed) && !trimmed.includes('/') && !trimmed.includes('?')) {
-          folderId = trimmed;
-          Logger.log('  - Используется как ID: ' + folderId);
-        }
-      }
-    }
+    const folderId = extractDriveIdFromUrl(folderUrlOrId);
     
     if (!folderId) {
-      throw new Error('Неверный формат URL папки: ' + trimmed);
+      throw new Error('Неверный формат URL папки: ' + folderUrlOrId);
     }
     
     Logger.log('  - Folder ID для получения файлов: ' + folderId);
@@ -1973,6 +1942,17 @@ function _addMaintenanceEntry(equipmentId, entry) {
     Logger.log('📁 Получение листа "Журнал обслуживания"...');
     const sheet = getMaintenanceLogSheet();
     Logger.log('✅ Лист получен: ' + sheet.getName());
+
+    // Получаем данные оборудования, чтобы при необходимости синхронизировать файл в папке
+    let equipment = null;
+    try {
+      equipment = getEquipmentById(equipmentId);
+      if (!equipment) {
+        Logger.log('⚠️ Оборудование с ID "' + equipmentId + '" не найдено при добавлении записи');
+      }
+    } catch (equipmentError) {
+      Logger.log('⚠️ Ошибка при получении оборудования для синхронизации журнала: ' + equipmentError);
+    }
     
     // Генерируем уникальный ID для записи
     const entryId = generateId();
@@ -2018,6 +1998,14 @@ function _addMaintenanceEntry(equipmentId, entry) {
     };
     
     Logger.log('✅ Запись создана: ' + JSON.stringify(result));
+
+    // Пытаемся создать/обновить файл журнала в папке оборудования
+    try {
+      syncMaintenanceEntryFile(equipment, result);
+    } catch (syncError) {
+      Logger.log('⚠️ Не удалось синхронизировать запись с файлом в папке: ' + syncError);
+    }
+
     return result;
   } catch (error) {
     Logger.log('❌ Ошибка в addMaintenanceEntry: ' + error.toString());
@@ -2123,4 +2111,249 @@ function _deleteMaintenanceEntry(entryId) {
     Logger.log('❌ Ошибка в deleteMaintenanceEntry: ' + error.toString());
     throw new Error('Ошибка при удалении записи: ' + error.toString());
   }
+}
+
+/**
+ * Синхронизирует запись журнала с индивидуальным файлом в папке оборудования
+ *
+ * @param {Object|null} equipment - Объект оборудования
+ * @param {Object} entry - Созданная запись журнала
+ */
+function syncMaintenanceEntryFile(equipment, entry) {
+  if (!equipment) {
+    Logger.log('ℹ️ Оборудование не найдено, пропускаем синхронизацию файла журнала');
+    return;
+  }
+
+  if (!equipment.googleDriveUrl) {
+    Logger.log('ℹ️ У оборудования "' + (equipment.name || equipment.id) + '" нет ссылки на папку Google Drive, пропускаем создание файла журнала');
+    return;
+  }
+
+  const maintenanceSheetInfo = getOrCreateEquipmentMaintenanceSheet(equipment);
+  if (!maintenanceSheetInfo || !maintenanceSheetInfo.sheet) {
+    Logger.log('⚠️ Не удалось получить или создать файл журнала для оборудования "' + (equipment.name || equipment.id) + '"');
+    return;
+  }
+
+  appendEntryToEquipmentMaintenanceSheet(maintenanceSheetInfo.sheet, entry);
+}
+
+/**
+ * Получает или создает отдельный файл (Google Sheet) журнала обслуживания для оборудования
+ *
+ * @param {Object} equipment - Объект оборудования
+ * @returns {Object|null} { spreadsheet, sheet, sheetId, sheetUrl } или null при ошибке
+ */
+function getOrCreateEquipmentMaintenanceSheet(equipment) {
+  try {
+    const folderId = extractDriveIdFromUrl(equipment.googleDriveUrl);
+    if (!folderId) {
+      Logger.log('⚠️ Не удалось извлечь ID папки из URL: ' + equipment.googleDriveUrl);
+      return null;
+    }
+
+    let spreadsheet = null;
+    let existingSheetId = equipment.maintenanceSheetId ? String(equipment.maintenanceSheetId).trim() : '';
+
+    if (existingSheetId) {
+      try {
+        spreadsheet = SpreadsheetApp.openById(existingSheetId);
+      } catch (openError) {
+        Logger.log('⚠️ Не удалось открыть существующий файл журнала (' + existingSheetId + '), будет создан новый: ' + openError);
+        spreadsheet = null;
+        existingSheetId = '';
+      }
+    }
+
+    if (!spreadsheet) {
+      Logger.log('📄 Создаем новый файл журнала обслуживания для оборудования "' + (equipment.name || equipment.id) + '"');
+      const name = buildMaintenanceSheetName(equipment);
+      spreadsheet = SpreadsheetApp.create(name);
+
+      try {
+        const file = DriveApp.getFileById(spreadsheet.getId());
+        const folder = DriveApp.getFolderById(folderId);
+        file.moveTo(folder);
+        Logger.log('✅ Файл журнала перемещен в папку оборудования');
+      } catch (folderError) {
+        Logger.log('⚠️ Не удалось переместить файл журнала в папку оборудования: ' + folderError);
+      }
+
+      const sheet = spreadsheet.getSheets()[0];
+      sheet.setName('Журнал');
+      setupMaintenanceSheetHeaders(sheet);
+
+      const sheetUrl = spreadsheet.getUrl();
+      updateEquipmentMaintenanceSheetInfo(equipment.id, spreadsheet.getId(), sheetUrl);
+
+      return {
+        spreadsheet,
+        sheet,
+        sheetId: spreadsheet.getId(),
+        sheetUrl
+      };
+    }
+
+    const sheet = spreadsheet.getSheets()[0];
+    setupMaintenanceSheetHeaders(sheet);
+    const sheetUrl = equipment.maintenanceSheetUrl || spreadsheet.getUrl();
+
+    if (!equipment.maintenanceSheetUrl) {
+      updateEquipmentMaintenanceSheetInfo(equipment.id, spreadsheet.getId(), sheetUrl);
+    }
+
+    return {
+      spreadsheet,
+      sheet,
+      sheetId: spreadsheet.getId(),
+      sheetUrl
+    };
+  } catch (error) {
+    Logger.log('⚠️ Ошибка при подготовке файла журнала оборудования: ' + error);
+    return null;
+  }
+}
+
+/**
+ * Формирует человекочитаемое название файла журнала
+ *
+ * @param {Object} equipment - Объект оборудования
+ * @returns {string} Название файла
+ */
+function buildMaintenanceSheetName(equipment) {
+  const baseName = equipment && equipment.name ? String(equipment.name).trim() : equipment.id;
+  const safeName = baseName || 'Оборудование';
+  const fullName = 'Журнал обслуживания - ' + safeName;
+  // Ограничиваем длину, чтобы избежать ошибок именования
+  return fullName.substring(0, 100);
+}
+
+/**
+ * Настраивает заголовки листа журнала обслуживания (идемпотентно)
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ */
+function setupMaintenanceSheetHeaders(sheet) {
+  const headers = [
+    'Дата обслуживания',
+    'Тип работы',
+    'Описание',
+    'Выполнил',
+    'Статус',
+    'Создано системой',
+    'ID записи'
+  ];
+
+  const requiredColumns = headers.length;
+  const lastRow = sheet.getLastRow();
+
+  let needsHeader = lastRow === 0;
+  if (!needsHeader) {
+    const existing = sheet.getRange(1, 1, 1, requiredColumns).getValues()[0];
+    needsHeader = headers.some((header, index) => existing[index] !== header);
+    if (needsHeader) {
+      sheet.insertRows(1);
+    }
+  }
+
+  if (needsHeader) {
+    sheet.getRange(1, 1, 1, requiredColumns).setValues([headers]);
+    const headerRange = sheet.getRange(1, 1, 1, requiredColumns);
+    headerRange.setFontWeight('bold');
+    headerRange.setBackground('#f1f3f4');
+  }
+
+  sheet.setFrozenRows(1);
+  sheet.autoResizeColumns(1, requiredColumns);
+}
+
+/**
+ * Добавляет запись в файл журнала обслуживания оборудования
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @param {Object} entry
+ */
+function appendEntryToEquipmentMaintenanceSheet(sheet, entry) {
+  if (!sheet || !entry) {
+    return;
+  }
+
+  const createdAt = entry.createdAt ? new Date(entry.createdAt) : new Date();
+
+  const row = [
+    entry.date || '',
+    entry.type || '',
+    entry.description || '',
+    entry.performedBy || '',
+    entry.status || 'completed',
+    formatDate(createdAt),
+    entry.id
+  ];
+
+  sheet.appendRow(row);
+}
+
+/**
+ * Сохраняет информацию о файле журнала в строке оборудования
+ *
+ * @param {string} equipmentId
+ * @param {string} sheetId
+ * @param {string} sheetUrl
+ */
+function updateEquipmentMaintenanceSheetInfo(equipmentId, sheetId, sheetUrl) {
+  if (!equipmentId) {
+    return;
+  }
+
+  const sheet = getEquipmentSheet();
+  const data = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === equipmentId) {
+      const rowIndex = i + 1;
+      if (sheetId !== undefined) {
+        sheet.getRange(rowIndex, 12).setValue(sheetId);
+      }
+      if (sheetUrl !== undefined) {
+        sheet.getRange(rowIndex, 13).setValue(sheetUrl);
+      }
+      sheet.getRange(rowIndex, 11).setValue(new Date());
+      return;
+    }
+  }
+}
+
+/**
+ * Извлекает ID файла или папки Google Drive из URL или строки
+ *
+ * @param {string} urlOrId
+ * @returns {string|null}
+ */
+function extractDriveIdFromUrl(urlOrId) {
+  if (!urlOrId) {
+    return null;
+  }
+
+  const trimmed = String(urlOrId).trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const foldersMatch = trimmed.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+  if (foldersMatch && foldersMatch[1]) {
+    return foldersMatch[1];
+  }
+
+  const idMatch = trimmed.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (idMatch && idMatch[1]) {
+    return idMatch[1];
+  }
+
+  const idPattern = /^[a-zA-Z0-9_-]{20,}$/;
+  if (idPattern.test(trimmed) && !trimmed.includes('/') && !trimmed.includes('?')) {
+    return trimmed;
+  }
+
+  return null;
 }
