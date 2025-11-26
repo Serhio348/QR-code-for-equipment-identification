@@ -22,6 +22,8 @@ interface EquipmentPageHeaderProps {
   onDelete: () => void;
   deleting: boolean;
   onOpenMaintenanceLog?: () => void;
+  onOpenDocumentation?: () => void;
+  documentationAvailable?: boolean;
 }
 
 /**
@@ -36,7 +38,9 @@ export const EquipmentPageHeader: React.FC<EquipmentPageHeaderProps> = ({
   equipment,
   onDelete,
   deleting,
-  onOpenMaintenanceLog
+  onOpenMaintenanceLog,
+  onOpenDocumentation,
+  documentationAvailable = true
 }) => {
   const navigate = useNavigate();
 
@@ -46,6 +50,14 @@ export const EquipmentPageHeader: React.FC<EquipmentPageHeaderProps> = ({
       
       {equipment && (
         <div className="header-actions">
+          <button
+            className="header-button documentation-button"
+            onClick={onOpenDocumentation}
+            type="button"
+            disabled={!onOpenDocumentation || !documentationAvailable}
+          >
+            Документация
+          </button>
           <button
             className="header-button maintenance-button"
             onClick={onOpenMaintenanceLog}

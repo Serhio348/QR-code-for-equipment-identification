@@ -1,0 +1,68 @@
+.documentation-modal-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+}
+
+.documentation-modal {
+  width: min(1100px, 100%);
+  max-height: 90vh;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: documentationModalFade 200ms ease;
+}
+
+.documentation-modal__header {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.documentation-modal__header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #1f2937;
+}
+
+.documentation-modal__close {
+  background: transparent;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  line-height: 1;
+  color: #6b7280;
+  transition: color 0.2s;
+}
+
+.documentation-modal__close:hover {
+  color: #111827;
+}
+
+.documentation-modal__content {
+  padding: 1.5rem;
+  overflow-y: auto;
+}
+
+@keyframes documentationModalFade {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+

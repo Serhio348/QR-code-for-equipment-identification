@@ -77,6 +77,14 @@
 .delete-button {
   background: linear-gradient(135deg, #f87171, #ef4444);
 }
+.documentation-button {
+  background: linear-gradient(135deg, #10b981, #059669);
+}
+
+.documentation-button:hover:not(:disabled) {
+  background: linear-gradient(135deg, #059669, #047857);
+}
+
 
 .delete-button:hover:not(:disabled) {
   background: linear-gradient(135deg, #ef4444, #dc2626);
