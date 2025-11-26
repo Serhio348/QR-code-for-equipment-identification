@@ -29,3 +29,11 @@ export {
   createDriveFolder,
   getFolderFiles
 } from './api/driveApi';
+
+// Реэкспорт API журнала обслуживания
+export {
+  getMaintenanceLog,
+  addMaintenanceEntry,
+  updateMaintenanceEntry,
+  deleteMaintenanceEntry
+} from './api/maintenanceApi';

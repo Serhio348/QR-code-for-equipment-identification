@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import EquipmentPlate from '../components/EquipmentPlate';
 import DriveFilesList from '../components/DriveFilesList';
+import MaintenanceLog from '../components/MaintenanceLog';
 import EquipmentPageHeader from '../components/EquipmentPage/EquipmentPageHeader';
 import DateEditor from '../components/EquipmentPage/DateEditor';
 import StatusMessages from '../components/EquipmentPage/StatusMessages';
@@ -153,6 +154,10 @@ const EquipmentPage: React.FC = () => {
                 folderUrl={currentEquipment.googleDriveUrl}
                 equipmentName={currentEquipment.name}
               />
+            )}
+
+            {currentEquipment && (
+              <MaintenanceLog equipmentId={currentEquipment.id} />
             )}
           </>
         )}
