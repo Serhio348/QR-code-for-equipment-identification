@@ -7,6 +7,7 @@ import React from 'react';
 import { Equipment, EquipmentType, EquipmentStatus } from '../types/equipment';
 import { useEquipmentForm } from '../hooks/useEquipmentForm';
 import { SpecFieldsRenderer } from './EquipmentForm/SpecFields/SpecFieldsRenderer';
+import { EQUIPMENT_TYPE_OPTIONS } from '../constants/equipmentTypes';
 import './EquipmentForm.css';
 
 interface EquipmentFormProps {
@@ -78,15 +79,11 @@ const EquipmentForm: React.FC<EquipmentFormProps> = ({ equipmentId, onSave, onCa
               onChange={(e) => handleTypeChange(e.target.value as EquipmentType)}
               required
             >
-              <option value="filter">Фильтр</option>
-              <option value="pump">Насос</option>
-              <option value="tank">Резервуар</option>
-              <option value="valve">Клапан</option>
-              <option value="electrical">Электрооборудование</option>
-              <option value="ventilation">Вентиляционное оборудование</option>
-              <option value="plumbing">Сантехническое оборудование</option>
-              <option value="industrial">Прочее промышленное оборудование</option>
-              <option value="other">Другое</option>
+              {EQUIPMENT_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </div>
 

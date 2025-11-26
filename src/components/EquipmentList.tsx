@@ -7,6 +7,8 @@ import React, { useState, useEffect } from 'react';
 import { getAllEquipment } from '../services/equipmentApi';
 import { Equipment } from '../types/equipment';
 import { formatDate } from '../utils/dateFormatting';
+import { EQUIPMENT_TYPE_OPTIONS } from '../constants/equipmentTypes';
+import StatusBadge from './StatusBadge';
 import './EquipmentList.css';
 
 interface EquipmentListProps {
@@ -83,16 +85,6 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
   });
 
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'active':
-        return <span className="status-badge status-active">Активен</span>;
-      case 'inactive':
-        return <span className="status-badge status-inactive">Неактивен</span>;
-      default:
-        return <span className="status-badge">{status}</span>;
-    }
-  };
 
   if (loading) {
     return (
@@ -135,15 +127,11 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
             className="filter-select"
           >
             <option value="all">Все типы</option>
-            <option value="filter">Фильтры</option>
-            <option value="pump">Насосы</option>
-            <option value="tank">Резервуары</option>
-            <option value="valve">Клапаны</option>
-            <option value="electrical">Электрооборудование</option>
-            <option value="ventilation">Вентиляционное оборудование</option>
-            <option value="plumbing">Сантехническое оборудование</option>
-            <option value="industrial">Прочее промышленное оборудование</option>
-            <option value="other">Другое</option>
+            {EQUIPMENT_TYPE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
           
           {/* Фильтр по статусу */}
@@ -179,7 +167,7 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
             >
               <div className="card-header">
                 <h3 className="equipment-name">{equipment.name}</h3>
-                {getStatusBadge(equipment.status)}
+                <StatusBadge status={equipment.status} />
               </div>
               
               <div className="card-body">
