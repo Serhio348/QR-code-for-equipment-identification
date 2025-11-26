@@ -7,8 +7,9 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import EquipmentPlate from '../components/EquipmentPlate';
 import DriveFilesList from '../components/DriveFilesList';
-import { filterSpecs, Equipment, FilterSpecs } from '../types/equipment';
-import { getEquipmentById, updateEquipment, deleteEquipment } from '../services/equipmentApi';
+import { filterSpecs, FilterSpecs } from '../types/equipment';
+import { updateEquipment, deleteEquipment } from '../services/equipmentApi';
+import { useEquipmentData, updateEquipmentCache, clearEquipmentCache } from '../hooks/useEquipmentData';
 import { exportToPDF } from '../utils/pdfExport';
 import { ROUTES, getEquipmentEditUrl } from '../utils/routes';
 import { normalizeDate } from '../utils/dateNormalization';
@@ -17,64 +18,35 @@ import './EquipmentPage.css';
 const EquipmentPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [currentEquipment, setCurrentEquipment] = useState<Equipment | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+  
+  // Используем хук для загрузки данных (с кешированием)
+  const { data: equipmentData, loading, error: loadError } = useEquipmentData(id && id !== 'new' ? id : undefined);
+  
+  // Преобразуем данные в один объект (если это одно оборудование)
+  const currentEquipment = equipmentData && !Array.isArray(equipmentData) ? equipmentData : null;
+  
+  // Локальные состояния для операций сохранения/удаления
   const [saving, setSaving] = useState<boolean>(false);
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
   const [deleting, setDeleting] = useState<boolean>(false);
+  const [operationError, setOperationError] = useState<string | null>(null);
   
   const [commissioningDate, setCommissioningDate] = useState<string>('');
   const [lastMaintenanceDate, setLastMaintenanceDate] = useState<string>('');
+  
+  // Объединяем ошибки загрузки и операций
+  const error = loadError || operationError;
 
-  // Загрузка оборудования при монтировании
+  // Устанавливаем даты при загрузке оборудования
   useEffect(() => {
-    if (id && id !== 'new') {
-      loadEquipment(id);
-    } else {
-      // Для нового оборудования используем дефолтные данные
-      setCurrentEquipment(null);
-      setLoading(false);
+    if (currentEquipment) {
+      const normalizedCommissioning = normalizeDate(currentEquipment.commissioningDate);
+      const normalizedMaintenance = normalizeDate(currentEquipment.lastMaintenanceDate);
+      
+      setCommissioningDate(normalizedCommissioning);
+      setLastMaintenanceDate(normalizedMaintenance);
     }
-  }, [id]);
-
-
-  const loadEquipment = async (equipmentId: string) => {
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const equipment = await getEquipmentById(equipmentId);
-      if (equipment) {
-        setCurrentEquipment(equipment);
-        // Нормализуем даты перед установкой в state
-        const normalizedCommissioning = normalizeDate(equipment.commissioningDate);
-        const normalizedMaintenance = normalizeDate(equipment.lastMaintenanceDate);
-        
-        // Логируем для отладки
-        if (equipment.commissioningDate) {
-          console.log('📅 Обработка даты на странице:', {
-            id: equipment.id,
-            name: equipment.name,
-            исходная_дата: equipment.commissioningDate,
-            нормализованная_дата: normalizedCommissioning
-          });
-        }
-        
-        setCommissioningDate(normalizedCommissioning);
-        setLastMaintenanceDate(normalizedMaintenance);
-      } else {
-        setError('Оборудование не найдено');
-        // Оборудование не найдено - будет показана ошибка, но не редиректим автоматически
-        // Пользователь может вернуться назад
-      }
-    } catch (err: any) {
-      console.error('Ошибка загрузки оборудования:', err);
-      setError('Не удалось загрузить данные оборудования');
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [currentEquipment]);
 
   // Сохранение дат через API (ручное сохранение по кнопке)
   const saveDatesToAPI = async () => {
@@ -84,7 +56,7 @@ const EquipmentPage: React.FC = () => {
     
     setSaving(true);
     setSaveSuccess(false);
-    setError(null);
+    setOperationError(null);
     
     try {
       // input type="date" уже возвращает YYYY-MM-DD, просто убираем возможное время для гарантии
@@ -102,13 +74,14 @@ const EquipmentPage: React.FC = () => {
         commissioningDate: normalizedCommissioning,
         lastMaintenanceDate: normalizedMaintenance
       });
-      setCurrentEquipment(updated);
+      // Обновляем кеш после сохранения
+      updateEquipmentCache(updated);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (error: any) {
       console.error('Ошибка сохранения:', error);
-      setError(`Ошибка сохранения: ${error.message || 'Не удалось сохранить данные'}`);
-      setTimeout(() => setError(null), 5000);
+      setOperationError(`Ошибка сохранения: ${error.message || 'Не удалось сохранить данные'}`);
+      setTimeout(() => setOperationError(null), 5000);
     } finally {
       setSaving(false);
     }
@@ -134,10 +107,12 @@ const EquipmentPage: React.FC = () => {
     }
 
     setDeleting(true);
-    setError(null);
+    setOperationError(null);
 
     try {
       await deleteEquipment(currentEquipment.id);
+      // Очищаем кеш после удаления
+      clearEquipmentCache(currentEquipment.id);
       setSaveSuccess(true);
       setTimeout(() => {
         setSaveSuccess(false);
@@ -146,7 +121,7 @@ const EquipmentPage: React.FC = () => {
       }, 1500);
     } catch (err: any) {
       console.error('Ошибка удаления:', err);
-      setError(`Ошибка удаления: ${err.message || 'Не удалось удалить оборудование'}`);
+      setOperationError(`Ошибка удаления: ${err.message || 'Не удалось удалить оборудование'}`);
     } finally {
       setDeleting(false);
     }

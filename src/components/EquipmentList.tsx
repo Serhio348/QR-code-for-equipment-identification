@@ -3,11 +3,11 @@
  * Отображает все оборудование из базы данных в виде списка
  */
 
-import React, { useState, useEffect } from 'react';
-import { getAllEquipment } from '../services/equipmentApi';
+import React, { useState, useMemo } from 'react';
 import { Equipment } from '../types/equipment';
 import { formatDate } from '../utils/dateFormatting';
 import { EQUIPMENT_TYPE_OPTIONS } from '../constants/equipmentTypes';
+import { useEquipmentData } from '../hooks/useEquipmentData';
 import StatusBadge from './StatusBadge';
 import './EquipmentList.css';
 
@@ -16,48 +16,18 @@ interface EquipmentListProps {
 }
 
 const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
-  const [equipmentList, setEquipmentList] = useState<Equipment[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+  // Используем хук для загрузки данных (с кешированием)
+  const { data: equipmentListData, loading, error, refetch } = useEquipmentData();
+  
+  // Преобразуем данные в массив (если это список)
+  const equipmentList = useMemo(() => {
+    if (!equipmentListData) return [];
+    return Array.isArray(equipmentListData) ? equipmentListData : [];
+  }, [equipmentListData]);
+  
   const [filterType, setFilterType] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
-
-  // Загрузка оборудования при монтировании компонента
-  useEffect(() => {
-    loadEquipment();
-  }, []);
-
-  const loadEquipment = async () => {
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const allEquipment = await getAllEquipment();
-      
-      // НЕ нормализуем даты - используем их как есть с сервера
-      // Нормализация может привести к потере данных или изменению даты
-      // Если дата приходит в формате YYYY-MM-DD, она уже правильная
-      const normalizedEquipment = allEquipment.map(eq => {
-        // Просто убираем время, если оно есть, но не меняем саму дату
-        const commissioningDate = eq.commissioningDate ? String(eq.commissioningDate).split('T')[0].split(' ')[0].trim() : '';
-        const lastMaintenanceDate = eq.lastMaintenanceDate ? String(eq.lastMaintenanceDate).split('T')[0].split(' ')[0].trim() : '';
-        
-        return {
-          ...eq,
-          commissioningDate: commissioningDate,
-          lastMaintenanceDate: lastMaintenanceDate
-        };
-      });
-      
-      setEquipmentList(normalizedEquipment);
-    } catch (err: any) {
-      console.error('Ошибка загрузки оборудования:', err);
-      setError('Не удалось загрузить список оборудования');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // Фильтрация оборудования
   const filteredEquipment = equipmentList.filter(eq => {
@@ -98,7 +68,7 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
     return (
       <div className="equipment-list">
         <div className="error-message">{error}</div>
-        <button onClick={loadEquipment} className="retry-button">
+        <button onClick={refetch} className="retry-button">
           Попробовать снова
         </button>
       </div>
