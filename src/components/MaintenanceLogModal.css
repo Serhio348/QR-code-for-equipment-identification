@@ -1,0 +1,68 @@
+.maintenance-modal-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  padding: 2rem;
+}
+
+.maintenance-modal {
+  background: #ffffff;
+  width: min(1100px, 100%);
+  max-height: 90vh;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: maintenanceModalFade 200ms ease;
+}
+
+.maintenance-modal__header {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.maintenance-modal__header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #1f2937;
+}
+
+.maintenance-modal__close {
+  background: transparent;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  line-height: 1;
+  color: #6b7280;
+  transition: color 0.2s;
+}
+
+.maintenance-modal__close:hover {
+  color: #111827;
+}
+
+.maintenance-modal__content {
+  padding: 1.5rem;
+  overflow-y: auto;
+}
+
+@keyframes maintenanceModalFade {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+

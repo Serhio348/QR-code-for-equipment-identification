@@ -3,11 +3,11 @@
  * Отображает табличку оборудования с возможностью редактирования дат
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import EquipmentPlate from '../components/EquipmentPlate';
 import DriveFilesList from '../components/DriveFilesList';
-import MaintenanceLog from '../components/MaintenanceLog';
+import MaintenanceLogModal from '../components/MaintenanceLogModal';
 import EquipmentPageHeader from '../components/EquipmentPage/EquipmentPageHeader';
 import DateEditor from '../components/EquipmentPage/DateEditor';
 import StatusMessages from '../components/EquipmentPage/StatusMessages';
@@ -44,11 +44,18 @@ const EquipmentPage: React.FC = () => {
   // Локальные состояния для операций удаления
   const [deleting, setDeleting] = useState<boolean>(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isMaintenanceLogOpen, setMaintenanceLogOpen] = useState(false);
   
   // Объединяем ошибки загрузки, сохранения дат и удаления
   const error = loadError || datesError || deleteError;
   const saving = datesSaving;
   const saveSuccess = datesSuccess;
+
+  useEffect(() => {
+    if (!currentEquipment && isMaintenanceLogOpen) {
+      setMaintenanceLogOpen(false);
+    }
+  }, [currentEquipment, isMaintenanceLogOpen]);
 
   /**
    * Удаление оборудования
@@ -108,6 +115,9 @@ const EquipmentPage: React.FC = () => {
         equipment={currentEquipment}
         onDelete={handleDelete}
         deleting={deleting}
+        onOpenMaintenanceLog={
+          currentEquipment ? () => setMaintenanceLogOpen(true) : undefined
+        }
       />
 
       <div className="plate-container">
@@ -156,8 +166,12 @@ const EquipmentPage: React.FC = () => {
               />
             )}
 
-            {currentEquipment && (
-              <MaintenanceLog equipmentId={currentEquipment.id} />
+            {currentEquipment && isMaintenanceLogOpen && (
+              <MaintenanceLogModal
+                equipmentId={currentEquipment.id}
+                equipmentName={currentEquipment.name}
+                onClose={() => setMaintenanceLogOpen(false)}
+              />
             )}
           </>
         )}
