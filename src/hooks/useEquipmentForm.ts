@@ -108,10 +108,6 @@ export function useEquipmentForm({ equipmentId, onSave, onCancel }: UseEquipment
     }));
   };
 
-  // Обработка изменения всех характеристик (для типа "other")
-  const handleSpecsChange = (newSpecs: EquipmentSpecs) => {
-    setSpecs(newSpecs);
-  };
 
   // Валидация формы
   const validateForm = (): boolean => {
@@ -254,7 +250,6 @@ export function useEquipmentForm({ equipmentId, onSave, onCancel }: UseEquipment
     // Обработчики
     handleTypeChange,
     handleSpecChange,
-    handleSpecsChange,
     handleSubmit,
     handleCancel,
   };

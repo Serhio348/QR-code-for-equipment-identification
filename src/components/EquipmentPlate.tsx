@@ -169,6 +169,14 @@ const EquipmentPlate: React.FC<EquipmentPlateProps> = ({
                   <td className="spec-value">{specs.serialNumber}</td>
                 </tr>
               )}
+              {specs.additionalNotes && (
+                <tr>
+                  <td className="spec-label">Дополнительные характеристики:</td>
+                  <td className="spec-value" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                    {specs.additionalNotes}
+                  </td>
+                </tr>
+              )}
               <tr className="date-row">
                 <td className="spec-label">Дата ввода в эксплуатацию:</td>
                 <td className="spec-value">{formatDate(commissioningDate)}</td>
