@@ -33,21 +33,20 @@ import { ElectricalSpecFields } from './ElectricalSpecFields';   // Электр
 import { VentilationSpecFields } from './VentilationSpecFields'; // Вентиляционное оборудование
 import { PlumbingSpecFields } from './PlumbingSpecFields';        // Сантехническое оборудование
 import { IndustrialSpecFields } from './IndustrialSpecFields';   // Прочее промышленное оборудование
-import { OtherSpecFields } from './OtherSpecFields';              // Другое (JSON редактор)
+import { OtherSpecFields } from './OtherSpecFields';              // Другое
+import { AdditionalNotesField } from './CommonSpecFields';        // Дополнительные характеристики (для всех типов)
 
 /**
  * Интерфейс пропсов SpecFieldsRenderer
  * 
  * @param type - Тип оборудования (определяет какой компонент рендерить)
  * @param specs - Объект со всеми характеристиками
- * @param onSpecChange - Функция для обновления одного поля (для большинства типов)
- * @param onSpecsChange - Функция для обновления всего объекта specs (только для типа 'other')
+ * @param onSpecChange - Функция для обновления одного поля
  */
 interface SpecFieldsRendererProps {
   type: EquipmentType;                                    // Тип оборудования
   specs: EquipmentSpecs;                                 // Все характеристики
   onSpecChange: (key: string, value: string) => void;     // Обновление одного поля
-  onSpecsChange?: (specs: EquipmentSpecs) => void;       // Обновление всего объекта (для 'other')
 }
 
 /**
@@ -57,7 +56,7 @@ interface SpecFieldsRendererProps {
  * 1. Получает type (тип оборудования) из пропсов
  * 2. Использует switch-case для выбора нужного компонента
  * 3. Рендерит выбранный компонент с передачей specs и onSpecChange
- * 4. Для типа 'other' использует onSpecsChange (работа с JSON)
+ * 4. Добавляет поле "Дополнительные характеристики" для всех типов
  * 
  * ПОТОК ДАННЫХ:
  * EquipmentForm → SpecFieldsRenderer → [FilterSpecFields | PumpSpecFields | ...]
@@ -67,8 +66,7 @@ interface SpecFieldsRendererProps {
 export const SpecFieldsRenderer: React.FC<SpecFieldsRendererProps> = ({
   type,              // Тип оборудования (например: 'filter', 'pump')
   specs,             // Все характеристики оборудования
-  onSpecChange,      // Функция обновления одного поля
-  onSpecsChange      // Функция обновления всего объекта (для типа 'other')
+  onSpecChange       // Функция обновления одного поля
 }) => {
   /**
    * Switch-case для выбора компонента в зависимости от типа оборудования
@@ -77,47 +75,70 @@ export const SpecFieldsRenderer: React.FC<SpecFieldsRendererProps> = ({
    * - specs: текущие характеристики
    * - onSpecChange: функция обновления полей
    */
+  let specificFields: React.ReactNode;
+  
   switch (type) {
     // Фильтр - компонент с полями: Наименование, Инвентарный номер, Высота, Диаметр, и т.д.
     case 'filter':
-      return <FilterSpecFields specs={specs} onSpecChange={onSpecChange} />;
+      specificFields = <FilterSpecFields specs={specs} onSpecChange={onSpecChange} />;
+      break;
     
     // Насос - компонент с полями: Наименование, Инвентарный номер, Производительность, Напор, и т.д.
     case 'pump':
-      return <PumpSpecFields specs={specs} onSpecChange={onSpecChange} />;
+      specificFields = <PumpSpecFields specs={specs} onSpecChange={onSpecChange} />;
+      break;
     
     // Резервуар - компонент с полями: Наименование, Инвентарный номер, Объем, Высота, Диаметр
     case 'tank':
-      return <TankSpecFields specs={specs} onSpecChange={onSpecChange} />;
+      specificFields = <TankSpecFields specs={specs} onSpecChange={onSpecChange} />;
+      break;
     
     // Клапан - компонент с полями: Наименование, Инвентарный номер, Диаметр, Тип клапана
     case 'valve':
-      return <ValveSpecFields specs={specs} onSpecChange={onSpecChange} />;
+      specificFields = <ValveSpecFields specs={specs} onSpecChange={onSpecChange} />;
+      break;
     
     // Электрооборудование - компонент с полями: Наименование, Инвентарный номер, Мощность, Напряжение, и т.д.
     case 'electrical':
-      return <ElectricalSpecFields specs={specs} onSpecChange={onSpecChange} />;
+      specificFields = <ElectricalSpecFields specs={specs} onSpecChange={onSpecChange} />;
+      break;
     
     // Вентиляционное оборудование - компонент с полями: Наименование, Инвентарный номер, Производительность, Мощность, и т.д.
     case 'ventilation':
-      return <VentilationSpecFields specs={specs} onSpecChange={onSpecChange} />;
+      specificFields = <VentilationSpecFields specs={specs} onSpecChange={onSpecChange} />;
+      break;
     
     // Сантехническое оборудование - компонент с полями: Наименование, Инвентарный номер, Диаметр, Материал, и т.д.
     case 'plumbing':
-      return <PlumbingSpecFields specs={specs} onSpecChange={onSpecChange} />;
+      specificFields = <PlumbingSpecFields specs={specs} onSpecChange={onSpecChange} />;
+      break;
     
     // Прочее промышленное оборудование - компонент с полями: Наименование, Инвентарный номер, Заводской номер, Производительность
     case 'industrial':
-      return <IndustrialSpecFields specs={specs} onSpecChange={onSpecChange} />;
+      specificFields = <IndustrialSpecFields specs={specs} onSpecChange={onSpecChange} />;
+      break;
     
-    // Другое - специальный компонент с JSON редактором
-    // Использует onSpecsChange вместо onSpecChange (работает со всем объектом сразу)
+    // Другое - компонент с полями: Наименование, Инвентарный номер
+    // Использует стандартный onSpecChange (как и другие типы)
     case 'other':
-      return <OtherSpecFields specs={specs} onSpecChange={onSpecsChange || (() => {})} />;
+      specificFields = <OtherSpecFields specs={specs} onSpecChange={onSpecChange} />;
+      break;
     
     // Если тип не распознан, ничего не рендерим
     default:
       return null;
   }
+  
+  /**
+   * Возвращаем специфичные поля + универсальное поле "Дополнительные характеристики"
+   * для всех типов оборудования (включая 'other')
+   */
+  return (
+    <>
+      {specificFields}
+      {/* Дополнительные характеристики доступны для всех типов оборудования */}
+      <AdditionalNotesField specs={specs} onSpecChange={onSpecChange} />
+    </>
+  );
 };
 

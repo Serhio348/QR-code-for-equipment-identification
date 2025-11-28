@@ -37,7 +37,6 @@ const EquipmentForm: React.FC<EquipmentFormProps> = ({ equipmentId, onSave, onCa
     setCommissioningDate,
     handleTypeChange,
     handleSpecChange,
-    handleSpecsChange,
     handleSubmit,
     handleCancel,
   } = useEquipmentForm({ equipmentId, onSave, onCancel });
@@ -149,7 +148,6 @@ const EquipmentForm: React.FC<EquipmentFormProps> = ({ equipmentId, onSave, onCa
             type={type}
             specs={specs}
             onSpecChange={handleSpecChange}
-            onSpecsChange={handleSpecsChange}
           />
         </div>
 

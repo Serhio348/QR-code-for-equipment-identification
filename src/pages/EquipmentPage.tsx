@@ -3,12 +3,13 @@
  * Отображает табличку оборудования с возможностью редактирования дат
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import EquipmentPlate from '../components/EquipmentPlate';
-import DriveFilesList from '../components/DriveFilesList';
+import MaintenanceLogModal from '../components/MaintenanceLogModal';
+import DocumentationModal from '../components/DocumentationModal';
 import EquipmentPageHeader from '../components/EquipmentPage/EquipmentPageHeader';
-import DateEditor from '../components/EquipmentPage/DateEditor';
+import EquipmentSidebar from '../components/EquipmentPage/EquipmentSidebar';
 import StatusMessages from '../components/EquipmentPage/StatusMessages';
 import { filterSpecs, FilterSpecs } from '../types/equipment';
 import { deleteEquipment } from '../services/equipmentApi';
@@ -43,11 +44,38 @@ const EquipmentPage: React.FC = () => {
   // Локальные состояния для операций удаления
   const [deleting, setDeleting] = useState<boolean>(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isMaintenanceLogOpen, setMaintenanceLogOpen] = useState(false);
+  const [isDocumentationOpen, setDocumentationOpen] = useState(false);
+  const [isSidebarOpen, setSidebarOpen] = useState(false);
   
   // Объединяем ошибки загрузки, сохранения дат и удаления
   const error = loadError || datesError || deleteError;
   const saving = datesSaving;
   const saveSuccess = datesSuccess;
+
+  useEffect(() => {
+    if (!currentEquipment && isMaintenanceLogOpen) {
+      setMaintenanceLogOpen(false);
+    }
+    if (!currentEquipment && isDocumentationOpen) {
+      setDocumentationOpen(false);
+    }
+  }, [currentEquipment, isMaintenanceLogOpen, isDocumentationOpen]);
+
+  // Отладочное логирование для диагностики проблемы с характеристиками
+  useEffect(() => {
+    if (currentEquipment) {
+      console.log('🔍 Отладочная информация об оборудовании:', {
+        id: currentEquipment.id,
+        name: currentEquipment.name,
+        type: currentEquipment.type,
+        specs: currentEquipment.specs,
+        specsType: typeof currentEquipment.specs,
+        specsKeys: currentEquipment.specs ? Object.keys(currentEquipment.specs) : [],
+        specsStringified: JSON.stringify(currentEquipment.specs, null, 2)
+      });
+    }
+  }, [currentEquipment]);
 
   /**
    * Удаление оборудования
@@ -105,8 +133,37 @@ const EquipmentPage: React.FC = () => {
     <div className="equipment-page">
       <EquipmentPageHeader
         equipment={currentEquipment}
+        loading={loading}
+        onToggleSidebar={() => setSidebarOpen(!isSidebarOpen)}
+      />
+
+      <EquipmentSidebar
+        equipment={currentEquipment}
         onDelete={handleDelete}
         deleting={deleting}
+        onOpenMaintenanceLog={
+          currentEquipment ? () => {
+            setMaintenanceLogOpen(true);
+            setSidebarOpen(false); // Закрываем панель на мобильных после открытия модального окна
+          } : undefined
+        }
+        onOpenDocumentation={
+          currentEquipment?.googleDriveUrl ? () => {
+            setDocumentationOpen(true);
+            setSidebarOpen(false); // Закрываем панель на мобильных после открытия модального окна
+          } : undefined
+        }
+        documentationAvailable={!!currentEquipment?.googleDriveUrl}
+        loading={loading}
+        commissioningDate={commissioningDate}
+        lastMaintenanceDate={lastMaintenanceDate}
+        onCommissioningDateChange={setCommissioningDate}
+        onLastMaintenanceDateChange={setLastMaintenanceDate}
+        onSaveDates={saveDates}
+        savingDates={saving}
+        onExportPDF={handleExportPDF}
+        isOpen={isSidebarOpen}
+        onToggle={() => setSidebarOpen(!isSidebarOpen)}
       />
 
       <div className="plate-container">
@@ -121,24 +178,6 @@ const EquipmentPage: React.FC = () => {
           <div className="loading-message">Загрузка данных оборудования...</div>
         ) : (
           <>
-            <div className="controls">
-              <DateEditor
-                commissioningDate={commissioningDate}
-                lastMaintenanceDate={lastMaintenanceDate}
-                onCommissioningDateChange={setCommissioningDate}
-                onLastMaintenanceDateChange={setLastMaintenanceDate}
-                onSave={saveDates}
-                saving={saving}
-              />
-              <button 
-                onClick={handleExportPDF} 
-                className="export-button"
-                disabled={saving}
-              >
-                Экспортировать в PDF
-              </button>
-            </div>
-            
             <EquipmentPlate 
               specs={(currentEquipment?.specs as FilterSpecs) || filterSpecs} 
               equipmentName={currentEquipment?.name}
@@ -148,10 +187,20 @@ const EquipmentPage: React.FC = () => {
               qrCodeUrl={currentEquipment?.qrCodeUrl}
             />
             
-            {currentEquipment?.googleDriveUrl && (
-              <DriveFilesList 
+            {currentEquipment && isMaintenanceLogOpen && (
+              <MaintenanceLogModal
+                equipmentId={currentEquipment.id}
+                equipmentName={currentEquipment.name}
+                maintenanceSheetId={currentEquipment.maintenanceSheetId}
+                onClose={() => setMaintenanceLogOpen(false)}
+              />
+            )}
+
+            {currentEquipment?.googleDriveUrl && isDocumentationOpen && (
+              <DocumentationModal
                 folderUrl={currentEquipment.googleDriveUrl}
                 equipmentName={currentEquipment.name}
+                onClose={() => setDocumentationOpen(false)}
               />
             )}
           </>

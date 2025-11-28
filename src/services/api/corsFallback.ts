@@ -27,7 +27,10 @@ export function isCorsError(error: any): boolean {
  * @returns {Promise<void>} Промис, который резолвится после отправки
  */
 export async function sendNoCorsRequest(action: string, data: Record<string, any>): Promise<void> {
-  const postUrl = API_CONFIG.EQUIPMENT_API_URL;
+  const baseUrl = API_CONFIG.EQUIPMENT_API_URL;
+  
+  // Для no-cors запросов используем POST с URL-encoded данными в теле
+  // Google Apps Script должен получать данные из e.postData.contents
   const formData = new URLSearchParams();
   formData.append('action', action);
   
@@ -44,16 +47,27 @@ export async function sendNoCorsRequest(action: string, data: Record<string, any
     }
   });
   
-  await fetch(postUrl, {
-    method: 'POST',
-    mode: 'no-cors',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: formData.toString()
-  }).catch(() => {
+  console.log('📤 Отправка no-cors запроса через POST');
+  console.log('  - URL:', baseUrl);
+  console.log('  - action:', action);
+  console.log('  - data:', data);
+  console.log('  - formData:', formData.toString());
+  
+  // Пробуем отправить POST запрос с URL-encoded данными
+  try {
+    await fetch(baseUrl, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: formData.toString()
+    });
+    console.log('✅ Запрос отправлен (no-cors не возвращает response)');
+  } catch (error) {
     // Игнорируем ошибки no-cors запросов (они всегда возникают)
-  });
+    console.log('⚠️ Ошибка no-cors запроса (ожидаемо):', error);
+  }
 }
 
 /**

@@ -1,18 +1,10 @@
 .equipment-page {
-  min-height: 100vh;
   background: #f5f5f5;
-}
-
-.page-header {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 20px;
-  background: white;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  flex-wrap: wrap;
+  padding-bottom: 40px;
+  padding-left: 280px; /* Отступ для боковой панели */
+  overflow: visible;
+  height: auto;
+  min-height: auto;
 }
 
 .back-link {
@@ -110,7 +102,15 @@
 .plate-container {
   max-width: 1200px;
   margin: 0 auto;
+  width: 100%;
   padding: 20px;
+  padding-top: 160px; /* Отступ для header */
+  overflow: visible !important;
+  overflow-x: visible !important;
+  overflow-y: visible !important;
+  height: auto !important;
+  max-height: none !important;
+  position: relative;
 }
 
 .controls {
@@ -212,6 +212,18 @@
 }
 
 @media (max-width: 768px) {
+  .equipment-page {
+    padding-left: 0; /* Убираем отступ на мобильных */
+  }
+
+  .plate-container {
+    padding-top: 140px; /* Отступ для header на мобильных */
+  }
+
+  .sidebar-toggle {
+    display: block;
+  }
+
   .controls {
     flex-direction: column;
   }

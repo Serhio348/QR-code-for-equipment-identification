@@ -108,3 +108,45 @@ export const InventoryNumberField: React.FC<CommonSpecFieldsProps> = ({ specs, o
   );
 };
 
+/**
+ * AdditionalNotesField - Поле "Дополнительные характеристики"
+ * 
+ * НАЗНАЧЕНИЕ:
+ * Универсальное поле для ВСЕХ типов оборудования.
+ * Позволяет вводить любые дополнительные характеристики, которые не входят в стандартные поля.
+ * 
+ * ЛОГИКА:
+ * - Необязательное поле (может быть пустым)
+ * - Значение хранится в specs.additionalNotes
+ * - Использует textarea для многострочного ввода
+ * - При изменении вызывает onSpecChange('additionalNotes', новоеЗначение)
+ * 
+ * ПРИМЕРЫ ЗНАЧЕНИЙ:
+ * - "Особые условия эксплуатации: температура не выше 40°C"
+ * - "Требуется ежегодная калибровка. Последняя калибровка: 15.03.2024"
+ * - "Дополнительное оборудование: датчик давления, манометр"
+ */
+export const AdditionalNotesField: React.FC<CommonSpecFieldsProps> = ({ specs, onSpecChange }) => {
+  return (
+    <div className="form-group">
+      {/* Метка без звездочки (поле необязательное) */}
+      <label>Дополнительные характеристики</label>
+      
+      {/* 
+        Textarea для дополнительных характеристик:
+        - value: specs.additionalNotes или пустая строка
+        - onChange: обновляем поле 'additionalNotes'
+        - rows: количество строк (можно настроить)
+        - placeholder: подсказка для пользователя
+      */}
+      <textarea
+        value={specs.additionalNotes || ''}  // specs.additionalNotes может быть undefined
+        onChange={(e) => onSpecChange('additionalNotes', e.target.value)}  // Обновляем 'additionalNotes'
+        placeholder="Введите любые дополнительные характеристики, которые не входят в стандартные поля..."
+        rows={4}  // Высота textarea (4 строки)
+        style={{ resize: 'vertical' }}  // Разрешаем изменение размера только по вертикали
+      />
+    </div>
+  );
+};
+
