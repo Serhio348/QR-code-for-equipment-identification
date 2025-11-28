@@ -2,10 +2,15 @@
   max-width: 1200px;
   margin: 0 auto;
   padding: 20px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
 }
 
 .list-header {
   margin-bottom: 20px;
+  flex: 0 0 auto;
 }
 
 .list-controls {
@@ -55,12 +60,17 @@
   margin-bottom: 15px;
   color: #666;
   font-size: 14px;
+  flex: 0 0 auto;
 }
 
 .equipment-cards {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 20px;
+  padding-right: 4px;
 }
 
 .equipment-card {
@@ -155,6 +165,10 @@
   font-size: 16px;
   background: #f9f9f9;
   border-radius: 8px;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .loading-message,

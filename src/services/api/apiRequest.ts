@@ -14,6 +14,7 @@ import { ApiResponse } from './types';
  * @param {string} action - Действие для выполнения (getAll, getById, getByType, add, update, delete)
  * @param {string} method - HTTP метод ('GET' или 'POST')
  * @param {any} body - Тело запроса для POST запросов
+ * @param {Record<string, string>} params - Дополнительные параметры для GET запросов
  * @returns {Promise<ApiResponse<T>>} Ответ API
  * 
  * @throws {Error} Если URL не настроен или произошла ошибка сети
@@ -21,7 +22,8 @@ import { ApiResponse } from './types';
 export async function apiRequest<T>(
   action: string,
   method: 'GET' | 'POST' = 'GET',
-  body?: any
+  body?: any,
+  params?: Record<string, string>
 ): Promise<ApiResponse<T>> {
   // Проверяем, что URL настроен
   if (!API_CONFIG.EQUIPMENT_API_URL) {
@@ -32,6 +34,12 @@ export async function apiRequest<T>(
   const url = new URL(API_CONFIG.EQUIPMENT_API_URL);
   if (method === 'GET') {
     url.searchParams.append('action', action);
+    // Добавляем дополнительные параметры для GET запросов
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        url.searchParams.append(key, value);
+      });
+    }
   }
 
   // Настройки запроса

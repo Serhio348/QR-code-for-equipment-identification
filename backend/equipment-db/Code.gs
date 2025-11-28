@@ -74,10 +74,30 @@ function doOptions(e) {
  */
 function doGet(e) {
   try {
+    // Логируем входящий запрос для отладки (самое первое, что должно быть видно)
+    Logger.log('📥 ========== doGet ВЫЗВАН ==========');
+    
+    // Проверяем, что объект события передан
+    // Если e равен undefined, создаем пустой объект (может быть при прямом вызове из редактора)
+    if (!e) {
+      Logger.log('⚠️ Объект события (e) не передан, создаем пустой объект');
+      e = {
+        parameter: {}
+      };
+    }
+    
+    // Проверяем наличие параметров
+    if (!e.parameter) {
+      Logger.log('⚠️ e.parameter отсутствует, создаем пустой объект');
+      e.parameter = {};
+    }
+    
     // Получаем параметр action из URL
     const action = e.parameter.action;
     
     Logger.log('📥 GET запрос получен');
+    Logger.log('  - e: ' + (e ? 'есть' : 'НЕТ'));
+    Logger.log('  - e.parameter: ' + (e.parameter ? 'есть' : 'НЕТ'));
     Logger.log('  - action: ' + action);
     Logger.log('  - parameters: ' + JSON.stringify(e.parameter));
     
@@ -117,11 +137,55 @@ function doGet(e) {
         Logger.log('✅ getFolderFiles вернул ' + files.length + ' файлов');
         return createJsonResponse(files);
       
+      case 'getMaintenanceLog':
+        // Получить журнал обслуживания для оборудования
+        const equipmentId = e.parameter.equipmentId;
+        if (!equipmentId) {
+          return createErrorResponse('ID оборудования не указан');
+        }
+        return createJsonResponse(getMaintenanceLog(equipmentId));
+      
+      case 'addMaintenanceEntry':
+        // Обработка addMaintenanceEntry через GET (для no-cors запросов)
+        // Это fallback для случаев, когда POST не работает из-за CORS
+        Logger.log('📝 Обработка addMaintenanceEntry через GET (no-cors fallback)');
+        Logger.log('  - e.parameter: ' + JSON.stringify(e.parameter));
+        
+        const getEquipmentId = e.parameter.equipmentId;
+        if (!getEquipmentId) {
+          Logger.log('❌ ID оборудования не указан в GET параметрах');
+          return createErrorResponse('ID оборудования не указан');
+        }
+        
+        const getEntryData = {
+          date: e.parameter.date || '',
+          type: e.parameter.type || '',
+          description: e.parameter.description || '',
+          performedBy: e.parameter.performedBy || '',
+          status: e.parameter.status || 'completed'
+        };
+        
+        Logger.log('  - equipmentId: ' + getEquipmentId);
+        Logger.log('  - entryData: ' + JSON.stringify(getEntryData));
+        
+        if (!getEntryData.date || !getEntryData.type || !getEntryData.description || !getEntryData.performedBy) {
+          return createErrorResponse('Не все обязательные поля заполнены');
+        }
+        
+        try {
+          const result = _addMaintenanceEntry(getEquipmentId, getEntryData);
+          Logger.log('✅ Запись добавлена успешно через GET: ' + JSON.stringify(result));
+          return createJsonResponse(result);
+        } catch (error) {
+          Logger.log('❌ Ошибка в addMaintenanceEntry через GET: ' + error.toString());
+          return createErrorResponse('Ошибка при добавлении записи: ' + error.toString());
+        }
+      
       default:
         // Если действие не распознано, возвращаем ошибку
         Logger.log('❌ Неизвестное действие: ' + action);
-        Logger.log('  - Доступные действия: getAll, getById, getByType, getFolderFiles');
-        return createErrorResponse('Неизвестное действие. Используйте: getAll, getById, getByType, getFolderFiles');
+        Logger.log('  - Доступные действия: getAll, getById, getByType, getFolderFiles, getMaintenanceLog, addMaintenanceEntry');
+        return createErrorResponse('Неизвестное действие. Используйте: getAll, getById, getByType, getFolderFiles, getMaintenanceLog, addMaintenanceEntry');
     }
   } catch (error) {
     // Логируем ошибку для отладки
@@ -159,14 +223,16 @@ function doGet(e) {
  */
 function doPost(e) {
   try {
+    // Логируем входящий запрос для отладки (самое первое, что должно быть видно)
+    Logger.log('📨 ========== doPost ВЫЗВАН ==========');
+    Logger.log('📨 Получен POST запрос');
+    Logger.log('  - Timestamp: ' + new Date().toISOString());
+    
     // Проверяем, что объект события передан
     if (!e) {
       Logger.log('❌ Ошибка: объект события (e) не передан в doPost');
       return createErrorResponse('Ошибка: объект события не передан');
     }
-    
-    // Логируем входящий запрос для отладки
-    Logger.log('📨 Получен POST запрос');
     Logger.log('  - e: ' + (e ? 'есть' : 'НЕТ'));
     Logger.log('  - postData: ' + (e.postData ? 'есть' : 'НЕТ'));
     if (e.postData && e.postData.contents) {
@@ -184,6 +250,10 @@ function doPost(e) {
     }
     Logger.log('  - postData.type: ' + (e.postData ? e.postData.type : 'НЕТ'));
     Logger.log('  - parameters count: ' + (e.parameter ? Object.keys(e.parameter).length : 0));
+    if (e.parameter && Object.keys(e.parameter).length > 0) {
+      Logger.log('  - e.parameter keys: ' + JSON.stringify(Object.keys(e.parameter)));
+      Logger.log('  - e.parameter values: ' + JSON.stringify(e.parameter));
+    }
     
     // Парсим данные из тела запроса
     let data;
@@ -218,18 +288,52 @@ function doPost(e) {
       // Если это URL-encoded
       else if (contentType.includes('application/x-www-form-urlencoded') || contentType.includes('form-urlencoded')) {
         Logger.log('📝 Обнаружен URL-encoded формат, парсим...');
-        // URL-encoded данные приходят в e.parameter, но проверим и postData.contents
+        Logger.log('  - e.parameter существует: ' + (e.parameter ? 'ДА' : 'НЕТ'));
+        Logger.log('  - e.parameter keys count: ' + (e.parameter ? Object.keys(e.parameter).length : 0));
+        Logger.log('  - e.postData.contents существует: ' + (e.postData && e.postData.contents ? 'ДА' : 'НЕТ'));
+        Logger.log('  - e.postData.contents length: ' + (e.postData && e.postData.contents ? e.postData.contents.length : 0));
+        
+        // Сначала пробуем получить из e.parameter (может быть для некоторых типов запросов)
         if (e.parameter && Object.keys(e.parameter).length > 0) {
-          data = e.parameter;
-          Logger.log('  - Данные из e.parameter: ' + JSON.stringify(data));
-        } else {
-          // Пытаемся распарсить вручную
-          const params = new URLSearchParams(e.postData.contents);
+          Logger.log('  - Используем данные из e.parameter');
           data = {};
-          for (const [key, value] of params.entries()) {
-            data[key] = value;
+          for (const key in e.parameter) {
+            if (e.parameter.hasOwnProperty(key)) {
+              data[key] = e.parameter[key];
+            }
+          }
+          Logger.log('  - Данные из e.parameter: ' + JSON.stringify(data));
+          Logger.log('  - Количество параметров: ' + Object.keys(data).length);
+          Logger.log('  - Ключи: ' + JSON.stringify(Object.keys(data)));
+        } 
+        // Если e.parameter пустой, пробуем распарсить из postData.contents
+        else if (e.postData && e.postData.contents) {
+          // Пытаемся распарсить вручную из postData.contents
+          Logger.log('  - Парсинг postData.contents вручную...');
+          Logger.log('  - Содержимое (первые 500 символов): ' + e.postData.contents.substring(0, Math.min(500, e.postData.contents.length)));
+          // Ручной парсинг URL-encoded строки
+          const contents = e.postData.contents;
+          data = {};
+          const pairs = contents.split('&');
+          Logger.log('  - Найдено пар: ' + pairs.length);
+          for (let i = 0; i < pairs.length; i++) {
+            const pair = pairs[i].split('=');
+            if (pair.length === 2) {
+              const key = decodeURIComponent(pair[0].replace(/\+/g, ' '));
+              const value = decodeURIComponent(pair[1].replace(/\+/g, ' '));
+              data[key] = value;
+              Logger.log('    - Пара ' + (i + 1) + ': ' + key + ' = ' + value.substring(0, Math.min(50, value.length)));
+            } else {
+              Logger.log('    - Пара ' + (i + 1) + ' не распознана: ' + pairs[i]);
+            }
           }
           Logger.log('  - Данные из postData.contents (распарсены): ' + JSON.stringify(data));
+          Logger.log('  - Количество параметров: ' + Object.keys(data).length);
+        } else {
+          Logger.log('⚠️ Нет данных ни в e.parameter, ни в postData.contents для URL-encoded');
+          Logger.log('  - e.parameter: ' + (e.parameter ? JSON.stringify(e.parameter) : 'НЕТ'));
+          Logger.log('  - e.postData: ' + (e.postData ? 'есть' : 'НЕТ'));
+          Logger.log('  - e.postData.contents: ' + (e.postData && e.postData.contents ? 'есть (' + e.postData.contents.length + ' символов)' : 'НЕТ'));
         }
       } else {
         // Пытаемся распарсить как JSON по умолчанию
@@ -247,9 +351,23 @@ function doPost(e) {
       }
     } else if (e.parameter && Object.keys(e.parameter).length > 0) {
       // Если postData пустое, пытаемся получить данные из параметров URL
+      // Это может быть для no-cors запросов или URL-encoded данных
       Logger.log('⚠️ postData пустое, пытаемся получить данные из параметров');
-      data = e.parameter;
-      Logger.log('  - Данные из e.parameter: ' + JSON.stringify(data));
+      Logger.log('  - e.parameter keys: ' + JSON.stringify(Object.keys(e.parameter)));
+      Logger.log('  - e.parameter values: ' + JSON.stringify(e.parameter));
+      
+      // Создаем новый объект и копируем все параметры
+      data = {};
+      for (const key in e.parameter) {
+        if (e.parameter.hasOwnProperty(key)) {
+          data[key] = e.parameter[key];
+        }
+      }
+      
+      Logger.log('  - Данные из e.parameter (после копирования): ' + JSON.stringify(data));
+      Logger.log('  - data.action: ' + (data.action || 'НЕ УКАЗАНО'));
+      Logger.log('  - data.equipmentId: ' + (data.equipmentId || 'НЕ УКАЗАН'));
+      
       // Преобразуем строковые значения в нужные типы
       if (data.specs && typeof data.specs === 'string') {
         try {
@@ -268,7 +386,9 @@ function doPost(e) {
     const action = data.action;
     Logger.log('  - action: ' + (action || 'НЕ УКАЗАНО'));
     Logger.log('  - data.name: ' + (data.name || 'НЕ УКАЗАНО'));
+    Logger.log('  - data.equipmentId: ' + (data.equipmentId || 'НЕ УКАЗАНО'));
     Logger.log('  - Полный объект data: ' + JSON.stringify(data));
+    Logger.log('  - Все ключи data: ' + JSON.stringify(Object.keys(data || {})));
     
     // Выполняем действие в зависимости от параметра
     switch(action) {
@@ -305,9 +425,77 @@ function doPost(e) {
         }
         return createJsonResponse(createDriveFolder(data.name, data.parentFolderId));
       
+      case 'addMaintenanceEntry':
+        // Добавить запись в журнал обслуживания
+        Logger.log('📝 Обработка addMaintenanceEntry');
+        Logger.log('  - data существует: ' + (data ? 'ДА' : 'НЕТ'));
+        Logger.log('  - data: ' + JSON.stringify(data));
+        Logger.log('  - data.equipmentId: ' + (data && data.equipmentId ? data.equipmentId : 'НЕ УКАЗАН'));
+        Logger.log('  - data.date: ' + (data && data.date ? data.date : 'НЕ УКАЗАНО'));
+        Logger.log('  - data.type: ' + (data && data.type ? data.type : 'НЕ УКАЗАНО'));
+        Logger.log('  - data.description: ' + (data && data.description ? data.description : 'НЕ УКАЗАНО'));
+        Logger.log('  - data.performedBy: ' + (data && data.performedBy ? data.performedBy : 'НЕ УКАЗАНО'));
+        Logger.log('  - Все ключи data: ' + (data ? JSON.stringify(Object.keys(data)) : 'data is null/undefined'));
+        
+        // Проверяем наличие данных
+        if (!data) {
+          Logger.log('❌ data is null или undefined');
+          return createErrorResponse('Данные не получены. Проверьте формат запроса.');
+        }
+        
+        if (!data.equipmentId) {
+          Logger.log('❌ ID оборудования не указан в data');
+          Logger.log('   data: ' + JSON.stringify(data));
+          Logger.log('   Все ключи: ' + JSON.stringify(Object.keys(data)));
+          return createErrorResponse('ID оборудования не указан. Проверьте, что equipmentId передается в запросе.');
+        }
+        
+        // Извлекаем equipmentId и остальные данные записи
+        const equipmentId = String(data.equipmentId).trim();
+        const entryData = {
+          date: data.date ? String(data.date).trim() : '',
+          type: data.type ? String(data.type).trim() : '',
+          description: data.description ? String(data.description).trim() : '',
+          performedBy: data.performedBy ? String(data.performedBy).trim() : '',
+          status: data.status ? String(data.status).trim() : 'completed'
+        };
+        
+        Logger.log('  - Извлеченный equipmentId: "' + equipmentId + '"');
+        Logger.log('  - Данные записи: ' + JSON.stringify(entryData));
+        
+        if (!equipmentId || equipmentId === '') {
+          Logger.log('❌ equipmentId пустой после извлечения');
+          return createErrorResponse('ID оборудования пустой после обработки');
+        }
+        
+        try {
+          Logger.log('📞 Вызов addMaintenanceEntry с equipmentId="' + equipmentId + '" и entryData=' + JSON.stringify(entryData));
+          const result = _addMaintenanceEntry(equipmentId, entryData);
+          Logger.log('✅ Запись добавлена успешно: ' + JSON.stringify(result));
+          return createJsonResponse(result);
+        } catch (error) {
+          Logger.log('❌ Ошибка в addMaintenanceEntry: ' + error.toString());
+          Logger.log('   Стек: ' + (error.stack || 'нет стека'));
+          return createErrorResponse('Ошибка при добавлении записи: ' + error.toString());
+        }
+      
+      case 'updateMaintenanceEntry':
+        // Обновить запись в журнале обслуживания
+        if (!data.entryId) {
+          return createErrorResponse('ID записи не указан');
+        }
+        return createJsonResponse(_updateMaintenanceEntry(data.entryId, data));
+      
+      case 'deleteMaintenanceEntry':
+        // Удалить запись из журнала обслуживания
+        if (!data.entryId) {
+          return createErrorResponse('ID записи не указан');
+        }
+        return createJsonResponse(_deleteMaintenanceEntry(data.entryId));
+      
       default:
         // Если действие не распознано, возвращаем ошибку
-        return createErrorResponse('Неизвестное действие. Используйте: add, update, delete, createFolder');
+        return createErrorResponse('Неизвестное действие. Используйте: add, update, delete, createFolder, addMaintenanceEntry, updateMaintenanceEntry, deleteMaintenanceEntry');
     }
   } catch (error) {
     // Логируем ошибку для отладки
@@ -576,7 +764,9 @@ function addEquipment(data) {
       data.lastMaintenanceDate ? String(data.lastMaintenanceDate).split('T')[0] : '',        // H: Последнее обслуживание (только YYYY-MM-DD)
       data.status || 'active',               // I: Статус (по умолчанию active)
       now,                                   // J: Создано (дата и время)
-      now                                    // K: Обновлено (дата и время)
+      now,                                   // K: Обновлено (дата и время)
+      data.maintenanceSheetId || '',         // L: Maintenance Sheet ID
+      data.maintenanceSheetUrl || ''         // M: Maintenance Sheet URL
     ];
     
     // Добавляем строку в конец таблицы
@@ -594,7 +784,9 @@ function addEquipment(data) {
       lastMaintenanceDate: data.lastMaintenanceDate || '',
       status: data.status || 'active',
       createdAt: now.toISOString(),
-      updatedAt: now.toISOString()
+      updatedAt: now.toISOString(),
+      maintenanceSheetId: data.maintenanceSheetId || '',
+      maintenanceSheetUrl: data.maintenanceSheetUrl || ''
     };
   } catch (error) {
     Logger.log('Ошибка при добавлении оборудования: ' + error);
@@ -675,6 +867,12 @@ function updateEquipment(id, data) {
         }
         if (data.status !== undefined) {
           sheet.getRange(rowIndex, 9).setValue(data.status); // Колонка I
+        }
+        if (data.maintenanceSheetId !== undefined) {
+          sheet.getRange(rowIndex, 12).setValue(data.maintenanceSheetId); // Колонка L
+        }
+        if (data.maintenanceSheetUrl !== undefined) {
+          sheet.getRange(rowIndex, 13).setValue(data.maintenanceSheetUrl); // Колонка M
         }
         
         // Всегда обновляем дату обновления (колонка K, индекс 11)
@@ -799,33 +997,7 @@ function deleteDriveFolder(folderUrl) {
     const trimmedUrl = folderUrl.trim();
     Logger.log('  - Trimmed URL: ' + trimmedUrl);
     
-    // Извлекаем ID папки из URL
-    // Поддерживаем разные форматы URL:
-    // - https://drive.google.com/drive/folders/FOLDER_ID
-    // - https://drive.google.com/open?id=FOLDER_ID
-    // - FOLDER_ID (если передан напрямую ID)
-    let folderId = null;
-    
-    // Формат 1: /folders/FOLDER_ID
-    const foldersMatch = trimmedUrl.match(/\/folders\/([a-zA-Z0-9_-]+)/);
-    if (foldersMatch && foldersMatch[1]) {
-      folderId = foldersMatch[1];
-      Logger.log('  - Извлечен ID из формата /folders/: ' + folderId);
-    } else {
-      // Формат 2: ?id=FOLDER_ID
-      const idMatch = trimmedUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-      if (idMatch && idMatch[1]) {
-        folderId = idMatch[1];
-        Logger.log('  - Извлечен ID из формата ?id=: ' + folderId);
-      } else {
-        // Формат 3: возможно это уже сам ID (проверяем длину и формат)
-        const idPattern = /^[a-zA-Z0-9_-]{20,}$/;
-        if (idPattern.test(trimmedUrl) && !trimmedUrl.includes('/') && !trimmedUrl.includes('?')) {
-          folderId = trimmedUrl;
-          Logger.log('  - Используется URL как ID: ' + folderId);
-        }
-      }
-    }
+    const folderId = extractDriveIdFromUrl(trimmedUrl);
     
     if (!folderId) {
       Logger.log('⚠️ Не удалось извлечь ID папки из URL: ' + trimmedUrl);
@@ -904,46 +1076,46 @@ function deleteDriveFolder(folderUrl) {
  * - Первая строка заморожена (остается видимой при прокрутке)
  */
 function getEquipmentSheet() {
-  // Получаем текущую таблицу (та, в которой открыт Apps Script)
+  const headers = [
+    'ID',                    // Колонка A
+    'Название',              // Колонка B
+    'Тип',                   // Колонка C
+    'Характеристики',        // Колонка D
+    'Google Drive URL',      // Колонка E
+    'QR Code URL',           // Колонка F
+    'Дата ввода',            // Колонка G
+    'Последнее обслуживание', // Колонка H
+    'Статус',                // Колонка I
+    'Создано',               // Колонка J
+    'Обновлено',             // Колонка K
+    'Maintenance Sheet ID',  // Колонка L
+    'Maintenance Sheet URL'  // Колонка M
+  ];
+
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  
-  // Пытаемся получить лист с именем "Оборудование"
   let sheet = spreadsheet.getSheetByName('Оборудование');
-  
-  // Если лист не существует, создаем его
+
   if (!sheet) {
-    // Создаем новый лист
     sheet = spreadsheet.insertSheet('Оборудование');
-    
-    // Создаем массив заголовков в правильном порядке
-    const headers = [
-      'ID',                    // Колонка A
-      'Название',              // Колонка B
-      'Тип',                   // Колонка C
-      'Характеристики',        // Колонка D
-      'Google Drive URL',      // Колонка E
-      'QR Code URL',           // Колонка F
-      'Дата ввода',            // Колонка G
-      'Последнее обслуживание', // Колонка H
-      'Статус',                // Колонка I
-      'Создано',               // Колонка J
-      'Обновлено'              // Колонка K
-    ];
-    
-    // Записываем заголовки в первую строку
-    // getRange(строка, колонка, количество_строк, количество_колонок)
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-    
-    // Форматируем заголовки для лучшей читаемости
     const headerRange = sheet.getRange(1, 1, 1, headers.length);
-    headerRange.setFontWeight('bold');        // Жирный шрифт
-    headerRange.setBackground('#4285f4');     // Синий фон (цвет Google)
-    headerRange.setFontColor('#ffffff');       // Белый текст
-    
-    // Замораживаем первую строку, чтобы она оставалась видимой при прокрутке
+    headerRange.setFontWeight('bold');
+    headerRange.setBackground('#4285f4');
+    headerRange.setFontColor('#ffffff');
     sheet.setFrozenRows(1);
+    return sheet;
   }
-  
+
+  const currentLastColumn = sheet.getLastColumn();
+  if (currentLastColumn < headers.length) {
+    const missingHeaders = headers.slice(currentLastColumn);
+    const newHeaderRange = sheet.getRange(1, currentLastColumn + 1, 1, missingHeaders.length);
+    newHeaderRange.setValues([missingHeaders]);
+    newHeaderRange.setFontWeight('bold');
+    newHeaderRange.setBackground('#4285f4');
+    newHeaderRange.setFontColor('#ffffff');
+  }
+
   return sheet;
 }
 
@@ -1057,6 +1229,14 @@ function parseRowToEquipment(row, headers) {
           
         case 'Обновлено':
           equipment.updatedAt = value ? new Date(value).toISOString() : '';
+          break;
+
+        case 'Maintenance Sheet ID':
+          equipment.maintenanceSheetId = value || '';
+          break;
+
+        case 'Maintenance Sheet URL':
+          equipment.maintenanceSheetUrl = value || '';
           break;
       }
     });
@@ -1319,33 +1499,10 @@ function getFolderFiles(folderUrlOrId) {
       throw new Error('URL или ID папки не указан');
     }
     
-    const trimmed = folderUrlOrId.trim();
-    let folderId = null;
-    
-    // Извлекаем ID папки из URL
-    // Формат 1: /folders/FOLDER_ID
-    const foldersMatch = trimmed.match(/\/folders\/([a-zA-Z0-9_-]+)/);
-    if (foldersMatch && foldersMatch[1]) {
-      folderId = foldersMatch[1];
-      Logger.log('  - Извлечен ID из формата /folders/: ' + folderId);
-    } else {
-      // Формат 2: ?id=FOLDER_ID
-      const idMatch = trimmed.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-      if (idMatch && idMatch[1]) {
-        folderId = idMatch[1];
-        Logger.log('  - Извлечен ID из формата ?id=: ' + folderId);
-      } else {
-        // Формат 3: возможно это уже сам ID
-        const idPattern = /^[a-zA-Z0-9_-]{20,}$/;
-        if (idPattern.test(trimmed) && !trimmed.includes('/') && !trimmed.includes('?')) {
-          folderId = trimmed;
-          Logger.log('  - Используется как ID: ' + folderId);
-        }
-      }
-    }
+    const folderId = extractDriveIdFromUrl(folderUrlOrId);
     
     if (!folderId) {
-      throw new Error('Неверный формат URL папки: ' + trimmed);
+      throw new Error('Неверный формат URL папки: ' + folderUrlOrId);
     }
     
     Logger.log('  - Folder ID для получения файлов: ' + folderId);
@@ -1626,4 +1783,577 @@ function requestFullDrivePermissions() {
     Logger.log('   В окне авторизации выберите аккаунт и разрешите доступ к Google Drive');
     throw error; // Пробрасываем, чтобы вызвать окно авторизации
   }
+}
+
+// ============================================================================
+// ФУНКЦИИ ДЛЯ РАБОТЫ С ЖУРНАЛОМ ОБСЛУЖИВАНИЯ
+// ============================================================================
+
+/**
+ * Получить или создать лист "Журнал обслуживания"
+ * 
+ * Создает лист с заголовками, если его еще нет
+ * 
+ * Структура листа:
+ * Колонка A: ID оборудования
+ * Колонка B: ID записи
+ * Колонка C: Дата обслуживания
+ * Колонка D: Тип работы
+ * Колонка E: Описание
+ * Колонка F: Выполнил
+ * Колонка G: Статус
+ * Колонка H: Дата создания записи
+ * 
+ * @returns {Sheet} Лист "Журнал обслуживания"
+ */
+function getMaintenanceLogSheet() {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  
+  // Пытаемся получить лист с именем "Журнал обслуживания"
+  let sheet = spreadsheet.getSheetByName('Журнал обслуживания');
+  
+  // Если лист не существует, создаем его
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet('Журнал обслуживания');
+    
+    // Создаем массив заголовков
+    const headers = [
+      'ID оборудования',    // Колонка A
+      'ID записи',          // Колонка B
+      'Дата обслуживания',  // Колонка C
+      'Тип работы',         // Колонка D
+      'Описание',           // Колонка E
+      'Выполнил',           // Колонка F
+      'Статус',             // Колонка G
+      'Дата создания'       // Колонка H
+    ];
+    
+    // Записываем заголовки в первую строку
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    
+    // Форматируем заголовки
+    const headerRange = sheet.getRange(1, 1, 1, headers.length);
+    headerRange.setFontWeight('bold');
+    headerRange.setBackground('#4285f4');
+    headerRange.setFontColor('#ffffff');
+    
+    // Замораживаем первую строку
+    sheet.setFrozenRows(1);
+  }
+  
+  return sheet;
+}
+
+/**
+ * Получить журнал обслуживания для оборудования
+ * 
+ * @param {string} equipmentId - ID оборудования
+ * @returns {Array} Массив записей журнала обслуживания
+ */
+function getMaintenanceLog(equipmentId) {
+  try {
+    const sheet = getMaintenanceLogSheet();
+    const data = sheet.getDataRange().getValues();
+    
+    // Пропускаем заголовок (первая строка)
+    const entries = [];
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      // Проверяем, что ID оборудования совпадает
+      if (row[0] === equipmentId) {
+        entries.push({
+          id: row[1],                    // ID записи
+          equipmentId: row[0],           // ID оборудования
+          date: row[2] ? formatDate(row[2]) : '',  // Дата обслуживания
+          type: row[3] || '',            // Тип работы
+          description: row[4] || '',     // Описание
+          performedBy: row[5] || '',     // Выполнил
+          status: row[6] || 'completed', // Статус
+          createdAt: row[7] ? formatDate(row[7]) : '' // Дата создания
+        });
+      }
+    }
+    
+    // Сортируем по дате обслуживания (новые сверху)
+    entries.sort((a, b) => {
+      const dateA = new Date(a.date);
+      const dateB = new Date(b.date);
+      return dateB - dateA;
+    });
+    
+    return entries;
+  } catch (error) {
+    Logger.log('❌ Ошибка в getMaintenanceLog: ' + error.toString());
+    throw new Error('Ошибка при получении журнала обслуживания: ' + error.toString());
+  }
+}
+
+/**
+ * Добавить запись в журнал обслуживания
+ * 
+ * @param {string} equipmentId - ID оборудования
+ * @param {Object} entry - Данные записи
+ * @param {string} entry.date - Дата обслуживания (YYYY-MM-DD)
+ * @param {string} entry.type - Тип работы
+ * @param {string} entry.description - Описание
+ * @param {string} entry.performedBy - Кто выполнил
+ * @param {string} entry.status - Статус (completed/planned)
+ * @returns {Object} Созданная запись
+ */
+// Приватная функция (с префиксом _) - не должна вызываться напрямую из URL
+function _addMaintenanceEntry(equipmentId, entry) {
+  try {
+    // Логируем стек вызовов для отладки
+    try {
+      const stack = new Error().stack;
+      Logger.log('📝 ========== _addMaintenanceEntry ВЫЗВАНА ==========');
+      Logger.log('  - Стек вызовов: ' + (stack || 'недоступен'));
+      if (stack) {
+        const stackLines = stack.split('\n');
+        Logger.log('  - Вызвана из: ' + (stackLines[1] || 'неизвестно'));
+        Logger.log('  - Вызвана из (строка 2): ' + (stackLines[2] || 'неизвестно'));
+      }
+    } catch (stackError) {
+      Logger.log('  - Не удалось получить стек: ' + stackError);
+    }
+    
+    Logger.log('📝 _addMaintenanceEntry вызвана');
+    Logger.log('  - equipmentId type: ' + typeof equipmentId);
+    Logger.log('  - equipmentId: ' + (equipmentId || 'НЕ УКАЗАН'));
+    Logger.log('  - entry type: ' + typeof entry);
+    Logger.log('  - entry: ' + (entry ? JSON.stringify(entry) : 'undefined'));
+    Logger.log('  - entry is undefined: ' + (entry === undefined));
+    Logger.log('  - entry is null: ' + (entry === null));
+    
+    if (!equipmentId) {
+      Logger.log('❌ equipmentId is falsy');
+      Logger.log('   equipmentId value: ' + equipmentId);
+      Logger.log('   equipmentId type: ' + typeof equipmentId);
+      throw new Error('ID оборудования не указан');
+    }
+    
+    if (!entry) {
+      Logger.log('❌ entry is falsy');
+      Logger.log('   entry value: ' + entry);
+      Logger.log('   entry type: ' + typeof entry);
+      throw new Error('Данные записи не указаны');
+    }
+    
+    Logger.log('📁 Получение листа "Журнал обслуживания"...');
+    const sheet = getMaintenanceLogSheet();
+    Logger.log('✅ Лист получен: ' + sheet.getName());
+
+    // Получаем данные оборудования, чтобы при необходимости синхронизировать файл в папке
+    let equipment = null;
+    try {
+      equipment = getEquipmentById(equipmentId);
+      if (!equipment) {
+        Logger.log('⚠️ Оборудование с ID "' + equipmentId + '" не найдено при добавлении записи');
+      }
+    } catch (equipmentError) {
+      Logger.log('⚠️ Ошибка при получении оборудования для синхронизации журнала: ' + equipmentError);
+    }
+    
+    // Генерируем уникальный ID для записи
+    const entryId = generateId();
+    
+    // Получаем текущую дату и время
+    const now = new Date();
+    
+    // Форматируем дату обслуживания
+    let maintenanceDate = '';
+    if (entry.date) {
+      const date = new Date(entry.date);
+      maintenanceDate = date;
+    }
+    
+    // Добавляем новую строку
+    const newRow = [
+      equipmentId,                           // A: ID оборудования
+      entryId,                               // B: ID записи
+      maintenanceDate,                       // C: Дата обслуживания
+      entry.type || '',                      // D: Тип работы
+      entry.description || '',               // E: Описание
+      entry.performedBy || '',               // F: Выполнил
+      entry.status || 'completed',           // G: Статус
+      now                                    // H: Дата создания
+    ];
+    
+    // Добавляем строку в конец таблицы
+    Logger.log('➕ Добавление строки в таблицу...');
+    Logger.log('  - newRow: ' + JSON.stringify(newRow));
+    sheet.appendRow(newRow);
+    Logger.log('✅ Строка добавлена в таблицу');
+    
+    // Возвращаем созданную запись
+    const result = {
+      id: entryId,
+      equipmentId: equipmentId,
+      date: entry.date || '',
+      type: entry.type || '',
+      description: entry.description || '',
+      performedBy: entry.performedBy || '',
+      status: entry.status || 'completed',
+      createdAt: now.toISOString()
+    };
+    
+    Logger.log('✅ Запись создана: ' + JSON.stringify(result));
+
+    // Пытаемся создать/обновить файл журнала в папке оборудования
+    try {
+      syncMaintenanceEntryFile(equipment, result);
+    } catch (syncError) {
+      Logger.log('⚠️ Не удалось синхронизировать запись с файлом в папке: ' + syncError);
+    }
+
+    return result;
+  } catch (error) {
+    Logger.log('❌ Ошибка в addMaintenanceEntry: ' + error.toString());
+    Logger.log('   Стек ошибки: ' + (error.stack || 'нет стека'));
+    throw new Error('Ошибка при добавлении записи в журнал: ' + error.toString());
+  }
+}
+
+/**
+ * Обновить запись в журнале обслуживания
+ * 
+ * @param {string} entryId - ID записи
+ * @param {Object} entry - Новые данные записи
+ * @returns {Object} Обновленная запись
+ */
+// Приватная функция (с префиксом _) - не должна вызываться напрямую из URL
+function _updateMaintenanceEntry(entryId, entry) {
+  try {
+    if (!entryId) {
+      throw new Error('ID записи не указан');
+    }
+    
+    const sheet = getMaintenanceLogSheet();
+    const data = sheet.getDataRange().getValues();
+    
+    // Ищем запись по ID
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][1] === entryId) {
+        // Обновляем данные
+        const row = i + 1; // Номер строки (индекс + 1)
+        
+        // Форматируем дату обслуживания
+        if (entry.date) {
+          const date = new Date(entry.date);
+          sheet.getRange(row, 3).setValue(date); // C: Дата обслуживания
+        }
+        
+        if (entry.type !== undefined) {
+          sheet.getRange(row, 4).setValue(entry.type); // D: Тип работы
+        }
+        
+        if (entry.description !== undefined) {
+          sheet.getRange(row, 5).setValue(entry.description); // E: Описание
+        }
+        
+        if (entry.performedBy !== undefined) {
+          sheet.getRange(row, 6).setValue(entry.performedBy); // F: Выполнил
+        }
+        
+        if (entry.status !== undefined) {
+          sheet.getRange(row, 7).setValue(entry.status); // G: Статус
+        }
+        
+        // Возвращаем обновленную запись
+        const updatedRow = sheet.getRange(row, 1, 1, 8).getValues()[0];
+        return {
+          id: updatedRow[1],
+          equipmentId: updatedRow[0],
+          date: updatedRow[2] ? formatDate(updatedRow[2]) : '',
+          type: updatedRow[3] || '',
+          description: updatedRow[4] || '',
+          performedBy: updatedRow[5] || '',
+          status: updatedRow[6] || 'completed',
+          createdAt: updatedRow[7] ? formatDate(updatedRow[7]) : ''
+        };
+      }
+    }
+    
+    throw new Error('Запись с ID ' + entryId + ' не найдена');
+  } catch (error) {
+    Logger.log('❌ Ошибка в updateMaintenanceEntry: ' + error.toString());
+    throw new Error('Ошибка при обновлении записи: ' + error.toString());
+  }
+}
+
+/**
+ * Удалить запись из журнала обслуживания
+ * 
+ * @param {string} entryId - ID записи
+ * @returns {Object} Результат удаления
+ */
+// Приватная функция (с префиксом _) - не должна вызываться напрямую из URL
+function _deleteMaintenanceEntry(entryId) {
+  try {
+    if (!entryId) {
+      throw new Error('ID записи не указан');
+    }
+    
+    const sheet = getMaintenanceLogSheet();
+    const data = sheet.getDataRange().getValues();
+    
+    // Ищем запись по ID
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][1] === entryId) {
+        // Удаляем строку
+        sheet.deleteRow(i + 1);
+        return { success: true, message: 'Запись удалена' };
+      }
+    }
+    
+    throw new Error('Запись с ID ' + entryId + ' не найдена');
+  } catch (error) {
+    Logger.log('❌ Ошибка в deleteMaintenanceEntry: ' + error.toString());
+    throw new Error('Ошибка при удалении записи: ' + error.toString());
+  }
+}
+
+/**
+ * Синхронизирует запись журнала с индивидуальным файлом в папке оборудования
+ *
+ * @param {Object|null} equipment - Объект оборудования
+ * @param {Object} entry - Созданная запись журнала
+ */
+function syncMaintenanceEntryFile(equipment, entry) {
+  if (!equipment) {
+    Logger.log('ℹ️ Оборудование не найдено, пропускаем синхронизацию файла журнала');
+    return;
+  }
+
+  if (!equipment.googleDriveUrl) {
+    Logger.log('ℹ️ У оборудования "' + (equipment.name || equipment.id) + '" нет ссылки на папку Google Drive, пропускаем создание файла журнала');
+    return;
+  }
+
+  const maintenanceSheetInfo = getOrCreateEquipmentMaintenanceSheet(equipment);
+  if (!maintenanceSheetInfo || !maintenanceSheetInfo.sheet) {
+    Logger.log('⚠️ Не удалось получить или создать файл журнала для оборудования "' + (equipment.name || equipment.id) + '"');
+    return;
+  }
+
+  appendEntryToEquipmentMaintenanceSheet(maintenanceSheetInfo.sheet, entry);
+}
+
+/**
+ * Получает или создает отдельный файл (Google Sheet) журнала обслуживания для оборудования
+ *
+ * @param {Object} equipment - Объект оборудования
+ * @returns {Object|null} { spreadsheet, sheet, sheetId, sheetUrl } или null при ошибке
+ */
+function getOrCreateEquipmentMaintenanceSheet(equipment) {
+  try {
+    const folderId = extractDriveIdFromUrl(equipment.googleDriveUrl);
+    if (!folderId) {
+      Logger.log('⚠️ Не удалось извлечь ID папки из URL: ' + equipment.googleDriveUrl);
+      return null;
+    }
+
+    let spreadsheet = null;
+    let existingSheetId = equipment.maintenanceSheetId ? String(equipment.maintenanceSheetId).trim() : '';
+
+    if (existingSheetId) {
+      try {
+        spreadsheet = SpreadsheetApp.openById(existingSheetId);
+      } catch (openError) {
+        Logger.log('⚠️ Не удалось открыть существующий файл журнала (' + existingSheetId + '), будет создан новый: ' + openError);
+        spreadsheet = null;
+        existingSheetId = '';
+      }
+    }
+
+    if (!spreadsheet) {
+      Logger.log('📄 Создаем новый файл журнала обслуживания для оборудования "' + (equipment.name || equipment.id) + '"');
+      const name = buildMaintenanceSheetName(equipment);
+      spreadsheet = SpreadsheetApp.create(name);
+
+      try {
+        const file = DriveApp.getFileById(spreadsheet.getId());
+        const folder = DriveApp.getFolderById(folderId);
+        file.moveTo(folder);
+        Logger.log('✅ Файл журнала перемещен в папку оборудования');
+      } catch (folderError) {
+        Logger.log('⚠️ Не удалось переместить файл журнала в папку оборудования: ' + folderError);
+      }
+
+      const sheet = spreadsheet.getSheets()[0];
+      sheet.setName('Журнал');
+      setupMaintenanceSheetHeaders(sheet);
+
+      const sheetUrl = spreadsheet.getUrl();
+      updateEquipmentMaintenanceSheetInfo(equipment.id, spreadsheet.getId(), sheetUrl);
+
+      return {
+        spreadsheet,
+        sheet,
+        sheetId: spreadsheet.getId(),
+        sheetUrl
+      };
+    }
+
+    const sheet = spreadsheet.getSheets()[0];
+    setupMaintenanceSheetHeaders(sheet);
+    const sheetUrl = equipment.maintenanceSheetUrl || spreadsheet.getUrl();
+
+    if (!equipment.maintenanceSheetUrl) {
+      updateEquipmentMaintenanceSheetInfo(equipment.id, spreadsheet.getId(), sheetUrl);
+    }
+
+    return {
+      spreadsheet,
+      sheet,
+      sheetId: spreadsheet.getId(),
+      sheetUrl
+    };
+  } catch (error) {
+    Logger.log('⚠️ Ошибка при подготовке файла журнала оборудования: ' + error);
+    return null;
+  }
+}
+
+/**
+ * Формирует человекочитаемое название файла журнала
+ *
+ * @param {Object} equipment - Объект оборудования
+ * @returns {string} Название файла
+ */
+function buildMaintenanceSheetName(equipment) {
+  const baseName = equipment && equipment.name ? String(equipment.name).trim() : equipment.id;
+  const safeName = baseName || 'Оборудование';
+  const fullName = 'Журнал обслуживания - ' + safeName;
+  // Ограничиваем длину, чтобы избежать ошибок именования
+  return fullName.substring(0, 100);
+}
+
+/**
+ * Настраивает заголовки листа журнала обслуживания (идемпотентно)
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ */
+function setupMaintenanceSheetHeaders(sheet) {
+  const headers = [
+    'Дата обслуживания',
+    'Тип работы',
+    'Описание',
+    'Выполнил',
+    'Статус',
+    'Создано системой',
+    'ID записи'
+  ];
+
+  const requiredColumns = headers.length;
+  const lastRow = sheet.getLastRow();
+
+  let needsHeader = lastRow === 0;
+  if (!needsHeader) {
+    const existing = sheet.getRange(1, 1, 1, requiredColumns).getValues()[0];
+    needsHeader = headers.some((header, index) => existing[index] !== header);
+    if (needsHeader) {
+      sheet.insertRows(1);
+    }
+  }
+
+  if (needsHeader) {
+    sheet.getRange(1, 1, 1, requiredColumns).setValues([headers]);
+    const headerRange = sheet.getRange(1, 1, 1, requiredColumns);
+    headerRange.setFontWeight('bold');
+    headerRange.setBackground('#f1f3f4');
+  }
+
+  sheet.setFrozenRows(1);
+  sheet.autoResizeColumns(1, requiredColumns);
+}
+
+/**
+ * Добавляет запись в файл журнала обслуживания оборудования
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @param {Object} entry
+ */
+function appendEntryToEquipmentMaintenanceSheet(sheet, entry) {
+  if (!sheet || !entry) {
+    return;
+  }
+
+  const createdAt = entry.createdAt ? new Date(entry.createdAt) : new Date();
+
+  const row = [
+    entry.date || '',
+    entry.type || '',
+    entry.description || '',
+    entry.performedBy || '',
+    entry.status || 'completed',
+    formatDate(createdAt),
+    entry.id
+  ];
+
+  sheet.appendRow(row);
+}
+
+/**
+ * Сохраняет информацию о файле журнала в строке оборудования
+ *
+ * @param {string} equipmentId
+ * @param {string} sheetId
+ * @param {string} sheetUrl
+ */
+function updateEquipmentMaintenanceSheetInfo(equipmentId, sheetId, sheetUrl) {
+  if (!equipmentId) {
+    return;
+  }
+
+  const sheet = getEquipmentSheet();
+  const data = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === equipmentId) {
+      const rowIndex = i + 1;
+      if (sheetId !== undefined) {
+        sheet.getRange(rowIndex, 12).setValue(sheetId);
+      }
+      if (sheetUrl !== undefined) {
+        sheet.getRange(rowIndex, 13).setValue(sheetUrl);
+      }
+      sheet.getRange(rowIndex, 11).setValue(new Date());
+      return;
+    }
+  }
+}
+
+/**
+ * Извлекает ID файла или папки Google Drive из URL или строки
+ *
+ * @param {string} urlOrId
+ * @returns {string|null}
+ */
+function extractDriveIdFromUrl(urlOrId) {
+  if (!urlOrId) {
+    return null;
+  }
+
+  const trimmed = String(urlOrId).trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const foldersMatch = trimmed.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+  if (foldersMatch && foldersMatch[1]) {
+    return foldersMatch[1];
+  }
+
+  const idMatch = trimmed.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (idMatch && idMatch[1]) {
+    return idMatch[1];
+  }
+
+  const idPattern = /^[a-zA-Z0-9_-]{20,}$/;
+  if (idPattern.test(trimmed) && !trimmed.includes('/') && !trimmed.includes('?')) {
+    return trimmed;
+  }
+
+  return null;
 }

@@ -11,6 +11,7 @@ import { addEquipment, updateEquipment, getEquipmentById } from '../services/equ
 import { generateQRCodeUrl } from '../utils/urlGenerator';
 import { getEquipmentViewUrl } from '../utils/routes';
 import { normalizeDate } from '../utils/dateNormalization';
+import { updateEquipmentCache, clearEquipmentCache } from './useEquipmentData';
 
 interface UseEquipmentFormProps {
   equipmentId?: string;
@@ -107,10 +108,6 @@ export function useEquipmentForm({ equipmentId, onSave, onCancel }: UseEquipment
     }));
   };
 
-  // Обработка изменения всех характеристик (для типа "other")
-  const handleSpecsChange = (newSpecs: EquipmentSpecs) => {
-    setSpecs(newSpecs);
-  };
 
   // Валидация формы
   const validateForm = (): boolean => {
@@ -197,6 +194,11 @@ export function useEquipmentForm({ equipmentId, onSave, onCancel }: UseEquipment
 
       setSuccess(true);
       
+      // Обновляем кеш после успешного сохранения
+      updateEquipmentCache(savedEquipment);
+      // Также очищаем кеш списка, чтобы изменения отобразились в списке
+      clearEquipmentCache();
+      
       if (onSave) {
         onSave(savedEquipment);
       }
@@ -248,7 +250,6 @@ export function useEquipmentForm({ equipmentId, onSave, onCancel }: UseEquipment
     // Обработчики
     handleTypeChange,
     handleSpecChange,
-    handleSpecsChange,
     handleSubmit,
     handleCancel,
   };

@@ -1,0 +1,56 @@
+import React, { useEffect } from 'react';
+import DriveFilesList from './DriveFilesList';
+import './DocumentationModal.css';
+
+interface DocumentationModalProps {
+  folderUrl: string;
+  equipmentName?: string;
+  onClose: () => void;
+}
+
+const DocumentationModal: React.FC<DocumentationModalProps> = ({
+  folderUrl,
+  equipmentName,
+  onClose
+}) => {
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  const stopPropagation = (event: React.MouseEvent<HTMLDivElement>) => {
+    event.stopPropagation();
+  };
+
+  return (
+    <div className="documentation-modal-overlay" onClick={onClose} role="dialog" aria-modal="true">
+      <div className="documentation-modal" onClick={stopPropagation}>
+        <div className="documentation-modal__header">
+          <h2>
+            Документация{equipmentName ? ` — ${equipmentName}` : ''}
+          </h2>
+          <button
+            className="documentation-modal__close"
+            onClick={onClose}
+            aria-label="Закрыть окно документации"
+            type="button"
+          >
+            ×
+          </button>
+        </div>
+        <div className="documentation-modal__content">
+          <DriveFilesList folderUrl={folderUrl} equipmentName={equipmentName || ''} />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default DocumentationModal;
+

@@ -21,7 +21,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Equipment } from '../types/equipment';
+import { Equipment, EquipmentSpecs } from '../types/equipment';
 import { getAllEquipment, getEquipmentById } from '../services/equipmentApi';
 
 /**
@@ -46,10 +46,79 @@ const cache = new Map<string, { data: Equipment | Equipment[]; timestamp: number
 const CACHE_TTL = 5 * 60 * 1000;
 
 /**
+ * Подписчики на изменения кеша
+ * Ключ: ключ кеша, значение: массив функций обратного вызова
+ */
+const cacheSubscribers = new Map<string, Set<() => void>>();
+
+/**
+ * Подписаться на изменения кеша
+ */
+function subscribeToCache(key: string, callback: () => void): () => void {
+  if (!cacheSubscribers.has(key)) {
+    cacheSubscribers.set(key, new Set());
+  }
+  cacheSubscribers.get(key)!.add(callback);
+  
+  // Возвращаем функцию отписки
+  return () => {
+    const subscribers = cacheSubscribers.get(key);
+    if (subscribers) {
+      subscribers.delete(callback);
+      if (subscribers.size === 0) {
+        cacheSubscribers.delete(key);
+      }
+    }
+  };
+}
+
+/**
+ * Уведомить подписчиков об изменении кеша
+ */
+function notifyCacheChange(key: string): void {
+  const subscribers = cacheSubscribers.get(key);
+  if (subscribers) {
+    subscribers.forEach(callback => {
+      try {
+        callback();
+      } catch (error) {
+        console.error('Ошибка при уведомлении подписчика кеша:', error);
+      }
+    });
+  }
+}
+
+/**
  * Проверка, не устарел ли кеш
  */
 const isCacheValid = (timestamp: number): boolean => {
   return Date.now() - timestamp < CACHE_TTL;
+};
+
+/**
+ * Нормализация specs - убеждаемся, что это объект, а не строка
+ */
+const normalizeSpecs = (specs: any): EquipmentSpecs => {
+  if (!specs) {
+    return {};
+  }
+  
+  // Если specs это строка, пытаемся распарсить
+  if (typeof specs === 'string') {
+    try {
+      return JSON.parse(specs);
+    } catch (e) {
+      console.warn('⚠️ Не удалось распарсить specs как JSON:', e);
+      return {};
+    }
+  }
+  
+  // Если specs это объект, возвращаем как есть
+  if (typeof specs === 'object') {
+    return specs;
+  }
+  
+  return {};
 };
 
 /**
@@ -59,6 +128,7 @@ const isCacheValid = (timestamp: number): boolean => {
 const normalizeEquipmentDates = (equipment: Equipment): Equipment => {
   return {
     ...equipment,
+    specs: normalizeSpecs(equipment.specs),
     commissioningDate: equipment.commissioningDate 
       ? String(equipment.commissioningDate).split('T')[0].split(' ')[0].trim() 
       : undefined,
@@ -168,11 +238,18 @@ export function useEquipmentData(id?: string): UseEquipmentDataResult {
     isMountedRef.current = true;
     loadData(false);
     
+    // Подписываемся на изменения кеша
+    const unsubscribe = subscribeToCache(cacheKey, () => {
+      // При изменении кеша перезагружаем данные
+      loadData(false);
+    });
+    
     // Очистка при размонтировании
     return () => {
       isMountedRef.current = false;
+      unsubscribe();
     };
-  }, [loadData]);
+  }, [loadData, cacheKey]);
   
   return {
     data,
@@ -191,8 +268,15 @@ export function clearEquipmentCache(id?: string): void {
     cache.delete(id);
     // Также очищаем кеш списка, так как он мог измениться
     cache.delete('all');
+    // Уведомляем подписчиков
+    notifyCacheChange(id);
+    notifyCacheChange('all');
   } else {
     cache.clear();
+    // Уведомляем всех подписчиков
+    cacheSubscribers.forEach((_, key) => {
+      notifyCacheChange(key);
+    });
   }
 }
 
@@ -208,5 +292,9 @@ export function updateEquipmentCache(equipment: Equipment): void {
   
   // Инвалидируем кеш списка (он мог измениться)
   cache.delete('all');
+  
+  // Уведомляем подписчиков об изменении кеша
+  notifyCacheChange(equipment.id);
+  notifyCacheChange('all');
 }
 

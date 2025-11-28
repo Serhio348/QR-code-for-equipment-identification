@@ -1,0 +1,257 @@
+/**
+ * Стили для боковой админ-панели EquipmentSidebar
+ */
+
+/* Overlay для мобильных устройств */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 998;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Боковая панель */
+.equipment-sidebar {
+  position: fixed;
+  top: 80px; /* Высота глобального header */
+  left: 0;
+  width: 280px;
+  height: calc(100vh - 80px);
+  background: white;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+  z-index: 999;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  transition: transform 0.3s ease;
+}
+
+.sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 2px solid #e0e0e0;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.sidebar-header h2 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.sidebar-close {
+  display: none;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 18px;
+  transition: background 0.2s;
+}
+
+.sidebar-close:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.sidebar-content {
+  flex: 1;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
+}
+
+.sidebar-section {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.sidebar-section-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #333;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.sidebar-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sidebar-button {
+  width: 100%;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.sidebar-button:hover:not(:disabled) {
+  transform: translateX(4px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.sidebar-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Стили для кнопок */
+.export-button {
+  background: linear-gradient(135deg, #28a745, #218838);
+  color: white;
+}
+
+.export-button:hover:not(:disabled) {
+  background: linear-gradient(135deg, #218838, #1e7e34);
+}
+
+.documentation-button {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+}
+
+.documentation-button:hover:not(:disabled) {
+  background: linear-gradient(135deg, #059669, #047857);
+}
+
+.maintenance-button {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: white;
+}
+
+.maintenance-button:hover:not(:disabled) {
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);
+}
+
+.edit-button {
+  background: linear-gradient(135deg, #0ea5e9, #0284c7);
+  color: white;
+}
+
+.edit-button:hover:not(:disabled) {
+  background: linear-gradient(135deg, #0284c7, #0369a1);
+}
+
+.delete-button {
+  background: linear-gradient(135deg, #f87171, #ef4444);
+  color: white;
+}
+
+.delete-button:hover:not(:disabled) {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+}
+
+/* Адаптация DateEditor для боковой панели */
+.equipment-sidebar .date-editor {
+  margin: 0;
+}
+
+.equipment-sidebar .date-editor-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.equipment-sidebar .date-editor label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #333;
+  text-align: left;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.equipment-sidebar .date-input {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  width: 100%;
+  text-align: left;
+}
+
+.equipment-sidebar .save-button {
+  width: 100%;
+  padding: 12px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.equipment-sidebar .save-button:hover:not(:disabled) {
+  background: linear-gradient(135deg, #5568d3, #6a3f8f);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.equipment-sidebar .save-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Мобильная адаптация */
+@media (max-width: 768px) {
+  .sidebar-overlay {
+    display: block;
+  }
+
+  .equipment-sidebar {
+    transform: translateX(-100%);
+    width: 300px;
+    top: 70px;
+    height: calc(100vh - 70px);
+  }
+
+  .equipment-sidebar.sidebar-open {
+    transform: translateX(0);
+  }
+
+  .sidebar-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
