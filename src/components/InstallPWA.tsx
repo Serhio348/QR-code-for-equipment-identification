@@ -21,29 +21,52 @@ const InstallPWA: React.FC = () => {
     const checkIfInstalled = () => {
       // Проверка для standalone режима (iOS и Android)
       const isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
-        (window.navigator as any).standalone === true;
+        (window.navigator as any).standalone === true ||
+        document.referrer.includes('android-app://');
       
       setIsInstalled(isStandalone);
+      
+      // Если уже установлено, не показываем кнопку
+      if (isStandalone) {
+        setShowInstallButton(false);
+      }
     };
 
     checkIfInstalled();
 
     // Обработчик события beforeinstallprompt (для Android/Chrome)
     const handleBeforeInstallPrompt = (e: Event) => {
+      console.log('[PWA] beforeinstallprompt event fired');
       e.preventDefault();
-      setDeferredPrompt(e as BeforeInstallPromptEvent);
+      const promptEvent = e as BeforeInstallPromptEvent;
+      setDeferredPrompt(promptEvent);
       setShowInstallButton(true);
     };
 
     // Обработчик успешной установки
     const handleAppInstalled = () => {
+      console.log('[PWA] App installed');
       setIsInstalled(true);
       setShowInstallButton(false);
       setDeferredPrompt(null);
     };
 
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    window.addEventListener('appinstalled', handleAppInstalled);
+    // Проверяем поддержку PWA
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.addEventListener('appinstalled', handleAppInstalled);
+    }
+
+    // Для iOS Safari - показываем инструкции по установке
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
+    
+    if (isIOS && isSafari && !isInstalled) {
+      // Показываем кнопку с инструкциями для iOS
+      setTimeout(() => {
+        setShowInstallButton(true);
+      }, 2000);
+    }
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -52,24 +75,40 @@ const InstallPWA: React.FC = () => {
   }, []);
 
   const handleInstallClick = async () => {
-    if (!deferredPrompt) {
+    // Проверяем, iOS ли это
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
+    
+    if (isIOS && isSafari) {
+      // Для iOS показываем инструкции
+      alert('Для установки приложения на iOS:\n1. Нажмите кнопку "Поделиться" (квадрат со стрелкой вверх)\n2. Выберите "На экран «Домой»"\n3. Нажмите "Добавить"');
+      setShowInstallButton(false);
       return;
     }
 
-    // Показываем prompt установки
-    deferredPrompt.prompt();
-
-    // Ждем выбора пользователя
-    const { outcome } = await deferredPrompt.userChoice;
-
-    if (outcome === 'accepted') {
-      console.log('Пользователь принял установку');
-    } else {
-      console.log('Пользователь отклонил установку');
+    if (!deferredPrompt) {
+      console.warn('[PWA] No deferred prompt available');
+      return;
     }
 
-    setDeferredPrompt(null);
-    setShowInstallButton(false);
+    try {
+      // Показываем prompt установки
+      await deferredPrompt.prompt();
+
+      // Ждем выбора пользователя
+      const { outcome } = await deferredPrompt.userChoice;
+
+      if (outcome === 'accepted') {
+        console.log('[PWA] Пользователь принял установку');
+      } else {
+        console.log('[PWA] Пользователь отклонил установку');
+      }
+    } catch (error) {
+      console.error('[PWA] Ошибка при показе prompt:', error);
+    } finally {
+      setDeferredPrompt(null);
+      setShowInstallButton(false);
+    }
   };
 
   // Не показываем кнопку, если приложение уже установлено
