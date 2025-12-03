@@ -4,7 +4,7 @@
  * Типы для аутентификации и авторизации
  */
 
-import { User, UserRole } from './user';
+import { User } from './user';
 
 /**
  * Сессия пользователя (хранится в sessionStorage)
