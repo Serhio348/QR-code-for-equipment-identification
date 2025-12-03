@@ -1,12 +1,12 @@
 import React from 'react';
 import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
-import LoadingSpinner from './components/LoadingSpinner';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import EquipmentPage from './pages/EquipmentPage';
 import EquipmentFormPage from './pages/EquipmentFormPage';
+import ScannerPage from './pages/ScannerPage';
 import NotFoundPage from './pages/NotFoundPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import { isEquipmentRoute, ROUTES } from './utils/routes';
@@ -15,6 +15,7 @@ import './App.css';
 const App: React.FC = () => {
   const location = useLocation();
   const isEquipmentPage = isEquipmentRoute(location.pathname);
+  const isAuthPage = location.pathname === ROUTES.LOGIN || location.pathname === ROUTES.REGISTER;
   const { isAuthenticated, user, logout, loading } = useAuth();
 
   return (
@@ -58,7 +59,7 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      <main className="app-content">
+      <main className={`app-content ${isAuthPage ? 'auth-page' : ''}`}>
         <Routes>
           {/* Страницы аутентификации - доступны всем */}
           <Route path={ROUTES.LOGIN} element={<LoginPage />} />
@@ -100,6 +101,16 @@ const App: React.FC = () => {
             element={
               <ProtectedRoute>
                 <EquipmentPage />
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Сканер QR-кодов - для всех авторизованных */}
+          <Route 
+            path={ROUTES.SCANNER} 
+            element={
+              <ProtectedRoute>
+                <ScannerPage />
               </ProtectedRoute>
             } 
           />

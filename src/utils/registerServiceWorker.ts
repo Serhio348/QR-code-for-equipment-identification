@@ -11,7 +11,8 @@ const isLocalhost = Boolean(
 export function registerServiceWorker(): void {
   if ('serviceWorker' in navigator) {
     // Для production используем /sw.js, для dev можно использовать другой путь
-    const swUrl = `${process.env.NODE_ENV === 'production' ? '' : ''}/sw.js`;
+    // В Vite используется import.meta.env.MODE вместо process.env.NODE_ENV
+    const swUrl = '/sw.js';
 
     if (isLocalhost) {
       // Для localhost проверяем, что Service Worker существует

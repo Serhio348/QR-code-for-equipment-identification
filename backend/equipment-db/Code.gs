@@ -457,7 +457,7 @@ function doPost(e) {
             if (pair.length === 2) {
               const key = decodeURIComponent(pair[0].replace(/\+/g, ' '));
               const value = decodeURIComponent(pair[1].replace(/\+/g, ' '));
-              data[key] = value;
+            data[key] = value;
               Logger.log('    - Пара ' + (i + 1) + ': ' + key + ' = ' + value.substring(0, Math.min(100, value.length)));
             } else if (pair.length === 1 && pair[0]) {
               // Пара без значения (ключ без =)
@@ -611,7 +611,7 @@ function doPost(e) {
         Logger.log('  - Все ключи data: ' + (data ? JSON.stringify(Object.keys(data)) : 'data is null/undefined'));
         
         // Проверяем наличие данных
-        if (!data) {
+    if (!data) {
           Logger.log('❌ data is null или undefined');
           return createErrorResponse('Данные не получены. Проверьте формат запроса.');
         }
@@ -646,7 +646,7 @@ function doPost(e) {
           const result = _addMaintenanceEntry(equipmentId, entryData);
           Logger.log('✅ Запись добавлена успешно: ' + JSON.stringify(result));
           return createJsonResponse(result);
-        } catch (error) {
+  } catch (error) {
           Logger.log('❌ Ошибка в addMaintenanceEntry: ' + error.toString());
           Logger.log('   Стек: ' + (error.stack || 'нет стека'));
           return createErrorResponse('Ошибка при добавлении записи: ' + error.toString());

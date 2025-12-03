@@ -1,0 +1,304 @@
+/**
+ * PWAMenu.css
+ * 
+ * Стили для главного меню PWA приложения
+ */
+
+.pwa-menu {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  width: 100%;
+  padding: 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  box-sizing: border-box;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.pwa-menu-container {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+  padding: 40px 24px;
+  width: 100%;
+  max-width: 400px;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* Заголовок */
+.pwa-menu-header {
+  text-align: center;
+  margin-bottom: 24px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid #e0e0e0;
+  flex-shrink: 0;
+}
+
+.pwa-menu-title {
+  margin: 0 0 16px 0;
+  font-size: 28px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.pwa-menu-user-info {
+  margin-top: 12px;
+}
+
+.pwa-menu-user-email {
+  margin: 0 0 4px 0;
+  font-size: 16px;
+  color: #666;
+  font-weight: 500;
+}
+
+.pwa-menu-user-name {
+  margin: 0;
+  font-size: 14px;
+  color: #999;
+}
+
+/* Основной контент */
+.pwa-menu-content {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 24px 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.pwa-menu-equipment-button {
+  width: 100%;
+  max-width: 320px;
+  min-height: 120px;
+  padding: 24px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.pwa-menu-equipment-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.pwa-menu-equipment-button:active {
+  transform: translateY(0);
+}
+
+.pwa-menu-equipment-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.pwa-menu-button-icon {
+  font-size: 48px;
+  line-height: 1;
+}
+
+.pwa-menu-button-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.pwa-menu-button-title {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.pwa-menu-button-subtitle {
+  font-size: 14px;
+  opacity: 0.9;
+  font-weight: 400;
+}
+
+/* Футер с кнопкой выхода */
+.pwa-menu-footer {
+  flex-shrink: 0;
+  padding-top: 24px;
+  border-top: 1px solid #e0e0e0;
+  margin-top: auto;
+}
+
+.pwa-menu-logout-button {
+  width: 100%;
+  padding: 12px 24px;
+  background: transparent;
+  color: #666;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.pwa-menu-logout-button:hover:not(:disabled) {
+  background: #f5f5f5;
+  border-color: #ccc;
+  color: #333;
+}
+
+.pwa-menu-logout-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.pwa-menu-button-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(102, 102, 102, 0.3);
+  border-top-color: #666;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Адаптивность */
+@media (max-width: 480px) {
+  .pwa-menu {
+    padding: 12px;
+  }
+
+  .pwa-menu-container {
+    padding: 24px 20px;
+    max-height: calc(100vh - 104px);
+  }
+
+  .pwa-menu-header {
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+  }
+
+  .pwa-menu-title {
+    font-size: 24px;
+    margin-bottom: 12px;
+  }
+
+  .pwa-menu-content {
+    margin: 16px 0;
+  }
+
+  .pwa-menu-equipment-button {
+    min-height: 100px;
+    padding: 20px;
+  }
+
+  .pwa-menu-button-icon {
+    font-size: 40px;
+  }
+
+  .pwa-menu-button-title {
+    font-size: 20px;
+  }
+
+  .pwa-menu-footer {
+    padding-top: 16px;
+  }
+}
+
+/* Для очень маленьких экранов */
+@media (max-height: 600px) {
+  .pwa-menu-container {
+    padding: 20px 16px;
+  }
+
+  .pwa-menu-header {
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+  }
+
+  .pwa-menu-title {
+    font-size: 20px;
+    margin-bottom: 8px;
+  }
+
+  .pwa-menu-content {
+    margin: 12px 0;
+  }
+
+  .pwa-menu-equipment-button {
+    min-height: 80px;
+    padding: 16px;
+  }
+
+  .pwa-menu-button-icon {
+    font-size: 36px;
+  }
+
+  .pwa-menu-button-title {
+    font-size: 18px;
+  }
+
+  .pwa-menu-footer {
+    padding-top: 12px;
+  }
+}
+
+/* Поддержка темной темы (опционально) */
+@media (prefers-color-scheme: dark) {
+  .pwa-menu-container {
+    background: #1a1a1a;
+    color: #fff;
+  }
+
+  .pwa-menu-title {
+    color: #fff;
+  }
+
+  .pwa-menu-user-email {
+    color: #ccc;
+  }
+
+  .pwa-menu-user-name {
+    color: #999;
+  }
+
+  .pwa-menu-header,
+  .pwa-menu-footer {
+    border-color: #333;
+  }
+
+  .pwa-menu-logout-button {
+    color: #ccc;
+    border-color: #333;
+  }
+
+  .pwa-menu-logout-button:hover:not(:disabled) {
+    background: #2a2a2a;
+    border-color: #444;
+    color: #fff;
+  }
+}
+
