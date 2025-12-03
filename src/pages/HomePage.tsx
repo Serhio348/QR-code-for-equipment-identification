@@ -7,9 +7,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { useDeviceDetection } from '../hooks/useDeviceDetection';
 import EquipmentList from '../components/EquipmentList';
-import PWAMenu from '../components/PWAMenu/PWAMenu';
 import { Equipment } from '../types/equipment';
 import { ROUTES, getEquipmentViewUrl } from '../utils/routes';
 import './HomePage.css';
@@ -17,7 +15,6 @@ import './HomePage.css';
 const HomePage: React.FC = () => {
   const navigate = useNavigate();
   const { isAdmin, loading } = useAuth();
-  const { isMobile, isStandalone } = useDeviceDetection();
 
   const handleSelectEquipment = (equipment: Equipment) => {
     // Переход на страницу оборудования
@@ -34,12 +31,8 @@ const HomePage: React.FC = () => {
     );
   }
 
-  // Если не администратор И (мобильное устройство ИЛИ PWA режим) → показываем PWA меню
-  if (!isAdmin && (isMobile || isStandalone)) {
-    return <PWAMenu />;
-  }
-
-  // Если не администратор на десктопе, показываем список оборудования для просмотра документации и журнала
+  // Если не администратор, показываем список оборудования для просмотра документации и журнала
+  // (и на мобильных, и на десктопе)
   if (!isAdmin) {
     return (
       <div className="home-page">

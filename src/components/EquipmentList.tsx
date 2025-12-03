@@ -26,6 +26,16 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
     if (!equipmentListData) return [];
     return Array.isArray(equipmentListData) ? equipmentListData : [];
   }, [equipmentListData]);
+
+  // Отладочное логирование
+  React.useEffect(() => {
+    console.log('[EquipmentList] Состояние:', { 
+      loading, 
+      error, 
+      dataLength: equipmentList.length,
+      hasData: !!equipmentListData 
+    });
+  }, [loading, error, equipmentList.length, equipmentListData]);
   
   const [filterType, setFilterType] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -116,7 +126,20 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
   if (loading) {
     return (
       <div className="equipment-list">
-        <div className="loading-message">Загрузка списка оборудования...</div>
+        <div className="loading-message">
+          <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+            <div className="spinner" style={{ 
+              width: '40px', 
+              height: '40px', 
+              border: '4px solid #f3f3f3', 
+              borderTop: '4px solid #667eea', 
+              borderRadius: '50%', 
+              animation: 'spin 1s linear infinite',
+              margin: '0 auto 20px'
+            }}></div>
+            <p>Загрузка списка оборудования...</p>
+          </div>
+        </div>
       </div>
     );
   }
@@ -124,10 +147,13 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
   if (error) {
     return (
       <div className="equipment-list">
-        <div className="error-message">{error}</div>
-        <button onClick={refetch} className="retry-button">
+        <div className="error-message">
+          <p style={{ marginBottom: '10px', fontWeight: '600' }}>Ошибка загрузки данных</p>
+          <p style={{ marginBottom: '20px' }}>{error}</p>
+          <button onClick={refetch} className="retry-button">
           Попробовать снова
         </button>
+        </div>
       </div>
     );
   }
