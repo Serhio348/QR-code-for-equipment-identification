@@ -188,10 +188,12 @@ export function useEquipmentData(id?: string): UseEquipmentDataResult {
     }
     
     try {
+      console.log('[useEquipmentData] Начало загрузки данных, id:', id, 'forceRefresh:', forceRefresh);
       let result: Equipment | Equipment[];
       
       if (id) {
         // Загрузка одного оборудования
+        console.log('[useEquipmentData] Загрузка одного оборудования:', id);
         const equipment = await getEquipmentById(id);
         if (!equipment) {
           throw new Error('Оборудование не найдено');
@@ -199,7 +201,9 @@ export function useEquipmentData(id?: string): UseEquipmentDataResult {
         result = normalizeEquipmentDates(equipment);
       } else {
         // Загрузка списка оборудования
+        console.log('[useEquipmentData] Загрузка списка оборудования');
         const allEquipment = await getAllEquipment();
+        console.log('[useEquipmentData] Получено оборудования:', allEquipment.length);
         result = allEquipment.map(normalizeEquipmentDates);
       }
       
@@ -235,17 +239,20 @@ export function useEquipmentData(id?: string): UseEquipmentDataResult {
   
   // Загрузка данных при монтировании или изменении ID
   useEffect(() => {
+    console.log('[useEquipmentData] Монтирование/обновление, cacheKey:', cacheKey);
     isMountedRef.current = true;
     loadData(false);
     
     // Подписываемся на изменения кеша
     const unsubscribe = subscribeToCache(cacheKey, () => {
+      console.log('[useEquipmentData] Изменение кеша, перезагрузка данных');
       // При изменении кеша перезагружаем данные
       loadData(false);
     });
     
     // Очистка при размонтировании
     return () => {
+      console.log('[useEquipmentData] Размонтирование');
       isMountedRef.current = false;
       unsubscribe();
     };
