@@ -10,6 +10,12 @@ export const ROUTES = {
   /** Главная страница - список оборудования */
   HOME: '/',
   
+  /** Страница входа */
+  LOGIN: '/login',
+  
+  /** Страница регистрации */
+  REGISTER: '/register',
+  
   /** Создание нового оборудования */
   EQUIPMENT_NEW: '/equipment/new',
   
@@ -18,6 +24,9 @@ export const ROUTES = {
   
   /** Редактирование оборудования по ID */
   EQUIPMENT_EDIT: (id: string) => `/equipment/${id}/edit`,
+  
+  /** Сканер QR-кодов */
+  SCANNER: '/scanner',
 } as const;
 
 /**
