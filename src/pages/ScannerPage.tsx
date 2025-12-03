@@ -20,7 +20,10 @@ const ScannerPage: React.FC = () => {
   const isProcessingRef = useRef(false); // Флаг для предотвращения повторных вызовов
   const abortControllerRef = useRef<AbortController | null>(null); // Для отмены запросов
   const hasNavigatedRef = useRef(false); // Флаг для отслеживания навигации
-  const scannerControlRef = useRef<{ stop: () => Promise<void> } | null>(null); // Ref для управления сканером
+  const scannerControlRef = useRef<{ 
+    stop: () => Promise<void>;
+    resetProcessing: () => void;
+  } | null>(null); // Ref для управления сканером
 
   // Показываем загрузку во время проверки авторизации
   if (loading) {
@@ -147,6 +150,11 @@ const ScannerPage: React.FC = () => {
           isProcessingRef.current = false;
           abortControllerRef.current = null;
           setSearching(false);
+          
+          // Сбрасываем флаги в QRScanner, чтобы можно было сканировать снова
+          if (scannerControlRef.current) {
+            scannerControlRef.current.resetProcessing();
+          }
           return;
         }
         
@@ -235,6 +243,11 @@ const ScannerPage: React.FC = () => {
           isProcessingRef.current = false;
           abortControllerRef.current = null;
           setSearching(false);
+          
+          // Сбрасываем флаги в QRScanner, чтобы можно было сканировать снова
+          if (scannerControlRef.current) {
+            scannerControlRef.current.resetProcessing();
+          }
         }
       } catch (error: any) {
         // Игнорируем ошибку, если запрос был отменен
@@ -296,10 +309,10 @@ const ScannerPage: React.FC = () => {
         abortControllerRef.current = null;
         setSearching(false);
         
-        // Даем время на отображение ошибки, затем можно будет сканировать снова
-        setTimeout(() => {
-          // Флаги уже сброшены, можно сканировать снова
-        }, 1000);
+        // Сбрасываем флаги в QRScanner, чтобы можно было сканировать снова
+        if (scannerControlRef.current) {
+          scannerControlRef.current.resetProcessing();
+        }
       }
     } else {
       // Обычный ID оборудования - переходим напрямую
