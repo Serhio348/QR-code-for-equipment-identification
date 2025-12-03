@@ -150,19 +150,22 @@ const QRScanner: React.FC<QRScannerProps> = ({
    * Обрабатывает успешное сканирование QR-кода
    */
   const handleScanSuccess = (decodedText: string) => {
-    console.log('Отсканированный QR-код:', decodedText);
+    console.log('[QRScanner] Отсканированный QR-код:', decodedText);
     
     // Парсим ID оборудования из QR-кода
     const equipmentIdOrDriveId = parseEquipmentId(decodedText);
+    console.log('[QRScanner] Результат парсинга:', equipmentIdOrDriveId);
 
     if (!equipmentIdOrDriveId) {
       // Пробуем извлечь URL и проверить, может быть это прямой URL приложения
       const url = decodedText.trim();
+      console.log('[QRScanner] Попытка извлечь ID из URL:', url);
+      
       const equipmentMatch = url.match(/\/equipment\/([^/?\s]+)/i);
       
       if (equipmentMatch && equipmentMatch[1]) {
         const id = equipmentMatch[1];
-        console.log('Найден ID оборудования из URL:', id);
+        console.log('[QRScanner] Найден ID оборудования из URL:', id);
         stopScanning();
         onScanSuccess(id);
         if (autoCloseOnSuccess) {
@@ -173,14 +176,31 @@ const QRScanner: React.FC<QRScannerProps> = ({
         return;
       }
       
-      const errorMsg = 'QR-код не содержит информацию об оборудовании. Ожидается URL вида: /equipment/{id} или Google Drive URL';
-      console.error('Ошибка парсинга QR-кода:', decodedText);
+      // Пробуем найти Google Drive URL напрямую
+      const driveMatch = url.match(/drive\.google\.com\/drive\/folders\/([^/?&\s]+)/i) ||
+                         url.match(/[?&]id=([^&\s]+)/i);
+      
+      if (driveMatch && driveMatch[1]) {
+        const driveId = driveMatch[1];
+        console.log('[QRScanner] Найден Google Drive ID:', driveId);
+        stopScanning();
+        onScanSuccess(`DRIVE:${driveId}`);
+        if (autoCloseOnSuccess) {
+          setTimeout(() => {
+            onClose?.();
+          }, 500);
+        }
+        return;
+      }
+      
+      const errorMsg = `QR-код не содержит информацию об оборудовании.\n\nОтсканировано: ${decodedText}\n\nОжидается URL вида: /equipment/{id} или Google Drive URL`;
+      console.error('[QRScanner] Ошибка парсинга QR-кода. Исходный текст:', decodedText);
       setError(errorMsg);
       onScanError?.(errorMsg);
       return;
     }
 
-    console.log('Распознан ID оборудования или Drive ID:', equipmentIdOrDriveId);
+    console.log('[QRScanner] Распознан ID оборудования или Drive ID:', equipmentIdOrDriveId);
 
     // Останавливаем сканирование
     stopScanning();
