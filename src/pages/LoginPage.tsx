@@ -4,9 +4,10 @@
  * Страница входа пользователя
  */
 
-import { useState, FormEvent } from 'react';
+import { useState, FormEvent, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import LoadingSpinner from '../components/LoadingSpinner';
 import './LoginPage.css';
 
 export default function LoginPage() {
@@ -16,13 +17,29 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const { login, isAuthenticated } = useAuth();
+  const { login, isAuthenticated, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
-  // Если уже авторизован, редиректим на главную
+  // Показываем загрузку при инициализации аутентификации
+  useEffect(() => {
+    if (authLoading) {
+      return;
+    }
+    
+    // Если уже авторизован, редиректим на главную
+    if (isAuthenticated) {
+      navigate('/');
+    }
+  }, [isAuthenticated, authLoading, navigate]);
+
+  // Показываем индикатор загрузки при инициализации
+  if (authLoading) {
+    return <LoadingSpinner fullScreen text="Проверка сессии..." />;
+  }
+
+  // Если уже авторизован, показываем загрузку перед редиректом
   if (isAuthenticated) {
-    navigate('/');
-    return null;
+    return <LoadingSpinner fullScreen text="Перенаправление..." />;
   }
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -120,7 +137,14 @@ export default function LoginPage() {
             className="submit-button"
             disabled={loading}
           >
-            {loading ? 'Вход...' : 'Войти'}
+            {loading ? (
+              <>
+                <span className="button-spinner"></span>
+                Вход...
+              </>
+            ) : (
+              'Войти'
+            )}
           </button>
         </form>
 

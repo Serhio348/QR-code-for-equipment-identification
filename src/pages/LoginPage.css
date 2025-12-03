@@ -143,6 +143,18 @@
   cursor: not-allowed;
 }
 
+.button-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
 .login-footer {
   margin-top: 24px;
   text-align: center;
