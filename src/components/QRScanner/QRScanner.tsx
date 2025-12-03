@@ -36,6 +36,10 @@ const QRScanner: React.FC<QRScannerProps> = ({
 
   // Инициализация сканера
   useEffect(() => {
+    // Сбрасываем флаги при монтировании компонента (при возврате на страницу)
+    isProcessingRef.current = false;
+    isStoppedRef.current = false;
+    
     if (!isCameraSupported()) {
       setError('Ваш браузер не поддерживает доступ к камере.');
       return;
