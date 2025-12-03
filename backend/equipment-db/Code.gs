@@ -343,6 +343,8 @@ function doPost(e) {
         }
       }
       // Если это URL-encoded
+      // ВАЖНО: Используем ручной парсинг через split('&') и split('='), так как URLSearchParams
+      // недоступен в Google Apps Script V8 runtime
       else if (contentType.includes('application/x-www-form-urlencoded') || contentType.includes('form-urlencoded')) {
         Logger.log('📝 Обнаружен URL-encoded формат, парсим...');
         Logger.log('  - e.parameter существует: ' + (e.parameter ? 'ДА' : 'НЕТ'));
@@ -364,11 +366,11 @@ function doPost(e) {
           Logger.log('  - Ключи: ' + JSON.stringify(Object.keys(data)));
         } 
         // Если e.parameter пустой, пробуем распарсить из postData.contents
+        // Используем ручной парсинг, так как URLSearchParams недоступен в Google Apps Script
         else if (e.postData && e.postData.contents) {
-          // Пытаемся распарсить вручную из postData.contents
-          Logger.log('  - Парсинг postData.contents вручную...');
+          Logger.log('  - Парсинг postData.contents вручную (URLSearchParams недоступен в GAS)...');
           Logger.log('  - Содержимое (первые 500 символов): ' + e.postData.contents.substring(0, Math.min(500, e.postData.contents.length)));
-          // Ручной парсинг URL-encoded строки
+          // Ручной парсинг URL-encoded строки через split('&') и split('=')
           const contents = e.postData.contents;
           data = {};
           const pairs = contents.split('&');
@@ -398,9 +400,24 @@ function doPost(e) {
           data = JSON.parse(e.postData.contents);
         } catch (parseError) {
           Logger.log('⚠️ Не удалось распарсить как JSON, пробуем как URL-encoded');
-          // Пробуем как URL-encoded
+          // Пробуем как URL-encoded (ручной парсинг, так как URLSearchParams недоступен в Google Apps Script)
           if (e.parameter && Object.keys(e.parameter).length > 0) {
             data = e.parameter;
+          } else if (e.postData && e.postData.contents) {
+            // Ручной парсинг URL-encoded строки из postData.contents
+            Logger.log('  - Парсинг postData.contents как URL-encoded (fallback)...');
+            const contents = e.postData.contents;
+            data = {};
+            const pairs = contents.split('&');
+            for (let i = 0; i < pairs.length; i++) {
+              const pair = pairs[i].split('=');
+              if (pair.length === 2) {
+                const key = decodeURIComponent(pair[0].replace(/\+/g, ' '));
+                const value = decodeURIComponent(pair[1].replace(/\+/g, ' '));
+                data[key] = value;
+              }
+            }
+            Logger.log('  - Распарсено параметров: ' + Object.keys(data).length);
           } else {
             return createErrorResponse('Не удалось распарсить данные запроса. Content-Type: ' + contentType);
           }
