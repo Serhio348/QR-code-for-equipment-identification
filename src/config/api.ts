@@ -17,7 +17,7 @@ export const API_CONFIG = {
    * 
    * Пример: 'https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec'
    */
-  EQUIPMENT_API_URL: 'https://script.google.com/macros/s/AKfycbxvAN180HbeF-oeXZz3lEyeO4Mkyb3YtWl4xBc03HFoof-iBk1QkUZ5la7pLgT_FFiaXQ/exec',
+  EQUIPMENT_API_URL: 'https://script.google.com/macros/s/AKfycbwkhGBwlIW4ztCNN3OX9hdzm7KAut2ZwKuOeQg7lAl1SSDAnonoPCZBQqlB2uoZZxQaRA/exec',
 
   /**
    * URL веб-приложения для журнала обслуживания (существующий)
