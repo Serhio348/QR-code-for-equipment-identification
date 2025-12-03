@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { login as loginApi, logout as logoutApi, register as registerApi, checkSession, verifyAdmin } from '../services/api/authApi';
 import { saveSession, loadSession, clearSession, isSessionExpired, isSessionTimeout } from '../utils/sessionStorage';
 import { startActivityTracking, stopActivityTracking, checkSessionTimeout as checkTimeout } from '../utils/sessionTimeout';
+import { ROUTES } from '../utils/routes';
 import type { User } from '../types/user';
 import type { AuthState, UserSession } from '../types/auth';
 import type { LoginData, RegisterData } from '../types/user';
@@ -249,7 +250,13 @@ export function useAuth(): AuthContextType {
 /**
  * Хук для проверки, требуется ли аутентификация
  * 
- * Редиректит на страницу входа, если пользователь не авторизован
+ * Используйте этот хук внутри компонента для редиректа на страницу входа
+ * 
+ * @example
+ * function MyComponent() {
+ *   useRequireAuth();
+ *   return <div>Защищенный контент</div>;
+ * }
  */
 export function useRequireAuth(): void {
   const { isAuthenticated, loading } = useAuth();
@@ -257,7 +264,7 @@ export function useRequireAuth(): void {
 
   useEffect(() => {
     if (!loading && !isAuthenticated) {
-      navigate('/login');
+      navigate(ROUTES.LOGIN);
     }
   }, [isAuthenticated, loading, navigate]);
 }
@@ -268,6 +275,12 @@ export function useRequireAuth(): void {
  * Редиректит на главную страницу, если у пользователя нет нужной роли
  * 
  * @param requiredRole - Требуемая роль ('admin' | 'user')
+ * 
+ * @example
+ * function AdminComponent() {
+ *   useRequireRole('admin');
+ *   return <div>Только для админов</div>;
+ * }
  */
 export function useRequireRole(requiredRole: 'admin' | 'user'): void {
   const { user, isAuthenticated, loading } = useAuth();
@@ -276,7 +289,7 @@ export function useRequireRole(requiredRole: 'admin' | 'user'): void {
   useEffect(() => {
     if (!loading && isAuthenticated && user) {
       if (requiredRole === 'admin' && user.role !== 'admin') {
-        navigate('/');
+        navigate(ROUTES.HOME);
       }
     }
   }, [user, isAuthenticated, loading, requiredRole, navigate]);
