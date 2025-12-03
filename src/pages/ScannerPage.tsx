@@ -41,19 +41,31 @@ const ScannerPage: React.FC = () => {
       try {
         // Загружаем все оборудование и ищем по Google Drive URL
         const allEquipment = await getAllEquipment() as Equipment[];
+        
+        if (!Array.isArray(allEquipment)) {
+          throw new Error('Неверный формат данных от сервера');
+        }
+        
         const equipment = allEquipment.find(
-          (eq) => eq.googleDriveUrl && eq.googleDriveUrl.includes(driveFolderId)
+          (eq) => {
+            if (!eq || !eq.googleDriveUrl) return false;
+            // Проверяем, содержит ли URL ID папки
+            return eq.googleDriveUrl.includes(driveFolderId) || 
+                   eq.googleDriveUrl.includes(`folders/${driveFolderId}`) ||
+                   eq.googleDriveUrl.includes(`id=${driveFolderId}`);
+          }
         );
         
         if (equipment) {
           navigate(getEquipmentViewUrl(equipment.id));
         } else {
-          alert('Оборудование с таким Google Drive URL не найдено');
+          alert(`Оборудование с Google Drive URL (ID: ${driveFolderId}) не найдено. Проверьте, что QR-код содержит правильную ссылку.`);
+          setSearching(false);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Ошибка при поиске оборудования:', error);
-        alert('Ошибка при поиске оборудования');
-      } finally {
+        const errorMessage = error?.message || 'Неизвестная ошибка';
+        alert(`Ошибка при поиске оборудования: ${errorMessage}. Попробуйте отсканировать QR-код еще раз.`);
         setSearching(false);
       }
     } else {
