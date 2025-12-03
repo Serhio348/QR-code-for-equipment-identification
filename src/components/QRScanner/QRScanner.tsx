@@ -16,8 +16,6 @@ interface QRScannerProps {
   onScanError?: (error: string) => void;
   /** Callback при закрытии сканера */
   onClose?: () => void;
-  /** Автоматически закрывать сканер после успешного сканирования */
-  autoCloseOnSuccess?: boolean;
   /** Ref для доступа к методам сканера извне */
   scannerRef?: React.RefObject<{ 
     stop: () => Promise<void>;
@@ -29,7 +27,6 @@ const QRScanner: React.FC<QRScannerProps> = ({
   onScanSuccess,
   onScanError,
   onClose,
-  autoCloseOnSuccess = true,
   scannerRef: externalScannerRef,
 }) => {
   const scannerRef = useRef<Html5Qrcode | null>(null);
