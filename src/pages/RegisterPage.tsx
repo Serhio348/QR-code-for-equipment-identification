@@ -4,9 +4,10 @@
  * Страница регистрации нового пользователя
  */
 
-import { useState, FormEvent } from 'react';
+import { useState, FormEvent, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import LoadingSpinner from '../components/LoadingSpinner';
 import './RegisterPage.css';
 
 export default function RegisterPage() {
@@ -19,13 +20,29 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const { register, isAuthenticated } = useAuth();
+  const { register, isAuthenticated, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
-  // Если уже авторизован, редиректим на главную
+  // Показываем загрузку при инициализации аутентификации
+  useEffect(() => {
+    if (authLoading) {
+      return;
+    }
+    
+    // Если уже авторизован, редиректим на главную
+    if (isAuthenticated) {
+      navigate('/');
+    }
+  }, [isAuthenticated, authLoading, navigate]);
+
+  // Показываем индикатор загрузки при инициализации
+  if (authLoading) {
+    return <LoadingSpinner fullScreen text="Проверка сессии..." />;
+  }
+
+  // Если уже авторизован, показываем загрузку перед редиректом
   if (isAuthenticated) {
-    navigate('/');
-    return null;
+    return <LoadingSpinner fullScreen text="Перенаправление..." />;
   }
 
   const validateForm = (): string | null => {
@@ -192,7 +209,14 @@ export default function RegisterPage() {
             className="submit-button"
             disabled={loading}
           >
-            {loading ? 'Регистрация...' : 'Зарегистрироваться'}
+            {loading ? (
+              <>
+                <span className="button-spinner"></span>
+                Регистрация...
+              </>
+            ) : (
+              'Зарегистрироваться'
+            )}
           </button>
         </form>
 

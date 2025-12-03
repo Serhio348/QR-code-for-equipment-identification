@@ -177,6 +177,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const logout = useCallback(async () => {
     try {
+      setLoading(true);
       if (user) {
         await logoutApi(user.email);
       }
@@ -187,6 +188,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       stopActivityTracking();
       setUser(null);
       setError(null);
+      setLoading(false);
     }
   }, [user]);
 

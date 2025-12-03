@@ -1,6 +1,7 @@
 import React from 'react';
 import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
+import LoadingSpinner from './components/LoadingSpinner';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
@@ -14,7 +15,7 @@ import './App.css';
 const App: React.FC = () => {
   const location = useLocation();
   const isEquipmentPage = isEquipmentRoute(location.pathname);
-  const { isAuthenticated, user, logout } = useAuth();
+  const { isAuthenticated, user, logout, loading } = useAuth();
 
   return (
     <div className="app">
@@ -37,8 +38,19 @@ const App: React.FC = () => {
                 {user.role === 'admin' && (
                   <span className="user-role">Администратор</span>
                 )}
-                <button onClick={logout} className="logout-button">
-                  Выйти
+                <button 
+                  onClick={logout} 
+                  className="logout-button"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <>
+                      <span className="button-spinner-small"></span>
+                      Выход...
+                    </>
+                  ) : (
+                    'Выйти'
+                  )}
                 </button>
               </div>
             )}
