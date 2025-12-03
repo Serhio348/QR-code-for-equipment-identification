@@ -3,12 +3,12 @@
  * Отображает все оборудование из базы данных в виде списка
  */
 
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Equipment } from '../types/equipment';
 import { formatDate } from '../utils/dateFormatting';
 import { EQUIPMENT_TYPE_OPTIONS } from '../constants/equipmentTypes';
 import { useEquipmentData } from '../hooks/useEquipmentData';
-import { parseEquipmentId, isDriveId } from '../utils/qrCodeParser';
+import { isDriveId } from '../utils/qrCodeParser';
 import StatusBadge from './StatusBadge';
 import QRScanner from './QRScanner/QRScanner';
 import './EquipmentList.css';
@@ -31,7 +31,6 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
-  const equipmentCardRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
   /**
    * Поиск оборудования по ID или Google Drive URL
