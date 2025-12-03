@@ -420,8 +420,9 @@ function doPost(e) {
       // Если это URL-encoded
       // ВАЖНО: Используем ручной парсинг через split('&') и split('='), так как URLSearchParams
       // недоступен в Google Apps Script V8 runtime
-      else if (contentType.includes('application/x-www-form-urlencoded') || contentType.includes('form-urlencoded')) {
-        Logger.log('📝 Обнаружен URL-encoded формат, парсим...');
+      else if (contentType.includes('application/x-www-form-urlencoded') || contentType.includes('form-urlencoded') || !contentType) {
+        Logger.log('📝 Обнаружен URL-encoded формат или пустой Content-Type, парсим...');
+        Logger.log('  - Content-Type: ' + (contentType || 'ПУСТОЙ'));
         Logger.log('  - e.parameter существует: ' + (e.parameter ? 'ДА' : 'НЕТ'));
         Logger.log('  - e.parameter keys count: ' + (e.parameter ? Object.keys(e.parameter).length : 0));
         Logger.log('  - e.postData.contents существует: ' + (e.postData && e.postData.contents ? 'ДА' : 'НЕТ'));
@@ -439,12 +440,13 @@ function doPost(e) {
           Logger.log('  - Данные из e.parameter: ' + JSON.stringify(data));
           Logger.log('  - Количество параметров: ' + Object.keys(data).length);
           Logger.log('  - Ключи: ' + JSON.stringify(Object.keys(data)));
+          Logger.log('  - action в e.parameter: ' + (data.action || 'НЕТ'));
         } 
         // Если e.parameter пустой, пробуем распарсить из postData.contents
         // Используем ручной парсинг, так как URLSearchParams недоступен в Google Apps Script
-        else if (e.postData && e.postData.contents) {
+        if ((!data || Object.keys(data).length === 0) && e.postData && e.postData.contents) {
           Logger.log('  - Парсинг postData.contents вручную (URLSearchParams недоступен в GAS)...');
-          Logger.log('  - Содержимое (первые 500 символов): ' + e.postData.contents.substring(0, Math.min(500, e.postData.contents.length)));
+          Logger.log('  - Полное содержимое: ' + e.postData.contents);
           // Ручной парсинг URL-encoded строки через split('&') и split('=')
           const contents = e.postData.contents;
           data = {};
@@ -456,14 +458,22 @@ function doPost(e) {
               const key = decodeURIComponent(pair[0].replace(/\+/g, ' '));
               const value = decodeURIComponent(pair[1].replace(/\+/g, ' '));
               data[key] = value;
-              Logger.log('    - Пара ' + (i + 1) + ': ' + key + ' = ' + value.substring(0, Math.min(50, value.length)));
+              Logger.log('    - Пара ' + (i + 1) + ': ' + key + ' = ' + value.substring(0, Math.min(100, value.length)));
+            } else if (pair.length === 1 && pair[0]) {
+              // Пара без значения (ключ без =)
+              const key = decodeURIComponent(pair[0].replace(/\+/g, ' '));
+              data[key] = '';
+              Logger.log('    - Пара ' + (i + 1) + ' (без значения): ' + key);
             } else {
               Logger.log('    - Пара ' + (i + 1) + ' не распознана: ' + pairs[i]);
             }
           }
           Logger.log('  - Данные из postData.contents (распарсены): ' + JSON.stringify(data));
           Logger.log('  - Количество параметров: ' + Object.keys(data).length);
-        } else {
+          Logger.log('  - action в postData.contents: ' + (data.action || 'НЕТ'));
+        }
+        
+        if (!data || Object.keys(data).length === 0) {
           Logger.log('⚠️ Нет данных ни в e.parameter, ни в postData.contents для URL-encoded');
           Logger.log('  - e.parameter: ' + (e.parameter ? JSON.stringify(e.parameter) : 'НЕТ'));
           Logger.log('  - e.postData: ' + (e.postData ? 'есть' : 'НЕТ'));
@@ -532,12 +542,26 @@ function doPost(e) {
       return createErrorResponse('Нет данных в запросе. Проверьте, что данные отправляются в теле запроса.');
     }
     
+    // Проверяем, что данные распарсены
+    if (!data || typeof data !== 'object') {
+      Logger.log('❌ data не является объектом: ' + typeof data);
+      return createErrorResponse('Неверный формат данных запроса');
+    }
+    
     const action = data.action;
     Logger.log('  - action: ' + (action || 'НЕ УКАЗАНО'));
     Logger.log('  - data.name: ' + (data.name || 'НЕ УКАЗАНО'));
-    Logger.log('  - data.equipmentId: ' + (data.equipmentId || 'НЕ УКАЗАНО'));
+    Logger.log('  - data.email: ' + (data.email || 'НЕ УКАЗАНО'));
+    Logger.log('  - data.equipmentId: ' + (data.equipmentId || 'НЕ УКАЗАН'));
     Logger.log('  - Полный объект data: ' + JSON.stringify(data));
     Logger.log('  - Все ключи data: ' + JSON.stringify(Object.keys(data || {})));
+    
+    // Если action не указан, возвращаем ошибку
+    if (!action) {
+      Logger.log('❌ action не указан в данных');
+      Logger.log('  - Доступные ключи: ' + JSON.stringify(Object.keys(data)));
+      return createErrorResponse('Действие (action) не указано в запросе. Доступные ключи: ' + JSON.stringify(Object.keys(data)));
+    }
     
     // Выполняем действие в зависимости от параметра
     switch(action) {
@@ -659,9 +683,22 @@ function doPost(e) {
         if (!registerResult.success) {
           return createErrorResponse(registerResult.message);
         }
+        // После успешной регистрации автоматически авторизуем пользователя
+        const autoLoginResult = loginUser(data.email, data.password);
+        if (!autoLoginResult.success) {
+          // Если авторизация не удалась, все равно возвращаем успешную регистрацию
+          Logger.log('⚠️ Регистрация успешна, но автоматический вход не удался: ' + autoLoginResult.message);
+          return createJsonResponse({
+            success: true,
+            user: registerResult.user,
+            message: registerResult.message + ' Пожалуйста, войдите в систему.'
+          });
+        }
         return createJsonResponse({
           success: true,
-          user: registerResult.user,
+          user: autoLoginResult.user,
+          sessionToken: autoLoginResult.sessionToken,
+          expiresAt: autoLoginResult.expiresAt,
           message: registerResult.message
         });
       
