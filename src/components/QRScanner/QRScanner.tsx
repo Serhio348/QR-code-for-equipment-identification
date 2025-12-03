@@ -138,12 +138,17 @@ const QRScanner: React.FC<QRScannerProps> = ({
    * Останавливает сканирование
    */
   const stopScanning = async () => {
-    if (scannerRef.current && isScanning) {
+    if (scannerRef.current) {
       try {
-        await scannerRef.current.stop();
-        await scannerRef.current.clear();
+        // Проверяем, запущен ли сканер, перед остановкой
+        const isRunning = scannerRef.current.getState && scannerRef.current.getState() === 2; // STATE_RUNNING = 2
+        if (isRunning || isScanning) {
+          await scannerRef.current.stop();
+          await scannerRef.current.clear();
+        }
       } catch (err) {
-        console.error('Ошибка при остановке сканера:', err);
+        // Игнорируем ошибки остановки (может быть уже остановлен)
+        console.log('[QRScanner] Сканер остановлен или уже был остановлен');
       }
       setIsScanning(false);
     }

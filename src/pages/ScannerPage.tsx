@@ -19,6 +19,7 @@ const ScannerPage: React.FC = () => {
   const [searching, setSearching] = useState(false);
   const isProcessingRef = useRef(false); // Флаг для предотвращения повторных вызовов
   const abortControllerRef = useRef<AbortController | null>(null); // Для отмены запросов
+  const hasNavigatedRef = useRef(false); // Флаг для отслеживания навигации
 
   // Показываем загрузку во время проверки авторизации
   if (loading) {
@@ -35,6 +36,7 @@ const ScannerPage: React.FC = () => {
   useEffect(() => {
     // Сбрасываем все флаги при монтировании (например, при возврате на страницу)
     isProcessingRef.current = false;
+    hasNavigatedRef.current = false;
     setSearching(false);
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -49,6 +51,7 @@ const ScannerPage: React.FC = () => {
       }
       // Сбрасываем флаги
       isProcessingRef.current = false;
+      hasNavigatedRef.current = false;
       setSearching(false);
     };
   }, []);
@@ -197,6 +200,9 @@ const ScannerPage: React.FC = () => {
           abortControllerRef.current = null;
           setSearching(false);
           
+          // Устанавливаем флаг навигации, чтобы предотвратить вызов onClose
+          hasNavigatedRef.current = true;
+          
           navigate(getEquipmentViewUrl(equipment.id));
         } else {
           console.warn('[ScannerPage] ❌ Оборудование не найдено для Drive ID:', driveFolderId);
@@ -285,6 +291,9 @@ const ScannerPage: React.FC = () => {
       isProcessingRef.current = false;
       abortControllerRef.current = null;
       
+      // Устанавливаем флаг навигации, чтобы предотвратить вызов onClose
+      hasNavigatedRef.current = true;
+      
       navigate(getEquipmentViewUrl(equipmentIdOrDriveId));
     }
   };
@@ -301,7 +310,14 @@ const ScannerPage: React.FC = () => {
    * Обрабатывает закрытие сканера
    */
   const handleClose = () => {
-    // Возвращаемся на главную страницу
+    // Если уже произошла навигация, не вызываем повторную навигацию
+    if (hasNavigatedRef.current) {
+      console.log('[ScannerPage] Игнорируем onClose - навигация уже произошла');
+      return;
+    }
+    
+    // Возвращаемся на главную страницу только если навигация не произошла
+    console.log('[ScannerPage] Закрытие сканера - возврат на главную');
     navigate(ROUTES.HOME);
   };
 
