@@ -44,16 +44,41 @@ const ScannerPage: React.FC = () => {
       try {
         console.log('[ScannerPage] Загрузка всего оборудования...');
         // Загружаем все оборудование и ищем по Google Drive URL
-        const allEquipment = await getAllEquipment() as Equipment[];
+        let allEquipment: Equipment[];
+        
+        try {
+          allEquipment = await getAllEquipment() as Equipment[];
+          console.log('[ScannerPage] getAllEquipment вернул:', allEquipment);
+        } catch (apiError: any) {
+          console.error('[ScannerPage] Ошибка при вызове getAllEquipment:', apiError);
+          throw new Error(`Ошибка загрузки оборудования: ${apiError?.message || 'Неизвестная ошибка API'}`);
+        }
+        
         console.log('[ScannerPage] Получено оборудования:', allEquipment?.length || 0);
+        console.log('[ScannerPage] Тип данных:', typeof allEquipment, Array.isArray(allEquipment));
         
         if (!allEquipment) {
-          throw new Error('Не удалось загрузить список оборудования');
+          console.error('[ScannerPage] allEquipment is null/undefined');
+          throw new Error('Не удалось загрузить список оборудования. Сервер вернул пустой ответ.');
         }
         
         if (!Array.isArray(allEquipment)) {
-          console.error('[ScannerPage] Неверный формат данных:', typeof allEquipment, allEquipment);
-          throw new Error('Неверный формат данных от сервера. Ожидается массив.');
+          const errorInfo: any = {
+            type: typeof allEquipment,
+            value: allEquipment
+          };
+          if (allEquipment && typeof allEquipment === 'object') {
+            errorInfo.constructor = (allEquipment as any).constructor?.name;
+          }
+          console.error('[ScannerPage] Неверный формат данных:', errorInfo);
+          throw new Error(`Неверный формат данных от сервера. Ожидается массив, получен: ${typeof allEquipment}`);
+        }
+        
+        if (allEquipment.length === 0) {
+          console.warn('[ScannerPage] Список оборудования пуст');
+          alert('В базе данных нет оборудования. Обратитесь к администратору.');
+          setSearching(false);
+          return;
         }
         
         console.log('[ScannerPage] Поиск оборудования с Drive ID:', driveFolderId);
@@ -94,18 +119,77 @@ const ScannerPage: React.FC = () => {
         );
         
         if (equipment) {
-          console.log('[ScannerPage] Оборудование найдено, переход на страницу:', equipment.id);
+          console.log('[ScannerPage] ✅ Оборудование найдено:', {
+            id: equipment.id,
+            name: equipment.name,
+            googleDriveUrl: equipment.googleDriveUrl
+          });
+          setSearching(false);
           navigate(getEquipmentViewUrl(equipment.id));
         } else {
-          console.warn('[ScannerPage] Оборудование не найдено для Drive ID:', driveFolderId);
-          alert(`Оборудование с Google Drive URL (ID: ${driveFolderId}) не найдено.\n\nПроверьте консоль браузера для подробностей.`);
+          console.warn('[ScannerPage] ❌ Оборудование не найдено для Drive ID:', driveFolderId);
+          console.log('[ScannerPage] Все Google Drive URL в базе:');
+          allEquipment.forEach((eq, idx) => {
+            console.log(`  ${idx + 1}. ${eq.name}: ${eq.googleDriveUrl || '(нет URL)'}`);
+          });
+          
+          const errorMsg = `Оборудование с Google Drive URL (ID: ${driveFolderId}) не найдено.\n\n` +
+            `Проверьте:\n` +
+            `1. Правильность QR-кода\n` +
+            `2. Что оборудование существует в базе данных\n` +
+            `3. Консоль браузера для подробностей`;
+          alert(errorMsg);
           setSearching(false);
         }
       } catch (error: any) {
-        console.error('[ScannerPage] Ошибка при поиске оборудования:', error);
+        console.error('[ScannerPage] ❌ КРИТИЧЕСКАЯ ОШИБКА при поиске оборудования:', error);
+        console.error('[ScannerPage] Тип ошибки:', error?.constructor?.name);
         console.error('[ScannerPage] Stack trace:', error?.stack);
-        const errorMessage = error?.message || 'Неизвестная ошибка';
-        alert(`Ошибка при поиске оборудования: ${errorMessage}\n\nПроверьте консоль браузера для подробностей.`);
+        console.error('[ScannerPage] Полная информация об ошибке:', {
+          message: error?.message,
+          name: error?.name,
+          stack: error?.stack,
+          toString: error?.toString()
+        });
+        
+        // Определяем тип ошибки для более понятного сообщения
+        const isTimeout = error?.name === 'TimeoutError' || 
+                         error?.name === 'AbortError' ||
+                         error?.message?.includes('timeout') ||
+                         error?.message?.includes('Превышено время ожидания');
+        
+        const isNetworkError = error?.message?.includes('fetch') ||
+                              error?.message?.includes('Failed to fetch') ||
+                              error?.message?.includes('network');
+        
+        let userMessage: string;
+        
+        if (isTimeout) {
+          userMessage = `Превышено время ожидания ответа от сервера.\n\n` +
+            `Возможные причины:\n` +
+            `• Медленное интернет-соединение\n` +
+            `• Сервер перегружен\n` +
+            `• Большое количество оборудования в базе\n\n` +
+            `Попробуйте:\n` +
+            `1. Проверить подключение к интернету\n` +
+            `2. Повторить попытку через несколько секунд\n` +
+            `3. Обратиться к администратору`;
+        } else if (isNetworkError) {
+          userMessage = `Не удалось подключиться к серверу.\n\n` +
+            `Проверьте:\n` +
+            `1. Подключение к интернету\n` +
+            `2. Что вы находитесь в сети Wi‑Fi или мобильной сети\n` +
+            `3. Попробуйте обновить страницу`;
+        } else {
+          const errorMessage = error?.message || error?.toString() || 'Неизвестная ошибка';
+          userMessage = `Ошибка при поиске оборудования:\n\n${errorMessage}\n\n` +
+            `Проверьте:\n` +
+            `1. Подключение к интернету\n` +
+            `2. Доступность API сервера\n` +
+            `3. Консоль браузера (Eruda) для подробностей`;
+        }
+        
+        alert(userMessage);
         setSearching(false);
       }
     } else {
