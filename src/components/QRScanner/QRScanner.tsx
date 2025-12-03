@@ -18,6 +18,8 @@ interface QRScannerProps {
   onClose?: () => void;
   /** Автоматически закрывать сканер после успешного сканирования */
   autoCloseOnSuccess?: boolean;
+  /** Ref для доступа к методам сканера извне */
+  scannerRef?: React.RefObject<{ stop: () => Promise<void> }>;
 }
 
 const QRScanner: React.FC<QRScannerProps> = ({
@@ -25,6 +27,7 @@ const QRScanner: React.FC<QRScannerProps> = ({
   onScanError,
   onClose,
   autoCloseOnSuccess = true,
+  scannerRef: externalScannerRef,
 }) => {
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const [isScanning, setIsScanning] = useState(false);
@@ -33,6 +36,19 @@ const QRScanner: React.FC<QRScannerProps> = ({
   const isProcessingRef = useRef(false); // Флаг для предотвращения повторных вызовов
   const isStoppedRef = useRef(false); // Флаг для отслеживания остановки сканера
   const scannerContainerId = 'qr-scanner-container';
+
+  // Предоставляем метод остановки через ref, если передан
+  useEffect(() => {
+    if (externalScannerRef) {
+      (externalScannerRef as React.MutableRefObject<{ stop: () => Promise<void> }>).current = {
+        stop: async () => {
+          isStoppedRef.current = true;
+          isProcessingRef.current = true;
+          await stopScanning();
+        }
+      };
+    }
+  }, [externalScannerRef]);
 
   // Инициализация сканера
   useEffect(() => {
@@ -101,8 +117,10 @@ const QRScanner: React.FC<QRScannerProps> = ({
         { facingMode: 'environment' }, // Задняя камера
         config,
         (decodedText) => {
-          // Успешное сканирование
-          handleScanSuccess(decodedText);
+          // Успешное сканирование - проверяем флаги перед вызовом
+          if (!isProcessingRef.current && !isStoppedRef.current) {
+            handleScanSuccess(decodedText);
+          }
         },
         () => {
           // Игнорируем ошибки сканирования (они нормальны, пока не найден QR-код)
@@ -121,7 +139,10 @@ const QRScanner: React.FC<QRScannerProps> = ({
               disableFlip: false,
             },
             (decodedText) => {
-              handleScanSuccess(decodedText);
+              // Успешное сканирование - проверяем флаги перед вызовом
+              if (!isProcessingRef.current && !isStoppedRef.current) {
+                handleScanSuccess(decodedText);
+              }
             },
             () => {}
           );
@@ -170,19 +191,19 @@ const QRScanner: React.FC<QRScannerProps> = ({
   const handleScanSuccess = (decodedText: string) => {
     // Защита от повторных вызовов - только если уже обрабатывается
     if (isProcessingRef.current) {
-      console.log('[QRScanner] Игнорируем повторный вызов handleScanSuccess - уже обрабатывается');
+      // Не логируем каждый раз, чтобы не засорять консоль
       return;
     }
     
     // Если сканер уже остановлен (например, после предыдущего успешного сканирования), игнорируем
     if (isStoppedRef.current) {
-      console.log('[QRScanner] Игнорируем вызов - сканер уже остановлен');
+      // Не логируем каждый раз, чтобы не засорять консоль
       return;
     }
     
     console.log('[QRScanner] Отсканированный QR-код:', decodedText);
     
-    // Устанавливаем флаг обработки (НЕ останавливаем сканер сразу!)
+    // Устанавливаем флаг обработки (НЕ останавливаем сканер - он должен работать до загрузки оборудования!)
     isProcessingRef.current = true;
     
     // Парсим ID оборудования из QR-кода
@@ -199,18 +220,9 @@ const QRScanner: React.FC<QRScannerProps> = ({
       if (equipmentMatch && equipmentMatch[1]) {
         const id = equipmentMatch[1];
         console.log('[QRScanner] Найден ID оборудования из URL:', id);
-        // Вызываем callback - сканер продолжит работать, но повторные вызовы заблокированы флагом
+        // Вызываем callback - сканер продолжит работать до загрузки оборудования
         onScanSuccess(id);
-        // Останавливаем сканер только после успешной обработки
-        if (autoCloseOnSuccess) {
-          setTimeout(() => {
-            isStoppedRef.current = true;
-            stopScanning().catch(err => {
-              console.error('[QRScanner] Ошибка при остановке сканера:', err);
-            });
-            onClose?.();
-          }, 500);
-        }
+        // Сканер остановится после успешной загрузки оборудования (в ScannerPage)
         return;
       }
       
@@ -221,18 +233,9 @@ const QRScanner: React.FC<QRScannerProps> = ({
       if (driveMatch && driveMatch[1]) {
         const driveId = driveMatch[1];
         console.log('[QRScanner] Найден Google Drive ID:', driveId);
-        // Вызываем callback - сканер продолжит работать, но повторные вызовы заблокированы флагом
+        // Вызываем callback - сканер продолжит работать до загрузки оборудования
         onScanSuccess(`DRIVE:${driveId}`);
-        // Останавливаем сканер только после успешной обработки
-        if (autoCloseOnSuccess) {
-          setTimeout(() => {
-            isStoppedRef.current = true;
-            stopScanning().catch(err => {
-              console.error('[QRScanner] Ошибка при остановке сканера:', err);
-            });
-            onClose?.();
-          }, 500);
-        }
+        // Сканер остановится после успешной загрузки оборудования (в ScannerPage)
         return;
       }
       
@@ -252,19 +255,10 @@ const QRScanner: React.FC<QRScannerProps> = ({
     console.log('[QRScanner] Распознан ID оборудования или Drive ID:', equipmentIdOrDriveId);
 
     // Вызываем callback с ID оборудования или Drive ID
-    // Сканер продолжит работать, но повторные вызовы заблокированы флагом isProcessingRef
+    // Сканер продолжит работать до загрузки оборудования
     onScanSuccess(equipmentIdOrDriveId);
 
-    // Автоматически закрываем сканер после успешной обработки
-    if (autoCloseOnSuccess) {
-      setTimeout(() => {
-        isStoppedRef.current = true;
-        stopScanning().catch(err => {
-          console.error('[QRScanner] Ошибка при остановке сканера:', err);
-        });
-        onClose?.();
-      }, 500);
-    }
+    // Сканер остановится после успешной загрузки оборудования (в ScannerPage)
   };
 
   /**

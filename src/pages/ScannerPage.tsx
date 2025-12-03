@@ -20,6 +20,7 @@ const ScannerPage: React.FC = () => {
   const isProcessingRef = useRef(false); // Флаг для предотвращения повторных вызовов
   const abortControllerRef = useRef<AbortController | null>(null); // Для отмены запросов
   const hasNavigatedRef = useRef(false); // Флаг для отслеживания навигации
+  const scannerControlRef = useRef<{ stop: () => Promise<void> } | null>(null); // Ref для управления сканером
 
   // Показываем загрузку во время проверки авторизации
   if (loading) {
@@ -202,6 +203,13 @@ const ScannerPage: React.FC = () => {
           // Устанавливаем флаг навигации, чтобы предотвратить вызов onClose
           hasNavigatedRef.current = true;
           
+          // Останавливаем сканер после успешной загрузки оборудования
+          if (scannerControlRef.current) {
+            scannerControlRef.current.stop().catch(err => {
+              console.error('[ScannerPage] Ошибка при остановке сканера:', err);
+            });
+          }
+          
           // Сбрасываем флаги перед навигацией
           isProcessingRef.current = false;
           abortControllerRef.current = null;
@@ -297,12 +305,19 @@ const ScannerPage: React.FC = () => {
       // Обычный ID оборудования - переходим напрямую
       console.log('[ScannerPage] Прямой переход по ID:', equipmentIdOrDriveId);
       
+      // Устанавливаем флаг навигации, чтобы предотвратить вызов onClose
+      hasNavigatedRef.current = true;
+      
+      // Останавливаем сканер перед навигацией
+      if (scannerControlRef.current) {
+        scannerControlRef.current.stop().catch(err => {
+          console.error('[ScannerPage] Ошибка при остановке сканера:', err);
+        });
+      }
+      
       // Сбрасываем флаги
       isProcessingRef.current = false;
       abortControllerRef.current = null;
-      
-      // Устанавливаем флаг навигации, чтобы предотвратить вызов onClose
-      hasNavigatedRef.current = true;
       
       navigate(getEquipmentViewUrl(equipmentIdOrDriveId));
     }
@@ -343,7 +358,8 @@ const ScannerPage: React.FC = () => {
           onScanSuccess={handleScanSuccess}
           onScanError={handleScanError}
           onClose={handleClose}
-          autoCloseOnSuccess={true}
+          autoCloseOnSuccess={false}
+          scannerRef={scannerControlRef}
         />
       </div>
     </div>
