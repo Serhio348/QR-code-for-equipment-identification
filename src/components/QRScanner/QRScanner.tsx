@@ -31,6 +31,7 @@ const QRScanner: React.FC<QRScannerProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [permissionStatus, setPermissionStatus] = useState<CameraPermissionStatus | null>(null);
   const isProcessingRef = useRef(false); // Флаг для предотвращения повторных вызовов
+  const isStoppedRef = useRef(false); // Флаг для отслеживания остановки сканера
   const scannerContainerId = 'qr-scanner-container';
 
   // Инициализация сканера
@@ -68,6 +69,7 @@ const QRScanner: React.FC<QRScannerProps> = ({
 
     // Очистка при размонтировании
     return () => {
+      isStoppedRef.current = true;
       stopScanning();
       // Сбрасываем флаг при размонтировании
       isProcessingRef.current = false;
@@ -138,19 +140,23 @@ const QRScanner: React.FC<QRScannerProps> = ({
    * Останавливает сканирование
    */
   const stopScanning = async () => {
-    if (scannerRef.current) {
+    if (scannerRef.current && !isStoppedRef.current) {
       try {
+        isStoppedRef.current = true; // Устанавливаем флаг остановки сразу
         // Проверяем, запущен ли сканер, перед остановкой
         const isRunning = scannerRef.current.getState && scannerRef.current.getState() === 2; // STATE_RUNNING = 2
         if (isRunning || isScanning) {
           await scannerRef.current.stop();
           await scannerRef.current.clear();
         }
+        // Дополнительная очистка
+        scannerRef.current = null;
       } catch (err) {
         // Игнорируем ошибки остановки (может быть уже остановлен)
         console.log('[QRScanner] Сканер остановлен или уже был остановлен');
+      } finally {
+        setIsScanning(false);
       }
-      setIsScanning(false);
     }
   };
 
@@ -158,16 +164,25 @@ const QRScanner: React.FC<QRScannerProps> = ({
    * Обрабатывает успешное сканирование QR-кода
    */
   const handleScanSuccess = (decodedText: string) => {
-    // Защита от повторных вызовов
-    if (isProcessingRef.current) {
-      console.log('[QRScanner] Игнорируем повторный вызов handleScanSuccess');
+    // Защита от повторных вызовов и остановленного сканера
+    if (isProcessingRef.current || isStoppedRef.current) {
+      console.log('[QRScanner] Игнорируем повторный вызов handleScanSuccess', {
+        isProcessing: isProcessingRef.current,
+        isStopped: isStoppedRef.current
+      });
       return;
     }
     
     console.log('[QRScanner] Отсканированный QR-код:', decodedText);
     
-    // Устанавливаем флаг обработки
+    // Устанавливаем флаг обработки и останавливаем сканер СРАЗУ
     isProcessingRef.current = true;
+    isStoppedRef.current = true;
+    
+    // Останавливаем сканирование немедленно, чтобы предотвратить повторные вызовы
+    stopScanning().catch(err => {
+      console.error('[QRScanner] Ошибка при остановке сканера:', err);
+    });
     
     // Парсим ID оборудования из QR-кода
     const equipmentIdOrDriveId = parseEquipmentId(decodedText);
@@ -183,20 +198,14 @@ const QRScanner: React.FC<QRScannerProps> = ({
       if (equipmentMatch && equipmentMatch[1]) {
         const id = equipmentMatch[1];
         console.log('[QRScanner] Найден ID оборудования из URL:', id);
-        stopScanning();
+        // Сканер уже остановлен выше
         onScanSuccess(id);
         if (autoCloseOnSuccess) {
           setTimeout(() => {
-            // Сбрасываем флаг перед закрытием
-            isProcessingRef.current = false;
             onClose?.();
-          }, 500);
-        } else {
-          // Сбрасываем флаг, если не закрываем автоматически
-          setTimeout(() => {
-            isProcessingRef.current = false;
-          }, 1000);
+          }, 100);
         }
+        // Не сбрасываем флаги - сканер должен остаться остановленным
         return;
       }
       
@@ -207,20 +216,14 @@ const QRScanner: React.FC<QRScannerProps> = ({
       if (driveMatch && driveMatch[1]) {
         const driveId = driveMatch[1];
         console.log('[QRScanner] Найден Google Drive ID:', driveId);
-        stopScanning();
+        // Сканер уже остановлен выше
         onScanSuccess(`DRIVE:${driveId}`);
         if (autoCloseOnSuccess) {
           setTimeout(() => {
-            // Сбрасываем флаг перед закрытием
-            isProcessingRef.current = false;
             onClose?.();
-          }, 500);
-        } else {
-          // Сбрасываем флаг, если не закрываем автоматически
-          setTimeout(() => {
-            isProcessingRef.current = false;
-          }, 1000);
+          }, 100);
         }
+        // Не сбрасываем флаги - сканер должен остаться остановленным
         return;
       }
       
@@ -229,40 +232,35 @@ const QRScanner: React.FC<QRScannerProps> = ({
       setError(errorMsg);
       onScanError?.(errorMsg);
       
-      // Сбрасываем флаг при ошибке
+      // Сбрасываем флаг при ошибке, чтобы можно было попробовать снова
       setTimeout(() => {
         isProcessingRef.current = false;
-      }, 1000);
+        isStoppedRef.current = false;
+      }, 2000);
       return;
     }
 
     console.log('[QRScanner] Распознан ID оборудования или Drive ID:', equipmentIdOrDriveId);
 
-    // Останавливаем сканирование
-    stopScanning();
-
+    // Сканер уже остановлен выше
     // Вызываем callback с ID оборудования или Drive ID
     onScanSuccess(equipmentIdOrDriveId);
 
     // Автоматически закрываем сканер, если нужно
     if (autoCloseOnSuccess) {
       setTimeout(() => {
-        // Сбрасываем флаг перед закрытием
-        isProcessingRef.current = false;
         onClose?.();
-      }, 500);
-    } else {
-      // Сбрасываем флаг, если не закрываем автоматически
-      setTimeout(() => {
-        isProcessingRef.current = false;
-      }, 1000);
+      }, 100);
     }
+    // Не сбрасываем флаги - сканер должен остаться остановленным
   };
 
   /**
    * Обрабатывает закрытие сканера
    */
   const handleClose = async () => {
+    isStoppedRef.current = true;
+    isProcessingRef.current = true; // Блокируем дальнейшие вызовы
     await stopScanning();
     onClose?.();
   };
