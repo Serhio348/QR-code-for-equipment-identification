@@ -9,12 +9,31 @@ import { API_CONFIG } from '../../config/api';
 import { ApiResponse } from './types';
 
 /**
- * Базовый запрос к API
+ * Задержка на указанное количество миллисекунд
+ */
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Проверяет, является ли ошибка таймаутом
+ */
+function isTimeoutError(error: any): boolean {
+  return error?.name === 'TimeoutError' || 
+         error?.name === 'AbortError' ||
+         error?.message?.includes('timeout') ||
+         error?.message?.includes('timed out') ||
+         error?.stack?.includes('TimeoutError');
+}
+
+/**
+ * Базовый запрос к API с автоматическим повтором при таймауте
  * 
  * @param {string} action - Действие для выполнения (getAll, getById, getByType, add, update, delete)
  * @param {string} method - HTTP метод ('GET' или 'POST')
  * @param {any} body - Тело запроса для POST запросов
  * @param {Record<string, string>} params - Дополнительные параметры для GET запросов
+ * @param {number} retryCount - Текущее количество попыток (внутренний параметр)
  * @returns {Promise<ApiResponse<T>>} Ответ API
  * 
  * @throws {Error} Если URL не настроен или произошла ошибка сети
@@ -23,7 +42,8 @@ export async function apiRequest<T>(
   action: string,
   method: 'GET' | 'POST' = 'GET',
   body?: any,
-  params?: Record<string, string>
+  params?: Record<string, string>,
+  retryCount: number = 0
 ): Promise<ApiResponse<T>> {
   // Проверяем, что URL настроен
   if (!API_CONFIG.EQUIPMENT_API_URL) {
@@ -146,6 +166,25 @@ export async function apiRequest<T>(
 
     return data;
   } catch (error: any) {
+    // Проверяем, является ли это таймаутом
+    const isTimeout = isTimeoutError(error);
+    
+    // Если это таймаут и есть попытки повтора - повторяем запрос
+    if (isTimeout && retryCount < API_CONFIG.MAX_RETRIES) {
+      const nextRetry = retryCount + 1;
+      console.warn(`⏱️ Таймаут запроса (попытка ${nextRetry}/${API_CONFIG.MAX_RETRIES}). Повтор через ${API_CONFIG.RETRY_DELAY}ms...`, {
+        action,
+        method,
+        retryCount: nextRetry
+      });
+      
+      // Ждем перед повтором
+      await delay(API_CONFIG.RETRY_DELAY);
+      
+      // Повторяем запрос
+      return apiRequest<T>(action, method, body, params, nextRetry);
+    }
+    
     // Проверяем, является ли это CORS ошибкой для POST запросов
     const isCorsError = error.name === 'TypeError' && 
                        (error.message.includes('fetch') || 
@@ -157,6 +196,8 @@ export async function apiRequest<T>(
       action,
       method,
       isCorsError,
+      isTimeout,
+      retryCount,
       errorName: error.name,
       errorMessage: error.message
     });
@@ -168,11 +209,16 @@ export async function apiRequest<T>(
         method,
         action,
         error: error.message,
-        stack: error.stack
+        stack: error.stack,
+        retryCount
       });
     }
     
     // Улучшенные сообщения об ошибках
+    if (isTimeout && retryCount >= API_CONFIG.MAX_RETRIES) {
+      throw new Error(`Превышено время ожидания ответа от сервера (${API_CONFIG.TIMEOUT / 1000} сек). Попробуйте позже или проверьте подключение к интернету.`);
+    }
+    
     if (isCorsError && method === 'GET') {
       throw new Error(`Не удалось подключиться к API. Проверьте:\n1. URL в src/config/api.ts\n2. Доступность интернета\n3. Настройки CORS в Google Apps Script\n\nURL: ${API_CONFIG.EQUIPMENT_API_URL}`);
     }

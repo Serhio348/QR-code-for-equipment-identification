@@ -152,12 +152,42 @@ const ScannerPage: React.FC = () => {
           toString: error?.toString()
         });
         
-        const errorMessage = error?.message || error?.toString() || 'Неизвестная ошибка';
-        const userMessage = `Ошибка при поиске оборудования:\n\n${errorMessage}\n\n` +
-          `Проверьте:\n` +
-          `1. Подключение к интернету\n` +
-          `2. Доступность API сервера\n` +
-          `3. Консоль браузера (Eruda) для подробностей`;
+        // Определяем тип ошибки для более понятного сообщения
+        const isTimeout = error?.name === 'TimeoutError' || 
+                         error?.name === 'AbortError' ||
+                         error?.message?.includes('timeout') ||
+                         error?.message?.includes('Превышено время ожидания');
+        
+        const isNetworkError = error?.message?.includes('fetch') ||
+                              error?.message?.includes('Failed to fetch') ||
+                              error?.message?.includes('network');
+        
+        let userMessage: string;
+        
+        if (isTimeout) {
+          userMessage = `Превышено время ожидания ответа от сервера.\n\n` +
+            `Возможные причины:\n` +
+            `• Медленное интернет-соединение\n` +
+            `• Сервер перегружен\n` +
+            `• Большое количество оборудования в базе\n\n` +
+            `Попробуйте:\n` +
+            `1. Проверить подключение к интернету\n` +
+            `2. Повторить попытку через несколько секунд\n` +
+            `3. Обратиться к администратору`;
+        } else if (isNetworkError) {
+          userMessage = `Не удалось подключиться к серверу.\n\n` +
+            `Проверьте:\n` +
+            `1. Подключение к интернету\n` +
+            `2. Что вы находитесь в сети Wi‑Fi или мобильной сети\n` +
+            `3. Попробуйте обновить страницу`;
+        } else {
+          const errorMessage = error?.message || error?.toString() || 'Неизвестная ошибка';
+          userMessage = `Ошибка при поиске оборудования:\n\n${errorMessage}\n\n` +
+            `Проверьте:\n` +
+            `1. Подключение к интернету\n` +
+            `2. Доступность API сервера\n` +
+            `3. Консоль браузера (Eruda) для подробностей`;
+        }
         
         alert(userMessage);
         setSearching(false);
