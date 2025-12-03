@@ -27,6 +27,14 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <!-- Eruda - консоль разработчика для мобильных устройств -->
+    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+    <script>
+      // Инициализируем Eruda только в development режиме или если есть параметр ?debug
+      if (import.meta.env.MODE === 'development' || window.location.search.includes('debug=true')) {
+        eruda.init();
+      }
+    </script>
   </body>
 </html>
 
