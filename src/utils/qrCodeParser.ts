@@ -36,16 +36,20 @@ export function parseEquipmentId(qrCodeText: string): string | null {
     }
   }
 
-  // Вариант 3: Google Drive URL с ID в параметрах или пути
-  // Ищем ID в параметрах или в пути
-  const driveMatch = cleaned.match(/drive\.google\.com\/.*[\/?]id=([^&\s]+)/i);
+  // Вариант 3: Google Drive URL - извлекаем ID папки и ищем оборудование по нему
+  const driveMatch = cleaned.match(/drive\.google\.com\/drive\/folders\/([^/?&\s]+)/i);
   if (driveMatch && driveMatch[1]) {
-    // Если это Google Drive ID, нужно найти связанное оборудование
-    // Но для простоты, если в URL есть /equipment/, используем его
-    const equipmentMatch = cleaned.match(/\/equipment\/([^/?\s]+)/i);
-    if (equipmentMatch && equipmentMatch[1]) {
-      return equipmentMatch[1];
-    }
+    const driveFolderId = driveMatch[1];
+    // Возвращаем специальный маркер для поиска по Google Drive ID
+    // Это будет обработано в компоненте сканера
+    return `DRIVE:${driveFolderId}`;
+  }
+
+  // Вариант 3.1: Google Drive URL с параметром id
+  const driveIdMatch = cleaned.match(/[?&]id=([^&\s]+)/i);
+  if (driveIdMatch && driveIdMatch[1]) {
+    const driveFolderId = driveIdMatch[1];
+    return `DRIVE:${driveFolderId}`;
   }
 
   // Вариант 4: Прямой URL приложения с ID
