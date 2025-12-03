@@ -6,7 +6,6 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import EquipmentPage from './pages/EquipmentPage';
 import EquipmentFormPage from './pages/EquipmentFormPage';
-import ScannerPage from './pages/ScannerPage';
 import NotFoundPage from './pages/NotFoundPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import InstallPWA from './components/InstallPWA';
@@ -103,16 +102,6 @@ const App: React.FC = () => {
             element={
               <ProtectedRoute>
                 <EquipmentPage />
-              </ProtectedRoute>
-            } 
-          />
-          
-          {/* Сканер QR-кодов - для всех авторизованных */}
-          <Route 
-            path={ROUTES.SCANNER} 
-            element={
-              <ProtectedRoute>
-                <ScannerPage />
               </ProtectedRoute>
             } 
           />
