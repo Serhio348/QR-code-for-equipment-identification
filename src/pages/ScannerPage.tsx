@@ -141,6 +141,10 @@ const ScannerPage: React.FC = () => {
         if (allEquipment.length === 0) {
           console.warn('[ScannerPage] Список оборудования пуст');
           alert('В базе данных нет оборудования. Обратитесь к администратору.');
+          
+          // Сбрасываем флаги после ошибки
+          isProcessingRef.current = false;
+          abortControllerRef.current = null;
           setSearching(false);
           return;
         }
@@ -278,10 +282,15 @@ const ScannerPage: React.FC = () => {
         
         alert(userMessage);
         
-        // Сбрасываем флаги
+        // Сбрасываем флаги после ошибки, чтобы можно было попробовать снова
         isProcessingRef.current = false;
         abortControllerRef.current = null;
         setSearching(false);
+        
+        // Даем время на отображение ошибки, затем можно будет сканировать снова
+        setTimeout(() => {
+          // Флаги уже сброшены, можно сканировать снова
+        }, 1000);
       }
     } else {
       // Обычный ID оборудования - переходим напрямую
