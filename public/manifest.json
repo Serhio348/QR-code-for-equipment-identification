@@ -58,15 +58,6 @@
     }
   ],
   "categories": ["productivity", "business"],
-  "screenshots": [],
-  "shortcuts": [
-    {
-      "name": "Сканировать QR",
-      "short_name": "Сканер",
-      "description": "Открыть сканер QR-кода",
-      "url": "/scanner",
-      "icons": [{ "src": "/icons/scanner-icon.png", "sizes": "96x96" }]
-    }
-  ]
+  "screenshots": []
 }
 

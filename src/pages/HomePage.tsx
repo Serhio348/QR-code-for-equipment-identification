@@ -24,11 +24,6 @@ const HomePage: React.FC = () => {
     navigate(getEquipmentViewUrl(equipment.id));
   };
 
-  const handleScanQR = () => {
-    // Открыть сканер QR-кода
-    // TODO: Реализовать переход на страницу сканера
-    navigate('/scanner');
-  };
 
   // Показываем загрузку во время проверки прав
   if (loading) {
@@ -41,7 +36,7 @@ const HomePage: React.FC = () => {
 
   // Если не администратор И (мобильное устройство ИЛИ PWA режим) → показываем PWA меню
   if (!isAdmin && (isMobile || isStandalone)) {
-    return <PWAMenu onScanQR={handleScanQR} />;
+    return <PWAMenu />;
   }
 
   // Если не администратор на десктопе, показываем список оборудования для просмотра документации и журнала
@@ -50,12 +45,6 @@ const HomePage: React.FC = () => {
       <div className="home-page">
         <div className="home-page-header">
           <h1>Оборудование</h1>
-          <button 
-            className="add-button"
-            onClick={handleScanQR}
-          >
-            📱 Сканировать QR-код
-          </button>
         </div>
         <div className="home-page-content">
           <div style={{ 

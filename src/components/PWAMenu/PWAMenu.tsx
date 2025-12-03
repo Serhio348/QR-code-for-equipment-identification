@@ -2,7 +2,7 @@
  * PWAMenu.tsx
  * 
  * Главное меню для обычных пользователей в PWA режиме
- * Показывает только кнопку "Оборудование" для сканирования QR-кода
+ * Показывает кнопку "Оборудование" для просмотра списка оборудования
  */
 
 import React from 'react';
@@ -11,11 +11,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { ROUTES } from '../../utils/routes';
 import './PWAMenu.css';
 
-interface PWAMenuProps {
-  onScanQR: () => void;
-}
-
-const PWAMenu: React.FC<PWAMenuProps> = ({ onScanQR }) => {
+const PWAMenu: React.FC = () => {
   const { user, logout, loading } = useAuth();
   const navigate = useNavigate();
 
@@ -48,16 +44,16 @@ const PWAMenu: React.FC<PWAMenuProps> = ({ onScanQR }) => {
         <div className="pwa-menu-content">
           <button
             className="pwa-menu-equipment-button"
-            onClick={onScanQR}
+            onClick={() => navigate(ROUTES.HOME)}
             type="button"
-            aria-label="Открыть сканер QR-кода для оборудования"
+            aria-label="Просмотр оборудования"
           >
             <div className="pwa-menu-button-icon">
-              📱
+              📋
             </div>
             <div className="pwa-menu-button-text">
               <span className="pwa-menu-button-title">Оборудование</span>
-              <span className="pwa-menu-button-subtitle">Сканировать QR-код</span>
+              <span className="pwa-menu-button-subtitle">Список оборудования</span>
             </div>
           </button>
         </div>

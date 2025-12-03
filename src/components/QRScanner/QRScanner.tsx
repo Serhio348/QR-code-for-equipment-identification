@@ -6,7 +6,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { parseEquipmentId } from '../../utils/qrCodeParser';
-import { requestCameraPermission, isCameraSupported, CameraPermissionStatus } from '../../utils/cameraPermissions';
 import './QRScanner.css';
 
 interface QRScannerProps {
@@ -16,101 +15,62 @@ interface QRScannerProps {
   onScanError?: (error: string) => void;
   /** Callback при закрытии сканера */
   onClose?: () => void;
-  /** Ref для доступа к методам сканера извне */
-  scannerRef?: React.RefObject<{ 
-    stop: () => Promise<void>;
-    resetProcessing: () => void;
-  }>;
+  /** Открыт ли сканер */
+  isOpen: boolean;
 }
 
 const QRScanner: React.FC<QRScannerProps> = ({
   onScanSuccess,
   onScanError,
   onClose,
-  scannerRef: externalScannerRef,
+  isOpen,
 }) => {
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [permissionStatus, setPermissionStatus] = useState<CameraPermissionStatus | null>(null);
-  const isProcessingRef = useRef(false); // Флаг для предотвращения повторных вызовов
-  const isStoppedRef = useRef(false); // Флаг для отслеживания остановки сканера
   const scannerContainerId = 'qr-scanner-container';
+  const isProcessingRef = useRef(false);
 
-  // Предоставляем методы управления через ref, если передан
+  // Инициализация и остановка сканера
   useEffect(() => {
-    if (externalScannerRef) {
-      (externalScannerRef as React.MutableRefObject<{ 
-        stop: () => Promise<void>;
-        resetProcessing: () => void;
-      }>).current = {
-        stop: async () => {
-          isStoppedRef.current = true;
-          isProcessingRef.current = true;
-          await stopScanning();
-        },
-        resetProcessing: () => {
-          // Сбрасываем флаги обработки, чтобы можно было сканировать снова
-          isProcessingRef.current = false;
-          isStoppedRef.current = false;
-        }
-      };
-    }
-  }, [externalScannerRef]);
-
-  // Инициализация сканера
-  useEffect(() => {
-    // Сбрасываем флаги при монтировании компонента (при возврате на страницу)
-    isProcessingRef.current = false;
-    isStoppedRef.current = false;
-    
-    if (!isCameraSupported()) {
-      setError('Ваш браузер не поддерживает доступ к камере.');
+    if (!isOpen) {
+      // Если сканер закрыт, останавливаем его
+      stopScanning();
       return;
     }
 
-    const initScanner = async () => {
-      try {
-        // Проверяем разрешения
-        const permission = await requestCameraPermission();
-        setPermissionStatus(permission);
-
-        if (permission.denied) {
-          setError(permission.error || 'Доступ к камере запрещен.');
-          return;
-        }
-
-        // Создаем экземпляр сканера
-        const scanner = new Html5Qrcode(scannerContainerId);
-        scannerRef.current = scanner;
-
-        // Начинаем сканирование
-        await startScanning(scanner);
-      } catch (err: any) {
-        const errorMessage = err.message || 'Ошибка при инициализации сканера';
-        setError(errorMessage);
-        onScanError?.(errorMessage);
-      }
-    };
-
-    initScanner();
+    // Если сканер открыт, запускаем его
+    if (isOpen && !scannerRef.current) {
+      startScanning();
+    }
 
     // Очистка при размонтировании
     return () => {
-      isStoppedRef.current = true;
       stopScanning();
-      // Сбрасываем флаг при размонтировании
-      isProcessingRef.current = false;
     };
-  }, []);
+  }, [isOpen]);
 
   /**
    * Начинает сканирование QR-кодов
    */
-  const startScanning = async (scanner: Html5Qrcode) => {
+  const startScanning = async () => {
+    if (scannerRef.current) {
+      return; // Уже запущен
+    }
+
     try {
       setIsScanning(true);
       setError(null);
+      isProcessingRef.current = false;
+
+      // Проверяем поддержку камеры
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Ваш браузер не поддерживает доступ к камере');
+      }
+
+      // Создаем экземпляр сканера
+      const scanner = new Html5Qrcode(scannerContainerId);
+      scannerRef.current = scanner;
 
       // Конфигурация сканера
       const config = {
@@ -121,51 +81,42 @@ const QRScanner: React.FC<QRScannerProps> = ({
       };
 
       // Начинаем сканирование с задней камеры (если доступна)
-      await scanner.start(
-        { facingMode: 'environment' }, // Задняя камера
-        config,
-        (decodedText) => {
-          // Успешное сканирование - проверяем флаги перед вызовом
-          if (!isProcessingRef.current && !isStoppedRef.current) {
-            handleScanSuccess(decodedText);
+      try {
+        await scanner.start(
+          { facingMode: 'environment' }, // Задняя камера
+          config,
+          (decodedText) => {
+            // Успешное сканирование
+            if (!isProcessingRef.current) {
+              handleScanSuccess(decodedText);
+            }
+          },
+          () => {
+            // Игнорируем ошибки сканирования (они нормальны, пока не найден QR-код)
           }
-        },
-        () => {
-          // Игнорируем ошибки сканирования (они нормальны, пока не найден QR-код)
-        }
-      );
-    } catch (err: any) {
-      // Если не удалось использовать заднюю камеру, пробуем переднюю
-      if (err.message && err.message.includes('environment')) {
-        try {
+        );
+      } catch (err: any) {
+        // Если не удалось использовать заднюю камеру, пробуем переднюю
+        if (err.message && err.message.includes('environment')) {
           await scanner.start(
             { facingMode: 'user' }, // Передняя камера
-            {
-              fps: 10,
-              qrbox: { width: 250, height: 250 },
-              aspectRatio: 1.0,
-              disableFlip: false,
-            },
+            config,
             (decodedText) => {
-              // Успешное сканирование - проверяем флаги перед вызовом
-              if (!isProcessingRef.current && !isStoppedRef.current) {
+              if (!isProcessingRef.current) {
                 handleScanSuccess(decodedText);
               }
             },
             () => {}
           );
-        } catch (fallbackErr: any) {
-          const errorMessage = fallbackErr.message || 'Не удалось запустить камеру';
-          setError(errorMessage);
-          setIsScanning(false);
-          onScanError?.(errorMessage);
+        } else {
+          throw err;
         }
-      } else {
-        const errorMessage = err.message || 'Ошибка при запуске сканера';
-        setError(errorMessage);
-        setIsScanning(false);
-        onScanError?.(errorMessage);
       }
+    } catch (err: any) {
+      const errorMessage = err.message || 'Ошибка при запуске сканера';
+      setError(errorMessage);
+      setIsScanning(false);
+      onScanError?.(errorMessage);
     }
   };
 
@@ -173,23 +124,16 @@ const QRScanner: React.FC<QRScannerProps> = ({
    * Останавливает сканирование
    */
   const stopScanning = async () => {
-    if (scannerRef.current && !isStoppedRef.current) {
+    if (scannerRef.current) {
       try {
-        isStoppedRef.current = true; // Устанавливаем флаг остановки сразу
-        // Проверяем, запущен ли сканер, перед остановкой
-        const isRunning = scannerRef.current.getState && scannerRef.current.getState() === 2; // STATE_RUNNING = 2
-        if (isRunning || isScanning) {
-          await scannerRef.current.stop();
-          await scannerRef.current.clear();
-        }
-        // Дополнительная очистка
-        scannerRef.current = null;
+        await scannerRef.current.stop();
+        await scannerRef.current.clear();
       } catch (err) {
-        // Игнорируем ошибки остановки (может быть уже остановлен)
-        console.log('[QRScanner] Сканер остановлен или уже был остановлен');
-      } finally {
-        setIsScanning(false);
+        // Игнорируем ошибки остановки
+        console.log('[QRScanner] Сканер уже остановлен');
       }
+      scannerRef.current = null;
+      setIsScanning(false);
     }
   };
 
@@ -197,133 +141,90 @@ const QRScanner: React.FC<QRScannerProps> = ({
    * Обрабатывает успешное сканирование QR-кода
    */
   const handleScanSuccess = (decodedText: string) => {
-    // Защита от повторных вызовов - только если уже обрабатывается
     if (isProcessingRef.current) {
-      // Не логируем каждый раз, чтобы не засорять консоль
-      return;
+      return; // Уже обрабатывается
     }
-    
-    // Если сканер уже остановлен (например, после предыдущего успешного сканирования), игнорируем
-    if (isStoppedRef.current) {
-      // Не логируем каждый раз, чтобы не засорять консоль
-      return;
-    }
-    
+
     console.log('[QRScanner] Отсканированный QR-код:', decodedText);
     
-    // Устанавливаем флаг обработки (НЕ останавливаем сканер - он должен работать до загрузки оборудования!)
     isProcessingRef.current = true;
-    
-    // Парсим ID оборудования из QR-кода
-    const equipmentIdOrDriveId = parseEquipmentId(decodedText);
-    console.log('[QRScanner] Результат парсинга:', equipmentIdOrDriveId);
 
-    if (!equipmentIdOrDriveId) {
-      // Пробуем извлечь URL и проверить, может быть это прямой URL приложения
-      const url = decodedText.trim();
-      console.log('[QRScanner] Попытка извлечь ID из URL:', url);
-      
-      const equipmentMatch = url.match(/\/equipment\/([^/?\s]+)/i);
-      
-      if (equipmentMatch && equipmentMatch[1]) {
-        const id = equipmentMatch[1];
-        console.log('[QRScanner] Найден ID оборудования из URL:', id);
-        // Вызываем callback - сканер продолжит работать до загрузки оборудования
-        onScanSuccess(id);
-        // Сканер остановится после успешной загрузки оборудования (в ScannerPage)
-        return;
-      }
-      
-      // Пробуем найти Google Drive URL напрямую
-      const driveMatch = url.match(/drive\.google\.com\/drive\/folders\/([^/?&\s]+)/i) ||
-                         url.match(/[?&]id=([^&\s]+)/i);
-      
-      if (driveMatch && driveMatch[1]) {
-        const driveId = driveMatch[1];
-        console.log('[QRScanner] Найден Google Drive ID:', driveId);
-        // Вызываем callback - сканер продолжит работать до загрузки оборудования
-        onScanSuccess(`DRIVE:${driveId}`);
-        // Сканер остановится после успешной загрузки оборудования (в ScannerPage)
-        return;
-      }
-      
-      const errorMsg = `QR-код не содержит информацию об оборудовании.\n\nОтсканировано: ${decodedText}\n\nОжидается URL вида: /equipment/{id} или Google Drive URL`;
-      console.error('[QRScanner] Ошибка парсинга QR-кода. Исходный текст:', decodedText);
+    // Парсим ID оборудования из QR-кода
+    const equipmentId = parseEquipmentId(decodedText);
+    
+    if (!equipmentId) {
+      const errorMsg = `QR-код не содержит информацию об оборудовании.\n\nОтсканировано: ${decodedText}`;
       setError(errorMsg);
       onScanError?.(errorMsg);
       
-      // Сбрасываем флаг при ошибке, чтобы можно было попробовать снова
+      // Сбрасываем флаг через 2 секунды, чтобы можно было попробовать снова
       setTimeout(() => {
         isProcessingRef.current = false;
-        isStoppedRef.current = false;
       }, 2000);
       return;
     }
 
-    console.log('[QRScanner] Распознан ID оборудования или Drive ID:', equipmentIdOrDriveId);
+    console.log('[QRScanner] Распознан ID оборудования:', equipmentId);
 
-    // Вызываем callback с ID оборудования или Drive ID
-    // Сканер продолжит работать до загрузки оборудования
-    onScanSuccess(equipmentIdOrDriveId);
+    // Останавливаем сканирование
+    stopScanning();
 
-    // Сканер остановится после успешной загрузки оборудования (в ScannerPage)
+    // Вызываем callback с ID оборудования
+    onScanSuccess(equipmentId);
   };
 
   /**
    * Обрабатывает закрытие сканера
    */
   const handleClose = async () => {
-    isStoppedRef.current = true;
-    isProcessingRef.current = true; // Блокируем дальнейшие вызовы
     await stopScanning();
+    isProcessingRef.current = false;
     onClose?.();
   };
 
+  if (!isOpen) {
+    return null;
+  }
+
   return (
-    <div className="qr-scanner">
-      <div className="qr-scanner-header">
-        <h2 className="qr-scanner-title">Сканирование QR-кода</h2>
-        <button
-          className="qr-scanner-close-button"
-          onClick={handleClose}
-          type="button"
-          aria-label="Закрыть сканер"
-        >
-          ✕
-        </button>
+    <div className="qr-scanner-overlay" onClick={handleClose}>
+      <div className="qr-scanner-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="qr-scanner-header">
+          <h2 className="qr-scanner-title">Сканирование QR-кода</h2>
+          <button
+            className="qr-scanner-close-button"
+            onClick={handleClose}
+            type="button"
+            aria-label="Закрыть сканер"
+          >
+            ✕
+          </button>
+        </div>
+
+        {error && (
+          <div className="qr-scanner-error">
+            <p>{error}</p>
+            <button onClick={startScanning} className="qr-scanner-retry-button">
+              Попробовать снова
+            </button>
+          </div>
+        )}
+
+        <div 
+          id={scannerContainerId} 
+          className="qr-scanner-container"
+          style={{ 
+            display: isScanning && !error ? 'block' : 'none' 
+          }}
+        />
+
+        {!isScanning && !error && (
+          <div className="qr-scanner-loading">
+            <div className="qr-scanner-spinner"></div>
+            <p>Инициализация камеры...</p>
+          </div>
+        )}
       </div>
-
-      {error && (
-        <div className="qr-scanner-error">
-          <p>{error}</p>
-          {permissionStatus?.denied && (
-            <p className="qr-scanner-error-hint">
-              Разрешите доступ к камере в настройках браузера и обновите страницу.
-            </p>
-          )}
-        </div>
-      )}
-
-      {!error && permissionStatus?.prompt && (
-        <div className="qr-scanner-permission-prompt">
-          <p>Разрешите доступ к камере для сканирования QR-кода.</p>
-        </div>
-      )}
-
-      <div 
-        id={scannerContainerId} 
-        className="qr-scanner-container"
-        style={{ 
-          display: isScanning && !error ? 'block' : 'none' 
-        }}
-      />
-
-      {!isScanning && !error && (
-        <div className="qr-scanner-loading">
-          <div className="qr-scanner-spinner"></div>
-          <p>Инициализация камеры...</p>
-        </div>
-      )}
     </div>
   );
 };
