@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [react()],
   build: {
     rollupOptions: {
@@ -13,12 +13,7 @@ export default defineConfig({
       },
     },
     chunkSizeWarningLimit: 1000,
-    minify: 'terser',
-    terserOptions: {
-      compress: {
-        drop_console: import.meta.env.MODE === 'production',
-      },
-    },
+    minify: 'esbuild',
   },
   server: {
     port: 3000,
@@ -28,5 +23,5 @@ export default defineConfig({
     port: 3000,
     host: true,
   },
-})
+}))
 
