@@ -3,7 +3,7 @@
  * Отображает сканер QR-кодов и обрабатывает переход к странице оборудования
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import QRScanner from '../components/QRScanner/QRScanner';
@@ -17,6 +17,8 @@ const ScannerPage: React.FC = () => {
   const navigate = useNavigate();
   const { isAuthenticated, loading } = useAuth();
   const [searching, setSearching] = useState(false);
+  const isProcessingRef = useRef(false); // Флаг для предотвращения повторных вызовов
+  const abortControllerRef = useRef<AbortController | null>(null); // Для отмены запросов
 
   // Показываем загрузку во время проверки авторизации
   if (loading) {
@@ -29,16 +31,57 @@ const ScannerPage: React.FC = () => {
     return null;
   }
 
+  // Сброс состояния при монтировании компонента
+  useEffect(() => {
+    // Сбрасываем все флаги при монтировании (например, при возврате на страницу)
+    isProcessingRef.current = false;
+    setSearching(false);
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    
+    // Очистка при размонтировании компонента
+    return () => {
+      // Отменяем активный запрос при размонтировании
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      // Сбрасываем флаги
+      isProcessingRef.current = false;
+      setSearching(false);
+    };
+  }, []);
+
   /**
    * Обрабатывает успешное сканирование QR-кода
    */
   const handleScanSuccess = async (equipmentIdOrDriveId: string) => {
     console.log('[ScannerPage] handleScanSuccess вызван с:', equipmentIdOrDriveId);
     
+    // Защита от повторных вызовов
+    if (isProcessingRef.current) {
+      console.warn('[ScannerPage] Игнорируем повторный вызов handleScanSuccess - уже обрабатывается запрос');
+      return;
+    }
+    
+    // Устанавливаем флаг обработки
+    isProcessingRef.current = true;
+    
     // Если это маркер Google Drive ID, ищем оборудование по Google Drive URL
     if (equipmentIdOrDriveId.startsWith('DRIVE:')) {
       const driveFolderId = equipmentIdOrDriveId.replace('DRIVE:', '');
       console.log('[ScannerPage] Поиск оборудования по Drive ID:', driveFolderId);
+      
+      // Отменяем предыдущий запрос, если он есть
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      
+      // Создаем новый AbortController для этого запроса
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+      
       setSearching(true);
       
       try {
@@ -47,9 +90,27 @@ const ScannerPage: React.FC = () => {
         let allEquipment: Equipment[];
         
         try {
+          // Проверяем, не был ли запрос отменен
+          if (abortController.signal.aborted) {
+            console.log('[ScannerPage] Запрос был отменен');
+            return;
+          }
+          
           allEquipment = await getAllEquipment() as Equipment[];
+          
+          // Проверяем снова после получения данных
+          if (abortController.signal.aborted) {
+            console.log('[ScannerPage] Запрос был отменен после получения данных');
+            return;
+          }
+          
           console.log('[ScannerPage] getAllEquipment вернул:', allEquipment);
         } catch (apiError: any) {
+          // Игнорируем ошибку, если запрос был отменен
+          if (abortController.signal.aborted) {
+            console.log('[ScannerPage] Запрос был отменен, игнорируем ошибку');
+            return;
+          }
           console.error('[ScannerPage] Ошибка при вызове getAllEquipment:', apiError);
           throw new Error(`Ошибка загрузки оборудования: ${apiError?.message || 'Неизвестная ошибка API'}`);
         }
@@ -118,13 +179,24 @@ const ScannerPage: React.FC = () => {
           }
         );
         
+        // Проверяем, не был ли запрос отменен перед навигацией
+        if (abortController.signal.aborted) {
+          console.log('[ScannerPage] Запрос был отменен перед навигацией');
+          return;
+        }
+        
         if (equipment) {
           console.log('[ScannerPage] ✅ Оборудование найдено:', {
             id: equipment.id,
             name: equipment.name,
             googleDriveUrl: equipment.googleDriveUrl
           });
+          
+          // Сбрасываем флаги перед навигацией
+          isProcessingRef.current = false;
+          abortControllerRef.current = null;
           setSearching(false);
+          
           navigate(getEquipmentViewUrl(equipment.id));
         } else {
           console.warn('[ScannerPage] ❌ Оборудование не найдено для Drive ID:', driveFolderId);
@@ -139,9 +211,18 @@ const ScannerPage: React.FC = () => {
             `2. Что оборудование существует в базе данных\n` +
             `3. Консоль браузера для подробностей`;
           alert(errorMsg);
+          
+          // Сбрасываем флаги
+          isProcessingRef.current = false;
+          abortControllerRef.current = null;
           setSearching(false);
         }
       } catch (error: any) {
+        // Игнорируем ошибку, если запрос был отменен
+        if (abortControllerRef.current?.signal.aborted) {
+          console.log('[ScannerPage] Запрос был отменен, игнорируем ошибку');
+          return;
+        }
         console.error('[ScannerPage] ❌ КРИТИЧЕСКАЯ ОШИБКА при поиске оборудования:', error);
         console.error('[ScannerPage] Тип ошибки:', error?.constructor?.name);
         console.error('[ScannerPage] Stack trace:', error?.stack);
@@ -190,11 +271,20 @@ const ScannerPage: React.FC = () => {
         }
         
         alert(userMessage);
+        
+        // Сбрасываем флаги
+        isProcessingRef.current = false;
+        abortControllerRef.current = null;
         setSearching(false);
       }
     } else {
       // Обычный ID оборудования - переходим напрямую
       console.log('[ScannerPage] Прямой переход по ID:', equipmentIdOrDriveId);
+      
+      // Сбрасываем флаги
+      isProcessingRef.current = false;
+      abortControllerRef.current = null;
+      
       navigate(getEquipmentViewUrl(equipmentIdOrDriveId));
     }
   };
