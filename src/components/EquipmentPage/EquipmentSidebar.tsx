@@ -14,6 +14,7 @@
 
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import { Equipment } from '../../types/equipment';
 import { getEquipmentEditUrl } from '../../utils/routes';
 import DateEditor from './DateEditor';
@@ -69,6 +70,7 @@ export const EquipmentSidebar: React.FC<EquipmentSidebarProps> = ({
   onToggle
 }) => {
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
 
   return (
     <>
@@ -85,32 +87,27 @@ export const EquipmentSidebar: React.FC<EquipmentSidebarProps> = ({
         </div>
 
         <div className="sidebar-content">
-          {/* Блок с датами */}
-          <div className="sidebar-section">
-            <h3 className="sidebar-section-title">Даты</h3>
-            <DateEditor
-              commissioningDate={commissioningDate}
-              lastMaintenanceDate={lastMaintenanceDate}
-              onCommissioningDateChange={onCommissioningDateChange}
-              onLastMaintenanceDateChange={onLastMaintenanceDateChange}
-              onSave={onSaveDates}
-              saving={savingDates || loading}
-            />
-          </div>
+          {/* Блок с датами - только для администраторов */}
+          {isAdmin && (
+            <div className="sidebar-section">
+              <h3 className="sidebar-section-title">Даты</h3>
+              <DateEditor
+                commissioningDate={commissioningDate}
+                lastMaintenanceDate={lastMaintenanceDate}
+                onCommissioningDateChange={onCommissioningDateChange}
+                onLastMaintenanceDateChange={onLastMaintenanceDateChange}
+                onSave={onSaveDates}
+                saving={savingDates || loading}
+              />
+            </div>
+          )}
 
           {/* Блок с кнопками действий */}
           {equipment && (
             <div className="sidebar-section">
               <h3 className="sidebar-section-title">Действия</h3>
               <div className="sidebar-actions">
-                <button
-                  className="sidebar-button export-button"
-                  onClick={onExportPDF}
-                  type="button"
-                  disabled={loading}
-                >
-                  📄 Экспорт в PDF
-                </button>
+                {/* Кнопки для всех пользователей */}
                 <button
                   className="sidebar-button documentation-button"
                   onClick={onOpenDocumentation}
@@ -127,20 +124,34 @@ export const EquipmentSidebar: React.FC<EquipmentSidebarProps> = ({
                 >
                   📋 Журнал обслуживания
                 </button>
-                <button
-                  className="sidebar-button edit-button"
-                  onClick={() => navigate(getEquipmentEditUrl(equipment.id))}
-                  disabled={loading}
-                >
-                  ✏️ Редактировать
-                </button>
-                <button
-                  className="sidebar-button delete-button"
-                  onClick={onDelete}
-                  disabled={deleting || loading}
-                >
-                  {deleting ? '⏳ Удаление...' : '🗑️ Удалить'}
-                </button>
+                
+                {/* Кнопки только для администраторов */}
+                {isAdmin && (
+                  <>
+                    <button
+                      className="sidebar-button export-button"
+                      onClick={onExportPDF}
+                      type="button"
+                      disabled={loading}
+                    >
+                      📄 Экспорт в PDF
+                    </button>
+                    <button
+                      className="sidebar-button edit-button"
+                      onClick={() => navigate(getEquipmentEditUrl(equipment.id))}
+                      disabled={loading}
+                    >
+                      ✏️ Редактировать
+                    </button>
+                    <button
+                      className="sidebar-button delete-button"
+                      onClick={onDelete}
+                      disabled={deleting || loading}
+                    >
+                      {deleting ? '⏳ Удаление...' : '🗑️ Удалить'}
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           )}
