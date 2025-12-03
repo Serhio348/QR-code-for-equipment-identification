@@ -19,7 +19,10 @@ interface QRScannerProps {
   /** Автоматически закрывать сканер после успешного сканирования */
   autoCloseOnSuccess?: boolean;
   /** Ref для доступа к методам сканера извне */
-  scannerRef?: React.RefObject<{ stop: () => Promise<void> }>;
+  scannerRef?: React.RefObject<{ 
+    stop: () => Promise<void>;
+    resetProcessing: () => void;
+  }>;
 }
 
 const QRScanner: React.FC<QRScannerProps> = ({
@@ -37,14 +40,22 @@ const QRScanner: React.FC<QRScannerProps> = ({
   const isStoppedRef = useRef(false); // Флаг для отслеживания остановки сканера
   const scannerContainerId = 'qr-scanner-container';
 
-  // Предоставляем метод остановки через ref, если передан
+  // Предоставляем методы управления через ref, если передан
   useEffect(() => {
     if (externalScannerRef) {
-      (externalScannerRef as React.MutableRefObject<{ stop: () => Promise<void> }>).current = {
+      (externalScannerRef as React.MutableRefObject<{ 
+        stop: () => Promise<void>;
+        resetProcessing: () => void;
+      }>).current = {
         stop: async () => {
           isStoppedRef.current = true;
           isProcessingRef.current = true;
           await stopScanning();
+        },
+        resetProcessing: () => {
+          // Сбрасываем флаги обработки, чтобы можно было сканировать снова
+          isProcessingRef.current = false;
+          isStoppedRef.current = false;
         }
       };
     }
