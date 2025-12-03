@@ -46,11 +46,31 @@
  *    - _deleteMaintenanceEntry(entryId) - удаление записи
  *    - И вспомогательные функции для синхронизации с индивидуальными файлами журнала
  * 
+ * 8. UserManagement.gs - управление пользователями и аутентификацией
+ *    - getUsersSheet() - получение/создание листа "Пользователи"
+ *    - getLoginHistorySheet() - получение/создание листа "История входов"
+ *    - getAdminsSheet() - получение/создание листа "Администраторы"
+ *    - hashPassword(password) - хеширование пароля
+ *    - verifyPassword(password, passwordHash) - проверка пароля
+ *    - registerUser(email, password, name) - регистрация пользователя
+ *    - loginUser(email, password) - вход пользователя
+ *    - changePassword(email, currentPassword, newPassword) - смена пароля
+ *    - getUserByEmail(email) - получение пользователя по email
+ *    - verifyAdminAccess(email) - проверка прав администратора
+ *    - checkSessionTimeout(email) - проверка таймаута сессии
+ *    - updateLastActivity(email) - обновление времени активности
+ *    - addLoginHistory(email, success, failureReason) - добавление записи в историю
+ *    - getLoginHistory(email, limit) - получение истории входов
+ *    - addAdminManually(email, note) - добавление администратора
+ *    - removeAdminManually(email) - удаление администратора
+ *    - getAllAdmins() - получение всех администраторов
+ * 
  * ЗАВИСИМОСТИ МЕЖДУ МОДУЛЯМИ:
  * - SheetHelpers.gs использует Utils.gs (formatDate)
  * - EquipmentQueries.gs использует SheetHelpers.gs
  * - EquipmentMutations.gs использует Utils.gs, SheetHelpers.gs, EquipmentQueries.gs, DriveOperations.gs
  * - MaintenanceLog.gs использует Utils.gs, SheetHelpers.gs, EquipmentQueries.gs, DriveOperations.gs
+ * - UserManagement.gs использует Utils.gs (generateId)
  * - DriveOperations.gs использует свои внутренние функции
  * 
  * Все модули работают с одной таблицей Google Sheets через SpreadsheetApp.getActiveSpreadsheet()
@@ -104,28 +124,37 @@ function doOptions(e) {
 /**
  * Обработка GET запросов
  * 
- * GET запросы используются для чтения данных из таблицы
+ * GET запросы используются для чтения данных из таблицы,
+ * а также для некоторых операций аутентификации
  * 
- * Поддерживаемые действия:
+ * Поддерживаемые действия (оборудование):
  * - getAll - получить все оборудование
  * - getById - получить оборудование по ID
  * - getByType - получить оборудование по типу
  * - getFolderFiles - получить список файлов из папки Google Drive
+ * - getMaintenanceLog - получить журнал обслуживания для оборудования
+ * - addMaintenanceEntry - добавить запись в журнал обслуживания (fallback для no-cors)
+ * 
+ * Поддерживаемые действия (аутентификация):
+ * - verify-admin - проверка прав администратора (email)
+ * - get-login-history - получение истории входов (email, limit) - только для админов
  * 
  * @param {Object} e - объект события с параметрами запроса
  * @param {Object} e.parameter - параметры URL запроса
  * @param {string} e.parameter.action - действие для выполнения
  * @param {string} e.parameter.id - ID оборудования (для getById)
  * @param {string} e.parameter.type - тип оборудования (для getByType)
+ * @param {string} e.parameter.email - Email пользователя (для действий аутентификации)
+ * @param {number} e.parameter.limit - Лимит записей (для get-login-history)
  * 
  * @returns {TextOutput} JSON ответ с данными или ошибкой
  * 
  * Примеры использования:
- * - ?action=getAll - получить все записи
+ * - ?action=getAll - получить все записи оборудования
  * - ?action=getById&id=123 - получить запись с ID 123
  * - ?action=getByType&type=filter - получить все фильтры
- * - ?action=getByType&type=industrial - получить все промышленное оборудование
- * - ?action=getFolderFiles&folderUrl=https://... - получить список файлов из папки
+ * - ?action=verify-admin&email=user@example.com - проверить права администратора
+ * - ?action=get-login-history&email=user@example.com&limit=50 - получить историю входов
  */
 function doGet(e) {
   try {
@@ -238,11 +267,38 @@ function doGet(e) {
           return createErrorResponse('Ошибка при добавлении записи: ' + error.toString());
         }
       
+      // ========================================================================
+      // ДЕЙСТВИЯ АУТЕНТИФИКАЦИИ И УПРАВЛЕНИЯ ПОЛЬЗОВАТЕЛЯМИ (GET)
+      // ========================================================================
+      
+      case 'verify-admin':
+        // Проверка прав администратора через GET
+        Logger.log('👑 Обработка verify-admin (GET)');
+        const getEmail = e.parameter.email;
+        if (!getEmail) {
+          return createErrorResponse('Email не указан');
+        }
+        const getRole = verifyAdminAccess(getEmail);
+        return createJsonResponse({
+          isAdmin: getRole === 'admin',
+          role: getRole,
+          email: getEmail
+        });
+      
+      case 'get-login-history':
+        // Получение истории входов через GET
+        Logger.log('📜 Обработка get-login-history (GET)');
+        const historyEmail = e.parameter.email || null; // Опционально, если не указан - все записи
+        const historyLimit = e.parameter.limit ? parseInt(e.parameter.limit) : 100;
+        // TODO: Добавить проверку прав (только админы могут просматривать историю)
+        const history = getLoginHistory(historyEmail, historyLimit);
+        return createJsonResponse(history);
+      
       default:
         // Если действие не распознано, возвращаем ошибку
         Logger.log('❌ Неизвестное действие: ' + action);
-        Logger.log('  - Доступные действия: getAll, getById, getByType, getFolderFiles, getMaintenanceLog, addMaintenanceEntry');
-        return createErrorResponse('Неизвестное действие. Используйте: getAll, getById, getByType, getFolderFiles, getMaintenanceLog, addMaintenanceEntry');
+        Logger.log('  - Доступные действия: getAll, getById, getByType, getFolderFiles, getMaintenanceLog, addMaintenanceEntry, verify-admin, get-login-history');
+        return createErrorResponse('Неизвестное действие. Используйте: getAll, getById, getByType, getFolderFiles, getMaintenanceLog, addMaintenanceEntry, verify-admin, get-login-history');
     }
   } catch (error) {
     // Логируем ошибку для отладки
@@ -255,27 +311,46 @@ function doGet(e) {
 /**
  * Обработка POST запросов
  * 
- * POST запросы используются для создания, обновления и удаления данных
+ * POST запросы используются для создания, обновления и удаления данных,
+ * а также для аутентификации и управления пользователями
  * 
- * Поддерживаемые действия:
+ * Поддерживаемые действия (оборудование):
  * - add - добавить новое оборудование
  * - update - обновить существующее оборудование
  * - delete - удалить оборудование (физическое удаление с удалением папки в Google Drive)
  * - createFolder - создать папку в Google Drive для оборудования
+ * - addMaintenanceEntry - добавить запись в журнал обслуживания
+ * - updateMaintenanceEntry - обновить запись в журнале обслуживания
+ * - deleteMaintenanceEntry - удалить запись из журнала обслуживания
+ * 
+ * Поддерживаемые действия (аутентификация):
+ * - register - регистрация нового пользователя (email, password, name)
+ * - login - вход пользователя (email, password)
+ * - logout - выход пользователя (email)
+ * - change-password - смена пароля (email, currentPassword, newPassword)
+ * - check-session - проверка активности сессии (email)
+ * - verify-admin - проверка прав администратора (email)
+ * - add-admin - добавление администратора в резервный список (email, note) - только для админов
+ * - remove-admin - удаление администратора из резервного списка (email) - только для админов
  * 
  * @param {Object} e - объект события с данными запроса
- * @param {string} e.postData.contents - тело запроса в формате JSON
+ * @param {string} e.postData.contents - тело запроса в формате JSON или URL-encoded
  * 
  * @returns {TextOutput} JSON ответ с результатом операции
  * 
- * Пример тела запроса для добавления:
+ * Пример тела запроса для регистрации:
  * {
- *   "action": "add",
- *   "name": "Фильтр №1",
- *   "type": "filter",
- *   "specs": {...},
- *   "googleDriveUrl": "https://...",
- *   "status": "active"
+ *   "action": "register",
+ *   "email": "user@example.com",
+ *   "password": "password123",
+ *   "name": "Иван Иванов"
+ * }
+ * 
+ * Пример тела запроса для входа:
+ * {
+ *   "action": "login",
+ *   "email": "user@example.com",
+ *   "password": "password123"
  * }
  */
 function doPost(e) {
@@ -345,8 +420,9 @@ function doPost(e) {
       // Если это URL-encoded
       // ВАЖНО: Используем ручной парсинг через split('&') и split('='), так как URLSearchParams
       // недоступен в Google Apps Script V8 runtime
-      else if (contentType.includes('application/x-www-form-urlencoded') || contentType.includes('form-urlencoded')) {
-        Logger.log('📝 Обнаружен URL-encoded формат, парсим...');
+      else if (contentType.includes('application/x-www-form-urlencoded') || contentType.includes('form-urlencoded') || !contentType) {
+        Logger.log('📝 Обнаружен URL-encoded формат или пустой Content-Type, парсим...');
+        Logger.log('  - Content-Type: ' + (contentType || 'ПУСТОЙ'));
         Logger.log('  - e.parameter существует: ' + (e.parameter ? 'ДА' : 'НЕТ'));
         Logger.log('  - e.parameter keys count: ' + (e.parameter ? Object.keys(e.parameter).length : 0));
         Logger.log('  - e.postData.contents существует: ' + (e.postData && e.postData.contents ? 'ДА' : 'НЕТ'));
@@ -364,12 +440,13 @@ function doPost(e) {
           Logger.log('  - Данные из e.parameter: ' + JSON.stringify(data));
           Logger.log('  - Количество параметров: ' + Object.keys(data).length);
           Logger.log('  - Ключи: ' + JSON.stringify(Object.keys(data)));
+          Logger.log('  - action в e.parameter: ' + (data.action || 'НЕТ'));
         } 
         // Если e.parameter пустой, пробуем распарсить из postData.contents
         // Используем ручной парсинг, так как URLSearchParams недоступен в Google Apps Script
-        else if (e.postData && e.postData.contents) {
+        if ((!data || Object.keys(data).length === 0) && e.postData && e.postData.contents) {
           Logger.log('  - Парсинг postData.contents вручную (URLSearchParams недоступен в GAS)...');
-          Logger.log('  - Содержимое (первые 500 символов): ' + e.postData.contents.substring(0, Math.min(500, e.postData.contents.length)));
+          Logger.log('  - Полное содержимое: ' + e.postData.contents);
           // Ручной парсинг URL-encoded строки через split('&') и split('=')
           const contents = e.postData.contents;
           data = {};
@@ -381,14 +458,22 @@ function doPost(e) {
               const key = decodeURIComponent(pair[0].replace(/\+/g, ' '));
               const value = decodeURIComponent(pair[1].replace(/\+/g, ' '));
               data[key] = value;
-              Logger.log('    - Пара ' + (i + 1) + ': ' + key + ' = ' + value.substring(0, Math.min(50, value.length)));
+              Logger.log('    - Пара ' + (i + 1) + ': ' + key + ' = ' + value.substring(0, Math.min(100, value.length)));
+            } else if (pair.length === 1 && pair[0]) {
+              // Пара без значения (ключ без =)
+              const key = decodeURIComponent(pair[0].replace(/\+/g, ' '));
+              data[key] = '';
+              Logger.log('    - Пара ' + (i + 1) + ' (без значения): ' + key);
             } else {
               Logger.log('    - Пара ' + (i + 1) + ' не распознана: ' + pairs[i]);
             }
           }
           Logger.log('  - Данные из postData.contents (распарсены): ' + JSON.stringify(data));
           Logger.log('  - Количество параметров: ' + Object.keys(data).length);
-        } else {
+          Logger.log('  - action в postData.contents: ' + (data.action || 'НЕТ'));
+        }
+        
+        if (!data || Object.keys(data).length === 0) {
           Logger.log('⚠️ Нет данных ни в e.parameter, ни в postData.contents для URL-encoded');
           Logger.log('  - e.parameter: ' + (e.parameter ? JSON.stringify(e.parameter) : 'НЕТ'));
           Logger.log('  - e.postData: ' + (e.postData ? 'есть' : 'НЕТ'));
@@ -457,12 +542,26 @@ function doPost(e) {
       return createErrorResponse('Нет данных в запросе. Проверьте, что данные отправляются в теле запроса.');
     }
     
+    // Проверяем, что данные распарсены
+    if (!data || typeof data !== 'object') {
+      Logger.log('❌ data не является объектом: ' + typeof data);
+      return createErrorResponse('Неверный формат данных запроса');
+    }
+    
     const action = data.action;
     Logger.log('  - action: ' + (action || 'НЕ УКАЗАНО'));
     Logger.log('  - data.name: ' + (data.name || 'НЕ УКАЗАНО'));
-    Logger.log('  - data.equipmentId: ' + (data.equipmentId || 'НЕ УКАЗАНО'));
+    Logger.log('  - data.email: ' + (data.email || 'НЕ УКАЗАНО'));
+    Logger.log('  - data.equipmentId: ' + (data.equipmentId || 'НЕ УКАЗАН'));
     Logger.log('  - Полный объект data: ' + JSON.stringify(data));
     Logger.log('  - Все ключи data: ' + JSON.stringify(Object.keys(data || {})));
+    
+    // Если action не указан, возвращаем ошибку
+    if (!action) {
+      Logger.log('❌ action не указан в данных');
+      Logger.log('  - Доступные ключи: ' + JSON.stringify(Object.keys(data)));
+      return createErrorResponse('Действие (action) не указано в запросе. Доступные ключи: ' + JSON.stringify(Object.keys(data)));
+    }
     
     // Выполняем действие в зависимости от параметра
     switch(action) {
@@ -567,9 +666,163 @@ function doPost(e) {
         }
         return createJsonResponse(_deleteMaintenanceEntry(data.entryId));
       
+      // ========================================================================
+      // ДЕЙСТВИЯ АУТЕНТИФИКАЦИИ И УПРАВЛЕНИЯ ПОЛЬЗОВАТЕЛЯМИ
+      // ========================================================================
+      
+      case 'register':
+        // Регистрация нового пользователя
+        Logger.log('👤 Обработка register');
+        if (!data.email) {
+          return createErrorResponse('Email не указан');
+        }
+        if (!data.password) {
+          return createErrorResponse('Пароль не указан');
+        }
+        const registerResult = registerUser(data.email, data.password, data.name || '');
+        if (!registerResult.success) {
+          return createErrorResponse(registerResult.message);
+        }
+        // После успешной регистрации автоматически авторизуем пользователя
+        const autoLoginResult = loginUser(data.email, data.password);
+        if (!autoLoginResult.success) {
+          // Если авторизация не удалась, все равно возвращаем успешную регистрацию
+          Logger.log('⚠️ Регистрация успешна, но автоматический вход не удался: ' + autoLoginResult.message);
+          return createJsonResponse({
+            success: true,
+            user: registerResult.user,
+            message: registerResult.message + ' Пожалуйста, войдите в систему.'
+          });
+        }
+        return createJsonResponse({
+          success: true,
+          user: autoLoginResult.user,
+          sessionToken: autoLoginResult.sessionToken,
+          expiresAt: autoLoginResult.expiresAt,
+          message: registerResult.message
+        });
+      
+      case 'login':
+        // Вход пользователя
+        Logger.log('🔐 Обработка login');
+        if (!data.email) {
+          return createErrorResponse('Email не указан');
+        }
+        if (!data.password) {
+          return createErrorResponse('Пароль не указан');
+        }
+        const loginResult = loginUser(data.email, data.password);
+        if (!loginResult.success) {
+          return createErrorResponse(loginResult.message);
+        }
+        return createJsonResponse({
+          success: true,
+          user: loginResult.user,
+          sessionToken: loginResult.sessionToken,
+          expiresAt: loginResult.expiresAt,
+          message: loginResult.message
+        });
+      
+      case 'logout':
+        // Выход пользователя (обновление времени последней активности)
+        Logger.log('🚪 Обработка logout');
+        if (!data.email) {
+          return createErrorResponse('Email не указан');
+        }
+        // Обновляем время последней активности (можно использовать для статистики)
+        updateLastActivity(data.email);
+        return createJsonResponse({
+          success: true,
+          message: 'Выход выполнен успешно'
+        });
+      
+      case 'change-password':
+        // Смена пароля пользователя
+        Logger.log('🔑 Обработка change-password');
+        if (!data.email) {
+          return createErrorResponse('Email не указан');
+        }
+        if (!data.currentPassword) {
+          return createErrorResponse('Текущий пароль не указан');
+        }
+        if (!data.newPassword) {
+          return createErrorResponse('Новый пароль не указан');
+        }
+        const changePasswordResult = changePassword(data.email, data.currentPassword, data.newPassword);
+        if (!changePasswordResult.success) {
+          return createErrorResponse(changePasswordResult.message);
+        }
+        return createJsonResponse({
+          success: true,
+          message: changePasswordResult.message
+        });
+      
+      case 'check-session':
+        // Проверка активности сессии
+        Logger.log('⏱️ Обработка check-session');
+        if (!data.email) {
+          return createErrorResponse('Email не указан');
+        }
+        const sessionCheck = checkSessionTimeout(data.email);
+        if (!sessionCheck.active) {
+          return createErrorResponse(sessionCheck.message || 'Сессия истекла');
+        }
+        // Обновляем время последней активности при успешной проверке
+        updateLastActivity(data.email);
+        return createJsonResponse({
+          active: true,
+          remainingTime: sessionCheck.remainingTime,
+          message: 'Сессия активна'
+        });
+      
+      case 'verify-admin':
+        // Проверка прав администратора
+        Logger.log('👑 Обработка verify-admin');
+        if (!data.email) {
+          return createErrorResponse('Email не указан');
+        }
+        const role = verifyAdminAccess(data.email);
+        return createJsonResponse({
+          isAdmin: role === 'admin',
+          role: role,
+          email: data.email
+        });
+      
+      case 'add-admin':
+        // Добавление администратора в резервный список (только для админов)
+        Logger.log('➕ Обработка add-admin');
+        if (!data.email) {
+          return createErrorResponse('Email не указан');
+        }
+        // TODO: Добавить проверку прав текущего пользователя (только админы могут добавлять админов)
+        const addAdminResult = addAdminManually(data.email, data.note || '');
+        if (!addAdminResult.success) {
+          return createErrorResponse(addAdminResult.message);
+        }
+        return createJsonResponse({
+          success: true,
+          message: addAdminResult.message
+        });
+      
+      case 'remove-admin':
+        // Удаление администратора из резервного списка (только для админов)
+        Logger.log('➖ Обработка remove-admin');
+        if (!data.email) {
+          return createErrorResponse('Email не указан');
+        }
+        // TODO: Добавить проверку прав текущего пользователя (только админы могут удалять админов)
+        const removeAdminResult = removeAdminManually(data.email);
+        if (!removeAdminResult.success) {
+          return createErrorResponse(removeAdminResult.message);
+        }
+        return createJsonResponse({
+          success: true,
+          message: removeAdminResult.message
+        });
+      
       default:
         // Если действие не распознано, возвращаем ошибку
-        return createErrorResponse('Неизвестное действие. Используйте: add, update, delete, createFolder, addMaintenanceEntry, updateMaintenanceEntry, deleteMaintenanceEntry');
+        return createErrorResponse('Неизвестное действие. Используйте: add, update, delete, createFolder, addMaintenanceEntry, updateMaintenanceEntry, deleteMaintenanceEntry, register, login, logout, change-password, check-session, verify-admin, add-admin, remove-admin');
     }
   } catch (error) {
     // Логируем ошибку для отладки
