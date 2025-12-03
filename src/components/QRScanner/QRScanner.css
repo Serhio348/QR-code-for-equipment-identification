@@ -1,0 +1,143 @@
+.qr-scanner-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 20px;
+}
+
+.qr-scanner-modal {
+  background: white;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 600px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+
+.qr-scanner-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.qr-scanner-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #333;
+}
+
+.qr-scanner-close-button {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #666;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background-color 0.2s;
+}
+
+.qr-scanner-close-button:hover {
+  background-color: #f0f0f0;
+  color: #333;
+}
+
+.qr-scanner-container {
+  width: 100%;
+  min-height: 400px;
+  position: relative;
+  background: #000;
+}
+
+.qr-scanner-error {
+  padding: 20px;
+  text-align: center;
+}
+
+.qr-scanner-error p {
+  color: #d32f2f;
+  margin-bottom: 16px;
+}
+
+.qr-scanner-retry-button {
+  background: #667eea;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.qr-scanner-retry-button:hover {
+  background: #5568d3;
+}
+
+.qr-scanner-loading {
+  padding: 60px 20px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+}
+
+.qr-scanner-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #667eea;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.qr-scanner-loading p {
+  color: #666;
+  margin: 0;
+}
+
+/* Адаптивность для мобильных устройств */
+@media (max-width: 768px) {
+  .qr-scanner-overlay {
+    padding: 0;
+  }
+
+  .qr-scanner-modal {
+    max-width: 100%;
+    max-height: 100vh;
+    border-radius: 0;
+    height: 100vh;
+  }
+
+  .qr-scanner-container {
+    min-height: calc(100vh - 120px);
+  }
+}
+
