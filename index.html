@@ -33,6 +33,34 @@
       // Инициализируем Eruda только в development режиме или если есть параметр ?debug
       if (import.meta.env.MODE === 'development' || window.location.search.includes('debug=true')) {
         eruda.init();
+        
+        // Защита от переполнения консоли - ограничиваем количество логов
+        let logCount = 0;
+        const maxLogs = 1000;
+        const originalConsoleLog = console.log;
+        const originalConsoleWarn = console.warn;
+        const originalConsoleError = console.error;
+        
+        console.log = function(...args) {
+          if (logCount++ < maxLogs) {
+            originalConsoleLog.apply(console, args);
+          } else if (logCount === maxLogs) {
+            originalConsoleWarn.apply(console, ['[Console] Достигнут лимит логов. Дальнейшие логи будут игнорироваться.']);
+          }
+        };
+        
+        console.warn = function(...args) {
+          if (logCount++ < maxLogs) {
+            originalConsoleWarn.apply(console, args);
+          }
+        };
+        
+        console.error = function(...args) {
+          // Ошибки всегда логируем, но ограничиваем их количество
+          if (logCount++ < maxLogs * 2) {
+            originalConsoleError.apply(console, args);
+          }
+        };
       }
     </script>
   </body>
