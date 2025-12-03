@@ -17,7 +17,8 @@ export default defineConfig(({ mode }) => ({
   },
   server: {
     port: 3000,
-    host: true,
+    host: true, // Разрешает доступ из локальной сети
+    strictPort: false, // Если порт занят, попробует другой
   },
   preview: {
     port: 3000,
