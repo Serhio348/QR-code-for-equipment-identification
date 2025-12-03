@@ -10,6 +10,12 @@ export const ROUTES = {
   /** Главная страница - список оборудования */
   HOME: '/',
   
+  /** Страница входа */
+  LOGIN: '/login',
+  
+  /** Страница регистрации */
+  REGISTER: '/register',
+  
   /** Создание нового оборудования */
   EQUIPMENT_NEW: '/equipment/new',
   
