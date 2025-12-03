@@ -323,8 +323,12 @@ const ScannerPage: React.FC = () => {
 
   return (
     <div className="scanner-page">
-      {searching && <LoadingSpinner text="Поиск оборудования..." />}
-      <div className="scanner-page-container">
+      {searching && (
+        <div className="scanner-page-overlay">
+          <LoadingSpinner text="Поиск оборудования..." />
+        </div>
+      )}
+      <div className={`scanner-page-container ${searching ? 'scanner-page-container-blurred' : ''}`}>
         <QRScanner
           onScanSuccess={handleScanSuccess}
           onScanError={handleScanError}
