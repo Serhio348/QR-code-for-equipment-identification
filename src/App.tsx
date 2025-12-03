@@ -9,6 +9,7 @@ import EquipmentFormPage from './pages/EquipmentFormPage';
 import ScannerPage from './pages/ScannerPage';
 import NotFoundPage from './pages/NotFoundPage';
 import ProtectedRoute from './components/ProtectedRoute';
+import InstallPWA from './components/InstallPWA';
 import { isEquipmentRoute, ROUTES } from './utils/routes';
 import './App.css';
 
@@ -60,6 +61,7 @@ const App: React.FC = () => {
       </header>
 
       <main className={`app-content ${isAuthPage ? 'auth-page' : ''}`}>
+        {!isAuthPage && <InstallPWA />}
         <Routes>
           {/* Страницы аутентификации - доступны всем */}
           <Route path={ROUTES.LOGIN} element={<LoginPage />} />
