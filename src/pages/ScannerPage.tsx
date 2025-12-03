@@ -199,14 +199,15 @@ const ScannerPage: React.FC = () => {
             googleDriveUrl: equipment.googleDriveUrl
           });
           
+          // Устанавливаем флаг навигации, чтобы предотвратить вызов onClose
+          hasNavigatedRef.current = true;
+          
           // Сбрасываем флаги перед навигацией
           isProcessingRef.current = false;
           abortControllerRef.current = null;
           setSearching(false);
           
-          // Устанавливаем флаг навигации, чтобы предотвратить вызов onClose
-          hasNavigatedRef.current = true;
-          
+          // Навигация после успешной загрузки
           navigate(getEquipmentViewUrl(equipment.id));
         } else {
           console.warn('[ScannerPage] ❌ Оборудование не найдено для Drive ID:', driveFolderId);
