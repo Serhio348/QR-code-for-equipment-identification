@@ -106,6 +106,9 @@
   transition: transform 0.2s, box-shadow 0.2s;
   cursor: pointer;
   border: 1px solid #e0e0e0;
+  overflow: hidden; /* Предотвращаем скролл внутри карточки */
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .equipment-card:hover {
@@ -156,15 +159,25 @@
   justify-content: space-between;
   margin-bottom: 8px;
   font-size: 14px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  min-width: 0; /* Позволяет flex-элементам сжиматься */
 }
 
 .info-label {
   color: #666;
   font-weight: 500;
+  flex-shrink: 0; /* Не сжимается */
+  margin-right: 8px;
 }
 
 .info-value {
   color: #333;
+  text-align: right;
+  flex: 1;
+  min-width: 0; /* Позволяет сжиматься */
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .info-value-bold {
@@ -233,8 +246,13 @@
 }
 
 @media (max-width: 768px) {
+  .equipment-list {
+    padding: 15px;
+  }
+
   .equipment-cards {
     grid-template-columns: 1fr;
+    gap: 15px;
   }
   
   .list-controls {
@@ -244,6 +262,84 @@
   .search-box,
   .filter-select {
     width: 100%;
+  }
+
+  .equipment-card {
+    padding: 15px;
+    overflow: hidden; /* Предотвращаем скролл внутри карточки */
+  }
+
+  .card-header {
+    margin-bottom: 12px;
+    gap: 8px;
+  }
+
+  .equipment-name {
+    font-size: 16px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    hyphens: auto;
+  }
+
+  .card-body {
+    margin-bottom: 12px;
+  }
+
+  .card-info {
+    flex-direction: column;
+    align-items: flex-start;
+    margin-bottom: 10px;
+    font-size: 13px;
+    gap: 4px;
+  }
+
+  .info-label {
+    font-size: 12px;
+    margin-bottom: 2px;
+    margin-right: 0;
+  }
+
+  .info-value {
+    font-size: 13px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    text-align: left;
+    width: 100%;
+  }
+
+  .card-footer {
+    padding-top: 12px;
+  }
+
+  .equipment-id {
+    font-size: 11px;
+  }
+}
+
+/* Дополнительные стили для очень малых экранов */
+@media (max-width: 480px) {
+  .equipment-list {
+    padding: 10px;
+  }
+
+  .equipment-card {
+    padding: 12px;
+  }
+
+  .equipment-name {
+    font-size: 15px;
+  }
+
+  .card-info {
+    font-size: 12px;
+  }
+
+  .info-label {
+    font-size: 11px;
+  }
+
+  .info-value {
+    font-size: 12px;
   }
 }
 
