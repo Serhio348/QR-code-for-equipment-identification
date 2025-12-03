@@ -150,21 +150,43 @@ const QRScanner: React.FC<QRScannerProps> = ({
    * Обрабатывает успешное сканирование QR-кода
    */
   const handleScanSuccess = (decodedText: string) => {
+    console.log('Отсканированный QR-код:', decodedText);
+    
     // Парсим ID оборудования из QR-кода
-    const equipmentId = parseEquipmentId(decodedText);
+    const equipmentIdOrDriveId = parseEquipmentId(decodedText);
 
-    if (!equipmentId) {
-      const errorMsg = 'QR-код не содержит информацию об оборудовании';
+    if (!equipmentIdOrDriveId) {
+      // Пробуем извлечь URL и проверить, может быть это прямой URL приложения
+      const url = decodedText.trim();
+      const equipmentMatch = url.match(/\/equipment\/([^/?\s]+)/i);
+      
+      if (equipmentMatch && equipmentMatch[1]) {
+        const id = equipmentMatch[1];
+        console.log('Найден ID оборудования из URL:', id);
+        stopScanning();
+        onScanSuccess(id);
+        if (autoCloseOnSuccess) {
+          setTimeout(() => {
+            onClose?.();
+          }, 500);
+        }
+        return;
+      }
+      
+      const errorMsg = 'QR-код не содержит информацию об оборудовании. Ожидается URL вида: /equipment/{id} или Google Drive URL';
+      console.error('Ошибка парсинга QR-кода:', decodedText);
       setError(errorMsg);
       onScanError?.(errorMsg);
       return;
     }
 
+    console.log('Распознан ID оборудования или Drive ID:', equipmentIdOrDriveId);
+
     // Останавливаем сканирование
     stopScanning();
 
-    // Вызываем callback с ID оборудования
-    onScanSuccess(equipmentId);
+    // Вызываем callback с ID оборудования или Drive ID
+    onScanSuccess(equipmentIdOrDriveId);
 
     // Автоматически закрываем сканер, если нужно
     if (autoCloseOnSuccess) {
