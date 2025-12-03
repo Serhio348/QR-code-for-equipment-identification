@@ -887,56 +887,170 @@ function updateLastActivity(email) {
 // ============================================================================
 
 /**
- * Проверить права администратора пользователя
+ * Получить список email владельцев корневой папки Google Drive
  * 
- * Проверяет два источника:
- * 1. Google Drive - владельцы папки оборудования
- * 2. Резервный список в листе "Администраторы"
+ * Использует Drive API v3 для получения владельцев папки.
+ * Если Drive API недоступен, использует DriveApp как fallback.
  * 
- * Если email найден хотя бы в одном источнике - возвращает 'admin'
- * Если не найден - возвращает 'user'
+ * @param {string} folderId - (Опционально) ID папки для проверки. Если не указан, используется корневая папка.
+ * @returns {Array<string>} Массив email адресов владельцев папки
+ */
+function getDriveFolderOwners(folderId) {
+  try {
+    const owners = [];
+    
+    // Если не указан folderId, используем корневую папку
+    let folder;
+    if (folderId) {
+      try {
+        folder = DriveApp.getFolderById(folderId);
+      } catch (error) {
+        Logger.log('⚠️ Не удалось получить папку по ID: ' + folderId);
+        Logger.log('   Ошибка: ' + error.toString());
+        return owners; // Возвращаем пустой массив
+      }
+    } else {
+      folder = DriveApp.getRootFolder();
+    }
+    
+    // Метод 1: Используем Drive API v3 (более надежный)
+    try {
+      // Проверяем, включен ли Drive API
+      if (typeof Drive !== 'undefined' && Drive.Files) {
+        const fileId = folder.getId();
+        const file = Drive.Files.get(fileId, {
+          fields: 'owners(emailAddress)'
+        });
+        
+        if (file.owners && file.owners.length > 0) {
+          for (let i = 0; i < file.owners.length; i++) {
+            const ownerEmail = file.owners[i].emailAddress;
+            if (ownerEmail) {
+              owners.push(ownerEmail.toLowerCase().trim());
+            }
+          }
+        }
+        
+        Logger.log('✅ Получены владельцы через Drive API v3: ' + owners.length);
+        return owners;
+      }
+    } catch (driveApiError) {
+      Logger.log('⚠️ Drive API v3 недоступен, используем DriveApp: ' + driveApiError.toString());
+    }
+    
+    // Метод 2: Fallback на DriveApp.getOwners()
+    try {
+      const folderOwners = folder.getOwners();
+      while (folderOwners.hasNext()) {
+        const owner = folderOwners.next();
+        const ownerEmail = owner.getEmail();
+        if (ownerEmail) {
+          owners.push(ownerEmail.toLowerCase().trim());
+        }
+      }
+      
+      Logger.log('✅ Получены владельцы через DriveApp: ' + owners.length);
+      return owners;
+    } catch (driveAppError) {
+      Logger.log('❌ Ошибка при получении владельцев через DriveApp: ' + driveAppError.toString());
+      return owners; // Возвращаем пустой массив
+    }
+  } catch (error) {
+    Logger.log('❌ Критическая ошибка в getDriveFolderOwners: ' + error.toString());
+    Logger.log('   Stack: ' + (error.stack || 'нет стека'));
+    return []; // Возвращаем пустой массив в случае ошибки
+  }
+}
+
+/**
+ * Получить ID корневой папки Google Drive для проверки прав администратора
  * 
- * Также обновляет роль пользователя в таблице "Пользователи"
+ * Можно настроить конкретную папку для проверки прав администратора.
+ * По умолчанию используется корневая папка Google Drive.
+ * 
+ * @returns {string} ID папки для проверки прав администратора
+ */
+function getAdminCheckFolderId() {
+  // TODO: Можно добавить конфигурацию в листе "Настройки" или использовать переменную
+  // Пока используем корневую папку
+  try {
+    const rootFolder = DriveApp.getRootFolder();
+    return rootFolder.getId();
+  } catch (error) {
+    Logger.log('⚠️ Не удалось получить ID корневой папки: ' + error.toString());
+    return null;
+  }
+}
+
+/**
+ * Проверить права администратора для пользователя
+ * 
+ * Проверяет, является ли пользователь администратором через:
+ * 1. Владельцы корневой папки Google Drive (приоритет)
+ * 2. Резервный список администраторов в листе "Администраторы"
  * 
  * @param {string} email - Email пользователя
  * @returns {string} 'admin' или 'user'
  */
 function verifyAdminAccess(email) {
-  // TODO: Реализовать проверку через Google Drive
-  // Пока проверяем только резервный список
+  if (!email) {
+    Logger.log('⚠️ verifyAdminAccess вызвана без email');
+    return 'user';
+  }
   
-  // Проверка резервного списка администраторов
-  const sheet = getAdminsSheet();
-  const data = sheet.getDataRange().getValues();
+  const normalizedEmail = email.trim().toLowerCase();
+  Logger.log('🔍 Проверка прав администратора для: ' + normalizedEmail);
   
-  if (data.length >= 2) {
-    const headers = data[0];
-    const emailIndex = headers.indexOf('Email');
-    
-    if (emailIndex !== -1) {
-      const normalizedEmail = email.trim().toLowerCase();
+  // Приоритет 1: Проверка через Google Drive (владельцы папки)
+  try {
+    const folderId = getAdminCheckFolderId();
+    if (folderId) {
+      const driveOwners = getDriveFolderOwners(folderId);
+      Logger.log('   Владельцы папки Google Drive: ' + driveOwners.length);
       
-      for (let i = 1; i < data.length; i++) {
-        const row = data[i];
-        const rowEmail = row[emailIndex];
-        
-        if (rowEmail && rowEmail.toString().trim().toLowerCase() === normalizedEmail) {
-          // Найден в резервном списке
-          updateUserRole(email, 'admin');
-          return 'admin';
+      if (driveOwners.length > 0) {
+        for (let i = 0; i < driveOwners.length; i++) {
+          if (driveOwners[i] === normalizedEmail) {
+            Logger.log('✅ Найден как владелец Google Drive папки');
+            updateUserRole(email, 'admin');
+            return 'admin';
+          }
         }
       }
     }
+  } catch (driveError) {
+    Logger.log('⚠️ Ошибка при проверке через Google Drive: ' + driveError.toString());
+    // Продолжаем проверку через резервный список
   }
   
-  // TODO: Добавить проверку через Google Drive API
-  // const driveAdmins = getDriveFolderOwners();
-  // if (driveAdmins.includes(email)) {
-  //   updateUserRole(email, 'admin');
-  //   return 'admin';
-  // }
+  // Приоритет 2: Проверка резервного списка администраторов
+  try {
+    const sheet = getAdminsSheet();
+    const data = sheet.getDataRange().getValues();
+    
+    if (data.length >= 2) {
+      const headers = data[0];
+      const emailIndex = headers.indexOf('Email');
+      
+      if (emailIndex !== -1) {
+        for (let i = 1; i < data.length; i++) {
+          const row = data[i];
+          const rowEmail = row[emailIndex];
+          
+          if (rowEmail && rowEmail.toString().trim().toLowerCase() === normalizedEmail) {
+            Logger.log('✅ Найден в резервном списке администраторов');
+            updateUserRole(email, 'admin');
+            return 'admin';
+          }
+        }
+      }
+    }
+  } catch (sheetError) {
+    Logger.log('⚠️ Ошибка при проверке резервного списка: ' + sheetError.toString());
+  }
   
   // Не найден ни в одном источнике
+  Logger.log('❌ Пользователь не является администратором');
   updateUserRole(email, 'user');
   return 'user';
 }
@@ -1121,19 +1235,30 @@ function getAllAdmins() {
     }
   }
   
-  // TODO: Добавить администраторов из Google Drive
-  // const driveAdmins = getDriveFolderOwners();
-  // for (const email of driveAdmins) {
-  //   if (!admins.find(a => a.email === email)) {
-  //     admins.push({
-  //       email: email,
-  //       addedAt: '',
-  //       addedManually: false,
-  //       priority: 'primary',
-  //       note: 'Автоматически из Google Drive'
-  //     });
-  //   }
-  // }
+  // Добавляем администраторов из Google Drive
+  try {
+    const folderId = getAdminCheckFolderId();
+    if (folderId) {
+      const driveAdmins = getDriveFolderOwners(folderId);
+      Logger.log('📁 Найдено администраторов из Google Drive: ' + driveAdmins.length);
+      
+      for (let i = 0; i < driveAdmins.length; i++) {
+        const email = driveAdmins[i];
+        // Проверяем, не добавлен ли уже этот администратор
+        if (!admins.find(function(a) { return a.email.toLowerCase() === email.toLowerCase(); })) {
+          admins.push({
+            email: email,
+            addedAt: '',
+            addedManually: false,
+            priority: 'primary',
+            note: 'Автоматически из Google Drive'
+          });
+        }
+      }
+    }
+  } catch (driveError) {
+    Logger.log('⚠️ Ошибка при получении администраторов из Google Drive: ' + driveError.toString());
+  }
   
   return admins;
 }
