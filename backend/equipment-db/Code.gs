@@ -1,14 +1,28 @@
 /**
+ * Code.gs - Главный файл HTTP обработчиков
+ * 
  * Google Apps Script API для базы данных оборудования
  * 
  * Предоставляет REST API для работы с Google Sheets таблицей "Оборудование"
  * 
+ * МОДУЛЬНАЯ СТРУКТУРА:
+ * Этот файл содержит только HTTP обработчики (doOptions, doGet, doPost).
+ * Остальные функции вынесены в отдельные модули:
+ * - Utils.gs - утилиты (formatDate, generateId)
+ * - ResponseHelpers.gs - формирование ответов (createJsonResponse, createErrorResponse)
+ * - SheetHelpers.gs - работа с листами (будет добавлен)
+ * - EquipmentQueries.gs - чтение данных (будет добавлен)
+ * - EquipmentMutations.gs - изменение данных (будет добавлен)
+ * - MaintenanceLog.gs - журнал обслуживания (будет добавлен)
+ * - DriveOperations.gs - операции с Google Drive (будет добавлен)
+ * 
  * Инструкция по установке:
  * 1. Откройте вашу Google Sheets таблицу "База данных оборудования"
  * 2. Расширения → Apps Script
- * 3. Скопируйте весь этот код
- * 4. Сохраните (Ctrl+S)
- * 5. Разверните как веб-приложение (см. README.md)
+ * 3. Создайте все файлы модулей (см. MODULAR_SETUP.md)
+ * 4. Скопируйте код из каждого файла в соответствующий файл в Google Apps Script
+ * 5. Сохраните все файлы (Ctrl+S)
+ * 6. Разверните как веб-приложение (см. README.md)
  * 
  * Структура таблицы:
  * Колонка A: ID (уникальный идентификатор)
@@ -22,6 +36,8 @@
  * Колонка I: Статус (active/inactive/archived)
  * Колонка J: Создано (дата и время)
  * Колонка K: Обновлено (дата и время)
+ * Колонка L: Maintenance Sheet ID
+ * Колонка M: Maintenance Sheet URL
  */
 
 // ============================================================================
@@ -1061,277 +1077,11 @@ function deleteDriveFolder(folderUrl) {
 // ============================================================================
 // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 // ============================================================================
-
-/**
- * Получить лист "Оборудование" из текущей таблицы
- * 
- * Если лист не существует, создает его автоматически с заголовками
- * и форматированием
- * 
- * @returns {Sheet} Объект листа Google Sheets
- * 
- * Структура создаваемого листа:
- * - Заголовки в первой строке
- * - Заголовки отформатированы (жирный шрифт, синий фон, белый текст)
- * - Первая строка заморожена (остается видимой при прокрутке)
- */
-function getEquipmentSheet() {
-  const headers = [
-    'ID',                    // Колонка A
-    'Название',              // Колонка B
-    'Тип',                   // Колонка C
-    'Характеристики',        // Колонка D
-    'Google Drive URL',      // Колонка E
-    'QR Code URL',           // Колонка F
-    'Дата ввода',            // Колонка G
-    'Последнее обслуживание', // Колонка H
-    'Статус',                // Колонка I
-    'Создано',               // Колонка J
-    'Обновлено',             // Колонка K
-    'Maintenance Sheet ID',  // Колонка L
-    'Maintenance Sheet URL'  // Колонка M
-  ];
-
-  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = spreadsheet.getSheetByName('Оборудование');
-
-  if (!sheet) {
-    sheet = spreadsheet.insertSheet('Оборудование');
-    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-    const headerRange = sheet.getRange(1, 1, 1, headers.length);
-    headerRange.setFontWeight('bold');
-    headerRange.setBackground('#4285f4');
-    headerRange.setFontColor('#ffffff');
-    sheet.setFrozenRows(1);
-    return sheet;
-  }
-
-  const currentLastColumn = sheet.getLastColumn();
-  if (currentLastColumn < headers.length) {
-    const missingHeaders = headers.slice(currentLastColumn);
-    const newHeaderRange = sheet.getRange(1, currentLastColumn + 1, 1, missingHeaders.length);
-    newHeaderRange.setValues([missingHeaders]);
-    newHeaderRange.setFontWeight('bold');
-    newHeaderRange.setBackground('#4285f4');
-    newHeaderRange.setFontColor('#ffffff');
-  }
-
-  return sheet;
-}
-
-/**
- * Преобразовать строку таблицы в объект Equipment
- * 
- * Парсит массив значений из строки таблицы и создает объект Equipment
- * с правильными типами данных
- * 
- * @param {Array} row - Массив значений из строки таблицы
- * @param {Array} headers - Массив заголовков колонок
- * 
- * @returns {Object|null} Объект Equipment или null при ошибке парсинга
- * 
- * Обрабатывает:
- * - JSON парсинг характеристик
- * - Форматирование дат
- * - Значения по умолчанию для пустых полей
- */
-function parseRowToEquipment(row, headers) {
-  try {
-    const equipment = {};
-    
-    // Проходим по каждому заголовку и извлекаем соответствующее значение
-    headers.forEach((header, index) => {
-      const value = row[index];
-      
-      // Обрабатываем каждое поле в зависимости от его названия
-      switch(header) {
-        case 'ID':
-          equipment.id = value;
-          break;
-          
-        case 'Название':
-          equipment.name = value;
-          break;
-          
-        case 'Тип':
-          equipment.type = value;
-          break;
-          
-        case 'Характеристики':
-          // Характеристики хранятся как JSON строка, нужно распарсить
-          try {
-            equipment.specs = value ? JSON.parse(value) : {};
-          } catch (e) {
-            // Если не удалось распарсить, используем пустой объект
-            equipment.specs = {};
-          }
-          break;
-          
-        case 'Google Drive URL':
-          equipment.googleDriveUrl = value || '';
-          break;
-          
-        case 'QR Code URL':
-          equipment.qrCodeUrl = value || '';
-          break;
-          
-        case 'Дата ввода':
-          // Форматируем дату в ISO формат (YYYY-MM-DD)
-          // Обрабатываем пустые значения: null, undefined, пустая строка
-          if (value && value !== '') {
-            Logger.log('📅 Чтение даты ввода из таблицы:');
-            Logger.log('  - value: ' + value);
-            Logger.log('  - typeof value: ' + typeof value);
-            Logger.log('  - value instanceof Date: ' + (value instanceof Date));
-            
-            // Если значение уже строка в формате YYYY-MM-DD, возвращаем как есть
-            if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-              Logger.log('  - Это строка YYYY-MM-DD, возвращаем как есть: ' + value);
-              equipment.commissioningDate = value;
-            } else {
-              // Иначе форматируем через formatDate
-              Logger.log('  - Форматируем через formatDate...');
-              const formatted = formatDate(value);
-              Logger.log('  - Результат formatDate: ' + formatted);
-              equipment.commissioningDate = formatted;
-            }
-          } else {
-            equipment.commissioningDate = '';
-          }
-          break;
-          
-        case 'Последнее обслуживание':
-          // Форматируем дату в ISO формат (YYYY-MM-DD)
-          // Обрабатываем пустые значения: null, undefined, пустая строка
-          // Если обслуживание не проводилось, ячейка может быть пустой - это нормально
-          if (value && value !== '') {
-            // Если значение уже строка в формате YYYY-MM-DD, возвращаем как есть
-            if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-              equipment.lastMaintenanceDate = value;
-            } else {
-              // Иначе форматируем через formatDate
-              equipment.lastMaintenanceDate = formatDate(value);
-            }
-          } else {
-            equipment.lastMaintenanceDate = '';
-          }
-          break;
-          
-        case 'Статус':
-          // Если статус не указан, используем 'active' по умолчанию
-          equipment.status = value || 'active';
-          break;
-          
-        case 'Создано':
-          // Преобразуем дату в ISO строку
-          equipment.createdAt = value ? new Date(value).toISOString() : '';
-          break;
-          
-        case 'Обновлено':
-          equipment.updatedAt = value ? new Date(value).toISOString() : '';
-          break;
-
-        case 'Maintenance Sheet ID':
-          equipment.maintenanceSheetId = value || '';
-          break;
-
-        case 'Maintenance Sheet URL':
-          equipment.maintenanceSheetUrl = value || '';
-          break;
-      }
-    });
-    
-    return equipment;
-  } catch (error) {
-    // Если произошла ошибка при парсинге, логируем и возвращаем null
-    Logger.log('Ошибка при парсинге строки: ' + error);
-    return null;
-  }
-}
-
-/**
- * Форматировать дату в ISO строку (YYYY-MM-DD)
- * 
- * Преобразует объект Date или строку даты в формат YYYY-MM-DD
- * для единообразного хранения и передачи дат
- * 
- * @param {Date|string} dateValue - Дата для форматирования
- * @returns {string} Дата в формате YYYY-MM-DD или пустая строка
- * 
- * Примеры:
- * formatDate(new Date('2024-01-15')) -> "2024-01-15"
- * formatDate('2024-01-15') -> "2024-01-15"
- */
-function formatDate(dateValue) {
-  // Обрабатываем все случаи пустых значений
-  // null, undefined, пустая строка, 0, false - все вернет пустую строку
-  if (!dateValue || dateValue === '' || dateValue === null || dateValue === undefined) {
-    return '';
-  }
-  
-  try {
-    // Если значение уже в формате YYYY-MM-DD, возвращаем как есть
-    if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
-      return dateValue;
-    }
-    
-    // Если это объект Date (из Google Sheets), используем его напрямую
-    let date;
-    if (dateValue instanceof Date) {
-      date = dateValue;
-      Logger.log('  - Это объект Date из Google Sheets');
-      Logger.log('  - date.toString(): ' + date.toString());
-      Logger.log('  - date.toISOString(): ' + date.toISOString());
-      Logger.log('  - date.getFullYear(): ' + date.getFullYear());
-      Logger.log('  - date.getMonth(): ' + date.getMonth());
-      Logger.log('  - date.getDate(): ' + date.getDate());
-    } else {
-      // Создаем объект Date из переданного значения
-      date = new Date(dateValue);
-      Logger.log('  - Создан объект Date из: ' + dateValue);
-      Logger.log('  - date.toString(): ' + date.toString());
-    }
-    
-    // Проверяем, что дата валидна (не Invalid Date)
-    if (isNaN(date.getTime())) {
-      Logger.log('  - ❌ Невалидная дата');
-      return '';
-    }
-    
-    // ВАЖНО: Используем локальные компоненты даты (getFullYear, getMonth, getDate)
-    // вместо UTC компонентов, чтобы избежать проблем с часовыми поясами
-    // Google Sheets хранит даты в локальном времени, поэтому мы должны использовать
-    // локальные компоненты для форматирования
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0'); // месяцы начинаются с 0
-    const day = String(date.getDate()).padStart(2, '0');
-    
-    const result = year + '-' + month + '-' + day;
-    Logger.log('  - ✅ Результат форматирования: ' + result);
-    return result;
-  } catch (e) {
-    // При любой ошибке возвращаем пустую строку
-    // Это безопасно - пустая дата не вызовет проблем в приложении
-    Logger.log('Ошибка форматирования даты: ' + e + ', значение: ' + dateValue);
-    return '';
-  }
-}
-
-/**
- * Генерация уникального ID (UUID)
- * 
- * Использует встроенную функцию Google Apps Script для генерации UUID
- * UUID гарантирует уникальность идентификатора
- * 
- * @returns {string} UUID в формате "550e8400-e29b-41d4-a716-446655440000"
- * 
- * Пример:
- * generateId() -> "550e8400-e29b-41d4-a716-446655440000"
- */
-function generateId() {
-  // Utilities.getUuid() генерирует UUID версии 4
-  return Utilities.getUuid();
-}
+// Функции getEquipmentSheet() и parseRowToEquipment() перенесены в SheetHelpers.gs
+// Они доступны глобально в проекте Google Apps Script
+// 
+// Зависимости:
+// - parseRowToEquipment() использует formatDate() из Utils.gs
 
 // ============================================================================
 // ФУНКЦИИ РАБОТЫ С GOOGLE DRIVE
@@ -1547,56 +1297,8 @@ function getFolderFiles(folderUrlOrId) {
 // ============================================================================
 // ФУНКЦИИ ФОРМИРОВАНИЯ ОТВЕТОВ
 // ============================================================================
-
-/**
- * Создать JSON ответ с данными
- * 
- * Формирует успешный ответ API в формате JSON
- * 
- * @param {*} data - Данные для возврата (может быть объект, массив и т.д.)
- * @returns {TextOutput} JSON ответ с полями success: true и data
- * 
- * Формат ответа:
- * {
- *   "success": true,
- *   "data": { ... }
- * }
- */
-function createJsonResponse(data) {
-  // Создаем JSON ответ
-  // Google Apps Script автоматически устанавливает CORS заголовки при настройке "У кого есть доступ: Все"
-  return ContentService
-    .createTextOutput(JSON.stringify({
-      success: true,
-      data: data
-    }))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-/**
- * Создать JSON ответ с ошибкой
- * 
- * Формирует ответ об ошибке в формате JSON
- * 
- * @param {string} message - Сообщение об ошибке
- * @returns {TextOutput} JSON ответ с полями success: false и error
- * 
- * Формат ответа:
- * {
- *   "success": false,
- *   "error": "Сообщение об ошибке"
- * }
- */
-function createErrorResponse(message) {
-  // Создаем JSON ответ с ошибкой
-  // Google Apps Script автоматически устанавливает CORS заголовки при настройке "У кого есть доступ: Все"
-  return ContentService
-    .createTextOutput(JSON.stringify({
-      success: false,
-      error: message
-    }))
-    .setMimeType(ContentService.MimeType.JSON);
-}
+// Функции createJsonResponse() и createErrorResponse() перенесены в ResponseHelpers.gs
+// Они доступны глобально в проекте Google Apps Script
 
 // ============================================================================
 // ТЕСТОВЫЕ ФУНКЦИИ
