@@ -8,7 +8,9 @@ import { Equipment } from '../types/equipment';
 import { formatDate } from '../utils/dateFormatting';
 import { EQUIPMENT_TYPE_OPTIONS } from '../constants/equipmentTypes';
 import { useEquipmentData } from '../hooks/useEquipmentData';
+import { isDriveId } from '../utils/qrCodeParser';
 import StatusBadge from './StatusBadge';
+import QRScanner from './QRScanner/QRScanner';
 import './EquipmentList.css';
 
 interface EquipmentListProps {
@@ -28,6 +30,61 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
   const [filterType, setFilterType] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+
+  /**
+   * Поиск оборудования по ID или Google Drive URL
+   */
+  const findEquipmentById = (id: string): Equipment | null => {
+    if (isDriveId(id)) {
+      // Поиск по Google Drive ID
+      const driveFolderId = id.replace('DRIVE:', '');
+      return equipmentList.find(eq => {
+        if (!eq.googleDriveUrl) return false;
+        const url = eq.googleDriveUrl.toLowerCase();
+        const searchId = driveFolderId.toLowerCase();
+        return url.includes(searchId) || 
+               url.includes(`folders/${searchId}`) ||
+               url.includes(`id=${searchId}`);
+      }) || null;
+    } else {
+      // Поиск по прямому ID
+      return equipmentList.find(eq => eq.id === id) || null;
+    }
+  };
+
+  /**
+   * Обработка успешного сканирования QR-кода
+   */
+  const handleScanSuccess = (scannedId: string) => {
+    console.log('[EquipmentList] Отсканирован ID:', scannedId);
+    
+    // Ищем оборудование в списке
+    const equipment = findEquipmentById(scannedId);
+    
+    if (equipment) {
+      console.log('[EquipmentList] Оборудование найдено:', equipment.name);
+      
+      // Закрываем сканер
+      setIsScannerOpen(false);
+      
+      // Автоматически открываем карточку оборудования
+      if (onSelectEquipment) {
+        onSelectEquipment(equipment);
+      }
+    } else {
+      // Оборудование не найдено - показываем сообщение
+      alert(`Оборудование с ID "${scannedId}" не найдено в списке.\n\nВозможно, список нужно обновить.`);
+      setIsScannerOpen(false);
+    }
+  };
+
+  /**
+   * Обработка ошибки сканирования
+   */
+  const handleScanError = (error: string) => {
+    console.error('[EquipmentList] Ошибка сканирования:', error);
+  };
 
   // Фильтрация оборудования
   const filteredEquipment = equipmentList.filter(eq => {
@@ -90,6 +147,16 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
             />
           </div>
           
+          {/* Кнопка сканера QR-кода */}
+          <button
+            className="qr-scanner-button"
+            onClick={() => setIsScannerOpen(true)}
+            type="button"
+            title="Сканировать QR-код"
+          >
+            📱 Сканировать QR
+          </button>
+          
           {/* Фильтр по типу */}
           <select
             value={filterType}
@@ -116,6 +183,14 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
           </select>
         </div>
       </div>
+
+      {/* Сканер QR-кодов */}
+      <QRScanner
+        isOpen={isScannerOpen}
+        onScanSuccess={handleScanSuccess}
+        onScanError={handleScanError}
+        onClose={() => setIsScannerOpen(false)}
+      />
 
       <div className="list-info">
         Найдено: {filteredEquipment.length} из {equipmentList.length}

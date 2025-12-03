@@ -8,7 +8,6 @@ export default defineConfig(({ mode }) => ({
       output: {
         manualChunks: {
           'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'qr-scanner': ['html5-qrcode'],
         },
       },
     },
