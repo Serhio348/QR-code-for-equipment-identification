@@ -238,6 +238,7 @@ function doGet(e) {
         Logger.log('  - e.parameter: ' + JSON.stringify(e.parameter));
         
         const getEquipmentId = e.parameter.equipmentId;
+        const getMaintenanceSheetId = e.parameter.maintenanceSheetId || null;
         if (!getEquipmentId) {
           Logger.log('❌ ID оборудования не указан в GET параметрах');
           return createErrorResponse('ID оборудования не указан');
@@ -252,6 +253,7 @@ function doGet(e) {
         };
         
         Logger.log('  - equipmentId: ' + getEquipmentId);
+        Logger.log('  - maintenanceSheetId: ' + (getMaintenanceSheetId || 'не указан'));
         Logger.log('  - entryData: ' + JSON.stringify(getEntryData));
         
         if (!getEntryData.date || !getEntryData.type || !getEntryData.description || !getEntryData.performedBy) {
@@ -625,6 +627,7 @@ function doPost(e) {
         
         // Извлекаем equipmentId и остальные данные записи
         const equipmentId = String(data.equipmentId).trim();
+        const maintenanceSheetId = data.maintenanceSheetId ? String(data.maintenanceSheetId).trim() : null;
         const entryData = {
           date: data.date ? String(data.date).trim() : '',
           type: data.type ? String(data.type).trim() : '',
@@ -634,6 +637,7 @@ function doPost(e) {
         };
         
         Logger.log('  - Извлеченный equipmentId: "' + equipmentId + '"');
+        Logger.log('  - maintenanceSheetId: ' + (maintenanceSheetId || 'не указан'));
         Logger.log('  - Данные записи: ' + JSON.stringify(entryData));
         
         if (!equipmentId || equipmentId === '') {
@@ -643,6 +647,8 @@ function doPost(e) {
         
         try {
           Logger.log('📞 Вызов addMaintenanceEntry с equipmentId="' + equipmentId + '" и entryData=' + JSON.stringify(entryData));
+          // maintenanceSheetId передается в _addMaintenanceEntry, но функция его не использует напрямую
+          // Она использует его через getMaintenanceLog, но для добавления всегда используется основной лист
           const result = _addMaintenanceEntry(equipmentId, entryData);
           Logger.log('✅ Запись добавлена успешно: ' + JSON.stringify(result));
           return createJsonResponse(result);

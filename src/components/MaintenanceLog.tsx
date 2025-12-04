@@ -80,30 +80,48 @@ const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanc
 
     try {
       const newEntry = await addMaintenanceEntry(equipmentId, formData, maintenanceSheetId);
-      // Добавляем новую запись в начало списка
-      setEntries([newEntry, ...entries]);
-      // Очищаем форму
-      setFormData({
-        date: new Date().toISOString().split('T')[0],
-        type: '',
-        description: '',
-        performedBy: '',
-        status: 'completed'
-      });
+      
+      // Проверяем, является ли это временной записью
+      const isTempEntry = newEntry.id.startsWith('temp-');
+      
+      if (isTempEntry) {
+        // Если это временная запись, добавляем её в список и обновляем журнал через задержку
+        setEntries([newEntry, ...entries]);
+        setError(null);
+        // Очищаем форму сразу
+        setFormData({
+          date: new Date().toISOString().split('T')[0],
+          type: '',
+          description: '',
+          performedBy: '',
+          status: 'completed'
+        });
+        // Обновляем журнал через задержку, чтобы получить реальную запись
+        setTimeout(() => {
+          loadMaintenanceLog();
+        }, 3000);
+      } else {
+        // Если это реальная запись, просто добавляем её
+        setEntries([newEntry, ...entries]);
+        setError(null);
+        // Очищаем форму
+        setFormData({
+          date: new Date().toISOString().split('T')[0],
+          type: '',
+          description: '',
+          performedBy: '',
+          status: 'completed'
+        });
+      }
     } catch (err: any) {
       console.error('Ошибка добавления записи:', err);
       const errorMessage = err.message || 'Неизвестная ошибка';
+      setError(`Не удалось добавить запись: ${errorMessage}`);
       
-      // Если ошибка говорит о том, что запись может быть добавлена, перезагружаем журнал
-      if (errorMessage.includes('может быть добавлена') || errorMessage.includes('не удалось подтвердить')) {
-        setError('Запись может быть добавлена. Обновляю журнал...');
-        // Перезагружаем журнал через небольшую задержку
-        setTimeout(() => {
-          loadMaintenanceLog();
-        }, 2000);
-      } else {
-        setError(`Не удалось добавить запись: ${errorMessage}`);
-      }
+      // Все равно пытаемся обновить журнал на случай, если запись добавилась
+      setTimeout(() => {
+        loadMaintenanceLog();
+      }, 3000);
     } finally {
       setSaving(false);
     }
