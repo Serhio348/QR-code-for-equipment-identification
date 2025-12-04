@@ -75,8 +75,20 @@ const InstallPWA: React.FC = () => {
       serviceWorker: 'serviceWorker' in navigator,
       userAgent: navigator.userAgent,
       isIOS: /iPad|iPhone|iPod/.test(navigator.userAgent),
-      isAndroid: /Android/.test(navigator.userAgent)
+      isAndroid: /Android/.test(navigator.userAgent),
+      isHTTPS: window.location.protocol === 'https:' || window.location.hostname === 'localhost',
+      hasManifest: document.querySelector('link[rel="manifest"]') !== null
     });
+    
+    // Проверяем, зарегистрирован ли Service Worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(registrations => {
+        console.log('[PWA] Зарегистрированные Service Workers:', registrations.length);
+        if (registrations.length === 0) {
+          console.warn('[PWA] Service Worker не зарегистрирован! Это может препятствовать установке PWA.');
+        }
+      });
+    }
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleAppInstalled);

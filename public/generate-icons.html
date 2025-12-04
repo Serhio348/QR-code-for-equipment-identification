@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Генератор иконок PWA</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .icon-preview {
+            display: inline-block;
+            margin: 10px;
+            text-align: center;
+        }
+        canvas {
+            border: 1px solid #ccc;
+            margin: 5px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 10px 5px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #5568d3;
+        }
+        .info {
+            background: #f0f0f0;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Генератор иконок PWA</h1>
+    <div class="info">
+        <p><strong>Инструкция:</strong></p>
+        <ol>
+            <li>Нажмите "Сгенерировать все иконки"</li>
+            <li>Правой кнопкой мыши на каждой иконке → "Сохранить изображение как..."</li>
+            <li>Сохраните в папку <code>public/icons/</code> с именами: icon-72x72.png, icon-96x96.png и т.д.</li>
+        </ol>
+    </div>
+    
+    <button onclick="generateAll()">Сгенерировать все иконки</button>
+    <button onclick="downloadAll()">Скачать все иконки (ZIP)</button>
+    
+    <div id="previews"></div>
+
+    <script>
+        const sizes = [72, 96, 128, 144, 152, 192, 384, 512];
+        
+        function generateIcon(size) {
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            
+            // Фон
+            ctx.fillStyle = '#667eea';
+            ctx.fillRect(0, 0, size, size);
+            
+            // Текст QR
+            ctx.fillStyle = 'white';
+            ctx.font = `bold ${size * 0.4}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('QR', size / 2, size / 2);
+            
+            return canvas;
+        }
+        
+        function generateAll() {
+            const container = document.getElementById('previews');
+            container.innerHTML = '';
+            
+            sizes.forEach(size => {
+                const canvas = generateIcon(size);
+                canvas.id = `icon-${size}`;
+                canvas.style.display = 'block';
+                
+                const div = document.createElement('div');
+                div.className = 'icon-preview';
+                div.innerHTML = `
+                    <canvas id="icon-${size}" width="${size}" height="${size}"></canvas>
+                    <p>${size}x${size}</p>
+                    <a href="#" onclick="downloadIcon(${size}); return false;">Скачать</a>
+                `;
+                
+                const newCanvas = div.querySelector('canvas');
+                const ctx = newCanvas.getContext('2d');
+                ctx.drawImage(canvas, 0, 0);
+                
+                container.appendChild(div);
+            });
+        }
+        
+        function downloadIcon(size) {
+            const canvas = generateIcon(size);
+            canvas.toBlob(blob => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `icon-${size}x${size}.png`;
+                a.click();
+                URL.revokeObjectURL(url);
+            });
+        }
+        
+        function downloadAll() {
+            sizes.forEach((size, index) => {
+                setTimeout(() => {
+                    downloadIcon(size);
+                }, index * 200);
+            });
+        }
+        
+        // Автоматически генерируем при загрузке
+        window.onload = generateAll;
+    </script>
+</body>
+</html>
+
