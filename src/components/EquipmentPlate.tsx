@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { FilterSpecs } from '../types/equipment';
 import QRCodeComponent from './QRCode';
 import { formatDate } from '../utils/dateFormatting';
@@ -20,12 +20,49 @@ const EquipmentPlate: React.FC<EquipmentPlateProps> = ({
   lastMaintenanceDate,
   qrCodeUrl
 }) => {
+  const [isQRModalOpen, setIsQRModalOpen] = useState(false);
+  
   // Используем переданный URL или дефолтный
   const defaultUrl = 'https://drive.google.com/drive/folders/1t90itk12veviwYM1LH7DZ15G4slpPnon';
   const urlForQR = qrCodeUrl || defaultUrl;
   
   // Используем переданное название оборудования или название из specs
   const displayName = equipmentName || specs.name || 'Оборудование';
+  
+  const handleQRClick = () => {
+    setIsQRModalOpen(true);
+  };
+  
+  const handleCloseModal = () => {
+    setIsQRModalOpen(false);
+  };
+  
+  const handleModalBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) {
+      handleCloseModal();
+    }
+  };
+  
+  // Закрытие по Escape и блокировка прокрутки
+  useEffect(() => {
+    if (isQRModalOpen) {
+      // Блокируем прокрутку body
+      document.body.style.overflow = 'hidden';
+      
+      const handleEscape = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          handleCloseModal();
+        }
+      };
+      
+      window.addEventListener('keydown', handleEscape);
+      
+      return () => {
+        document.body.style.overflow = '';
+        window.removeEventListener('keydown', handleEscape);
+      };
+    }
+  }, [isQRModalOpen]);
   
   return (
     <div className="equipment-plate" id="equipment-plate">
@@ -190,10 +227,31 @@ const EquipmentPlate: React.FC<EquipmentPlateProps> = ({
         </div>
         
         <div className="qr-section">
-          <QRCodeComponent url={urlForQR} />
-          <p className="qr-label">Отсканируйте для получения полной информации</p>
+          <div className="qr-code-clickable" onClick={handleQRClick}>
+            <QRCodeComponent url={urlForQR} />
+          </div>
+          <p className="qr-label">Нажмите на QR-код для увеличения</p>
         </div>
       </div>
+      
+      {/* Модальное окно с увеличенным QR-кодом */}
+      {isQRModalOpen && (
+        <div className="qr-modal-overlay" onClick={handleModalBackdropClick}>
+          <div className="qr-modal-content">
+            <button 
+              className="qr-modal-close" 
+              onClick={handleCloseModal}
+              aria-label="Закрыть"
+            >
+              ×
+            </button>
+            <div className="qr-modal-qr">
+              <QRCodeComponent url={urlForQR} size={400} />
+            </div>
+            <p className="qr-modal-label">Отсканируйте для получения полной информации</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
