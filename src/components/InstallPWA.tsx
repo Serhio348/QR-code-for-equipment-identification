@@ -20,7 +20,7 @@ const InstallPWA: React.FC = () => {
     console.log('[PWA] InstallPWA компонент инициализирован');
     
     // Проверяем, установлено ли приложение
-    const checkIfInstalled = () => {
+    const checkIfInstalled = (): boolean => {
       // Проверка для standalone режима (iOS и Android)
       const isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
         (window.navigator as any).standalone === true ||
@@ -34,15 +34,23 @@ const InstallPWA: React.FC = () => {
       });
       
       setIsInstalled(isStandalone);
-      
-      // Если уже установлено, не показываем кнопку
-      if (isStandalone) {
-        console.log('[PWA] Приложение уже установлено, скрываем кнопку');
-        setShowInstallButton(false);
-      }
+      return isStandalone;
     };
 
-    checkIfInstalled();
+    const installed = checkIfInstalled();
+    
+    // Проверяем, закрывал ли пользователь баннер ранее
+    const installBannerDismissed = localStorage.getItem('pwa-install-banner-dismissed');
+    
+    // Проверяем, мобильное ли это устройство
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    
+    console.log('[PWA] Проверка показа баннера:', {
+      installed,
+      installBannerDismissed,
+      isMobile,
+      shouldShow: !installed && !installBannerDismissed && isMobile
+    });
 
     // Обработчик события beforeinstallprompt (для Android/Chrome)
     const handleBeforeInstallPrompt = (e: Event) => {
@@ -50,8 +58,12 @@ const InstallPWA: React.FC = () => {
       e.preventDefault();
       const promptEvent = e as BeforeInstallPromptEvent;
       setDeferredPrompt(promptEvent);
-      setShowInstallButton(true);
-      console.log('[PWA] Кнопка установки показана');
+      
+      // Показываем баннер, если пользователь его не закрывал
+      if (!installBannerDismissed) {
+        setShowInstallButton(true);
+        console.log('[PWA] Кнопка установки показана (beforeinstallprompt)');
+      }
     };
 
     // Обработчик успешной установки
@@ -73,24 +85,24 @@ const InstallPWA: React.FC = () => {
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleAppInstalled);
 
-    // Для iOS Safari - показываем инструкции по установке
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
-    
-    console.log('[PWA] iOS/Safari проверка:', { isIOS, isSafari, isInstalled });
-    
-    if (isIOS && isSafari) {
-      // Показываем кнопку с инструкциями для iOS через небольшую задержку
-      setTimeout(() => {
-        checkIfInstalled();
-        if (!isInstalled) {
-          console.log('[PWA] Показываем кнопку для iOS');
+    // Для мобильных устройств показываем баннер автоматически
+    let showBannerTimeout: ReturnType<typeof setTimeout> | null = null;
+    if (!installed && !installBannerDismissed && isMobile) {
+      // Показываем баннер через небольшую задержку для всех мобильных
+      showBannerTimeout = setTimeout(() => {
+        const stillNotInstalled = !checkIfInstalled();
+        const stillNotDismissed = !localStorage.getItem('pwa-install-banner-dismissed');
+        if (stillNotInstalled && stillNotDismissed) {
+          console.log('[PWA] Показываем баннер для мобильного устройства');
           setShowInstallButton(true);
         }
-      }, 2000);
+      }, 3000); // Задержка 3 секунды
     }
 
     return () => {
+      if (showBannerTimeout) {
+        clearTimeout(showBannerTimeout);
+      }
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
     };
@@ -157,7 +169,11 @@ const InstallPWA: React.FC = () => {
         </button>
         <button
           className="install-pwa-close"
-          onClick={() => setShowInstallButton(false)}
+          onClick={() => {
+            setShowInstallButton(false);
+            // Сохраняем в localStorage, что пользователь закрыл баннер
+            localStorage.setItem('pwa-install-banner-dismissed', 'true');
+          }}
           type="button"
           aria-label="Закрыть"
         >
