@@ -39,17 +39,13 @@ const InstallPWA: React.FC = () => {
 
     const installed = checkIfInstalled();
     
-    // Проверяем, закрывал ли пользователь баннер ранее
-    const installBannerDismissed = localStorage.getItem('pwa-install-banner-dismissed');
-    
     // Проверяем, мобильное ли это устройство
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     
     console.log('[PWA] Проверка показа баннера:', {
       installed,
-      installBannerDismissed,
       isMobile,
-      shouldShow: !installed && !installBannerDismissed && isMobile
+      shouldShow: !installed && isMobile
     });
 
     // Обработчик события beforeinstallprompt (для Android/Chrome)
@@ -59,8 +55,8 @@ const InstallPWA: React.FC = () => {
       const promptEvent = e as BeforeInstallPromptEvent;
       setDeferredPrompt(promptEvent);
       
-      // Показываем баннер, если пользователь его не закрывал
-      if (!installBannerDismissed) {
+      // Показываем баннер всегда, если приложение не установлено
+      if (!installed) {
         setShowInstallButton(true);
         console.log('[PWA] Кнопка установки показана (beforeinstallprompt)');
       }
@@ -85,18 +81,17 @@ const InstallPWA: React.FC = () => {
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleAppInstalled);
 
-    // Для мобильных устройств показываем баннер автоматически
+    // Для мобильных устройств показываем баннер автоматически, если приложение не установлено
     let showBannerTimeout: ReturnType<typeof setTimeout> | null = null;
-    if (!installed && !installBannerDismissed && isMobile) {
+    if (!installed && isMobile) {
       // Показываем баннер через небольшую задержку для всех мобильных
       showBannerTimeout = setTimeout(() => {
         const stillNotInstalled = !checkIfInstalled();
-        const stillNotDismissed = !localStorage.getItem('pwa-install-banner-dismissed');
-        if (stillNotInstalled && stillNotDismissed) {
+        if (stillNotInstalled) {
           console.log('[PWA] Показываем баннер для мобильного устройства');
           setShowInstallButton(true);
         }
-      }, 3000); // Задержка 3 секунды
+      }, 2000); // Задержка 2 секунды
     }
 
     return () => {
@@ -170,7 +165,7 @@ const InstallPWA: React.FC = () => {
     
     alert(instructions);
     setShowInstallButton(false);
-    localStorage.setItem('pwa-install-banner-dismissed', 'true');
+    // Не сохраняем в localStorage - баннер будет показываться снова при следующем посещении
   };
 
   // Логируем состояние для отладки
@@ -199,8 +194,7 @@ const InstallPWA: React.FC = () => {
           className="install-pwa-close"
           onClick={() => {
             setShowInstallButton(false);
-            // Сохраняем в localStorage, что пользователь закрыл баннер
-            localStorage.setItem('pwa-install-banner-dismissed', 'true');
+            // Не сохраняем в localStorage - баннер будет показываться снова при следующем посещении
           }}
           type="button"
           aria-label="Закрыть"
