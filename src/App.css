@@ -45,6 +45,9 @@
 .header-title h1 {
   font-size: 28px;
   margin: 0 0 5px 0;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  line-height: 1.2;
 }
 
 .header-title p {
@@ -138,24 +141,56 @@
 }
 
 @media (max-width: 768px) {
+  .app-header {
+    padding: 15px;
+  }
+
   .header-content {
     flex-direction: column;
     gap: 12px;
     align-items: flex-start;
+    width: 100%;
+  }
+
+  .header-title h1 {
+    font-size: 20px;
+  }
+
+  .header-title p {
+    font-size: 14px;
   }
 
   .header-right {
     width: 100%;
     justify-content: space-between;
+    flex-wrap: wrap;
+  }
+
+  .header-nav {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .nav-link {
+    font-size: 14px;
+    padding: 6px 12px;
   }
 
   .user-info {
     flex-wrap: wrap;
     gap: 8px;
+    width: 100%;
   }
 
   .user-email {
     font-size: 12px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+
+  .user-role {
+    font-size: 11px;
+    padding: 3px 6px;
   }
 
   .logout-button {
@@ -164,9 +199,43 @@
   }
 }
 
+@media (max-width: 480px) {
+  .app-header {
+    padding: 12px;
+  }
+
+  .header-title h1 {
+    font-size: 18px;
+  }
+
+  .header-title p {
+    font-size: 12px;
+  }
+
+  .header-content {
+    gap: 10px;
+  }
+
+  .nav-link {
+    font-size: 13px;
+    padding: 5px 10px;
+  }
+
+  .user-email {
+    font-size: 11px;
+  }
+
+  .logout-button {
+    font-size: 11px;
+    padding: 3px 6px;
+  }
+}
+
 .app-content {
   flex: 1;
   overflow-y: auto;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* Убираем скролл для страниц входа и регистрации */
@@ -272,6 +341,9 @@
   .controls {
     flex-direction: column;
     gap: 15px;
+    padding: 15px;
+    width: 100%;
+    box-sizing: border-box;
   }
   
   .controls-left {
@@ -280,10 +352,28 @@
   
   .export-button {
     width: 100%;
+    box-sizing: border-box;
   }
   
   .date-input {
     width: 100%;
+    box-sizing: border-box;
+  }
+}
+
+@media (max-width: 480px) {
+  .controls {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .loading-message,
+  .error-message,
+  .saving-message,
+  .success-message {
+    padding: 12px 15px;
+    font-size: 14px;
+    margin: 0 10px 15px;
   }
 }
 

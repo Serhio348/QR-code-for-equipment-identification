@@ -10,9 +10,10 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 998;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 9998;
   animation: fadeIn 0.3s ease;
+  backdrop-filter: blur(2px);
 }
 
 @keyframes fadeIn {
@@ -26,17 +27,18 @@
 
 /* Боковая панель */
 .equipment-sidebar {
-  position: fixed;
-  top: 80px; /* Высота глобального header */
+  position: absolute; /* Абсолютное позиционирование, прокручивается со страницей */
+  top: 0; /* Начинается с верха equipment-page, не перекрывает header */
   left: 0;
   width: 280px;
-  height: calc(100vh - 80px);
+  height: auto;
+  min-height: calc(100vh - 80px);
   background: white;
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 4px 0 12px rgba(0, 0, 0, 0.15);
+  border-right: 2px solid #e0e0e0;
   z-index: 999;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
   transition: transform 0.3s ease;
 }
 
@@ -231,17 +233,27 @@
   cursor: not-allowed;
 }
 
-/* Мобильная адаптация */
+/* Мобильная адаптация - полноценный модальный drawer */
 @media (max-width: 768px) {
   .sidebar-overlay {
     display: block;
   }
 
   .equipment-sidebar {
+    /* На мобильных sidebar становится модальным drawer */
+    position: fixed; /* Фиксирован на мобильных */
     transform: translateX(-100%);
-    width: 300px;
-    top: 70px;
-    height: calc(100vh - 70px);
+    width: 85%;
+    max-width: 360px;
+    top: 0; /* Начинается с самого верха */
+    left: 0;
+    height: 100vh; /* Полная высота экрана */
+    z-index: 9999; /* Выше overlay и всего остального */
+    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.3);
+    border-radius: 0;
+    min-width: auto; /* Убираем фиксированную ширину на мобильных */
+    /* Плавная анимация выдвижения */
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .equipment-sidebar.sidebar-open {
@@ -252,6 +264,76 @@
     display: flex;
     align-items: center;
     justify-content: center;
+  }
+
+  .sidebar-header {
+    padding: 20px;
+    padding-top: calc(20px + env(safe-area-inset-top, 0px)); /* Учет safe area на iOS */
+    border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+  }
+
+  .sidebar-header h2 {
+    font-size: 1.2rem;
+  }
+
+  .sidebar-content {
+    padding: 20px;
+    gap: 24px;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)); /* Учет safe area на iOS */
+    max-height: calc(100vh - 100px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch; /* Плавный скролл на iOS */
+  }
+
+  .sidebar-button {
+    padding: 14px 16px;
+    font-size: 0.95rem;
+    min-height: 48px; /* Минимальная высота для удобного нажатия */
+  }
+
+}
+
+@media (max-width: 480px) {
+  .equipment-sidebar {
+    width: 90%;
+    max-width: 100%;
+    /* На очень малых экранах можно сделать почти на весь экран */
+  }
+
+  .sidebar-header {
+    padding: 16px;
+    padding-top: calc(16px + env(safe-area-inset-top, 0px));
+  }
+
+  .sidebar-header h2 {
+    font-size: 1.1rem;
+  }
+
+  .sidebar-content {
+    padding: 16px;
+    gap: 20px;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .sidebar-section {
+    gap: 14px;
+  }
+
+  .sidebar-button {
+    padding: 12px 14px;
+    font-size: 0.9rem;
+    min-height: 48px;
+  }
+
+  .equipment-sidebar .date-input {
+    font-size: 0.9rem;
+    padding: 10px 12px;
+  }
+
+  .equipment-sidebar .save-button {
+    padding: 12px;
+    font-size: 0.95rem;
+    min-height: 48px;
   }
 }
 
