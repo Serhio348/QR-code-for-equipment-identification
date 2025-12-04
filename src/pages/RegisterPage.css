@@ -198,13 +198,55 @@
 }
 
 /* Адаптивность */
-@media (max-width: 480px) {
+@media (max-width: 768px) {
+  .register-page {
+    padding: 15px;
+  }
+
   .register-container {
-    padding: 24px;
+    padding: 30px;
+    max-width: 100%;
   }
 
   .register-header h1 {
     font-size: 24px;
+  }
+}
+
+@media (max-width: 480px) {
+  .register-page {
+    padding: 10px;
+  }
+
+  .register-container {
+    padding: 20px;
+    border-radius: 8px;
+  }
+
+  .register-header {
+    margin-bottom: 24px;
+  }
+
+  .register-header h1 {
+    font-size: 20px;
+  }
+
+  .register-header p {
+    font-size: 13px;
+  }
+
+  .register-form {
+    gap: 16px;
+  }
+
+  .form-group input {
+    padding: 10px;
+    font-size: 16px; /* Предотвращаем зум на iOS */
+  }
+
+  .submit-button {
+    padding: 12px;
+    font-size: 16px;
   }
 }
 

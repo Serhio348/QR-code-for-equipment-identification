@@ -9,8 +9,9 @@ import EquipmentPlate from '../components/EquipmentPlate';
 import MaintenanceLogModal from '../components/MaintenanceLogModal';
 import DocumentationModal from '../components/DocumentationModal';
 import EquipmentPageHeader from '../components/EquipmentPage/EquipmentPageHeader';
-import EquipmentSidebar from '../components/EquipmentPage/EquipmentSidebar';
 import StatusMessages from '../components/EquipmentPage/StatusMessages';
+import { useAuth } from '../contexts/AuthContext';
+import { getEquipmentEditUrl } from '../utils/routes';
 import { filterSpecs, FilterSpecs } from '../types/equipment';
 import { deleteEquipment } from '../services/equipmentApi';
 import { useEquipmentData, clearEquipmentCache } from '../hooks/useEquipmentData';
@@ -22,6 +23,7 @@ import './EquipmentPage.css';
 const EquipmentPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
   
   // Используем хук для загрузки данных (с кешированием)
   const { data: equipmentData, loading, error: loadError } = useEquipmentData(id && id !== 'new' ? id : undefined);
@@ -46,7 +48,6 @@ const EquipmentPage: React.FC = () => {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isMaintenanceLogOpen, setMaintenanceLogOpen] = useState(false);
   const [isDocumentationOpen, setDocumentationOpen] = useState(false);
-  const [isSidebarOpen, setSidebarOpen] = useState(false);
   
   // Объединяем ошибки загрузки, сохранения дат и удаления
   const error = loadError || datesError || deleteError;
@@ -134,36 +135,20 @@ const EquipmentPage: React.FC = () => {
       <EquipmentPageHeader
         equipment={currentEquipment}
         loading={loading}
-        onToggleSidebar={() => setSidebarOpen(!isSidebarOpen)}
-      />
-
-      <EquipmentSidebar
-        equipment={currentEquipment}
-        onDelete={handleDelete}
-        deleting={deleting}
-        onOpenMaintenanceLog={
-          currentEquipment ? () => {
-            setMaintenanceLogOpen(true);
-            setSidebarOpen(false); // Закрываем панель на мобильных после открытия модального окна
-          } : undefined
-        }
-        onOpenDocumentation={
-          currentEquipment?.googleDriveUrl ? () => {
-            setDocumentationOpen(true);
-            setSidebarOpen(false); // Закрываем панель на мобильных после открытия модального окна
-          } : undefined
-        }
+        isAdmin={isAdmin}
+        onOpenMaintenanceLog={currentEquipment ? () => setMaintenanceLogOpen(true) : undefined}
+        onOpenDocumentation={currentEquipment?.googleDriveUrl ? () => setDocumentationOpen(true) : undefined}
+        onEditEquipment={currentEquipment ? () => navigate(getEquipmentEditUrl(currentEquipment.id)) : undefined}
+        onDeleteEquipment={handleDelete}
+        onExportPDF={handleExportPDF}
         documentationAvailable={!!currentEquipment?.googleDriveUrl}
-        loading={loading}
+        deleting={deleting}
         commissioningDate={commissioningDate}
         lastMaintenanceDate={lastMaintenanceDate}
         onCommissioningDateChange={setCommissioningDate}
         onLastMaintenanceDateChange={setLastMaintenanceDate}
         onSaveDates={saveDates}
         savingDates={saving}
-        onExportPDF={handleExportPDF}
-        isOpen={isSidebarOpen}
-        onToggle={() => setSidebarOpen(!isSidebarOpen)}
       />
 
       <div className="plate-container">

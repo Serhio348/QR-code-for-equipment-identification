@@ -166,19 +166,84 @@
 }
 
 @media (max-width: 768px) {
+  .drive-files-list {
+    margin: 10px;
+    padding: 15px;
+    width: calc(100% - 20px);
+    box-sizing: border-box;
+  }
+
   .files-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 15px;
   }
 
+  .files-header h3 {
+    font-size: 18px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+
   .files-actions {
     width: 100%;
     justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .refresh-button,
+  .open-folder-button {
+    flex: 1;
+    min-width: 120px;
+    box-sizing: border-box;
   }
 
   .files-grid {
     grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .file-card {
+    padding: 12px;
+  }
+
+  .file-name {
+    font-size: 13px;
+    white-space: normal;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+}
+
+@media (max-width: 480px) {
+  .drive-files-list {
+    margin: 5px;
+    padding: 12px;
+    width: calc(100% - 10px);
+  }
+
+  .files-header h3 {
+    font-size: 16px;
+  }
+
+  .files-actions {
+    flex-direction: column;
+  }
+
+  .refresh-button,
+  .open-folder-button {
+    width: 100%;
+  }
+
+  .file-card {
+    padding: 10px;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .file-icon {
+    font-size: 28px;
   }
 }
 

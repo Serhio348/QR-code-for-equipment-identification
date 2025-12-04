@@ -56,10 +56,32 @@
     flex-direction: column;
     gap: 15px;
     align-items: stretch;
+    padding: 15px;
+  }
+
+  .home-page-header h1 {
+    font-size: 22px;
   }
   
   .add-button {
     width: 100%;
+    box-sizing: border-box;
+  }
+}
+
+@media (max-width: 480px) {
+  .home-page-header {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .home-page-header h1 {
+    font-size: 18px;
+  }
+
+  .add-button {
+    padding: 10px 20px;
+    font-size: 14px;
   }
 }
 
