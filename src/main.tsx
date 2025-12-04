@@ -17,11 +17,6 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 )
 
 // Регистрация Service Worker для PWA
-// В Vite используется import.meta.env.MODE вместо process.env.NODE_ENV
-if (import.meta.env.MODE === 'production' || import.meta.env.PROD) {
-  registerServiceWorker();
-} else {
-  // В режиме разработки можно зарегистрировать для тестирования
-  // registerServiceWorker();
-}
+// Регистрируем в production и dev режиме для тестирования PWA
+registerServiceWorker();
 
