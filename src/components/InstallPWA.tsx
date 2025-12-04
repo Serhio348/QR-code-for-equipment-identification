@@ -109,40 +109,68 @@ const InstallPWA: React.FC = () => {
   }, []);
 
   const handleInstallClick = async () => {
+    console.log('[PWA] handleInstallClick вызван', { hasDeferredPrompt: !!deferredPrompt });
+    
     // Проверяем, iOS ли это
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
+    const isAndroid = /Android/.test(navigator.userAgent);
+    const isChrome = /Chrome/.test(navigator.userAgent);
     
+    // Для iOS Safari всегда показываем инструкции
     if (isIOS && isSafari) {
-      // Для iOS показываем инструкции
-      alert('Для установки приложения на iOS:\n1. Нажмите кнопку "Поделиться" (квадрат со стрелкой вверх)\n2. Выберите "На экран «Домой»"\n3. Нажмите "Добавить"');
+      alert('Для установки приложения на iOS:\n\n1. Нажмите кнопку "Поделиться" (квадрат со стрелкой вверх внизу экрана)\n2. Прокрутите вниз и выберите "На экран «Домой»"\n3. Нажмите "Добавить"');
       setShowInstallButton(false);
+      localStorage.setItem('pwa-install-banner-dismissed', 'true');
       return;
     }
 
-    if (!deferredPrompt) {
-      console.warn('[PWA] No deferred prompt available');
-      return;
-    }
+    // Если есть deferredPrompt, используем его
+    if (deferredPrompt) {
+      try {
+        console.log('[PWA] Показываем нативный prompt установки');
+        // Показываем prompt установки
+        await deferredPrompt.prompt();
 
-    try {
-      // Показываем prompt установки
-      await deferredPrompt.prompt();
+        // Ждем выбора пользователя
+        const { outcome } = await deferredPrompt.userChoice;
 
-      // Ждем выбора пользователя
-      const { outcome } = await deferredPrompt.userChoice;
+        console.log('[PWA] Результат выбора пользователя:', outcome);
 
-      if (outcome === 'accepted') {
-        console.log('[PWA] Пользователь принял установку');
-      } else {
-        console.log('[PWA] Пользователь отклонил установку');
+        if (outcome === 'accepted') {
+          console.log('[PWA] Пользователь принял установку');
+        } else {
+          console.log('[PWA] Пользователь отклонил установку');
+        }
+      } catch (error) {
+        console.error('[PWA] Ошибка при показе prompt:', error);
+        // Если произошла ошибка, показываем инструкции
+        showManualInstallInstructions(isAndroid, isChrome);
+      } finally {
+        setDeferredPrompt(null);
+        setShowInstallButton(false);
       }
-    } catch (error) {
-      console.error('[PWA] Ошибка при показе prompt:', error);
-    } finally {
-      setDeferredPrompt(null);
-      setShowInstallButton(false);
+    } else {
+      // Если нет deferredPrompt, показываем инструкции по ручной установке
+      console.log('[PWA] deferredPrompt недоступен, показываем инструкции');
+      showManualInstallInstructions(isAndroid, isChrome);
     }
+  };
+
+  const showManualInstallInstructions = (isAndroid: boolean, isChrome: boolean) => {
+    let instructions = '';
+    
+    if (isAndroid && isChrome) {
+      instructions = 'Для установки приложения на Android:\n\n1. Нажмите на меню браузера (три точки в правом верхнем углу)\n2. Выберите "Установить приложение" или "Добавить на главный экран"\n3. Подтвердите установку';
+    } else if (isAndroid) {
+      instructions = 'Для установки приложения на Android:\n\n1. Откройте меню браузера\n2. Найдите опцию "Добавить на главный экран" или "Установить приложение"\n3. Подтвердите установку';
+    } else {
+      instructions = 'Для установки приложения:\n\n1. Найдите в меню браузера опцию "Установить приложение" или "Добавить на главный экран"\n2. Следуйте инструкциям на экране';
+    }
+    
+    alert(instructions);
+    setShowInstallButton(false);
+    localStorage.setItem('pwa-install-banner-dismissed', 'true');
   };
 
   // Логируем состояние для отладки
