@@ -173,28 +173,28 @@
 
 @media (max-width: 768px) {
   .equipment-plate {
-    padding: 12px;
-    margin: 8px;
+    padding: 8px;
+    margin: 5px;
     border-radius: 6px;
-    max-width: calc(100% - 16px);
+    max-width: calc(100% - 10px);
   }
 
   .plate-header {
-    margin-left: -12px;
-    margin-right: -12px;
-    margin-top: -12px;
-    padding: 12px 8px;
-    padding-top: 12px;
-    padding-bottom: 10px;
-    width: calc(100% + 24px);
+    margin-left: -8px;
+    margin-right: -8px;
+    margin-top: -8px;
+    padding: 8px 6px;
+    padding-top: 8px;
+    padding-bottom: 6px;
+    width: calc(100% + 16px);
     border-radius: 4px 4px 0 0;
-    margin-bottom: 15px;
+    margin-bottom: 8px;
   }
 
   .equipment-name {
     font-size: 18px;
-    padding: 0 5px;
-    margin-bottom: 5px;
+    padding: 0 4px;
+    margin-bottom: 3px;
     line-height: 1.2;
   }
 
@@ -205,7 +205,7 @@
   .plate-content {
     flex-direction: column;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
   }
   
   .specs-table {
@@ -219,55 +219,64 @@
     font-size: 13px;
   }
 
+  .specs-table tr {
+    border-bottom: 1px solid #e0e0e0;
+  }
+
   .spec-label,
   .spec-value {
-    padding: 8px 10px;
+    padding: 5px 6px;
     font-size: 13px;
-    line-height: 1.4;
+    line-height: 1.3;
+  }
+
+  .date-row {
+    padding: 4px 0;
   }
 
   .qr-section {
     width: 100%;
     max-width: 100%;
-    padding: 12px;
-    gap: 10px;
+    padding: 8px;
+    gap: 6px;
   }
 
   .qr-code-container svg {
-    width: 150px !important;
-    height: 150px !important;
+    width: 120px !important;
+    height: 120px !important;
   }
 
   .qr-label {
     font-size: 11px;
-    padding: 0 5px;
+    padding: 0 4px;
+    margin: 0;
   }
 }
 
 @media (max-width: 480px) {
   .equipment-plate {
-    padding: 10px;
-    margin: 5px;
+    padding: 6px;
+    margin: 3px;
     border-width: 1px;
-    max-width: calc(100% - 10px);
+    max-width: calc(100% - 6px);
   }
 
   .plate-header {
-    margin-left: -10px;
-    margin-right: -10px;
-    margin-top: -10px;
-    padding: 10px 6px;
-    padding-top: 10px;
-    padding-bottom: 8px;
-    width: calc(100% + 20px);
-    margin-bottom: 12px;
+    margin-left: -6px;
+    margin-right: -6px;
+    margin-top: -6px;
+    padding: 6px 4px;
+    padding-top: 6px;
+    padding-bottom: 5px;
+    width: calc(100% + 12px);
+    margin-bottom: 6px;
   }
 
   .equipment-name {
     font-size: 16px;
     line-height: 1.2;
     padding: 0;
-    margin-bottom: 4px;
+    margin-bottom: 2px;
   }
 
   .filter-number {
@@ -275,15 +284,15 @@
   }
 
   .plate-content {
-    gap: 10px;
+    gap: 6px;
   }
 
   .spec-label,
   .spec-value {
-    padding: 6px 8px;
+    padding: 4px 5px;
     font-size: 12px;
     width: 50%;
-    line-height: 1.3;
+    line-height: 1.25;
   }
 
   /* На очень малых экранах делаем таблицу вертикальной */
@@ -299,9 +308,9 @@
 
   .specs-table tr {
     display: block;
-    border-bottom: 2px solid #e0e0e0;
-    margin-bottom: 10px;
-    padding-bottom: 10px;
+    border-bottom: 1px solid #e0e0e0;
+    margin-bottom: 6px;
+    padding-bottom: 6px;
   }
 
   .specs-table tr:last-child {
@@ -313,40 +322,42 @@
   .spec-label {
     display: block;
     width: 100%;
-    padding: 8px 0;
+    padding: 4px 0;
     font-weight: 700;
     color: #667eea;
     border-bottom: 1px solid #e0e0e0;
-    margin-bottom: 5px;
+    margin-bottom: 3px;
   }
 
   .spec-value {
     display: block;
     width: 100%;
-    padding: 8px 0;
-    padding-left: 10px;
+    padding: 4px 0;
+    padding-left: 8px;
   }
 
   .date-row {
     background-color: #f9f9f9;
-    padding: 8px;
+    padding: 6px;
     border-radius: 4px;
+    margin-bottom: 4px;
   }
 
   .qr-section {
-    padding: 10px;
-    gap: 8px;
+    padding: 6px;
+    gap: 5px;
   }
 
   .qr-code-container svg {
-    width: 120px !important;
-    height: 120px !important;
+    width: 100px !important;
+    height: 100px !important;
   }
 
   .qr-label {
     font-size: 10px;
     max-width: 100%;
-    padding: 0 5px;
+    padding: 0 3px;
+    margin: 0;
   }
 }
 
