@@ -1,7 +1,10 @@
 /**
  * sessionStorage.ts
  * 
- * Утилиты для работы с сессией пользователя в sessionStorage
+ * Утилиты для работы с сессией пользователя в localStorage
+ * 
+ * Используется localStorage вместо sessionStorage для сохранения сессии
+ * между обновлениями страницы и перезапусками браузера
  */
 
 import type { UserSession } from '../types/auth';
@@ -10,26 +13,26 @@ import type { User } from '../types/user';
 const SESSION_KEY = 'user_session';
 
 /**
- * Сохранить сессию пользователя в sessionStorage
+ * Сохранить сессию пользователя в localStorage
  * 
  * @param session - Объект сессии пользователя
  */
 export function saveSession(session: UserSession): void {
   try {
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
   } catch (error) {
     console.error('Ошибка сохранения сессии:', error);
   }
 }
 
 /**
- * Загрузить сессию пользователя из sessionStorage
+ * Загрузить сессию пользователя из localStorage
  * 
  * @returns Объект сессии или null, если сессия не найдена
  */
 export function loadSession(): UserSession | null {
   try {
-    const sessionData = sessionStorage.getItem(SESSION_KEY);
+    const sessionData = localStorage.getItem(SESSION_KEY);
     if (!sessionData) {
       return null;
     }
@@ -49,11 +52,11 @@ export function loadSession(): UserSession | null {
 }
 
 /**
- * Удалить сессию пользователя из sessionStorage
+ * Удалить сессию пользователя из localStorage
  */
 export function clearSession(): void {
   try {
-    sessionStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(SESSION_KEY);
   } catch (error) {
     console.error('Ошибка удаления сессии:', error);
   }

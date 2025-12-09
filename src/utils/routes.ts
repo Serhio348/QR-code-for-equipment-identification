@@ -24,6 +24,9 @@ export const ROUTES = {
   
   /** Редактирование оборудования по ID */
   EQUIPMENT_EDIT: (id: string) => `/equipment/${id}/edit`,
+  
+  /** Тестирование Beliot API */
+  BELIOT_TEST: '/beliot-test',
 } as const;
 
 /**

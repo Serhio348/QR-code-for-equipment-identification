@@ -55,19 +55,26 @@ self.addEventListener('activate', (event) => {
 // Перехват запросов
 self.addEventListener('fetch', (event) => {
   // Пропускаем запросы к API (они должны идти на сервер)
-  if (event.request.url.includes('/exec') || event.request.url.includes('script.google.com')) {
+  if (event.request.url.includes('/exec') || 
+      event.request.url.includes('script.google.com') ||
+      event.request.url.includes('beliot.by')) {
     return; // Не кэшируем API запросы
   }
   
-  // Для остальных запросов используем стратегию "Network First, Cache Fallback"
+  // Не кэшируем POST, PUT, DELETE и другие не-GET запросы
+  if (event.request.method !== 'GET') {
+    return; // Пропускаем не-GET запросы без кэширования
+  }
+  
+  // Для остальных GET запросов используем стратегию "Network First, Cache Fallback"
   event.respondWith(
     fetch(event.request)
       .then((response) => {
         // Клонируем ответ для кэширования
         const responseToCache = response.clone();
         
-        // Кэшируем успешные ответы
-        if (response.status === 200) {
+        // Кэшируем только успешные GET ответы
+        if (response.status === 200 && event.request.method === 'GET') {
           caches.open(CACHE_NAME).then((cache) => {
             cache.put(event.request, responseToCache);
           });

@@ -6,6 +6,7 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import EquipmentPage from './pages/EquipmentPage';
 import EquipmentFormPage from './pages/EquipmentFormPage';
+import BeliotDevicesTest from './components/BeliotDevicesTest';
 import NotFoundPage from './pages/NotFoundPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import InstallPWA from './components/InstallPWA';
@@ -102,6 +103,16 @@ const App: React.FC = () => {
             element={
               <ProtectedRoute>
                 <EquipmentPage />
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Тестирование Beliot API - для всех авторизованных */}
+          <Route 
+            path={ROUTES.BELIOT_TEST} 
+            element={
+              <ProtectedRoute>
+                <BeliotDevicesTest />
               </ProtectedRoute>
             } 
           />
