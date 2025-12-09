@@ -50,17 +50,32 @@ export function AuthProvider({ children }: AuthProviderProps) {
           return;
         }
 
-        // Проверяем сессию на сервере
-        const sessionCheck = await checkSession(session.user.email);
-        
-        if (!sessionCheck.active) {
-          clearSession();
-          setLoading(false);
-          return;
+        // Проверяем сессию на сервере (с обработкой ошибок)
+        let sessionCheck;
+        try {
+          sessionCheck = await checkSession(session.user.email);
+          
+          if (!sessionCheck.active) {
+            clearSession();
+            setLoading(false);
+            return;
+          }
+        } catch (sessionError: any) {
+          // Если ошибка при проверке сессии, но сессия не истекла по времени,
+          // продолжаем работу (возможно, временная проблема с сетью)
+          console.warn('⚠️ Ошибка проверки сессии на сервере, продолжаем с локальной сессией:', sessionError.message);
+          // Не очищаем сессию при временных ошибках сети
         }
 
         // Обновляем роль пользователя (может измениться)
-        const adminCheck = await verifyAdmin(session.user.email);
+        let adminCheck;
+        try {
+          adminCheck = await verifyAdmin(session.user.email);
+        } catch (adminError: any) {
+          // Если ошибка при проверке роли, используем роль из сессии
+          console.warn('⚠️ Ошибка проверки роли, используем роль из сессии:', adminError.message);
+          adminCheck = { role: session.user.role || 'user' };
+        }
         
         setUser({
           ...session.user,
@@ -80,9 +95,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
         startActivityTracking();
         
         setLoading(false);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Ошибка инициализации аутентификации:', error);
-        clearSession();
+        // Не очищаем сессию при ошибках инициализации, если сессия валидна по времени
+        // Пользователь может продолжить работу с локальной сессией
+        if (isSessionExpired() || isSessionTimeout()) {
+          clearSession();
+        }
         setLoading(false);
       }
     };

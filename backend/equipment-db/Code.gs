@@ -296,11 +296,30 @@ function doGet(e) {
         const history = getLoginHistory(historyEmail, historyLimit);
         return createJsonResponse(history);
       
+      // ========================================================================
+      // ДЕЙСТВИЯ ДЛЯ СЧЕТЧИКОВ BELIOT (GET)
+      // ========================================================================
+      
+      case 'getBeliotDevicesOverrides':
+        // Получить все пользовательские изменения счетчиков Beliot
+        Logger.log('📊 Обработка getBeliotDevicesOverrides');
+        return createJsonResponse(getBeliotDevicesOverrides());
+      
+      case 'getBeliotDeviceOverride':
+        // Получить изменения для конкретного устройства
+        Logger.log('📊 Обработка getBeliotDeviceOverride');
+        const overrideDeviceId = e.parameter.deviceId;
+        if (!overrideDeviceId) {
+          return createErrorResponse('deviceId не указан');
+        }
+        const override = getBeliotDeviceOverride(overrideDeviceId);
+        return createJsonResponse(override);
+      
       default:
         // Если действие не распознано, возвращаем ошибку
         Logger.log('❌ Неизвестное действие: ' + action);
-        Logger.log('  - Доступные действия: getAll, getById, getByType, getFolderFiles, getMaintenanceLog, addMaintenanceEntry, verify-admin, get-login-history');
-        return createErrorResponse('Неизвестное действие. Используйте: getAll, getById, getByType, getFolderFiles, getMaintenanceLog, addMaintenanceEntry, verify-admin, get-login-history');
+        Logger.log('  - Доступные действия: getAll, getById, getByType, getFolderFiles, getMaintenanceLog, addMaintenanceEntry, verify-admin, get-login-history, getBeliotDevicesOverrides, getBeliotDeviceOverride');
+        return createErrorResponse('Неизвестное действие. Используйте: getAll, getById, getByType, getFolderFiles, getMaintenanceLog, addMaintenanceEntry, verify-admin, get-login-history, getBeliotDevicesOverrides, getBeliotDeviceOverride');
     }
   } catch (error) {
     // Логируем ошибку для отладки
@@ -826,11 +845,50 @@ function doPost(e) {
           message: removeAdminResult.message
         });
       
+      // ========================================================================
+      // ДЕЙСТВИЯ ДЛЯ СЧЕТЧИКОВ BELIOT (POST)
+      // ========================================================================
+      
+      case 'saveBeliotDeviceOverride':
+        // Сохранить изменения для устройства
+        Logger.log('📊 Обработка saveBeliotDeviceOverride');
+        if (!data.deviceId) {
+          return createErrorResponse('deviceId не указан');
+        }
+        const overrideData = {
+          name: data.name,
+          address: data.address,
+          serialNumber: data.serialNumber,
+          group: data.group,
+          modifiedBy: data.modifiedBy,
+        };
+        return createJsonResponse(saveBeliotDeviceOverride(data.deviceId, overrideData));
+      
+      case 'saveBeliotDevicesOverrides':
+        // Сохранить несколько изменений за раз
+        Logger.log('📊 Обработка saveBeliotDevicesOverrides');
+        if (!data.overrides || typeof data.overrides !== 'object') {
+          return createErrorResponse('overrides не указаны или имеют неверный формат');
+        }
+        return createJsonResponse(saveBeliotDevicesOverrides(data.overrides, data.modifiedBy));
+      
+      case 'deleteBeliotDeviceOverride':
+        // Удалить изменения для устройства
+        Logger.log('📊 Обработка deleteBeliotDeviceOverride');
+        if (!data.deviceId) {
+          return createErrorResponse('deviceId не указан');
+        }
+        const deleted = deleteBeliotDeviceOverride(data.deviceId);
+        return createJsonResponse({
+          success: deleted,
+          message: deleted ? 'Изменения удалены успешно' : 'Изменения не найдены'
+        });
+      
       default:
         // Если действие не распознано, возвращаем ошибку
-        return createErrorResponse('Неизвестное действие. Используйте: add, update, delete, createFolder, addMaintenanceEntry, updateMaintenanceEntry, deleteMaintenanceEntry, register, login, logout, change-password, check-session, verify-admin, add-admin, remove-admin');
+        return createErrorResponse('Неизвестное действие. Используйте: add, update, delete, createFolder, addMaintenanceEntry, updateMaintenanceEntry, deleteMaintenanceEntry, register, login, logout, change-password, check-session, verify-admin, add-admin, remove-admin, saveBeliotDeviceOverride, saveBeliotDevicesOverrides, deleteBeliotDeviceOverride');
     }
-  } catch (error) {
+      } catch (error) {
     // Логируем ошибку для отладки
     Logger.log('Ошибка в doPost: ' + error);
     // Возвращаем ошибку пользователю
