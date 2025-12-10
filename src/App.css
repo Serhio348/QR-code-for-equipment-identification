@@ -10,18 +10,13 @@
   color: white;
   padding: 20px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  position: sticky;
-  top: 0;
-  width: 100%;
-  z-index: 10;
-  flex-shrink: 0;
-}
-
-/* На страницах входа и регистрации хедер фиксирован */
-.app:has(.auth-page) .app-header {
   position: fixed;
   top: 0;
-  z-index: 1001;
+  left: 0;
+  right: 0;
+  width: 100%;
+  z-index: 1000;
+  flex-shrink: 0;
 }
 
 .header-content {
@@ -145,6 +140,10 @@
     padding: 15px;
   }
 
+  .app-content {
+    margin-top: 70px; /* Меньший отступ для мобильных устройств */
+  }
+
   .header-content {
     flex-direction: column;
     gap: 12px;
@@ -204,6 +203,10 @@
     padding: 12px;
   }
 
+  .app-content {
+    margin-top: 65px; /* Еще меньший отступ для очень маленьких экранов */
+  }
+
   .header-title h1 {
     font-size: 18px;
   }
@@ -236,6 +239,7 @@
   overflow-y: auto;
   width: 100%;
   box-sizing: border-box;
+  margin-top: 80px; /* Отступ для фиксированной шапки */
 }
 
 /* Убираем скролл для страниц входа и регистрации */

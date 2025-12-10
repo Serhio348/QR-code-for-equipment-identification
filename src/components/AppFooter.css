@@ -1,0 +1,56 @@
+/* Футер приложения */
+.app-footer {
+  background: #f8f9fa;
+  border-top: 1px solid #e0e0e0;
+  padding: 15px 20px;
+  margin-top: auto;
+  flex-shrink: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.footer-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.footer-text {
+  margin: 0;
+  font-size: 13px;
+  color: #666;
+  font-weight: 400;
+}
+
+.footer-developer {
+  font-weight: 600;
+  color: #667eea;
+  letter-spacing: 0.5px;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+  .app-footer {
+    padding: 12px 15px;
+  }
+
+  .footer-text {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-footer {
+    padding: 10px 12px;
+  }
+
+  .footer-text {
+    font-size: 11px;
+  }
+
+  .footer-developer {
+    display: block;
+    margin-top: 2px;
+  }
+}
+
