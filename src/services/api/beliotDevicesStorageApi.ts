@@ -6,7 +6,6 @@
  */
 
 import { apiRequest } from './apiRequest';
-import { API_CONFIG } from '../../config/api';
 
 export interface BeliotDeviceOverride {
   name?: string;

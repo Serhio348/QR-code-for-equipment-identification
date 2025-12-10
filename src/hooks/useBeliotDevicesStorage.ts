@@ -8,7 +8,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   loadDeviceOverrides,
-  saveDeviceOverrides,
   updateDeviceOverride,
   removeDeviceOverride,
   clearAllOverrides,
