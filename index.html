@@ -9,6 +9,7 @@
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#667eea" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Оборудование" />
     <meta name="description" content="Система для управления оборудованием и журналом обслуживания" />
@@ -30,8 +31,13 @@
     <!-- Eruda - консоль разработчика для мобильных устройств -->
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>
-      // Инициализируем Eruda только в development режиме или если есть параметр ?debug
-      if (import.meta.env.MODE === 'development' || window.location.search.includes('debug=true')) {
+      // Инициализируем Eruda в development режиме или если есть параметр ?debug
+      // Проверяем по hostname (localhost) или параметру debug
+      const isDevelopment = window.location.hostname === 'localhost' || 
+                           window.location.hostname === '127.0.0.1' ||
+                           window.location.search.includes('debug=true');
+      
+      if (isDevelopment) {
         eruda.init();
         
         // Защита от переполнения консоли - ограничиваем количество логов

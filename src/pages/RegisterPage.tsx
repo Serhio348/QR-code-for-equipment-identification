@@ -8,6 +8,8 @@ import { useState, FormEvent, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import LoadingSpinner from '../components/LoadingSpinner';
+import { loadRedirectPath, clearRedirectPath, clearLastPath } from '../utils/pathStorage';
+import { ROUTES } from '../utils/routes';
 import './RegisterPage.css';
 
 export default function RegisterPage() {
@@ -29,9 +31,22 @@ export default function RegisterPage() {
       return;
     }
     
-    // Если уже авторизован, редиректим на главную
+    // Если уже авторизован, редиректим на главное меню
+    // Используем redirectPath только если пользователь пытался зайти на защищенную страницу
     if (isAuthenticated) {
-      navigate('/');
+      // Очищаем сохраненный путь при регистрации, чтобы не восстанавливать старую сессию
+      clearLastPath();
+      
+      const redirectPath = loadRedirectPath();
+      
+      // Очищаем сохраненный путь редиректа
+      if (redirectPath) {
+        clearRedirectPath();
+        navigate(redirectPath);
+      } else {
+        // Всегда на главное меню при регистрации
+        navigate(ROUTES.HOME);
+      }
     }
   }, [isAuthenticated, authLoading, navigate]);
 
@@ -96,8 +111,22 @@ export default function RegisterPage() {
         password,
         name: name.trim() || undefined,
       });
-      // После успешной регистрации редирект на главную
-      navigate('/');
+      
+      // Очищаем сохраненный путь при регистрации, чтобы не восстанавливать старую сессию
+      clearLastPath();
+      
+      // После успешной регистрации редирект на главное меню
+      // Используем redirectPath только если пользователь пытался зайти на защищенную страницу
+      const redirectPath = loadRedirectPath();
+      
+      // Очищаем сохраненный путь редиректа
+      if (redirectPath) {
+        clearRedirectPath();
+        navigate(redirectPath);
+      } else {
+        // Всегда на главное меню при регистрации
+        navigate(ROUTES.HOME);
+      }
     } catch (err: any) {
       setError(err.message || 'Ошибка при регистрации. Попробуйте еще раз.');
       setLoading(false);

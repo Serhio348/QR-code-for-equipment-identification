@@ -8,6 +8,8 @@ import { useState, FormEvent, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import LoadingSpinner from '../components/LoadingSpinner';
+import { loadRedirectPath, clearRedirectPath, clearLastPath } from '../utils/pathStorage';
+import { ROUTES } from '../utils/routes';
 import './LoginPage.css';
 
 export default function LoginPage() {
@@ -26,9 +28,22 @@ export default function LoginPage() {
       return;
     }
     
-    // Если уже авторизован, редиректим на главную
+    // Если уже авторизован, редиректим на главное меню
+    // Используем redirectPath только если пользователь пытался зайти на защищенную страницу
     if (isAuthenticated) {
-      navigate('/');
+      // Очищаем сохраненный путь при логировании, чтобы не восстанавливать старую сессию
+      clearLastPath();
+      
+      const redirectPath = loadRedirectPath();
+      
+      // Очищаем сохраненный путь редиректа
+      if (redirectPath) {
+        clearRedirectPath();
+        navigate(redirectPath);
+      } else {
+        // Всегда на главное меню при логировании
+        navigate(ROUTES.HOME);
+      }
     }
   }, [isAuthenticated, authLoading, navigate]);
 
@@ -70,8 +85,22 @@ export default function LoginPage() {
 
     try {
       await login({ email: email.trim(), password });
-      // После успешного входа редирект на главную
-      navigate('/');
+      
+      // Очищаем сохраненный путь при логировании, чтобы не восстанавливать старую сессию
+      clearLastPath();
+      
+      // После успешного входа редирект на главное меню
+      // Используем redirectPath только если пользователь пытался зайти на защищенную страницу
+      const redirectPath = loadRedirectPath();
+      
+      // Очищаем сохраненный путь редиректа
+      if (redirectPath) {
+        clearRedirectPath();
+        navigate(redirectPath);
+      } else {
+        // Всегда на главное меню при логировании
+        navigate(ROUTES.HOME);
+      }
     } catch (err: any) {
       setError(err.message || 'Ошибка при входе. Проверьте email и пароль.');
       setLoading(false);

@@ -1,0 +1,418 @@
+.access-settings-page {
+  min-height: auto;
+  background: #f5f5f5;
+  padding: 20px;
+  padding-bottom: 20px; /* Обычный отступ снизу */
+}
+
+.access-settings-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  padding: 30px;
+}
+
+.access-settings-header {
+  margin-bottom: 30px;
+  padding-bottom: 20px;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.access-settings-header h1 {
+  margin: 0 0 10px 0;
+  font-size: 28px;
+  color: #333;
+}
+
+.access-settings-header p {
+  margin: 0;
+  color: #666;
+  font-size: 16px;
+}
+
+.error-message {
+  background: #fee;
+  border: 1px solid #fcc;
+  color: #c33;
+  padding: 15px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.retry-button {
+  background: #c33;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.retry-button:hover {
+  background: #a22;
+}
+
+.access-settings-controls {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 20px;
+  align-items: center;
+}
+
+.search-box {
+  flex: 1;
+}
+
+.search-input {
+  width: 100%;
+  padding: 10px 15px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 16px;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.refresh-button {
+  background: #667eea;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  white-space: nowrap;
+}
+
+.refresh-button:hover:not(:disabled) {
+  background: #5568d3;
+}
+
+.refresh-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.access-settings-table-container {
+  overflow-x: auto;
+  overflow-y: auto;
+  margin-bottom: 20px;
+  max-height: 600px;
+  position: relative;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+}
+
+/* Стилизация скроллбара */
+.access-settings-table-container::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.access-settings-table-container::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.access-settings-table-container::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+.access-settings-table-container::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+.access-settings-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 800px;
+}
+
+.access-settings-table thead {
+  background: #f0f0f0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.access-settings-table th {
+  padding: 15px;
+  text-align: left;
+  font-weight: 600;
+  color: #333;
+  border-bottom: 2px solid #e0e0e0;
+  vertical-align: middle;
+  background: #f0f0f0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.access-settings-table th:first-child {
+  border-top-left-radius: 8px;
+}
+
+.access-settings-table th:last-child {
+  border-top-right-radius: 8px;
+}
+
+.app-header {
+  text-align: center;
+  background: #f0f0f0;
+}
+
+.app-header-content {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.app-name {
+  font-weight: 600;
+  color: #333;
+}
+
+.app-description {
+  font-size: 12px;
+  color: #666;
+  font-weight: normal;
+}
+
+.access-settings-table td {
+  padding: 15px;
+  border-bottom: 1px solid #e0e0e0;
+  vertical-align: middle;
+}
+
+.user-info {
+  min-width: 250px;
+}
+
+.user-info-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.user-name,
+.user-email,
+.user-id {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.user-label {
+  font-weight: 600;
+  color: #666;
+  min-width: 45px;
+  flex-shrink: 0;
+}
+
+.user-value {
+  color: #333;
+  word-break: break-word;
+  flex: 1;
+}
+
+.user-name .user-value {
+  font-weight: 500;
+  color: #333;
+}
+
+.user-email .user-value {
+  color: #667eea;
+  font-weight: 500;
+}
+
+.user-id .user-value {
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  color: #999;
+}
+
+.access-cell {
+  text-align: center;
+}
+
+.toggle-switch {
+  display: inline-block;
+  position: relative;
+  cursor: pointer;
+}
+
+.toggle-switch input {
+  display: none;
+}
+
+.toggle-slider {
+  display: inline-block;
+  width: 60px;
+  height: 30px;
+  background: #ccc;
+  border-radius: 15px;
+  position: relative;
+  transition: background 0.3s;
+  cursor: pointer;
+}
+
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  background: white;
+  border-radius: 50%;
+  top: 3px;
+  left: 3px;
+  transition: transform 0.3s;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.toggle-slider.active {
+  background: #667eea;
+}
+
+.toggle-slider.active::before {
+  transform: translateX(30px);
+}
+
+.toggle-slider::after {
+  content: attr(data-label);
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 12px;
+  font-weight: bold;
+  color: white;
+  pointer-events: none;
+}
+
+.updated-info {
+  font-size: 12px;
+  color: #666;
+  min-width: 150px;
+}
+
+.updated-time {
+  color: #999;
+  margin-top: 2px;
+}
+
+.updated-by {
+  color: #999;
+  margin-top: 5px;
+  font-size: 11px;
+}
+
+.no-data {
+  text-align: center;
+  padding: 40px;
+  color: #999;
+}
+
+.access-settings-footer {
+  margin-top: 30px;
+  padding-top: 20px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.back-button {
+  background: #6c757d;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.back-button:hover {
+  background: #5a6268;
+}
+
+/* Пагинация */
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 15px;
+  margin: 30px 0;
+  padding: 20px 0;
+  border-top: 1px solid #e0e0e0;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.pagination-button {
+  background: #667eea;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 0.3s;
+}
+
+.pagination-button:hover:not(:disabled) {
+  background: #5568d3;
+}
+
+.pagination-button:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.pagination-info {
+  font-size: 14px;
+  color: #666;
+  font-weight: 500;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+  .access-settings-container {
+    padding: 15px;
+  }
+
+  .access-settings-header h1 {
+    font-size: 24px;
+  }
+
+  .access-settings-controls {
+    flex-direction: column;
+  }
+
+  .search-box {
+    width: 100%;
+  }
+
+  .access-settings-table {
+    font-size: 14px;
+  }
+
+  .access-settings-table th,
+  .access-settings-table td {
+    padding: 10px;
+  }
+}
+

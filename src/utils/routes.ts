@@ -7,7 +7,7 @@
  * Базовые маршруты приложения
  */
 export const ROUTES = {
-  /** Главная страница - список оборудования */
+  /** Главное меню - выбор между приложениями */
   HOME: '/',
   
   /** Страница входа */
@@ -15,6 +15,9 @@ export const ROUTES = {
   
   /** Страница регистрации */
   REGISTER: '/register',
+  
+  /** Страница списка оборудования */
+  EQUIPMENT: '/equipment',
   
   /** Создание нового оборудования */
   EQUIPMENT_NEW: '/equipment/new',
@@ -24,6 +27,15 @@ export const ROUTES = {
   
   /** Редактирование оборудования по ID */
   EQUIPMENT_EDIT: (id: string) => `/equipment/${id}/edit`,
+  
+  /** Страница счётчиков воды */
+  WATER: '/water',
+  
+  /** Страница настроек доступа к приложениям (только для администраторов) */
+  ACCESS_SETTINGS: '/admin/access-settings',
+  
+  /** Тестирование Beliot API (устаревший маршрут, используйте WATER) */
+  BELIOT_TEST: '/beliot-test',
 } as const;
 
 /**

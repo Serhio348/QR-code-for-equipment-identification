@@ -36,12 +36,33 @@
 function createJsonResponse(data) {
   // Создаем JSON ответ
   // Google Apps Script автоматически устанавливает CORS заголовки при настройке "У кого есть доступ: Все"
-  return ContentService
-    .createTextOutput(JSON.stringify({
+  try {
+    Logger.log('[createJsonResponse] Получены данные, тип: ' + typeof data);
+    Logger.log('[createJsonResponse] Это массив: ' + Array.isArray(data));
+    if (Array.isArray(data)) {
+      Logger.log('[createJsonResponse] Длина массива: ' + data.length);
+    }
+    
+    const jsonData = {
       success: true,
       data: data
-    }))
-    .setMimeType(ContentService.MimeType.JSON);
+    };
+    
+    const jsonString = JSON.stringify(jsonData);
+    Logger.log('[createJsonResponse] JSON строка создана, длина: ' + jsonString.length);
+    Logger.log('[createJsonResponse] Первые 500 символов: ' + jsonString.substring(0, 500));
+    
+    const response = ContentService
+      .createTextOutput(jsonString)
+      .setMimeType(ContentService.MimeType.JSON);
+    
+    Logger.log('[createJsonResponse] Ответ создан успешно');
+    return response;
+  } catch (error) {
+    Logger.log('[createJsonResponse] Ошибка: ' + error.toString());
+    Logger.log('[createJsonResponse] Stack: ' + (error.stack || 'нет'));
+    throw error;
+  }
 }
 
 /**

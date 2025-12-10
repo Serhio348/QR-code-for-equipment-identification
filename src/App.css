@@ -1,8 +1,10 @@
 .app {
-  min-height: 100vh;
+  height: 100vh;
   background: #f5f5f5;
   display: flex;
   flex-direction: column;
+  position: relative;
+  overflow: hidden; /* Предотвращаем скролл на уровне app */
 }
 
 .app-header {
@@ -10,18 +12,13 @@
   color: white;
   padding: 20px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  position: sticky;
-  top: 0;
-  width: 100%;
-  z-index: 10;
-  flex-shrink: 0;
-}
-
-/* На страницах входа и регистрации хедер фиксирован */
-.app:has(.auth-page) .app-header {
   position: fixed;
   top: 0;
-  z-index: 1001;
+  left: 0;
+  right: 0;
+  width: 100%;
+  z-index: 1000;
+  flex-shrink: 0;
 }
 
 .header-content {
@@ -145,6 +142,10 @@
     padding: 15px;
   }
 
+  .app-content {
+    margin-top: 70px; /* Меньший отступ для мобильных устройств */
+  }
+
   .header-content {
     flex-direction: column;
     gap: 12px;
@@ -204,6 +205,10 @@
     padding: 12px;
   }
 
+  .app-content {
+    margin-top: 65px; /* Еще меньший отступ для очень маленьких экранов */
+  }
+
   .header-title h1 {
     font-size: 18px;
   }
@@ -234,8 +239,21 @@
 .app-content {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   width: 100%;
   box-sizing: border-box;
+  margin-top: 80px; /* Отступ для фиксированной шапки */
+  padding-bottom: 60px; /* Отступ для фиксированного футера */
+  min-height: 0; /* Важно для flex-контейнера */
+  max-height: calc(100vh - 80px); /* Максимальная высота с учетом заголовка */
+}
+
+/* Убираем отступ сверху для главного меню, так как хедер не отображается */
+.app-content:has(.main-menu-page) {
+  margin-top: 0;
+  padding-bottom: 0;
+  overflow: hidden;
+  max-height: 100vh;
 }
 
 /* Убираем скролл для страниц входа и регистрации */
