@@ -296,6 +296,20 @@ function doGet(e) {
         const history = getLoginHistory(historyEmail, historyLimit);
         return createJsonResponse(history);
       
+      case 'getAllUserAccess':
+        // Получить все настройки доступа через GET
+        Logger.log('🔐 [doGet] Обработка getAllUserAccess (GET)');
+        return handleGetAllUserAccess();
+      
+      case 'getUserAccess':
+        // Получить настройки доступа для пользователя через GET
+        Logger.log('🔐 [doGet] Обработка getUserAccess (GET)');
+        const getUserEmail = e.parameter.email;
+        if (!getUserEmail) {
+          return createErrorResponse('Email пользователя обязателен');
+        }
+        return handleGetUserAccess({ email: getUserEmail });
+      
       // ========================================================================
       // ДЕЙСТВИЯ ДЛЯ СЧЕТЧИКОВ BELIOT (GET)
       // ========================================================================
@@ -318,8 +332,8 @@ function doGet(e) {
       default:
         // Если действие не распознано, возвращаем ошибку
         Logger.log('❌ Неизвестное действие: ' + action);
-        Logger.log('  - Доступные действия: getAll, getById, getByType, getFolderFiles, getMaintenanceLog, addMaintenanceEntry, verify-admin, get-login-history, getBeliotDevicesOverrides, getBeliotDeviceOverride');
-        return createErrorResponse('Неизвестное действие. Используйте: getAll, getById, getByType, getFolderFiles, getMaintenanceLog, addMaintenanceEntry, verify-admin, get-login-history, getBeliotDevicesOverrides, getBeliotDeviceOverride');
+        Logger.log('  - Доступные действия: getAll, getById, getByType, getFolderFiles, getMaintenanceLog, addMaintenanceEntry, verify-admin, get-login-history, getAllUserAccess, getUserAccess, getBeliotDevicesOverrides, getBeliotDeviceOverride');
+        return createErrorResponse('Неизвестное действие. Используйте: getAll, getById, getByType, getFolderFiles, getMaintenanceLog, addMaintenanceEntry, verify-admin, get-login-history, getAllUserAccess, getUserAccess, getBeliotDevicesOverrides, getBeliotDeviceOverride');
     }
   } catch (error) {
     // Логируем ошибку для отладки
@@ -380,6 +394,7 @@ function doPost(e) {
     Logger.log('📨 ========== doPost ВЫЗВАН ==========');
     Logger.log('📨 Получен POST запрос');
     Logger.log('  - Timestamp: ' + new Date().toISOString());
+    Logger.log('  - Это HTTP запрос: ' + (typeof e !== 'undefined' && e !== null));
     
     // Проверяем, что объект события передан
     if (!e) {
@@ -782,6 +797,53 @@ function doPost(e) {
           message: changePasswordResult.message
         });
       
+      // ========================================================================
+      // ДЕЙСТВИЯ УПРАВЛЕНИЯ ДОСТУПОМ К ПРИЛОЖЕНИЯМ
+      // ========================================================================
+      
+      case 'getAllUserAccess':
+        // Получить все настройки доступа
+        Logger.log('🔐 [Code.gs] Обработка getAllUserAccess');
+        Logger.log('🔐 [Code.gs] Вызов handleGetAllUserAccess()');
+        try {
+          const result = handleGetAllUserAccess();
+          Logger.log('🔐 [Code.gs] handleGetAllUserAccess() вернул результат');
+          Logger.log('🔐 [Code.gs] Тип результата: ' + typeof result);
+          
+          // Проверяем содержимое ответа перед возвратом
+          if (result && typeof result.getContent === 'function') {
+            const content = result.getContent();
+            Logger.log('🔐 [Code.gs] Размер ответа перед возвратом: ' + content.length + ' символов');
+            Logger.log('🔐 [Code.gs] Первые 500 символов ответа: ' + content.substring(0, 500));
+            
+            // Проверяем, что данные действительно в ответе
+            try {
+              const parsed = JSON.parse(content);
+              Logger.log('🔐 [Code.gs] Парсинг ответа успешен, data.length=' + (parsed.data?.length || 0));
+            } catch (parseErr) {
+              Logger.log('❌ [Code.gs] Ошибка парсинга ответа: ' + parseErr.toString());
+            }
+          }
+          
+          return result;
+        } catch (err) {
+          Logger.log('❌ [Code.gs] Ошибка в handleGetAllUserAccess(): ' + err.toString());
+          Logger.log('❌ [Code.gs] Stack: ' + (err.stack || 'нет'));
+          throw err;
+        }
+      
+      case 'getUserAccess':
+        // Получить настройки доступа для пользователя
+        Logger.log('🔐 Обработка getUserAccess');
+        return handleGetUserAccess(data);
+      
+      case 'updateUserAccess':
+        // Обновить настройки доступа для пользователя
+        Logger.log('🔐 Обработка updateUserAccess');
+        // TODO: Добавить проверку прав администратора
+        // const adminEmail = data.adminEmail || null;
+        return handleUpdateUserAccess(data, data.adminEmail || null);
+      
       case 'check-session':
         // Проверка активности сессии
         Logger.log('⏱️ Обработка check-session');
@@ -886,7 +948,7 @@ function doPost(e) {
       
       default:
         // Если действие не распознано, возвращаем ошибку
-        return createErrorResponse('Неизвестное действие. Используйте: add, update, delete, createFolder, addMaintenanceEntry, updateMaintenanceEntry, deleteMaintenanceEntry, register, login, logout, change-password, check-session, verify-admin, add-admin, remove-admin, saveBeliotDeviceOverride, saveBeliotDevicesOverrides, deleteBeliotDeviceOverride');
+        return createErrorResponse('Неизвестное действие. Используйте: add, update, delete, createFolder, addMaintenanceEntry, updateMaintenanceEntry, deleteMaintenanceEntry, register, login, logout, change-password, check-session, verify-admin, add-admin, remove-admin, getAllUserAccess, getUserAccess, updateUserAccess, saveBeliotDeviceOverride, saveBeliotDevicesOverrides, deleteBeliotDeviceOverride, addDeviceReading, deleteDeviceReadings');
     }
       } catch (error) {
     // Логируем ошибку для отладки
