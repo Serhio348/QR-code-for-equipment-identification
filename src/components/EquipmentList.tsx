@@ -41,6 +41,8 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const itemsPerPage = 6;
 
   /**
    * Поиск оборудования по ID или Google Drive URL
@@ -97,29 +99,44 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
   };
 
   // Фильтрация оборудования
-  const filteredEquipment = equipmentList.filter(eq => {
-    // Фильтр по типу
-    if (filterType !== 'all' && eq.type !== filterType) {
-      return false;
-    }
-    
-    // Фильтр по статусу
-    if (filterStatus !== 'all' && eq.status !== filterStatus) {
-      return false;
-    }
-    
-    // Исключаем архивные из списка
-    if (eq.status === 'archived') {
-      return false;
-    }
-    
-    // Поиск по названию
-    if (searchQuery && !eq.name.toLowerCase().includes(searchQuery.toLowerCase())) {
-      return false;
-    }
-    
-    return true;
-  });
+  const filteredEquipment = useMemo(() => {
+    return equipmentList.filter(eq => {
+      // Фильтр по типу
+      if (filterType !== 'all' && eq.type !== filterType) {
+        return false;
+      }
+      
+      // Фильтр по статусу
+      if (filterStatus !== 'all' && eq.status !== filterStatus) {
+        return false;
+      }
+      
+      // Исключаем архивные из списка
+      if (eq.status === 'archived') {
+        return false;
+      }
+      
+      // Поиск по названию
+      if (searchQuery && !eq.name.toLowerCase().includes(searchQuery.toLowerCase())) {
+        return false;
+      }
+      
+      return true;
+    });
+  }, [equipmentList, filterType, filterStatus, searchQuery]);
+
+  // Пагинация
+  const totalPages = Math.ceil(filteredEquipment.length / itemsPerPage);
+  const paginatedEquipment = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredEquipment.slice(startIndex, endIndex);
+  }, [filteredEquipment, currentPage, itemsPerPage]);
+
+  // Сброс страницы при изменении фильтров
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [filterType, filterStatus, searchQuery]);
 
 
 
@@ -220,6 +237,7 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
 
       <div className="list-info">
         Найдено: {filteredEquipment.length} из {equipmentList.length}
+        {totalPages > 1 && ` (Страница ${currentPage} из ${totalPages})`}
       </div>
 
       {filteredEquipment.length === 0 ? (
@@ -229,8 +247,9 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
             : 'Нет оборудования, соответствующего фильтрам.'}
         </div>
       ) : (
-        <div className="equipment-cards">
-          {filteredEquipment.map((equipment) => (
+        <>
+          <div className="equipment-cards">
+            {paginatedEquipment.map((equipment) => (
             <div
               key={equipment.id}
               className="equipment-card"
@@ -272,8 +291,32 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
                 <span className="equipment-id">ID: {equipment.id.substring(0, 8)}...</span>
               </div>
             </div>
-          ))}
-        </div>
+            ))}
+          </div>
+
+          {/* Пагинация */}
+          {totalPages > 1 && (
+            <div className="pagination">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="pagination-button"
+              >
+                ← Назад
+              </button>
+              <span className="pagination-info">
+                Страница {currentPage} из {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+                className="pagination-button"
+              >
+                Вперед →
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

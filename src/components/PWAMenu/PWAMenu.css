@@ -69,8 +69,10 @@
 .pwa-menu-content {
   flex: 1 1 auto;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 16px;
   margin: 24px 0;
   min-height: 0;
   overflow: hidden;
@@ -105,6 +107,40 @@
 }
 
 .pwa-menu-equipment-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.pwa-menu-water-button {
+  width: 100%;
+  max-width: 320px;
+  min-height: 120px;
+  padding: 24px;
+  background: linear-gradient(135deg, #2196F3 0%, #03A9F4 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
+}
+
+.pwa-menu-water-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(33, 150, 243, 0.4);
+}
+
+.pwa-menu-water-button:active {
+  transform: translateY(0);
+}
+
+.pwa-menu-water-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
   transform: none;
@@ -210,7 +246,8 @@
     margin: 16px 0;
   }
 
-  .pwa-menu-equipment-button {
+  .pwa-menu-equipment-button,
+  .pwa-menu-water-button {
     min-height: 100px;
     padding: 20px;
   }
@@ -248,7 +285,8 @@
     margin: 12px 0;
   }
 
-  .pwa-menu-equipment-button {
+  .pwa-menu-equipment-button,
+  .pwa-menu-water-button {
     min-height: 80px;
     padding: 16px;
   }

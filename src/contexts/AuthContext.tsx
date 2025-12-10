@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { login as loginApi, logout as logoutApi, register as registerApi, checkSession, verifyAdmin } from '../services/api/authApi';
 import { saveSession, loadSession, clearSession, isSessionExpired, isSessionTimeout } from '../utils/sessionStorage';
 import { startActivityTracking, stopActivityTracking, checkSessionTimeout as checkTimeout } from '../utils/sessionTimeout';
+import { clearLastPath } from '../utils/pathStorage';
 import { ROUTES } from '../utils/routes';
 import type { User } from '../types/user';
 import type { AuthState, UserSession } from '../types/auth';
@@ -204,6 +205,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       console.error('Ошибка при выходе:', error);
     } finally {
       clearSession();
+      clearLastPath(); // Очищаем сохраненный путь при выходе
       stopActivityTracking();
       setUser(null);
       setError(null);
