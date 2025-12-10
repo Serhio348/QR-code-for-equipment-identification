@@ -17,7 +17,7 @@ export const API_CONFIG = {
    * 
    * Пример: 'https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec'
    */
-  EQUIPMENT_API_URL: import.meta.env.VITE_EQUIPMENT_API_URL || 'https://script.google.com/macros/s/AKfycbxFSNggPTOXisflhaZ4QSW1ivdWPqQt7fFFyje18-sG6htOru1DtLtVKkL8xksD-3q6ew/exec',
+  EQUIPMENT_API_URL: import.meta.env.VITE_EQUIPMENT_API_URL || 'https://script.google.com/macros/s/AKfycbydpb2GMhfwmN3oDvB-4wTF-hI9KkqnbVxrV7k9NWdBHJSEzzGZE7rcSu-l348dPCmyOw/exec',
 
   /**
    * URL веб-приложения для журнала обслуживания (существующий)
@@ -25,6 +25,32 @@ export const API_CONFIG = {
    * Если у вас уже есть URL для журнала обслуживания, вставьте его сюда
    */
   MAINTENANCE_API_URL: 'https://script.google.com/macros/s/AKfycbyt7M8596y4rn9IDihwRu73fzdXV6MpkqmAI0D9lNrW7AObWPyoOKsk1YmxX_6xAsZ_lw/exec',
+
+  /**
+   * Beliot API конфигурация
+   * 
+   * API для работы с оборудованием через beliot.by
+   * Swagger документация: https://beliot.by:4443/api/documentation
+   * 
+   * Примечание: API может быть доступен только из внутренней сети или через VPN
+   */
+  BELIOT_API_BASE_URL: import.meta.env.VITE_BELIOT_API_BASE_URL || 'https://beliot.by:4443/api',
+  BELIOT_API_KEY: import.meta.env.VITE_BELIOT_API_KEY || '',
+  
+  /**
+   * Учетные данные для Beliot API
+   * 
+   * Используются для автоматической аутентификации и получения Bearer token
+   */
+  BELIOT_LOGIN: import.meta.env.VITE_BELIOT_LOGIN || 'energo@brestvodka.by',
+  BELIOT_PASSWORD: import.meta.env.VITE_BELIOT_PASSWORD || 'wSjzy2WJxnj5DPk!',
+  
+  /**
+   * Использовать beliot API вместо Google Apps Script
+   * 
+   * Если true, приложение будет использовать beliot API как основной источник данных
+   */
+  USE_BELIOT_API: import.meta.env.VITE_USE_BELIOT_API === 'true' || false,
 
   /**
    * Таймаут запросов в миллисекундах

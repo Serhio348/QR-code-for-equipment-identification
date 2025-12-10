@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { login as loginApi, logout as logoutApi, register as registerApi, checkSession, verifyAdmin } from '../services/api/authApi';
 import { saveSession, loadSession, clearSession, isSessionExpired, isSessionTimeout } from '../utils/sessionStorage';
 import { startActivityTracking, stopActivityTracking, checkSessionTimeout as checkTimeout } from '../utils/sessionTimeout';
+import { clearLastPath } from '../utils/pathStorage';
 import { ROUTES } from '../utils/routes';
 import type { User } from '../types/user';
 import type { AuthState, UserSession } from '../types/auth';
@@ -50,17 +51,32 @@ export function AuthProvider({ children }: AuthProviderProps) {
           return;
         }
 
-        // Проверяем сессию на сервере
-        const sessionCheck = await checkSession(session.user.email);
-        
-        if (!sessionCheck.active) {
-          clearSession();
-          setLoading(false);
-          return;
+        // Проверяем сессию на сервере (с обработкой ошибок)
+        let sessionCheck;
+        try {
+          sessionCheck = await checkSession(session.user.email);
+          
+          if (!sessionCheck.active) {
+            clearSession();
+            setLoading(false);
+            return;
+          }
+        } catch (sessionError: any) {
+          // Если ошибка при проверке сессии, но сессия не истекла по времени,
+          // продолжаем работу (возможно, временная проблема с сетью)
+          console.warn('⚠️ Ошибка проверки сессии на сервере, продолжаем с локальной сессией:', sessionError.message);
+          // Не очищаем сессию при временных ошибках сети
         }
 
         // Обновляем роль пользователя (может измениться)
-        const adminCheck = await verifyAdmin(session.user.email);
+        let adminCheck;
+        try {
+          adminCheck = await verifyAdmin(session.user.email);
+        } catch (adminError: any) {
+          // Если ошибка при проверке роли, используем роль из сессии
+          console.warn('⚠️ Ошибка проверки роли, используем роль из сессии:', adminError.message);
+          adminCheck = { role: session.user.role || 'user' };
+        }
         
         setUser({
           ...session.user,
@@ -80,9 +96,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
         startActivityTracking();
         
         setLoading(false);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Ошибка инициализации аутентификации:', error);
-        clearSession();
+        // Не очищаем сессию при ошибках инициализации, если сессия валидна по времени
+        // Пользователь может продолжить работу с локальной сессией
+        if (isSessionExpired() || isSessionTimeout()) {
+          clearSession();
+        }
         setLoading(false);
       }
     };
@@ -185,6 +205,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       console.error('Ошибка при выходе:', error);
     } finally {
       clearSession();
+      clearLastPath(); // Очищаем сохраненный путь при выходе
       stopActivityTracking();
       setUser(null);
       setError(null);

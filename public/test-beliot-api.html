@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beliot API Tester</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+        }
+        .endpoint-list {
+            display: grid;
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .endpoint-item {
+            padding: 15px;
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .endpoint-item:hover {
+            background: #e8f4f8;
+            border-color: #667eea;
+        }
+        .endpoint-item.testing {
+            background: #fff3cd;
+        }
+        .endpoint-item.success {
+            background: #d4edda;
+            border-color: #28a745;
+        }
+        .endpoint-item.error {
+            background: #f8d7da;
+            border-color: #dc3545;
+        }
+        button {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #5568d3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .status.success { background: #28a745; color: white; }
+        .status.error { background: #dc3545; color: white; }
+        .status.testing { background: #ffc107; color: #000; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Beliot API Tester</h1>
+        <p>Тестирование подключения к <code>https://beliot.by:4443/api</code></p>
+        
+        <div>
+            <button onclick="testAll()">Тестировать все endpoints</button>
+            <button onclick="clearResults()">Очистить результаты</button>
+        </div>
+
+        <div class="endpoint-list" id="endpoints"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'https://beliot.by:4443/api';
+        
+        const endpoints = [
+            { path: '/documentation', name: 'Swagger UI / Documentation' },
+            { path: '/swagger.json', name: 'Swagger JSON (v2.0)' },
+            { path: '/openapi.json', name: 'OpenAPI JSON (v3.x)' },
+            { path: '/api-docs', name: 'API Docs' },
+            { path: '/v1/swagger.json', name: 'Swagger JSON v1' },
+            { path: '/v1/openapi.json', name: 'OpenAPI JSON v1' },
+        ];
+
+        function createEndpointItem(endpoint) {
+            const div = document.createElement('div');
+            div.className = 'endpoint-item';
+            div.id = `endpoint-${endpoint.path.replace(/\//g, '-')}`;
+            div.innerHTML = `
+                <strong>${endpoint.name}</strong>
+                <code>${endpoint.path}</code>
+                <span class="status" style="display: none;"></span>
+                <div class="result" style="display: none;"></div>
+            `;
+            div.onclick = () => testEndpoint(endpoint);
+            return div;
+        }
+
+        function init() {
+            const container = document.getElementById('endpoints');
+            endpoints.forEach(endpoint => {
+                container.appendChild(createEndpointItem(endpoint));
+            });
+        }
+
+        async function testEndpoint(endpoint) {
+            const item = document.getElementById(`endpoint-${endpoint.path.replace(/\//g, '-')}`);
+            const status = item.querySelector('.status');
+            const result = item.querySelector('.result');
+            
+            item.className = 'endpoint-item testing';
+            status.textContent = 'Тестирование...';
+            status.className = 'status testing';
+            status.style.display = 'inline-block';
+            result.style.display = 'block';
+            result.innerHTML = '<pre>Загрузка...</pre>';
+
+            try {
+                const url = `${API_BASE}${endpoint.path}`;
+                console.log(`Тестирование: ${url}`);
+                
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json, application/yaml, text/html, */*',
+                    },
+                    mode: 'cors',
+                });
+
+                const contentType = response.headers.get('content-type') || '';
+                let data;
+
+                if (contentType.includes('application/json')) {
+                    data = await response.json();
+                    result.innerHTML = `<pre>${JSON.stringify(data, null, 2).substring(0, 2000)}</pre>`;
+                } else if (contentType.includes('text/html')) {
+                    const text = await response.text();
+                    result.innerHTML = `<pre>HTML (${text.length} символов)\n\n${text.substring(0, 500)}...</pre>`;
+                } else {
+                    const text = await response.text();
+                    result.innerHTML = `<pre>${text.substring(0, 2000)}</pre>`;
+                }
+
+                item.className = 'endpoint-item success';
+                status.textContent = `✅ ${response.status} ${response.statusText}`;
+                status.className = 'status success';
+
+                // Проверяем, является ли это Swagger/OpenAPI спецификацией
+                if (data && (data.openapi || data.swagger)) {
+                    const version = data.openapi || data.swagger;
+                    const title = data.info?.title || 'Unknown';
+                    result.innerHTML += `<p><strong>🎯 Это OpenAPI/Swagger спецификация!</strong><br>
+                        Версия: ${version}<br>
+                        Название: ${title}</p>`;
+                }
+
+            } catch (error) {
+                item.className = 'endpoint-item error';
+                status.textContent = `❌ Ошибка`;
+                status.className = 'status error';
+                result.innerHTML = `<pre>Ошибка: ${error.message}\n\n${error.stack || ''}</pre>`;
+                console.error('Ошибка:', error);
+            }
+        }
+
+        async function testAll() {
+            for (const endpoint of endpoints) {
+                await testEndpoint(endpoint);
+                await new Promise(resolve => setTimeout(resolve, 500)); // Задержка между запросами
+            }
+        }
+
+        function clearResults() {
+            endpoints.forEach(endpoint => {
+                const item = document.getElementById(`endpoint-${endpoint.path.replace(/\//g, '-')}`);
+                item.className = 'endpoint-item';
+                const status = item.querySelector('.status');
+                const result = item.querySelector('.result');
+                status.style.display = 'none';
+                result.style.display = 'none';
+            });
+        }
+
+        // Инициализация при загрузке
+        init();
+    </script>
+</body>
+</html>
+

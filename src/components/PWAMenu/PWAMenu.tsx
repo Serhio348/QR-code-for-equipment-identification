@@ -40,20 +40,35 @@ const PWAMenu: React.FC = () => {
           )}
         </div>
 
-        {/* Основная кнопка "Оборудование" */}
+        {/* Кнопки выбора приложения */}
         <div className="pwa-menu-content">
           <button
             className="pwa-menu-equipment-button"
-            onClick={() => navigate(ROUTES.HOME)}
+            onClick={() => navigate(ROUTES.EQUIPMENT)}
             type="button"
-            aria-label="Просмотр оборудования"
+            aria-label="Перейти к оборудованию"
           >
             <div className="pwa-menu-button-icon">
               📋
             </div>
             <div className="pwa-menu-button-text">
               <span className="pwa-menu-button-title">Оборудование</span>
-              <span className="pwa-menu-button-subtitle">Список оборудования</span>
+              <span className="pwa-menu-button-subtitle">Управление оборудованием по QR-кодам</span>
+            </div>
+          </button>
+
+          <button
+            className="pwa-menu-water-button"
+            onClick={() => navigate(ROUTES.WATER)}
+            type="button"
+            aria-label="Перейти к счётчикам воды"
+          >
+            <div className="pwa-menu-button-icon">
+              💧
+            </div>
+            <div className="pwa-menu-button-text">
+              <span className="pwa-menu-button-title">Вода</span>
+              <span className="pwa-menu-button-subtitle">Счётчики воды</span>
             </div>
           </button>
         </div>

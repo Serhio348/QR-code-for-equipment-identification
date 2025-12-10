@@ -4,9 +4,10 @@
  * Компонент для защиты маршрутов, требующих аутентификации
  */
 
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ROUTES } from '../utils/routes';
+import { saveRedirectPath } from '../utils/pathStorage';
 import type { ReactNode } from 'react';
 
 interface ProtectedRouteProps {
@@ -25,6 +26,7 @@ interface ProtectedRouteProps {
  */
 export default function ProtectedRoute({ children, requireAdmin = false }: ProtectedRouteProps) {
   const { isAuthenticated, isAdmin, loading } = useAuth();
+  const location = useLocation();
 
   // Показываем загрузку во время проверки аутентификации
   if (loading) {
@@ -40,8 +42,9 @@ export default function ProtectedRoute({ children, requireAdmin = false }: Prote
     );
   }
 
-  // Если не авторизован, редиректим на страницу входа
+  // Если не авторизован, сохраняем текущий путь и редиректим на страницу входа
   if (!isAuthenticated) {
+    saveRedirectPath(location.pathname + location.search);
     return <Navigate to={ROUTES.LOGIN} replace />;
   }
 
