@@ -4,7 +4,8 @@
   overflow: visible;
   overflow-x: visible;
   overflow-y: visible;
-  min-height: calc(100vh - 80px);
+  min-height: auto;
+  padding-bottom: 40px; /* Обычный отступ снизу */
   height: auto;
   width: 100%;
   box-sizing: border-box;

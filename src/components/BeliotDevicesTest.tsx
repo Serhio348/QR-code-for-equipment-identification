@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   getCompanyDevices,
   getDeviceById,
@@ -18,6 +19,7 @@ import {
   saveBeliotDeviceOverride,
   BeliotDeviceOverride,
 } from '../services/api/beliotDevicesStorageApi';
+import { ROUTES } from '../utils/routes';
 import './BeliotDevicesTest.css';
 
 interface StateTableRow {
@@ -33,6 +35,7 @@ interface DeviceGroup {
 }
 
 const BeliotDevicesTest: React.FC = () => {
+  const navigate = useNavigate();
   const [devices, setDevices] = useState<BeliotDevice[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,6 +47,10 @@ const BeliotDevicesTest: React.FC = () => {
   
   // Состояние для архивных данных (для будущего локального архива)
   const [archiveData, setArchiveData] = useState<any>(null);
+  
+  // Состояние для управления мобильными панелями
+  const [isGroupsPanelOpen, setIsGroupsPanelOpen] = useState<boolean>(false);
+  const [isDetailsPanelOpen, setIsDetailsPanelOpen] = useState<boolean>(false);
   
   
   // Хранилище пользовательских изменений (localStorage)
@@ -319,22 +326,6 @@ const BeliotDevicesTest: React.FC = () => {
     return '-';
   };
 
-  const getDeviceAddress = (device: BeliotDevice): string => {
-    const deviceId = String(device.device_id || device.id || device._id);
-    
-    // Проверяем редактируемое значение
-    const editableValue = getEditableValue(deviceId, 'address', '');
-    if (editableValue) {
-      return editableValue;
-    }
-    
-    // Пробуем получить address.unrestricted_value
-    if (device.address && typeof device.address === 'object') {
-      return (device.address as any).unrestricted_value || (device.address as any).value || device.address || '-';
-    }
-    return device.address || device.tied_point?.name || '-';
-  };
-
   const getDeviceName = (device: BeliotDevice): string => {
     const deviceId = String(device.device_id || device.id || device._id);
     
@@ -367,6 +358,7 @@ const BeliotDevicesTest: React.FC = () => {
     setSelectedGroup(group);
     setSelectedDevice(null);
     setDeviceReadings(null);
+    setIsGroupsPanelOpen(false); // Закрываем панель групп на мобильных
   };
 
   // Обработка клика на устройство в таблице группы
@@ -466,9 +458,18 @@ const BeliotDevicesTest: React.FC = () => {
 
   return (
     <div className="beliot-devices-admin">
+
       {/* Левая панель: Таблица счетчиков */}
-      <div className="devices-panel">
+      <div className={`devices-panel ${isGroupsPanelOpen ? 'mobile-open' : ''}`}>
         <div className="panel-header">
+          {/* Кнопка закрытия на мобильных */}
+          <button 
+            className="mobile-close-button"
+            onClick={() => setIsGroupsPanelOpen(false)}
+            title="Закрыть"
+          >
+            ×
+          </button>
           <h2>ОАО "Брестский ликёро-водочный завод "Белалко"</h2>
           <button
             onClick={handleGetDevices}
@@ -558,7 +559,7 @@ const BeliotDevicesTest: React.FC = () => {
       </div>
 
       {/* Правая панель: Таблица счетчиков группы и состояние */}
-      <div className="details-panel">
+      <div className={`details-panel ${isDetailsPanelOpen ? 'mobile-open' : ''}`}>
         {selectedGroup ? (
           <>
             <div className="details-header">
@@ -581,6 +582,7 @@ const BeliotDevicesTest: React.FC = () => {
                     setSelectedGroup(null);
                     setSelectedDevice(null);
                     setDeviceReadings(null);
+                    setIsDetailsPanelOpen(false);
                   }}
                   className="close-button"
                   title="Закрыть"
@@ -598,21 +600,16 @@ const BeliotDevicesTest: React.FC = () => {
                   <table className="group-devices-table">
                     <thead>
                       <tr>
-                        <th>ID</th>
-                        <th>Место расположение</th>
-                        <th>Имя</th>
+                        <th>Счётчик</th>
                         <th>Серийный номер</th>
-                        <th>Статус</th>
-                        <th>Последние показания</th>
+                        <th>Показание</th>
                       </tr>
                     </thead>
                     <tbody>
                       {selectedGroup.devices.map((device, index) => {
                         const deviceId = String(device.device_id || device.id || device._id);
                         const isSelected = selectedDevice === device;
-                        const isActive = device.active !== undefined ? device.active : device.is_active;
                         const isEditingName = editingCell?.deviceId === deviceId && editingCell?.field === 'name';
-                        const isEditingAddress = editingCell?.deviceId === deviceId && editingCell?.field === 'address';
                         const isEditingSerial = editingCell?.deviceId === deviceId && editingCell?.field === 'serialNumber';
                         
                         return (
@@ -627,35 +624,6 @@ const BeliotDevicesTest: React.FC = () => {
                             }}
                             style={{ cursor: 'pointer' }}
                           >
-                            <td>{deviceId || '-'}</td>
-                            <td
-                              className="editable-cell"
-                              onDoubleClick={(e) => {
-                                e.stopPropagation();
-                                setEditingCell({ deviceId, field: 'address' });
-                              }}
-                            >
-                              {isEditingAddress ? (
-                                <input
-                                  type="text"
-                                  className="editable-input"
-                                  value={getEditableValue(deviceId, 'address', getDeviceAddress(device))}
-                                  onChange={(e) => saveOverride(deviceId, 'address', e.target.value)}
-                                  onBlur={() => setEditingCell(null)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      setEditingCell(null);
-                                    } else if (e.key === 'Escape') {
-                                      setEditingCell(null);
-                                    }
-                                  }}
-                                  onClick={(e) => e.stopPropagation()}
-                                  autoFocus
-                                />
-                              ) : (
-                                <span className="editable-text">{getDeviceAddress(device)}</span>
-                              )}
-                            </td>
                             <td
                               className="editable-cell"
                               onDoubleClick={(e) => {
@@ -712,14 +680,7 @@ const BeliotDevicesTest: React.FC = () => {
                                 <span className="editable-text">{getDeviceSerialNumber(device)}</span>
                               )}
                             </td>
-                            <td>
-                              {isActive === 1 || isActive === true ? (
-                                <span className="status-badge active">Активно</span>
-                              ) : (
-                                <span className="status-badge inactive">Неактивно</span>
-                              )}
-                            </td>
-                            <td>{getLastReading(device)}</td>
+                            <td className="reading-cell">{getLastReading(device)}</td>
                           </tr>
                         );
                       })}
@@ -868,6 +829,292 @@ const BeliotDevicesTest: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Основной контент для мобильных */}
+      <div className="mobile-main-content">
+        {!selectedGroup ? (
+          /* Список объектов (групп) */
+          <div className="mobile-groups-list">
+            <div className="mobile-groups-header">
+              <button
+                className="mobile-back-button"
+                onClick={() => {
+                  navigate(ROUTES.HOME);
+                }}
+              >
+                ← Главное меню
+              </button>
+              <h3>Объекты</h3>
+            </div>
+            {loading ? (
+              <div className="loading-state">
+                <div className="spinner"></div>
+                <p>Загрузка объектов...</p>
+              </div>
+            ) : error ? (
+              <div className="error-state">
+                <strong>❌ Ошибка:</strong> {error}
+              </div>
+            ) : filteredGroups.length === 0 ? (
+              <div className="empty-state">
+                {searchQuery ? 'Объекты не найдены по запросу' : 'Объекты не загружены'}
+              </div>
+            ) : (
+              <div className="mobile-groups-container">
+                {filteredGroups.map((group, index) => (
+                  <div
+                    key={group.name || index}
+                    className="mobile-group-card"
+                    onClick={() => handleGroupClick(group)}
+                  >
+                    <div className="mobile-group-name">{group.name}</div>
+                    <div className="mobile-group-count">
+                      Счетчиков: {group.devices.length}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : !selectedDevice ? (
+          /* Таблица счетчиков выбранного объекта */
+          <div className="mobile-devices-list">
+            <div className="mobile-devices-header">
+              <button
+                className="mobile-back-button"
+                onClick={() => {
+                  setSelectedGroup(null);
+                  setSelectedDevice(null);
+                  setDeviceReadings(null);
+                  setError(null);
+                }}
+              >
+                ← Назад к объектам
+              </button>
+              <h3>{selectedGroup.name}</h3>
+            </div>
+            <div className="group-devices-table-container">
+              <table className="group-devices-table">
+                <thead>
+                  <tr>
+                    <th>Счётчик</th>
+                    <th>Показание</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedGroup.devices.map((device, index) => {
+                    const deviceId = String(device.device_id || device.id || device._id);
+                    const isSelected = selectedDevice === device;
+                    const isEditingName = editingCell?.deviceId === deviceId && editingCell?.field === 'name';
+                    const isEditingSerial = editingCell?.deviceId === deviceId && editingCell?.field === 'serialNumber';
+                    
+                    return (
+                      <tr
+                        key={deviceId || index}
+                        className={isSelected ? 'selected' : ''}
+                        onClick={async (e) => {
+                          if ((e.target as HTMLElement).tagName !== 'INPUT') {
+                            await handleDeviceClick(device);
+                            // На мобильных не открываем боковую панель, показываем в основном контенте
+                          }
+                        }}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <td className="device-info-cell">
+                          <div className="device-name-container">
+                            <div
+                              className="editable-cell device-name-editable"
+                              onDoubleClick={(e) => {
+                                e.stopPropagation();
+                                setEditingCell({ deviceId, field: 'name' });
+                              }}
+                            >
+                              {isEditingName ? (
+                                <input
+                                  type="text"
+                                  className="editable-input"
+                                  value={getEditableValue(deviceId, 'name', getDeviceName(device))}
+                                  onChange={(e) => saveOverride(deviceId, 'name', e.target.value)}
+                                  onBlur={() => setEditingCell(null)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      setEditingCell(null);
+                                    } else if (e.key === 'Escape') {
+                                      setEditingCell(null);
+                                    }
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                  autoFocus
+                                />
+                              ) : (
+                                <span className="editable-text device-name-text">{getDeviceName(device) || '-'}</span>
+                              )}
+                            </div>
+                            <div
+                              className="editable-cell device-serial-editable"
+                              onDoubleClick={(e) => {
+                                e.stopPropagation();
+                                setEditingCell({ deviceId, field: 'serialNumber' });
+                              }}
+                            >
+                              {isEditingSerial ? (
+                                <input
+                                  type="text"
+                                  className="editable-input"
+                                  value={getEditableValue(deviceId, 'serialNumber', getDeviceSerialNumber(device))}
+                                  onChange={(e) => saveOverride(deviceId, 'serialNumber', e.target.value)}
+                                  onBlur={() => setEditingCell(null)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      setEditingCell(null);
+                                    } else if (e.key === 'Escape') {
+                                      setEditingCell(null);
+                                    }
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                  autoFocus
+                                />
+                              ) : (
+                                <span className="editable-text device-serial-text">{getDeviceSerialNumber(device) || '-'}</span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="reading-cell">{getLastReading(device) || '-'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          /* Показания выбранного счетчика */
+          <div className="mobile-readings-list">
+            <div className="mobile-readings-header">
+              <button
+                className="mobile-back-button"
+                onClick={() => {
+                  setSelectedDevice(null);
+                  setDeviceReadings(null);
+                  setError(null);
+                }}
+              >
+                ← Назад к счетчикам
+              </button>
+              <h3>{getDeviceName(selectedDevice) || selectedDevice.device_id || selectedDevice.id}</h3>
+            </div>
+            <div className="mobile-readings-content">
+              {loadingState ? (
+                <div className="loading-state">
+                  <div className="spinner"></div>
+                  <p>Загрузка показаний...</p>
+                </div>
+              ) : error ? (
+                <div className="error-state">
+                  <strong>❌ Ошибка:</strong> {error}
+                </div>
+              ) : deviceReadings ? (() => {
+                const calculateVolume = (): number | null => {
+                  if (deviceReadings.current?.value !== undefined && deviceReadings.previous?.value !== undefined) {
+                    const current = Number(deviceReadings.current.value);
+                    const previous = Number(deviceReadings.previous.value);
+                    if (!isNaN(current) && !isNaN(previous)) {
+                      return current - previous;
+                    }
+                  }
+                  return null;
+                };
+
+                const calculatePeriod = (): string => {
+                  if (deviceReadings.current?.date && deviceReadings.previous?.date) {
+                    try {
+                      const currentDate = new Date(deviceReadings.current.date);
+                      const previousDate = new Date(deviceReadings.previous.date);
+                      
+                      if (isNaN(currentDate.getTime()) || isNaN(previousDate.getTime())) {
+                        return '-';
+                      }
+
+                      const diffMs = Math.abs(currentDate.getTime() - previousDate.getTime());
+                      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                      const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                      const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+
+                      if (diffDays > 0) {
+                        return `${diffDays} дн. ${diffHours} ч.`;
+                      } else if (diffHours > 0) {
+                        return `${diffHours} ч. ${diffMinutes} мин.`;
+                      } else {
+                        return `${diffMinutes} мин.`;
+                      }
+                    } catch (e) {
+                      return '-';
+                    }
+                  }
+                  return '-';
+                };
+
+                const volume = calculateVolume();
+                const period = calculatePeriod();
+
+                return (
+                  <div className="mobile-readings-cards">
+                    {deviceReadings.current && (
+                      <div className="mobile-reading-card current">
+                        <div className="mobile-reading-badge current">Текущий</div>
+                        <div className="mobile-reading-value">{deviceReadings.current.value !== undefined ? deviceReadings.current.value : '-'}</div>
+                        <div className="mobile-reading-unit">{deviceReadings.current.unit || 'м³'}</div>
+                        <div className="mobile-reading-date">
+                          {deviceReadings.current.date ? new Date(deviceReadings.current.date).toLocaleString('ru-RU') : '-'}
+                        </div>
+                      </div>
+                    )}
+                    {deviceReadings.previous && (
+                      <div className="mobile-reading-card previous">
+                        <div className="mobile-reading-badge previous">Предыдущий</div>
+                        <div className="mobile-reading-value">{deviceReadings.previous.value !== undefined ? deviceReadings.previous.value : '-'}</div>
+                        <div className="mobile-reading-unit">{deviceReadings.previous.unit || 'м³'}</div>
+                        <div className="mobile-reading-date">
+                          {deviceReadings.previous.date ? new Date(deviceReadings.previous.date).toLocaleString('ru-RU') : '-'}
+                        </div>
+                      </div>
+                    )}
+                    {volume !== null && (
+                      <div className="mobile-reading-card difference">
+                        <div className="mobile-reading-badge difference">Разница</div>
+                        <div className="mobile-reading-value difference-value">{volume.toFixed(2)}</div>
+                        <div className="mobile-reading-unit">м³</div>
+                        <div className="mobile-reading-period">Период: {period}</div>
+                      </div>
+                    )}
+                    {!deviceReadings.current && !deviceReadings.previous && (
+                      <div className="empty-state">
+                        Показания не найдены
+                      </div>
+                    )}
+                  </div>
+                );
+              })() : (
+                <div className="empty-state">
+                  Нажмите на счетчик в таблице для просмотра показаний
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Overlay для закрытия мобильных панелей */}
+      {(isGroupsPanelOpen || isDetailsPanelOpen) && (
+        <div 
+          className="mobile-overlay"
+          onClick={() => {
+            setIsGroupsPanelOpen(false);
+            setIsDetailsPanelOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 };

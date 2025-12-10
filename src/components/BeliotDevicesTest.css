@@ -1,15 +1,17 @@
 /* Основной контейнер админ-панели */
 .beliot-devices-admin {
   display: flex;
-  height: 100vh;
+  height: calc(100vh - 80px); /* Учитываем высоту фиксированного заголовка */
+  min-height: calc(100vh - 80px);
   overflow: hidden;
   background: #f5f5f5;
 }
 
 /* Левая панель: Таблица счетчиков */
 .devices-panel {
-  width: 25%;
-  min-width: 300px;
+  width: 30%;
+  min-width: 280px;
+  max-width: 400px;
   display: flex;
   flex-direction: column;
   background: white;
@@ -300,7 +302,7 @@
 
 .group-devices-table-container {
   overflow-x: auto;
-  max-height: 400px;
+  max-height: calc(100vh - 300px); /* Увеличиваем высоту таблицы */
   overflow-y: auto;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
@@ -320,18 +322,26 @@
 }
 
 .group-devices-table th {
-  padding: 12px 8px;
+  padding: 16px 20px;
   text-align: left;
   font-weight: 600;
   color: #555;
   border-bottom: 2px solid #ddd;
   white-space: nowrap;
+  font-size: 15px;
 }
 
 .group-devices-table td {
-  padding: 10px 8px;
+  padding: 14px 20px;
   border-bottom: 1px solid #eee;
   color: #333;
+  font-size: 15px;
+}
+
+.group-devices-table .reading-cell {
+  font-weight: 600;
+  color: #667eea;
+  font-size: 16px;
 }
 
 .group-devices-table tbody tr {
@@ -417,6 +427,7 @@
   flex-direction: column;
   background: white;
   overflow: hidden;
+  min-width: 0; /* Позволяет панели сжиматься */
 }
 
 .details-header {
@@ -1291,53 +1302,661 @@
   }
 }
 
+/* Мобильные кнопки меню */
+.mobile-menu-button {
+  display: none;
+}
+
+.mobile-close-button {
+  display: none;
+}
+
+.mobile-overlay {
+  display: none;
+}
+
+.mobile-main-content {
+  display: none;
+}
+
+/* Мобильная версия */
 @media (max-width: 768px) {
   .beliot-devices-admin {
     flex-direction: column;
+    position: relative;
+    padding: 0;
+    height: calc(100vh - 80px - 60px); /* Высота экрана минус шапка минус футер */
+    max-height: calc(100vh - 80px - 60px);
+    overflow: hidden;
   }
 
+  /* Мобильная панель инструментов */
+  .mobile-toolbar {
+    display: flex;
+    position: sticky;
+    top: 80px;
+    left: 0;
+    right: 0;
+    padding: 10px 12px;
+    background: white;
+    border-bottom: 2px solid #e0e0e0;
+    z-index: 100;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    gap: 8px;
+  }
+
+  /* Скрываем боковые панели по умолчанию */
   .devices-panel {
-    width: 100%;
-    min-width: unset;
-    height: 50vh;
+    position: fixed;
+    top: 80px;
+    left: -100%;
+    width: 85%;
+    max-width: 400px;
+    height: calc(100vh - 80px);
+    z-index: 1000;
+    transition: left 0.3s ease;
+    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.2);
+    border-right: none;
+  }
+
+  .devices-panel.mobile-open {
+    left: 0;
   }
 
   .details-panel {
-    height: 50vh;
+    position: fixed;
+    top: 80px;
+    right: -100%;
+    width: 85%;
+    max-width: 500px;
+    height: calc(100vh - 80px);
+    z-index: 1000;
+    transition: right 0.3s ease;
+    box-shadow: -2px 0 10px rgba(0, 0, 0, 0.2);
   }
 
+  .details-panel.mobile-open {
+    right: 0;
+  }
+
+  /* Кнопка закрытия на мобильных */
+  .mobile-close-button {
+    display: block;
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    font-size: 24px;
+    cursor: pointer;
+    z-index: 1001;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+
+  .mobile-close-button:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: scale(1.1);
+  }
+
+  /* Мобильная панель инструментов - скрыта, не используется */
+  .mobile-toolbar {
+    display: none !important;
+  }
+
+  /* Мобильные кнопки меню */
+  .mobile-menu-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 16px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+    transition: all 0.2s;
+    gap: 6px;
+    flex: 1;
+    white-space: nowrap;
+  }
+
+  .mobile-menu-button:active {
+    transform: scale(0.98);
+    box-shadow: 0 1px 4px rgba(102, 126, 234, 0.4);
+  }
+
+  .mobile-menu-button.groups-button {
+    margin-right: 8px;
+  }
+
+  .mobile-menu-button.details-button {
+    margin-left: 8px;
+  }
+
+  /* Overlay для закрытия панелей */
+  .mobile-overlay {
+    display: block;
+    position: fixed;
+    top: 80px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 999;
+    backdrop-filter: blur(2px);
+  }
+
+  /* Основной контент для мобильных */
+  .mobile-main-content {
+    display: block;
+    width: 100%;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+    background: white;
+    height: calc(100vh - 80px - 60px); /* Высота экрана минус шапка минус футер */
+    max-height: calc(100vh - 80px - 60px);
+  }
+
+  /* Список объектов (групп) */
+  .mobile-groups-list {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .mobile-groups-header {
+    padding: 12px;
+    background: white;
+    border-bottom: 2px solid #667eea;
+    flex-shrink: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: sticky;
+    top: 0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  .mobile-groups-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #333;
+    flex: 1;
+  }
+
+  .mobile-groups-container {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 12px;
+    -webkit-overflow-scrolling: touch;
+    min-height: 0; /* Важно для flex-контейнера */
+  }
+
+  .mobile-group-card {
+    background: white;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0; /* Карточки не сжимаются */
+    box-sizing: border-box;
+  }
+
+  .mobile-group-card:last-child {
+    margin-bottom: 0; /* Убираем отступ у последней карточки */
+  }
+
+  .mobile-group-card:active {
+    transform: scale(0.98);
+    background: #f8f9fa;
+  }
+
+  .mobile-group-name {
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 8px;
+  }
+
+  .mobile-group-count {
+    font-size: 14px;
+    color: #666;
+  }
+
+  /* Таблица счетчиков */
+  .mobile-devices-list {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .mobile-devices-header {
+    padding: 12px;
+    background: white;
+    border-bottom: 2px solid #667eea;
+    flex-shrink: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: sticky;
+    top: 0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  .mobile-back-button {
+    background: #667eea;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+    white-space: nowrap;
+    min-width: auto;
+    box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+    line-height: 1.2;
+  }
+
+  .mobile-back-button:active {
+    transform: scale(0.95);
+    background: #5568d3;
+    box-shadow: 0 1px 2px rgba(102, 126, 234, 0.4);
+  }
+
+  .mobile-back-button:hover {
+    background: #5568d3;
+  }
+
+  .mobile-devices-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #333;
+    flex: 1;
+  }
+
+  .mobile-main-content .group-devices-section {
+    margin: 0;
+    padding: 16px 12px;
+  }
+
+  .mobile-main-content .group-devices-section h4 {
+    margin: 0 0 12px 0;
+    font-size: 18px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #667eea;
+  }
+
+  .mobile-main-content .group-devices-table-container {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: auto;
+    border: none;
+    border-radius: 0;
+    padding: 0 12px;
+  }
+
+  .mobile-main-content .group-devices-table {
+    width: 100%;
+    font-size: 14px;
+    border-collapse: collapse;
+    background: white;
+    table-layout: fixed; /* Фиксированная ширина столбцов */
+  }
+
+  .mobile-main-content .group-devices-table thead {
+    position: sticky;
+    top: 0;
+    background: #f0f0f0;
+    z-index: 10;
+  }
+
+  .mobile-main-content .group-devices-table th {
+    padding: 14px 10px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #333;
+    border-bottom: 2px solid #ddd;
+    white-space: nowrap;
+    text-align: left;
+    background: #f0f0f0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Фиксированные ширины столбцов */
+  .mobile-main-content .group-devices-table th:nth-child(1),
+  .mobile-main-content .group-devices-table td:nth-child(1) {
+    width: 60%; /* Счётчик (название + номер) */
+  }
+
+  .mobile-main-content .group-devices-table th:nth-child(2),
+  .mobile-main-content .group-devices-table td:nth-child(2) {
+    width: 40%; /* Показание */
+  }
+
+  .mobile-main-content .group-devices-table td {
+    padding: 16px 10px;
+    font-size: 14px;
+    border-bottom: 1px solid #eee;
+    color: #333;
+    vertical-align: middle;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    word-wrap: break-word;
+  }
+
+  /* Ячейка с информацией о счетчике */
+  .mobile-main-content .group-devices-table .device-info-cell {
+    padding: 16px 10px;
+    vertical-align: top;
+  }
+
+  .device-name-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .device-name-editable,
+  .device-serial-editable {
+    min-height: auto;
+    padding: 0;
+  }
+
+  .device-name-text {
+    font-size: 15px;
+    font-weight: 600;
+    color: #333;
+    display: block;
+  }
+
+  .device-serial-text {
+    font-size: 13px;
+    color: #666;
+    display: block;
+  }
+
+  .mobile-main-content .group-devices-table .reading-cell {
+    font-weight: 700;
+    color: #667eea;
+    font-size: 20px;
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: middle;
+  }
+
+  .mobile-main-content .group-devices-table tbody tr {
+    transition: background-color 0.2s;
+    cursor: pointer;
+  }
+
+  .mobile-main-content .group-devices-table tbody tr:active {
+    background-color: #e3f2fd;
+  }
+
+  .mobile-main-content .group-devices-table tbody tr.selected {
+    background-color: #e3f2fd;
+    border-left: 4px solid #667eea;
+  }
+
+  /* Улучшаем читаемость на мобильных */
   .panel-header h2 {
     font-size: 14px;
+    padding-right: 50px;
   }
 
   .devices-table {
-    font-size: 12px;
+    font-size: 13px;
   }
 
   .devices-table th,
   .devices-table td {
-    padding: 8px 12px;
+    padding: 10px 8px;
   }
 
-  .state-table {
-    font-size: 11px;
+  .details-header h3 {
+    font-size: 16px;
+    padding-right: 50px;
   }
 
-  .state-table th,
-  .state-table td {
-    padding: 6px 10px;
+  .details-content {
+    padding: 16px 12px;
   }
 
-  .group-devices-table-container {
-    max-height: 300px;
+  .group-devices-section h4 {
+    font-size: 16px;
   }
 
   .group-devices-table {
-    font-size: 0.8rem;
+    font-size: 14px;
   }
 
   .group-devices-table th,
   .group-devices-table td {
-    padding: 8px 6px;
+    padding: 12px 8px;
+  }
+
+  .state-table {
+    font-size: 12px;
+  }
+
+  .state-table th,
+  .state-table td {
+    padding: 8px 10px;
+  }
+
+  .readings-table {
+    font-size: 12px;
+  }
+
+  .readings-table th,
+  .readings-table td {
+    padding: 10px 8px;
+  }
+
+  /* Убираем боковые отступы */
+  .search-container {
+    padding: 12px 16px;
+  }
+
+  .panel-footer {
+    padding: 10px 16px;
+    font-size: 12px;
+  }
+
+  /* Улучшаем видимость таблицы на мобильных */
+  .group-devices-table-container {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .group-devices-table tbody tr {
+    min-height: 50px;
+  }
+
+  /* Улучшаем видимость редактируемых ячеек */
+  .editable-cell {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+
+  .editable-text {
+    word-break: break-word;
+    line-height: 1.4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+    width: 100%;
+  }
+
+  .editable-input {
+    width: 100%;
+    min-height: 36px;
+    font-size: 14px;
+  }
+
+  /* Улучшаем видимость показаний */
+  .reading-cell {
+    font-size: 18px !important;
+    font-weight: 700 !important;
+  }
+
+  /* Показания выбранного счетчика для мобильных */
+  .mobile-readings-list {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .mobile-readings-header {
+    padding: 12px;
+    background: white;
+    border-bottom: 2px solid #667eea;
+    flex-shrink: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: sticky;
+    top: 0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  .mobile-readings-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-readings-content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 16px 12px;
+    -webkit-overflow-scrolling: touch;
+    min-height: 0;
+  }
+
+  .mobile-readings-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .mobile-reading-card {
+    background: white;
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .mobile-reading-card.current {
+    border-color: #4caf50;
+    background: #e8f5e9;
+  }
+
+  .mobile-reading-card.previous {
+    border-color: #ff9800;
+    background: #fff3e0;
+  }
+
+  .mobile-reading-card.difference {
+    border-color: #2196f3;
+    background: #e3f2fd;
+  }
+
+  .mobile-reading-badge {
+    display: inline-block;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    align-self: flex-start;
+  }
+
+  .mobile-reading-badge.current {
+    background: #4caf50;
+    color: white;
+  }
+
+  .mobile-reading-badge.previous {
+    background: #ff9800;
+    color: white;
+  }
+
+  .mobile-reading-badge.difference {
+    background: #2196f3;
+    color: white;
+  }
+
+  .mobile-reading-value {
+    font-size: 32px;
+    font-weight: 700;
+    color: #333;
+    font-family: 'Courier New', monospace;
+    line-height: 1.2;
+  }
+
+  .mobile-reading-value.difference-value {
+    color: #1976d2;
+    font-size: 36px;
+  }
+
+  .mobile-reading-unit {
+    font-size: 16px;
+    color: #666;
+    font-weight: 500;
+  }
+
+  .mobile-reading-date {
+    font-size: 13px;
+    color: #999;
+    margin-top: 4px;
+  }
+
+  .mobile-reading-period {
+    font-size: 14px;
+    color: #666;
+    font-style: italic;
+    margin-top: 4px;
   }
 }

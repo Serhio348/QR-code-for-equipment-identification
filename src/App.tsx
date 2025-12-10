@@ -65,44 +65,44 @@ const App: React.FC = () => {
   return (
     <div className="app">
       {!isMainMenuPage && (
-        <header className="app-header">
-          <div className="header-content">
-            <Link to={ROUTES.HOME} className="header-title">
-              <h1>Система идентификации оборудования</h1>
-            </Link>
-            <div className="header-right">
+      <header className="app-header">
+        <div className="header-content">
+          <Link to={ROUTES.HOME} className="header-title">
+            <h1>Система идентификации оборудования</h1>
+          </Link>
+          <div className="header-right">
               {(isEquipmentPage || isWaterPage) && (
-                <nav className="header-nav">
-                  <Link to={ROUTES.HOME} className="nav-link">
+              <nav className="header-nav">
+                <Link to={ROUTES.HOME} className="nav-link">
                     ← Главное меню
-                  </Link>
-                </nav>
-              )}
-              {isAuthenticated && user && (
-                <div className="user-info">
-                  <span className="user-email">{user.email}</span>
-                  {user.role === 'admin' && (
-                    <span className="user-role">Администратор</span>
+                </Link>
+              </nav>
+            )}
+            {isAuthenticated && user && (
+              <div className="user-info">
+                <span className="user-email">{user.email}</span>
+                {user.role === 'admin' && (
+                  <span className="user-role">Администратор</span>
+                )}
+                <button 
+                  onClick={logout} 
+                  className="logout-button"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <>
+                      <span className="button-spinner-small"></span>
+                      Выход...
+                    </>
+                  ) : (
+                    'Выйти'
                   )}
-                  <button 
-                    onClick={logout} 
-                    className="logout-button"
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <>
-                        <span className="button-spinner-small"></span>
-                        Выход...
-                      </>
-                    ) : (
-                      'Выйти'
-                    )}
-                  </button>
-                </div>
-              )}
-            </div>
+                </button>
+              </div>
+            )}
           </div>
-        </header>
+        </div>
+      </header>
       )}
 
       <main className={`app-content ${isAuthPage ? 'auth-page' : ''}`}>
@@ -128,7 +128,7 @@ const App: React.FC = () => {
             element={
               <ProtectedRoute>
                 <AppAccessGuard appId="equipment">
-                  <HomePage />
+                <HomePage />
                 </AppAccessGuard>
               </ProtectedRoute>
             } 
@@ -170,7 +170,7 @@ const App: React.FC = () => {
             element={
               <ProtectedRoute>
                 <AppAccessGuard appId="water">
-                  <BeliotDevicesTest />
+                <BeliotDevicesTest />
                 </AppAccessGuard>
               </ProtectedRoute>
             } 
