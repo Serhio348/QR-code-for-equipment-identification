@@ -1,0 +1,61 @@
+/* Водяной знак приложения */
+.app-watermark {
+  position: fixed;
+  bottom: 10px;
+  right: 10px;
+  z-index: 999;
+  pointer-events: none;
+  opacity: 0.6;
+  transition: opacity 0.3s;
+}
+
+.app-watermark:hover {
+  opacity: 0.9;
+}
+
+.watermark-text {
+  font-size: 11px;
+  color: #999;
+  font-weight: 400;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
+  white-space: nowrap;
+}
+
+/* На темном фоне */
+.app-watermark.dark {
+  opacity: 0.5;
+}
+
+.app-watermark.dark .watermark-text {
+  color: rgba(255, 255, 255, 0.7);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+  .app-watermark {
+    bottom: 8px;
+    right: 8px;
+  }
+
+  .watermark-text {
+    font-size: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-watermark {
+    bottom: 5px;
+    right: 5px;
+  }
+
+  .watermark-text {
+    font-size: 9px;
+  }
+}
+
+/* Скрытие на страницах авторизации (опционально) */
+.app-content.auth-page ~ .app-watermark {
+  display: none;
+}
+

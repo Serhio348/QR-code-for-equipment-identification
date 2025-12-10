@@ -13,6 +13,7 @@ import NotFoundPage from './pages/NotFoundPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import AppAccessGuard from './components/AppAccessGuard';
 import InstallPWA from './components/InstallPWA';
+import AppFooter from './components/AppFooter';
 import { isEquipmentRoute, ROUTES } from './utils/routes';
 import { saveLastPath, loadLastPath } from './utils/pathStorage';
 import './App.css';
@@ -195,6 +196,9 @@ const App: React.FC = () => {
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </main>
+
+      {/* Футер приложения */}
+      {!isAuthPage && !isMainMenuPage && <AppFooter />}
     </div>
   );
 };
