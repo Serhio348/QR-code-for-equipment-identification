@@ -157,6 +157,7 @@ export function useEquipmentForm({ equipmentId, onSave, onCancel }: UseEquipment
       const normalizedCommissioningDate = commissioningDate ? commissioningDate.split('T')[0].trim() : undefined;
       
       console.log('💾 Сохранение оборудования:', {
+        режим: isEditMode ? 'редактирование' : 'добавление',
         исходная_дата: commissioningDate,
         нормализованная_дата: normalizedCommissioningDate
       });
