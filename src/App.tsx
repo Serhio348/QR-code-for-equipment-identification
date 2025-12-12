@@ -68,7 +68,9 @@ const App: React.FC = () => {
       <header className="app-header">
         <div className="header-content">
           <Link to={ROUTES.HOME} className="header-title">
-            <h1>Система идентификации оборудования</h1>
+            <h1>
+              {isWaterPage ? 'Вода' : isEquipmentPage ? 'Оборудование' : 'Система идентификации оборудования'}
+            </h1>
           </Link>
           <div className="header-right">
               {(isEquipmentPage || isWaterPage) && (

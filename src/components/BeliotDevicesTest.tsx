@@ -5,7 +5,6 @@
  */
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   getCompanyDevices,
   getDeviceById,
@@ -19,7 +18,6 @@ import {
   saveBeliotDeviceOverride,
   BeliotDeviceOverride,
 } from '../services/api/beliotDevicesStorageApi';
-import { ROUTES } from '../utils/routes';
 import './BeliotDevicesTest.css';
 
 interface StateTableRow {
@@ -35,7 +33,6 @@ interface DeviceGroup {
 }
 
 const BeliotDevicesTest: React.FC = () => {
-  const navigate = useNavigate();
   const [devices, setDevices] = useState<BeliotDevice[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -836,14 +833,6 @@ const BeliotDevicesTest: React.FC = () => {
           /* Список объектов (групп) */
           <div className="mobile-groups-list">
             <div className="mobile-groups-header">
-              <button
-                className="mobile-back-button"
-                onClick={() => {
-                  navigate(ROUTES.HOME);
-                }}
-              >
-                ← Главное меню
-              </button>
               <h3>Объекты</h3>
             </div>
             {loading ? (
