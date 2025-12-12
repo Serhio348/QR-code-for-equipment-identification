@@ -41,5 +41,30 @@ button, a {
 body, html {
   overflow-x: hidden;
   width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* На мобильных устройствах убираем вертикальный скролл для корневого элемента */
+@media (max-width: 768px) {
+  #root {
+    height: 100vh;
+    max-height: 100vh;
+    overflow: hidden;
+    margin: 0;
+    padding: 0;
+    position: relative;
+  }
+}
+
+@media (max-width: 480px) {
+  #root {
+    height: 100vh;
+    max-height: 100vh;
+    overflow: hidden;
+    margin: 0;
+    padding: 0;
+    position: relative;
+  }
 }
 

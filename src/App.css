@@ -141,6 +141,14 @@
     flex-direction: column !important; /* Вертикальное расположение элементов */
     align-items: stretch !important; /* Растягиваем элементы на всю ширину */
     gap: 0 !important; /* Убираем промежутки между элементами */
+    height: 100vh !important;
+    max-height: 100vh !important;
+    overflow: hidden !important; /* Полностью убираем скролл */
+    overflow-x: hidden !important;
+    overflow-y: hidden !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
   .app-header {
@@ -214,6 +222,14 @@
     flex-direction: column !important; /* Вертикальное расположение элементов */
     align-items: stretch !important; /* Растягиваем элементы на всю ширину */
     gap: 0 !important; /* Убираем промежутки между элементами */
+    height: 100vh !important;
+    max-height: 100vh !important;
+    overflow: hidden !important; /* Полностью убираем скролл */
+    overflow-x: hidden !important;
+    overflow-y: hidden !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
   .app-header {
