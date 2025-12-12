@@ -359,6 +359,7 @@
 
 .group-devices-table tbody tr {
   transition: background-color 0.2s;
+  cursor: pointer !important;
 }
 
 .group-devices-table tbody tr:hover {
@@ -374,7 +375,6 @@
 .group-devices-table .editable-cell {
   position: relative;
   padding: 10px 8px;
-  cursor: text;
 }
 
 .group-devices-table .editable-cell:hover {
@@ -387,6 +387,7 @@
   padding: 2px 4px;
   border-radius: 4px;
   transition: background-color 0.2s;
+  cursor: text;
 }
 
 .group-devices-table .editable-cell:hover .editable-text {
@@ -1764,6 +1765,14 @@
     font-size: 13px;
     color: #666;
     display: block;
+  }
+
+  .device-object-text {
+    font-size: 11px;
+    color: #999;
+    display: block;
+    margin-top: 4px;
+    font-style: italic;
   }
 
   .mobile-main-content .group-devices-table .reading-cell {
