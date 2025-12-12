@@ -4,7 +4,7 @@
  * Админ-панель с таблицей счетчиков слева и состоянием справа при наведении
  */
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   getCompanyDevices,
   getDeviceById,
@@ -61,7 +61,7 @@ const BeliotDevicesTest: React.FC = () => {
   const [syncing, setSyncing] = useState<boolean>(false);
   
   // Состояние для отслеживания редактируемой ячейки
-  const [editingCell, setEditingCell] = useState<{ deviceId: string; field: 'name' | 'address' | 'serialNumber' } | null>(null);
+  const [editingCell, setEditingCell] = useState<{ deviceId: string; field: 'name' | 'address' | 'serialNumber' | 'object' } | null>(null);
 
   // Загрузка устройств и синхронизация при монтировании компонента
   useEffect(() => {
@@ -85,22 +85,53 @@ const BeliotDevicesTest: React.FC = () => {
     }
   }, []);
 
-  // Сохранение изменений в localStorage и синхронизация с Google Sheets
-  const saveOverride = useCallback(async (
+  // Сохранение изменений только в localStorage (быстро, без синхронизации)
+  const updateLocalValue = useCallback((
     deviceId: string,
-    field: 'name' | 'address' | 'serialNumber',
+    field: 'name' | 'address' | 'serialNumber' | 'object',
     value: string
   ) => {
-    // Сохраняем в localStorage (быстро)
-    updateLocalOverride(deviceId, field, value);
+    if (!deviceId) {
+      console.error('❌ updateLocalValue: deviceId не указан!', { deviceId, field, value });
+      return;
+    }
     
-    // Синхронизируем с Google Sheets (асинхронно, не блокируем UI)
+    // Сохраняем только в localStorage (быстро, без синхронизации)
+    updateLocalOverride(deviceId, field, value);
+  }, [updateLocalOverride]);
+
+  // Защита от повторных вызовов синхронизации
+  const syncingRef = useRef<Set<string>>(new Set());
+
+  // Синхронизация изменений с Google Sheets (вызывается при onBlur или Enter)
+  const syncOverrideToSheets = useCallback(async (
+    deviceId: string,
+    field: 'name' | 'address' | 'serialNumber' | 'object'
+  ) => {
+    console.log('💾 syncOverrideToSheets вызван:', { deviceId, field });
+    
+    if (!deviceId) {
+      console.error('❌ syncOverrideToSheets: deviceId не указан!', { deviceId, field });
+      return;
+    }
+
+    // Проверяем, не выполняется ли уже синхронизация для этого устройства
+    const syncKey = `${deviceId}_${field}`;
+    if (syncingRef.current.has(syncKey)) {
+      console.log('⏸️ Синхронизация уже выполняется для', syncKey);
+      return;
+    }
+
+    // Помечаем, что синхронизация началась
+    syncingRef.current.add(syncKey);
+    
     try {
       const currentOverride = getLocalOverride(deviceId) || {};
-      await saveBeliotDeviceOverride(deviceId, {
+      const overrideData = {
         ...currentOverride,
-        [field]: value,
-      });
+      };
+      console.log('💾 Отправка данных в Google Sheets:', { deviceId, overrideData });
+      await saveBeliotDeviceOverride(deviceId, overrideData);
       console.log(`✅ Изменения для устройства ${deviceId} синхронизированы с Google Sheets`);
       
       // Обновляем локальный кэш синхронизированных данных
@@ -109,11 +140,14 @@ const BeliotDevicesTest: React.FC = () => {
     } catch (error: any) {
       console.error(`❌ Ошибка синхронизации изменений для устройства ${deviceId}:`, error);
       // Изменения остаются в localStorage, синхронизация произойдет при следующей попытке
+    } finally {
+      // Убираем флаг синхронизации
+      syncingRef.current.delete(syncKey);
     }
-  }, [updateLocalOverride, getLocalOverride]);
+  }, [getLocalOverride]);
 
   // Получение редактируемых данных для устройства с приоритетом
-  const getEditableValue = useCallback((deviceId: string, field: 'name' | 'address' | 'serialNumber', defaultValue: string): string => {
+  const getEditableValue = useCallback((deviceId: string, field: 'name' | 'address' | 'serialNumber' | 'object', defaultValue: string): string => {
     const id = String(deviceId);
     
     // Приоритет 1: localStorage (самые свежие локальные изменения)
@@ -333,6 +367,38 @@ const BeliotDevicesTest: React.FC = () => {
     }
     
     return device.name || '-';
+  };
+
+  const getDeviceObject = (device: BeliotDevice): string => {
+    const deviceId = String(device.device_id || device.id || device._id);
+    
+    // Проверяем редактируемое значение (override)
+    const editableValue = getEditableValue(deviceId, 'object', '');
+    if (editableValue) {
+      return editableValue;
+    }
+    
+    // Приоритет 1: tied_point.place (из API)
+    if (device.tied_point?.place) {
+      return device.tied_point.place;
+    }
+    
+    // Приоритет 2: object_name (из API)
+    if (device.object_name) {
+      return device.object_name;
+    }
+    
+    // Приоритет 3: facility_passport_name (из API)
+    if (device.facility_passport_name) {
+      return device.facility_passport_name;
+    }
+    
+    // Приоритет 4: building_name (из API)
+    if (device.building_name) {
+      return device.building_name;
+    }
+    
+    return '-';
   };
 
   const getLastReading = (device: BeliotDevice): string => {
@@ -604,6 +670,7 @@ const BeliotDevicesTest: React.FC = () => {
                       <tr>
                         <th>Счётчик</th>
                         <th>Серийный номер</th>
+                        <th>Объект</th>
                         <th>Показание</th>
                       </tr>
                     </thead>
@@ -638,10 +705,14 @@ const BeliotDevicesTest: React.FC = () => {
                                   type="text"
                                   className="editable-input"
                                   value={getEditableValue(deviceId, 'name', getDeviceName(device))}
-                                  onChange={(e) => saveOverride(deviceId, 'name', e.target.value)}
-                                  onBlur={() => setEditingCell(null)}
-                                  onKeyDown={(e) => {
+                                  onChange={(e) => updateLocalValue(deviceId, 'name', e.target.value)}
+                                  onBlur={async () => {
+                                    await syncOverrideToSheets(deviceId, 'name');
+                                    setEditingCell(null);
+                                  }}
+                                  onKeyDown={async (e) => {
                                     if (e.key === 'Enter') {
+                                      await syncOverrideToSheets(deviceId, 'name');
                                       setEditingCell(null);
                                     } else if (e.key === 'Escape') {
                                       setEditingCell(null);
@@ -666,10 +737,14 @@ const BeliotDevicesTest: React.FC = () => {
                                   type="text"
                                   className="editable-input"
                                   value={getEditableValue(deviceId, 'serialNumber', getDeviceSerialNumber(device))}
-                                  onChange={(e) => saveOverride(deviceId, 'serialNumber', e.target.value)}
-                                  onBlur={() => setEditingCell(null)}
-                                  onKeyDown={(e) => {
+                                  onChange={(e) => updateLocalValue(deviceId, 'serialNumber', e.target.value)}
+                                  onBlur={async () => {
+                                    await syncOverrideToSheets(deviceId, 'serialNumber');
+                                    setEditingCell(null);
+                                  }}
+                                  onKeyDown={async (e) => {
                                     if (e.key === 'Enter') {
+                                      await syncOverrideToSheets(deviceId, 'serialNumber');
                                       setEditingCell(null);
                                     } else if (e.key === 'Escape') {
                                       setEditingCell(null);
@@ -680,6 +755,38 @@ const BeliotDevicesTest: React.FC = () => {
                                 />
                               ) : (
                                 <span className="editable-text">{getDeviceSerialNumber(device)}</span>
+                              )}
+                            </td>
+                            <td
+                              className="editable-cell"
+                              onDoubleClick={(e) => {
+                                e.stopPropagation();
+                                setEditingCell({ deviceId, field: 'object' });
+                              }}
+                            >
+                              {editingCell?.deviceId === deviceId && editingCell?.field === 'object' ? (
+                                <input
+                                  type="text"
+                                  className="editable-input"
+                                  value={getEditableValue(deviceId, 'object', getDeviceObject(device))}
+                                  onChange={(e) => updateLocalValue(deviceId, 'object', e.target.value)}
+                                  onBlur={async () => {
+                                    await syncOverrideToSheets(deviceId, 'object');
+                                    setEditingCell(null);
+                                  }}
+                                  onKeyDown={async (e) => {
+                                    if (e.key === 'Enter') {
+                                      await syncOverrideToSheets(deviceId, 'object');
+                                      setEditingCell(null);
+                                    } else if (e.key === 'Escape') {
+                                      setEditingCell(null);
+                                    }
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                  autoFocus
+                                />
+                              ) : (
+                                <span className="editable-text">{getDeviceObject(device)}</span>
                               )}
                             </td>
                             <td className="reading-cell">{getLastReading(device)}</td>
@@ -928,10 +1035,14 @@ const BeliotDevicesTest: React.FC = () => {
                                   type="text"
                                   className="editable-input"
                                   value={getEditableValue(deviceId, 'name', getDeviceName(device))}
-                                  onChange={(e) => saveOverride(deviceId, 'name', e.target.value)}
-                                  onBlur={() => setEditingCell(null)}
-                                  onKeyDown={(e) => {
+                                  onChange={(e) => updateLocalValue(deviceId, 'name', e.target.value)}
+                                  onBlur={async () => {
+                                    await syncOverrideToSheets(deviceId, 'name');
+                                    setEditingCell(null);
+                                  }}
+                                  onKeyDown={async (e) => {
                                     if (e.key === 'Enter') {
+                                      await syncOverrideToSheets(deviceId, 'name');
                                       setEditingCell(null);
                                     } else if (e.key === 'Escape') {
                                       setEditingCell(null);
@@ -956,10 +1067,14 @@ const BeliotDevicesTest: React.FC = () => {
                                   type="text"
                                   className="editable-input"
                                   value={getEditableValue(deviceId, 'serialNumber', getDeviceSerialNumber(device))}
-                                  onChange={(e) => saveOverride(deviceId, 'serialNumber', e.target.value)}
-                                  onBlur={() => setEditingCell(null)}
-                                  onKeyDown={(e) => {
+                                  onChange={(e) => updateLocalValue(deviceId, 'serialNumber', e.target.value)}
+                                  onBlur={async () => {
+                                    await syncOverrideToSheets(deviceId, 'serialNumber');
+                                    setEditingCell(null);
+                                  }}
+                                  onKeyDown={async (e) => {
                                     if (e.key === 'Enter') {
+                                      await syncOverrideToSheets(deviceId, 'serialNumber');
                                       setEditingCell(null);
                                     } else if (e.key === 'Escape') {
                                       setEditingCell(null);

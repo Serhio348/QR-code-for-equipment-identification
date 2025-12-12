@@ -914,17 +914,44 @@ function doPost(e) {
       case 'saveBeliotDeviceOverride':
         // Сохранить изменения для устройства
         Logger.log('📊 Обработка saveBeliotDeviceOverride');
-        if (!data.deviceId) {
-          return createErrorResponse('deviceId не указан');
+        Logger.log('📊 data существует: ' + (data ? 'ДА' : 'НЕТ'));
+        Logger.log('📊 data type: ' + typeof data);
+        Logger.log('📊 Все ключи data: ' + JSON.stringify(data ? Object.keys(data) : []));
+        Logger.log('📊 Полный объект data: ' + JSON.stringify(data));
+        Logger.log('📊 Полученные данные: deviceId=' + (data ? data.deviceId : 'undefined') + ', serialNumber=' + (data ? data.serialNumber : 'undefined') + ', object=' + (data ? data.object : 'undefined'));
+        
+        if (!data) {
+          Logger.log('❌ data is null или undefined');
+          return createErrorResponse('Данные не получены. Проверьте формат запроса.');
         }
+        
+        if (!data.deviceId) {
+          Logger.log('❌ deviceId не указан в data');
+          Logger.log('   data: ' + JSON.stringify(data));
+          Logger.log('   Все ключи: ' + JSON.stringify(Object.keys(data)));
+          return createErrorResponse('deviceId не указан. Проверьте, что deviceId передается в запросе.');
+        }
+        
         const overrideData = {
           name: data.name,
           address: data.address,
           serialNumber: data.serialNumber,
           group: data.group,
+          object: data.object,
           modifiedBy: data.modifiedBy,
         };
-        return createJsonResponse(saveBeliotDeviceOverride(data.deviceId, overrideData));
+        Logger.log('📊 Данные для сохранения: ' + JSON.stringify(overrideData));
+        Logger.log('📊 Вызов saveBeliotDeviceOverride с deviceId="' + data.deviceId + '" и overrideData=' + JSON.stringify(overrideData));
+        try {
+          const result = saveBeliotDeviceOverride(data.deviceId, overrideData);
+          Logger.log('✅ Данные успешно сохранены в Google Sheets');
+          Logger.log('📊 Результат: ' + JSON.stringify(result));
+          return createJsonResponse(result);
+        } catch (error) {
+          Logger.log('❌ Ошибка при сохранении: ' + error.toString());
+          Logger.log('❌ Стек ошибки: ' + (error.stack || 'нет стека'));
+          return createErrorResponse('Ошибка при сохранении: ' + error.toString());
+        }
       
       case 'saveBeliotDevicesOverrides':
         // Сохранить несколько изменений за раз
