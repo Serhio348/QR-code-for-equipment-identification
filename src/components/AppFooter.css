@@ -36,6 +36,7 @@
 @media (max-width: 768px) {
   .app-footer {
     padding: 12px 15px;
+    order: 3; /* Футер третий в вертикальном потоке */
   }
 
   .footer-text {
@@ -46,6 +47,7 @@
 @media (max-width: 480px) {
   .app-footer {
     padding: 10px 12px;
+    order: 3; /* Футер третий в вертикальном потоке */
   }
 
   .footer-text {
