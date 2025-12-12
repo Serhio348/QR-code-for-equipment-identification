@@ -336,16 +336,21 @@ const BeliotDevicesTest: React.FC = () => {
   };
 
   const getLastReading = (device: BeliotDevice): string => {
+    let value: number | undefined;
     // Пробуем получить last_message_type.1.in1
     if (device.last_message_type && typeof device.last_message_type === 'object') {
       const msgType = device.last_message_type as any;
       if (msgType['1'] && msgType['1'].in1 !== undefined) {
-        return String(msgType['1'].in1);
+        value = Number(msgType['1'].in1);
       }
     }
     // Альтернативные пути
-    if ((device as any).last_message_type?.['1']?.in1 !== undefined) {
-      return String((device as any).last_message_type['1'].in1);
+    if (value === undefined && (device as any).last_message_type?.['1']?.in1 !== undefined) {
+      value = Number((device as any).last_message_type['1'].in1);
+    }
+    // Округляем до одного знака после запятой
+    if (value !== undefined && !isNaN(value)) {
+      return value.toFixed(1);
     }
     return '-';
   };
@@ -878,7 +883,7 @@ const BeliotDevicesTest: React.FC = () => {
                   setError(null);
                 }}
               >
-                ← Назад к объектам
+                назад
               </button>
               <h3>{selectedGroup.name}</h3>
             </div>
@@ -989,7 +994,7 @@ const BeliotDevicesTest: React.FC = () => {
                   setError(null);
                 }}
               >
-                ← Назад к счетчикам
+                назад
               </button>
               <h3>{getDeviceName(selectedDevice) || selectedDevice.device_id || selectedDevice.id}</h3>
             </div>
@@ -1052,27 +1057,55 @@ const BeliotDevicesTest: React.FC = () => {
                     {deviceReadings.current && (
                       <div className="mobile-reading-card current">
                         <div className="mobile-reading-badge current">Текущий</div>
-                        <div className="mobile-reading-value">{deviceReadings.current.value !== undefined ? deviceReadings.current.value : '-'}</div>
+                        <div className="mobile-reading-value">{deviceReadings.current.value !== undefined ? Number(deviceReadings.current.value).toFixed(1) : '-'}</div>
                         <div className="mobile-reading-unit">{deviceReadings.current.unit || 'м³'}</div>
                         <div className="mobile-reading-date">
-                          {deviceReadings.current.date ? new Date(deviceReadings.current.date).toLocaleString('ru-RU') : '-'}
+                          {deviceReadings.current.date ? (() => {
+                            let dateValue: string | number = deviceReadings.current.date;
+                            // Если дата в секундах (Unix timestamp), конвертируем в миллисекунды
+                            if (typeof dateValue === 'number' && dateValue < 10000000000) {
+                              dateValue = dateValue * 1000;
+                            }
+                            const date = new Date(dateValue);
+                            if (isNaN(date.getTime())) return '-';
+                            const day = String(date.getDate()).padStart(2, '0');
+                            const month = String(date.getMonth() + 1).padStart(2, '0');
+                            const year = date.getFullYear();
+                            const hours = String(date.getHours()).padStart(2, '0');
+                            const minutes = String(date.getMinutes()).padStart(2, '0');
+                            return `${day}.${month}.${year} ${hours}:${minutes}`;
+                          })() : '-'}
                         </div>
                       </div>
                     )}
                     {deviceReadings.previous && (
                       <div className="mobile-reading-card previous">
                         <div className="mobile-reading-badge previous">Предыдущий</div>
-                        <div className="mobile-reading-value">{deviceReadings.previous.value !== undefined ? deviceReadings.previous.value : '-'}</div>
+                        <div className="mobile-reading-value">{deviceReadings.previous.value !== undefined ? Number(deviceReadings.previous.value).toFixed(1) : '-'}</div>
                         <div className="mobile-reading-unit">{deviceReadings.previous.unit || 'м³'}</div>
                         <div className="mobile-reading-date">
-                          {deviceReadings.previous.date ? new Date(deviceReadings.previous.date).toLocaleString('ru-RU') : '-'}
+                          {deviceReadings.previous.date ? (() => {
+                            let dateValue: string | number = deviceReadings.previous.date;
+                            // Если дата в секундах (Unix timestamp), конвертируем в миллисекунды
+                            if (typeof dateValue === 'number' && dateValue < 10000000000) {
+                              dateValue = dateValue * 1000;
+                            }
+                            const date = new Date(dateValue);
+                            if (isNaN(date.getTime())) return '-';
+                            const day = String(date.getDate()).padStart(2, '0');
+                            const month = String(date.getMonth() + 1).padStart(2, '0');
+                            const year = date.getFullYear();
+                            const hours = String(date.getHours()).padStart(2, '0');
+                            const minutes = String(date.getMinutes()).padStart(2, '0');
+                            return `${day}.${month}.${year} ${hours}:${minutes}`;
+                          })() : '-'}
                         </div>
                       </div>
                     )}
                     {volume !== null && (
                       <div className="mobile-reading-card difference">
                         <div className="mobile-reading-badge difference">Разница</div>
-                        <div className="mobile-reading-value difference-value">{volume.toFixed(2)}</div>
+                        <div className="mobile-reading-value difference-value">{volume.toFixed(1)}</div>
                         <div className="mobile-reading-unit">м³</div>
                         <div className="mobile-reading-period">Период: {period}</div>
                       </div>
