@@ -829,8 +829,19 @@ const BeliotDevicesTest: React.FC = () => {
                     const calculatePeriod = (): string => {
                       if (deviceReadings.current?.date && deviceReadings.previous?.date) {
                         try {
-                          const currentDate = new Date(deviceReadings.current.date);
-                          const previousDate = new Date(deviceReadings.previous.date);
+                          // Конвертируем даты, если они в секундах (Unix timestamp)
+                          let currentDateValue: string | number = deviceReadings.current.date;
+                          let previousDateValue: string | number = deviceReadings.previous.date;
+                          
+                          if (typeof currentDateValue === 'number' && currentDateValue < 10000000000) {
+                            currentDateValue = currentDateValue * 1000;
+                          }
+                          if (typeof previousDateValue === 'number' && previousDateValue < 10000000000) {
+                            previousDateValue = previousDateValue * 1000;
+                          }
+                          
+                          const currentDate = new Date(currentDateValue);
+                          const previousDate = new Date(previousDateValue);
                           
                           if (isNaN(currentDate.getTime()) || isNaN(previousDate.getTime())) {
                             return '-';
@@ -875,7 +886,18 @@ const BeliotDevicesTest: React.FC = () => {
                             {deviceReadings.current && (
                               <tr className="reading-row current">
                                 <td className="period-badge current">Текущий</td>
-                                <td>{deviceReadings.current.date ? new Date(deviceReadings.current.date).toLocaleString('ru-RU') : '-'}</td>
+                                <td>
+                                  {deviceReadings.current.date ? (() => {
+                                    let dateValue: string | number = deviceReadings.current.date;
+                                    // Если дата в секундах (Unix timestamp), конвертируем в миллисекунды
+                                    if (typeof dateValue === 'number' && dateValue < 10000000000) {
+                                      dateValue = dateValue * 1000;
+                                    }
+                                    const date = new Date(dateValue);
+                                    if (isNaN(date.getTime())) return '-';
+                                    return date.toLocaleString('ru-RU');
+                                  })() : '-'}
+                                </td>
                                 <td className="reading-value">{deviceReadings.current.value !== undefined ? deviceReadings.current.value : '-'}</td>
                                 <td>{deviceReadings.current.unit || 'м³'}</td>
                                 <td>-</td>
@@ -885,7 +907,18 @@ const BeliotDevicesTest: React.FC = () => {
                             {deviceReadings.previous && (
                               <tr className="reading-row previous">
                                 <td className="period-badge previous">Предыдущий</td>
-                                <td>{deviceReadings.previous.date ? new Date(deviceReadings.previous.date).toLocaleString('ru-RU') : '-'}</td>
+                                <td>
+                                  {deviceReadings.previous.date ? (() => {
+                                    let dateValue: string | number = deviceReadings.previous.date;
+                                    // Если дата в секундах (Unix timestamp), конвертируем в миллисекунды
+                                    if (typeof dateValue === 'number' && dateValue < 10000000000) {
+                                      dateValue = dateValue * 1000;
+                                    }
+                                    const date = new Date(dateValue);
+                                    if (isNaN(date.getTime())) return '-';
+                                    return date.toLocaleString('ru-RU');
+                                  })() : '-'}
+                                </td>
                                 <td className="reading-value">{deviceReadings.previous.value !== undefined ? deviceReadings.previous.value : '-'}</td>
                                 <td>{deviceReadings.previous.unit || 'м³'}</td>
                                 <td>-</td>
@@ -1086,6 +1119,9 @@ const BeliotDevicesTest: React.FC = () => {
                               ) : (
                                 <span className="editable-text device-serial-text">{getDeviceSerialNumber(device) || '-'}</span>
                               )}
+                            </div>
+                            <div className="device-object-text">
+                              {getDeviceObject(device) || '-'}
                             </div>
                           </div>
                         </td>
