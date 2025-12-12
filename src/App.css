@@ -314,10 +314,10 @@
   margin: 0 !important;
 }
 
-/* Убираем скролл для страницы оборудования */
+/* Разрешаем скролл для страницы оборудования */
 .app-content:has(.equipment-page) {
-  overflow-y: visible;
-  overflow: visible;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* Убираем скролл для PWA меню */

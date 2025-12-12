@@ -3,7 +3,10 @@
  */
 
 .page-header {
-  position: relative;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
   padding: 15px 20px;
   background: white;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
@@ -13,7 +16,6 @@
   align-items: center;
   justify-content: space-between;
   gap: 15px;
-  margin-bottom: 20px;
   flex-wrap: wrap;
 }
 
