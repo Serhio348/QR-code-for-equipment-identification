@@ -12,6 +12,7 @@ export interface DeviceOverrides {
     name?: string;
     address?: string;
     serialNumber?: string;
+    object?: string; // Объект (под объектом основного меню)
     lastModified: number; // timestamp
   };
 }
@@ -144,7 +145,8 @@ export function hasDeviceOverride(deviceId: string): boolean {
   return override !== undefined && (
     override.name !== undefined ||
     override.address !== undefined ||
-    override.serialNumber !== undefined
+    override.serialNumber !== undefined ||
+    override.object !== undefined
   );
 }
 

@@ -4,8 +4,7 @@
  * Админ-панель с таблицей счетчиков слева и состоянием справа при наведении
  */
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   getCompanyDevices,
   getDeviceById,
@@ -19,7 +18,6 @@ import {
   saveBeliotDeviceOverride,
   BeliotDeviceOverride,
 } from '../services/api/beliotDevicesStorageApi';
-import { ROUTES } from '../utils/routes';
 import './BeliotDevicesTest.css';
 
 interface StateTableRow {
@@ -35,7 +33,6 @@ interface DeviceGroup {
 }
 
 const BeliotDevicesTest: React.FC = () => {
-  const navigate = useNavigate();
   const [devices, setDevices] = useState<BeliotDevice[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,7 +61,7 @@ const BeliotDevicesTest: React.FC = () => {
   const [syncing, setSyncing] = useState<boolean>(false);
   
   // Состояние для отслеживания редактируемой ячейки
-  const [editingCell, setEditingCell] = useState<{ deviceId: string; field: 'name' | 'address' | 'serialNumber' } | null>(null);
+  const [editingCell, setEditingCell] = useState<{ deviceId: string; field: 'name' | 'address' | 'serialNumber' | 'object' } | null>(null);
 
   // Загрузка устройств и синхронизация при монтировании компонента
   useEffect(() => {
@@ -88,22 +85,53 @@ const BeliotDevicesTest: React.FC = () => {
     }
   }, []);
 
-  // Сохранение изменений в localStorage и синхронизация с Google Sheets
-  const saveOverride = useCallback(async (
+  // Сохранение изменений только в localStorage (быстро, без синхронизации)
+  const updateLocalValue = useCallback((
     deviceId: string,
-    field: 'name' | 'address' | 'serialNumber',
+    field: 'name' | 'address' | 'serialNumber' | 'object',
     value: string
   ) => {
-    // Сохраняем в localStorage (быстро)
-    updateLocalOverride(deviceId, field, value);
+    if (!deviceId) {
+      console.error('❌ updateLocalValue: deviceId не указан!', { deviceId, field, value });
+      return;
+    }
     
-    // Синхронизируем с Google Sheets (асинхронно, не блокируем UI)
+    // Сохраняем только в localStorage (быстро, без синхронизации)
+    updateLocalOverride(deviceId, field, value);
+  }, [updateLocalOverride]);
+
+  // Защита от повторных вызовов синхронизации
+  const syncingRef = useRef<Set<string>>(new Set());
+
+  // Синхронизация изменений с Google Sheets (вызывается при onBlur или Enter)
+  const syncOverrideToSheets = useCallback(async (
+    deviceId: string,
+    field: 'name' | 'address' | 'serialNumber' | 'object'
+  ) => {
+    console.log('💾 syncOverrideToSheets вызван:', { deviceId, field });
+    
+    if (!deviceId) {
+      console.error('❌ syncOverrideToSheets: deviceId не указан!', { deviceId, field });
+      return;
+    }
+
+    // Проверяем, не выполняется ли уже синхронизация для этого устройства
+    const syncKey = `${deviceId}_${field}`;
+    if (syncingRef.current.has(syncKey)) {
+      console.log('⏸️ Синхронизация уже выполняется для', syncKey);
+      return;
+    }
+
+    // Помечаем, что синхронизация началась
+    syncingRef.current.add(syncKey);
+    
     try {
       const currentOverride = getLocalOverride(deviceId) || {};
-      await saveBeliotDeviceOverride(deviceId, {
+      const overrideData = {
         ...currentOverride,
-        [field]: value,
-      });
+      };
+      console.log('💾 Отправка данных в Google Sheets:', { deviceId, overrideData });
+      await saveBeliotDeviceOverride(deviceId, overrideData);
       console.log(`✅ Изменения для устройства ${deviceId} синхронизированы с Google Sheets`);
       
       // Обновляем локальный кэш синхронизированных данных
@@ -112,11 +140,14 @@ const BeliotDevicesTest: React.FC = () => {
     } catch (error: any) {
       console.error(`❌ Ошибка синхронизации изменений для устройства ${deviceId}:`, error);
       // Изменения остаются в localStorage, синхронизация произойдет при следующей попытке
+    } finally {
+      // Убираем флаг синхронизации
+      syncingRef.current.delete(syncKey);
     }
-  }, [updateLocalOverride, getLocalOverride]);
+  }, [getLocalOverride]);
 
   // Получение редактируемых данных для устройства с приоритетом
-  const getEditableValue = useCallback((deviceId: string, field: 'name' | 'address' | 'serialNumber', defaultValue: string): string => {
+  const getEditableValue = useCallback((deviceId: string, field: 'name' | 'address' | 'serialNumber' | 'object', defaultValue: string): string => {
     const id = String(deviceId);
     
     // Приоритет 1: localStorage (самые свежие локальные изменения)
@@ -338,17 +369,54 @@ const BeliotDevicesTest: React.FC = () => {
     return device.name || '-';
   };
 
+  const getDeviceObject = (device: BeliotDevice): string => {
+    const deviceId = String(device.device_id || device.id || device._id);
+    
+    // Проверяем редактируемое значение (override)
+    const editableValue = getEditableValue(deviceId, 'object', '');
+    if (editableValue) {
+      return editableValue;
+    }
+    
+    // Приоритет 1: tied_point.place (из API)
+    if (device.tied_point?.place) {
+      return device.tied_point.place;
+    }
+    
+    // Приоритет 2: object_name (из API)
+    if (device.object_name) {
+      return device.object_name;
+    }
+    
+    // Приоритет 3: facility_passport_name (из API)
+    if (device.facility_passport_name) {
+      return device.facility_passport_name;
+    }
+    
+    // Приоритет 4: building_name (из API)
+    if (device.building_name) {
+      return device.building_name;
+    }
+    
+    return '-';
+  };
+
   const getLastReading = (device: BeliotDevice): string => {
+    let value: number | undefined;
     // Пробуем получить last_message_type.1.in1
     if (device.last_message_type && typeof device.last_message_type === 'object') {
       const msgType = device.last_message_type as any;
       if (msgType['1'] && msgType['1'].in1 !== undefined) {
-        return String(msgType['1'].in1);
+        value = Number(msgType['1'].in1);
       }
     }
     // Альтернативные пути
-    if ((device as any).last_message_type?.['1']?.in1 !== undefined) {
-      return String((device as any).last_message_type['1'].in1);
+    if (value === undefined && (device as any).last_message_type?.['1']?.in1 !== undefined) {
+      value = Number((device as any).last_message_type['1'].in1);
+    }
+    // Округляем до одного знака после запятой
+    if (value !== undefined && !isNaN(value)) {
+      return value.toFixed(1);
     }
     return '-';
   };
@@ -602,6 +670,7 @@ const BeliotDevicesTest: React.FC = () => {
                       <tr>
                         <th>Счётчик</th>
                         <th>Серийный номер</th>
+                        <th>Объект</th>
                         <th>Показание</th>
                       </tr>
                     </thead>
@@ -636,10 +705,14 @@ const BeliotDevicesTest: React.FC = () => {
                                   type="text"
                                   className="editable-input"
                                   value={getEditableValue(deviceId, 'name', getDeviceName(device))}
-                                  onChange={(e) => saveOverride(deviceId, 'name', e.target.value)}
-                                  onBlur={() => setEditingCell(null)}
-                                  onKeyDown={(e) => {
+                                  onChange={(e) => updateLocalValue(deviceId, 'name', e.target.value)}
+                                  onBlur={async () => {
+                                    await syncOverrideToSheets(deviceId, 'name');
+                                    setEditingCell(null);
+                                  }}
+                                  onKeyDown={async (e) => {
                                     if (e.key === 'Enter') {
+                                      await syncOverrideToSheets(deviceId, 'name');
                                       setEditingCell(null);
                                     } else if (e.key === 'Escape') {
                                       setEditingCell(null);
@@ -664,10 +737,14 @@ const BeliotDevicesTest: React.FC = () => {
                                   type="text"
                                   className="editable-input"
                                   value={getEditableValue(deviceId, 'serialNumber', getDeviceSerialNumber(device))}
-                                  onChange={(e) => saveOverride(deviceId, 'serialNumber', e.target.value)}
-                                  onBlur={() => setEditingCell(null)}
-                                  onKeyDown={(e) => {
+                                  onChange={(e) => updateLocalValue(deviceId, 'serialNumber', e.target.value)}
+                                  onBlur={async () => {
+                                    await syncOverrideToSheets(deviceId, 'serialNumber');
+                                    setEditingCell(null);
+                                  }}
+                                  onKeyDown={async (e) => {
                                     if (e.key === 'Enter') {
+                                      await syncOverrideToSheets(deviceId, 'serialNumber');
                                       setEditingCell(null);
                                     } else if (e.key === 'Escape') {
                                       setEditingCell(null);
@@ -678,6 +755,38 @@ const BeliotDevicesTest: React.FC = () => {
                                 />
                               ) : (
                                 <span className="editable-text">{getDeviceSerialNumber(device)}</span>
+                              )}
+                            </td>
+                            <td
+                              className="editable-cell"
+                              onDoubleClick={(e) => {
+                                e.stopPropagation();
+                                setEditingCell({ deviceId, field: 'object' });
+                              }}
+                            >
+                              {editingCell?.deviceId === deviceId && editingCell?.field === 'object' ? (
+                                <input
+                                  type="text"
+                                  className="editable-input"
+                                  value={getEditableValue(deviceId, 'object', getDeviceObject(device))}
+                                  onChange={(e) => updateLocalValue(deviceId, 'object', e.target.value)}
+                                  onBlur={async () => {
+                                    await syncOverrideToSheets(deviceId, 'object');
+                                    setEditingCell(null);
+                                  }}
+                                  onKeyDown={async (e) => {
+                                    if (e.key === 'Enter') {
+                                      await syncOverrideToSheets(deviceId, 'object');
+                                      setEditingCell(null);
+                                    } else if (e.key === 'Escape') {
+                                      setEditingCell(null);
+                                    }
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                  autoFocus
+                                />
+                              ) : (
+                                <span className="editable-text">{getDeviceObject(device)}</span>
                               )}
                             </td>
                             <td className="reading-cell">{getLastReading(device)}</td>
@@ -836,14 +945,6 @@ const BeliotDevicesTest: React.FC = () => {
           /* Список объектов (групп) */
           <div className="mobile-groups-list">
             <div className="mobile-groups-header">
-              <button
-                className="mobile-back-button"
-                onClick={() => {
-                  navigate(ROUTES.HOME);
-                }}
-              >
-                ← Главное меню
-              </button>
               <h3>Объекты</h3>
             </div>
             {loading ? (
@@ -889,7 +990,7 @@ const BeliotDevicesTest: React.FC = () => {
                   setError(null);
                 }}
               >
-                ← Назад к объектам
+                назад
               </button>
               <h3>{selectedGroup.name}</h3>
             </div>
@@ -934,10 +1035,14 @@ const BeliotDevicesTest: React.FC = () => {
                                   type="text"
                                   className="editable-input"
                                   value={getEditableValue(deviceId, 'name', getDeviceName(device))}
-                                  onChange={(e) => saveOverride(deviceId, 'name', e.target.value)}
-                                  onBlur={() => setEditingCell(null)}
-                                  onKeyDown={(e) => {
+                                  onChange={(e) => updateLocalValue(deviceId, 'name', e.target.value)}
+                                  onBlur={async () => {
+                                    await syncOverrideToSheets(deviceId, 'name');
+                                    setEditingCell(null);
+                                  }}
+                                  onKeyDown={async (e) => {
                                     if (e.key === 'Enter') {
+                                      await syncOverrideToSheets(deviceId, 'name');
                                       setEditingCell(null);
                                     } else if (e.key === 'Escape') {
                                       setEditingCell(null);
@@ -962,10 +1067,14 @@ const BeliotDevicesTest: React.FC = () => {
                                   type="text"
                                   className="editable-input"
                                   value={getEditableValue(deviceId, 'serialNumber', getDeviceSerialNumber(device))}
-                                  onChange={(e) => saveOverride(deviceId, 'serialNumber', e.target.value)}
-                                  onBlur={() => setEditingCell(null)}
-                                  onKeyDown={(e) => {
+                                  onChange={(e) => updateLocalValue(deviceId, 'serialNumber', e.target.value)}
+                                  onBlur={async () => {
+                                    await syncOverrideToSheets(deviceId, 'serialNumber');
+                                    setEditingCell(null);
+                                  }}
+                                  onKeyDown={async (e) => {
                                     if (e.key === 'Enter') {
+                                      await syncOverrideToSheets(deviceId, 'serialNumber');
                                       setEditingCell(null);
                                     } else if (e.key === 'Escape') {
                                       setEditingCell(null);
@@ -1000,7 +1109,7 @@ const BeliotDevicesTest: React.FC = () => {
                   setError(null);
                 }}
               >
-                ← Назад к счетчикам
+                назад
               </button>
               <h3>{getDeviceName(selectedDevice) || selectedDevice.device_id || selectedDevice.id}</h3>
             </div>
@@ -1063,27 +1172,55 @@ const BeliotDevicesTest: React.FC = () => {
                     {deviceReadings.current && (
                       <div className="mobile-reading-card current">
                         <div className="mobile-reading-badge current">Текущий</div>
-                        <div className="mobile-reading-value">{deviceReadings.current.value !== undefined ? deviceReadings.current.value : '-'}</div>
+                        <div className="mobile-reading-value">{deviceReadings.current.value !== undefined ? Number(deviceReadings.current.value).toFixed(1) : '-'}</div>
                         <div className="mobile-reading-unit">{deviceReadings.current.unit || 'м³'}</div>
                         <div className="mobile-reading-date">
-                          {deviceReadings.current.date ? new Date(deviceReadings.current.date).toLocaleString('ru-RU') : '-'}
+                          {deviceReadings.current.date ? (() => {
+                            let dateValue: string | number = deviceReadings.current.date;
+                            // Если дата в секундах (Unix timestamp), конвертируем в миллисекунды
+                            if (typeof dateValue === 'number' && dateValue < 10000000000) {
+                              dateValue = dateValue * 1000;
+                            }
+                            const date = new Date(dateValue);
+                            if (isNaN(date.getTime())) return '-';
+                            const day = String(date.getDate()).padStart(2, '0');
+                            const month = String(date.getMonth() + 1).padStart(2, '0');
+                            const year = date.getFullYear();
+                            const hours = String(date.getHours()).padStart(2, '0');
+                            const minutes = String(date.getMinutes()).padStart(2, '0');
+                            return `${day}.${month}.${year} ${hours}:${minutes}`;
+                          })() : '-'}
                         </div>
                       </div>
                     )}
                     {deviceReadings.previous && (
                       <div className="mobile-reading-card previous">
                         <div className="mobile-reading-badge previous">Предыдущий</div>
-                        <div className="mobile-reading-value">{deviceReadings.previous.value !== undefined ? deviceReadings.previous.value : '-'}</div>
+                        <div className="mobile-reading-value">{deviceReadings.previous.value !== undefined ? Number(deviceReadings.previous.value).toFixed(1) : '-'}</div>
                         <div className="mobile-reading-unit">{deviceReadings.previous.unit || 'м³'}</div>
                         <div className="mobile-reading-date">
-                          {deviceReadings.previous.date ? new Date(deviceReadings.previous.date).toLocaleString('ru-RU') : '-'}
+                          {deviceReadings.previous.date ? (() => {
+                            let dateValue: string | number = deviceReadings.previous.date;
+                            // Если дата в секундах (Unix timestamp), конвертируем в миллисекунды
+                            if (typeof dateValue === 'number' && dateValue < 10000000000) {
+                              dateValue = dateValue * 1000;
+                            }
+                            const date = new Date(dateValue);
+                            if (isNaN(date.getTime())) return '-';
+                            const day = String(date.getDate()).padStart(2, '0');
+                            const month = String(date.getMonth() + 1).padStart(2, '0');
+                            const year = date.getFullYear();
+                            const hours = String(date.getHours()).padStart(2, '0');
+                            const minutes = String(date.getMinutes()).padStart(2, '0');
+                            return `${day}.${month}.${year} ${hours}:${minutes}`;
+                          })() : '-'}
                         </div>
                       </div>
                     )}
                     {volume !== null && (
                       <div className="mobile-reading-card difference">
                         <div className="mobile-reading-badge difference">Разница</div>
-                        <div className="mobile-reading-value difference-value">{volume.toFixed(2)}</div>
+                        <div className="mobile-reading-value difference-value">{volume.toFixed(1)}</div>
                         <div className="mobile-reading-unit">м³</div>
                         <div className="mobile-reading-period">Период: {period}</div>
                       </div>

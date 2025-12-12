@@ -81,6 +81,9 @@ export async function apiRequest<T>(
         ...body
       };
       options.body = JSON.stringify(postBody);
+      console.log('📤 POST body:', JSON.stringify(postBody, null, 2));
+    } else {
+      console.warn('⚠️ POST запрос без body для action:', action);
     }
   }
 
