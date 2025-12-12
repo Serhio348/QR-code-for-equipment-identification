@@ -1,8 +1,7 @@
 /* Основной контейнер админ-панели */
 .beliot-devices-admin {
   display: flex;
-  height: calc(100vh - 80px); /* Учитываем высоту фиксированного заголовка */
-  min-height: calc(100vh - 80px);
+  max-height: calc(100vh - 80px);
   overflow: hidden;
   background: #f5f5f5;
 }
@@ -27,6 +26,13 @@
   border-bottom: 2px solid #667eea;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
+}
+
+/* Скрываем panel-header на мобильных устройствах */
+@media (max-width: 768px) {
+  .panel-header {
+    display: none !important;
+  }
 }
 
 .panel-header h2 {
@@ -62,6 +68,13 @@
   position: relative;
   padding: 16px 24px;
   border-bottom: 1px solid #e0e0e0;
+}
+
+/* Скрываем search-container на мобильных устройствах */
+@media (max-width: 768px) {
+  .search-container {
+    display: none !important;
+  }
 }
 
 .search-input {
@@ -437,6 +450,13 @@
   padding: 20px 24px;
   border-bottom: 2px solid #e0e0e0;
   background: #fafafa;
+}
+
+/* Скрываем details-header на мобильных устройствах */
+@media (max-width: 768px) {
+  .details-header {
+    display: none !important;
+  }
 }
 
 .details-header h3 {
@@ -1323,11 +1343,18 @@
 @media (max-width: 768px) {
   .beliot-devices-admin {
     flex-direction: column;
-    position: relative;
-    padding: 0;
-    height: calc(100vh - 80px - 60px); /* Высота экрана минус шапка минус футер */
-    max-height: calc(100vh - 80px - 60px);
+    position: relative; /* Обычное позиционирование в потоке документа */
+    padding: 0 !important;
+    margin: 0 !important;
+    height: calc(100vh - 70px - 60px); /* Высота = viewport минус хедер и футер */
+    max-height: calc(100vh - 70px - 60px);
     overflow: hidden;
+    width: 100%;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    z-index: 1;
   }
 
   /* Мобильная панель инструментов */
@@ -1345,38 +1372,13 @@
     gap: 8px;
   }
 
-  /* Скрываем боковые панели по умолчанию */
+  /* Скрываем боковые панели полностью на мобильных */
   .devices-panel {
-    position: fixed;
-    top: 80px;
-    left: -100%;
-    width: 85%;
-    max-width: 400px;
-    height: calc(100vh - 80px);
-    z-index: 1000;
-    transition: left 0.3s ease;
-    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.2);
-    border-right: none;
-  }
-
-  .devices-panel.mobile-open {
-    left: 0;
+    display: none !important;
   }
 
   .details-panel {
-    position: fixed;
-    top: 80px;
-    right: -100%;
-    width: 85%;
-    max-width: 500px;
-    height: calc(100vh - 80px);
-    z-index: 1000;
-    transition: right 0.3s ease;
-    box-shadow: -2px 0 10px rgba(0, 0, 0, 0.2);
-  }
-
-  .details-panel.mobile-open {
-    right: 0;
+    display: none !important;
   }
 
   /* Кнопка закрытия на мобильных */
@@ -1458,70 +1460,123 @@
 
   /* Основной контент для мобильных */
   .mobile-main-content {
-    display: block;
+    display: flex !important;
+    flex-direction: column !important;
     width: 100%;
     padding: 0;
     margin: 0;
-    overflow: hidden;
+    overflow: hidden !important;
     background: white;
-    height: calc(100vh - 80px - 60px); /* Высота экрана минус шапка минус футер */
-    max-height: calc(100vh - 80px - 60px);
+    height: 100% !important;
+    max-height: 100% !important;
+    position: relative;
+    min-height: 0;
+    flex: 1 1 auto !important;
   }
 
   /* Список объектов (групп) */
   .mobile-groups-list {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
+    width: 100% !important;
+    height: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    min-height: 0;
+    flex: 1 1 auto !important;
   }
 
   .mobile-groups-header {
-    padding: 12px;
+    padding: 1px 6px !important;
+    padding-top: 0 !important; /* Убираем отступ сверху */
+    margin-top: 0 !important;
     background: white;
-    border-bottom: 2px solid #667eea;
+    border-bottom: 1px solid #667eea;
     flex-shrink: 0;
     z-index: 10;
     display: flex;
     align-items: center;
-    gap: 12px;
-    position: sticky;
-    top: 0;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    justify-content: space-between; /* Размещаем элементы по краям */
+    gap: 2px !important;
+    position: relative;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.05);
+    height: 20px !important; /* Уменьшенная высота заголовка */
+    min-height: 20px !important;
+    max-height: 20px !important;
   }
 
   .mobile-groups-header h3 {
-    margin: 0;
-    font-size: 18px;
+    margin: 0 !important;
+    font-size: 11px !important;
     font-weight: 600;
     color: #333;
     flex: 1;
+    line-height: 1 !important;
+    padding: 0 !important;
+  }
+
+  /* Иконка главного меню справа */
+  .mobile-home-icon-button {
+    background: transparent;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: all 0.2s;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 20px;
+    line-height: 1;
+  }
+
+  .mobile-home-icon-button:active {
+    transform: scale(0.9);
+    background: #f0f0f0;
+  }
+
+  .mobile-home-icon-button:hover {
+    background: #f5f5f5;
   }
 
   .mobile-groups-container {
-    flex: 1;
-    overflow-y: auto;
+    flex: 1 !important;
+    overflow-y: auto !important; /* Всегда включен вертикальный скролл */
     overflow-x: hidden;
-    padding: 12px;
+    padding: 0 2px !important; /* Минимальный padding для размещения всех карточек */
     -webkit-overflow-scrolling: touch;
-    min-height: 0; /* Важно для flex-контейнера */
+    min-height: 0;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0 !important; /* Убираем gap полностью */
+    /* Карточки выравниваются по началу для возможности скролла */
+    justify-content: flex-start !important;
+    align-items: stretch;
+    /* Высота контейнера = высота родителя минус высота заголовка (20px) */
+    height: calc(100% - 20px) !important;
+    max-height: calc(100% - 20px) !important;
   }
 
   .mobile-group-card {
     background: white;
-    border: 2px solid #e0e0e0;
-    border-radius: 8px;
-    padding: 16px;
-    margin-bottom: 12px;
+    border: 1px solid #e0e0e0 !important;
+    border-radius: 4px !important;
+    padding: 21px 4px 21px 4px !important; /* Верхний и нижний padding 21px, боковые 4px */
     cursor: pointer;
     transition: all 0.2s;
-    flex-shrink: 0; /* Карточки не сжимаются */
+    flex: 0 0 auto !important; /* Карточки имеют свою естественную высоту для скролла */
     box-sizing: border-box;
-  }
-
-  .mobile-group-card:last-child {
-    margin-bottom: 0; /* Убираем отступ у последней карточки */
+    width: 100%;
+    min-height: auto;
+    max-height: none;
+    /* Карточки адаптируются под размер контейнера */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 1px !important; /* Минимальный отступ между названием и счетчиком */
   }
 
   .mobile-group-card:active {
@@ -1530,15 +1585,20 @@
   }
 
   .mobile-group-name {
-    font-size: 16px;
+    font-size: 18px !important; /* Увеличен на 30% (14px * 1.3 = 18.2px) */
     font-weight: 600;
     color: #333;
-    margin-bottom: 8px;
+    margin-bottom: 0 !important;
+    line-height: 1.1 !important; /* Уменьшен line-height для компактности */
+    padding: 0 !important;
   }
 
   .mobile-group-count {
-    font-size: 14px;
+    font-size: 16px !important; /* Увеличен на 30% (12px * 1.3 = 15.6px) */
     color: #666;
+    line-height: 1.0 !important; /* Уменьшен line-height для компактности */
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
   /* Таблица счетчиков */
@@ -1552,6 +1612,7 @@
 
   .mobile-devices-header {
     padding: 12px;
+    padding-top: 16px; /* Дополнительный отступ сверху от хедера */
     background: white;
     border-bottom: 2px solid #667eea;
     flex-shrink: 0;
@@ -1559,8 +1620,7 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    position: sticky;
-    top: 0;
+    position: relative;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
 
@@ -1569,8 +1629,8 @@
     color: white;
     border: none;
     border-radius: 6px;
-    padding: 10px 14px;
-    font-size: 14px;
+    padding: 6px 10px;
+    font-size: 12px;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s;
@@ -1597,6 +1657,11 @@
     font-weight: 600;
     color: #333;
     flex: 1;
+    word-wrap: break-word;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    min-width: 0;
+    line-height: 1.3;
   }
 
   .mobile-main-content .group-devices-section {
@@ -1632,7 +1697,7 @@
     position: sticky;
     top: 0;
     background: #f0f0f0;
-    z-index: 10;
+    z-index: 3;
   }
 
   .mobile-main-content .group-devices-table th {
@@ -1780,9 +1845,9 @@
     padding: 10px 8px;
   }
 
-  /* Убираем боковые отступы */
+  /* Скрываем search-container на мобильных */
   .search-container {
-    padding: 12px 16px;
+    display: none !important;
   }
 
   .panel-footer {
@@ -1834,10 +1899,12 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    min-height: 0;
   }
 
   .mobile-readings-header {
     padding: 12px;
+    padding-top: 16px; /* Дополнительный отступ сверху от хедера */
     background: white;
     border-bottom: 2px solid #667eea;
     flex-shrink: 0;
@@ -1845,8 +1912,7 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    position: sticky;
-    top: 0;
+    position: relative;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
 
@@ -1868,6 +1934,7 @@
     padding: 16px 12px;
     -webkit-overflow-scrolling: touch;
     min-height: 0;
+    max-height: 100%;
   }
 
   .mobile-readings-cards {
@@ -1958,5 +2025,13 @@
     color: #666;
     font-style: italic;
     margin-top: 4px;
+  }
+}
+
+/* Для очень маленьких экранов */
+@media (max-width: 480px) {
+  .beliot-devices-admin {
+    height: calc(100vh - 65px - 60px); /* Высота = viewport минус хедер (65px) и футер (60px) */
+    max-height: calc(100vh - 65px - 60px);
   }
 }

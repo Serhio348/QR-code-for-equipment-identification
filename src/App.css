@@ -12,13 +12,11 @@
   color: white;
   padding: 20px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
+  position: relative; /* Обычное позиционирование для вертикального потока */
   width: 100%;
   z-index: 1000;
   flex-shrink: 0;
+  order: 1; /* Первый элемент в вертикальном потоке */
 }
 
 .header-content {
@@ -138,12 +136,22 @@
 }
 
 @media (max-width: 768px) {
+  .app {
+    display: flex !important;
+    flex-direction: column !important; /* Вертикальное расположение элементов */
+    align-items: stretch !important; /* Растягиваем элементы на всю ширину */
+    gap: 0 !important; /* Убираем промежутки между элементами */
+  }
+
   .app-header {
     padding: 15px;
+    order: 1; /* Хедер первый */
   }
 
   .app-content {
-    margin-top: 70px; /* Меньший отступ для мобильных устройств */
+    margin-top: 0; /* Убираем отступ, так как хедер не фиксированный */
+    order: 2; /* Контент второй */
+    flex: 1; /* Занимает оставшееся пространство */
   }
 
   .header-content {
@@ -201,12 +209,22 @@
 }
 
 @media (max-width: 480px) {
+  .app {
+    display: flex !important;
+    flex-direction: column !important; /* Вертикальное расположение элементов */
+    align-items: stretch !important; /* Растягиваем элементы на всю ширину */
+    gap: 0 !important; /* Убираем промежутки между элементами */
+  }
+
   .app-header {
     padding: 12px;
+    order: 1; /* Хедер первый */
   }
 
   .app-content {
-    margin-top: 65px; /* Еще меньший отступ для очень маленьких экранов */
+    margin-top: 0; /* Убираем отступ, так как хедер не фиксированный */
+    order: 2; /* Контент второй */
+    flex: 1; /* Занимает оставшееся пространство */
   }
 
   .header-title h1 {
@@ -242,10 +260,10 @@
   overflow-x: hidden;
   width: 100%;
   box-sizing: border-box;
-  margin-top: 80px; /* Отступ для фиксированной шапки */
+  margin-top: 0; /* Убираем отступ, так как хедер не фиксированный */
   padding-bottom: 60px; /* Отступ для фиксированного футера */
   min-height: 0; /* Важно для flex-контейнера */
-  max-height: calc(100vh - 80px); /* Максимальная высота с учетом заголовка */
+  order: 2; /* Второй элемент в вертикальном потоке */
 }
 
 /* Убираем отступ сверху для главного меню, так как хедер не отображается */
@@ -261,7 +279,7 @@
   overflow: hidden !important;
   height: calc(100vh - 80px) !important;
   position: relative !important;
-  margin-top: 80px !important;
+  margin-top: 0 !important; /* Убираем отступ, так как хедер не фиксированный */
   width: 100% !important;
   padding: 0 !important;
 }
@@ -292,6 +310,29 @@
   display: flex;
   flex-direction: column;
   height: calc(100vh - 80px);
+  margin-top: 0; /* Убираем отступ, так как хедер не фиксированный */
+}
+
+/* Убираем отступ сверху для страницы воды на мобильных */
+@media (max-width: 768px) {
+  .app-content:has(.beliot-devices-admin) {
+    margin-top: 0 !important; /* Убираем отступ, beliot-devices-admin сам позиционируется */
+    padding-bottom: 0 !important; /* Убираем отступ для футера */
+    overflow: hidden;
+    height: calc(100vh - 70px - 60px);
+    max-height: calc(100vh - 70px - 60px);
+  }
+}
+
+/* Для очень маленьких экранов */
+@media (max-width: 480px) {
+  .app-content:has(.beliot-devices-admin) {
+    margin-top: 0 !important; /* Убираем отступ, beliot-devices-admin сам позиционируется */
+    padding-bottom: 0 !important; /* Убираем отступ для футера */
+    overflow: hidden;
+    height: calc(100vh - 65px - 60px);
+    max-height: calc(100vh - 65px - 60px);
+  }
 }
 
 .controls {
