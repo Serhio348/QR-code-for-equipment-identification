@@ -6,12 +6,14 @@
  */
 
 import { apiRequest } from './apiRequest';
+import { API_CONFIG } from '../../config/api';
 
 export interface BeliotDeviceOverride {
   name?: string;
   address?: string;
   serialNumber?: string;
   group?: string;
+  object?: string; // Объект (под объектом основного меню)
   lastSync?: number;
   lastModified?: number;
   modifiedBy?: string;
@@ -85,20 +87,59 @@ export async function saveBeliotDeviceOverride(
   override: BeliotDeviceOverride
 ): Promise<BeliotDeviceOverride> {
   try {
-    const response = await apiRequest<BeliotDeviceOverride>(
-      'saveBeliotDeviceOverride',
-      'POST',
-      {
-        deviceId,
-        ...override,
-      }
-    );
-
-    if (response.success && response.data) {
-      return response.data;
+    // Используем URL-encoded формат вместо JSON, чтобы избежать preflight-запросов CORS
+    const formData = new URLSearchParams();
+    formData.append('action', 'saveBeliotDeviceOverride');
+    formData.append('deviceId', deviceId);
+    
+    if (override.name !== undefined) {
+      formData.append('name', override.name);
+    }
+    if (override.address !== undefined) {
+      formData.append('address', override.address);
+    }
+    if (override.serialNumber !== undefined) {
+      formData.append('serialNumber', override.serialNumber);
+    }
+    if (override.group !== undefined) {
+      formData.append('group', override.group);
+    }
+    if (override.object !== undefined) {
+      formData.append('object', override.object);
+    }
+    if (override.modifiedBy !== undefined) {
+      formData.append('modifiedBy', override.modifiedBy);
     }
 
-    throw new Error('Не удалось сохранить изменения');
+    const response = await fetch(API_CONFIG.EQUIPMENT_API_URL, {
+      method: 'POST',
+      mode: 'cors',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: formData.toString(),
+    });
+
+    const responseText = await response.text();
+    console.log('[beliotDevicesStorageApi] saveBeliotDeviceOverride ответ:', responseText.substring(0, 500));
+
+    let result;
+    try {
+      result = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error('[beliotDevicesStorageApi] Ошибка парсинга JSON:', parseError);
+      throw new Error('Неверный формат ответа от сервера');
+    }
+
+    if (!result.success) {
+      throw new Error(result.error || 'Не удалось сохранить изменения');
+    }
+
+    if (!result.data) {
+      throw new Error('Данные не получены от сервера');
+    }
+
+    return result.data;
   } catch (error: any) {
     console.error(`Ошибка сохранения изменений для устройства ${deviceId}:`, error);
     throw error;

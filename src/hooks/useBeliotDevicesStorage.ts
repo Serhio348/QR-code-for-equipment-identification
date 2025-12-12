@@ -18,7 +18,7 @@ import {
 
 export interface UseBeliotDevicesStorageReturn {
   overrides: DeviceOverrides;
-  updateOverride: (deviceId: string, field: 'name' | 'address' | 'serialNumber', value: string) => void;
+  updateOverride: (deviceId: string, field: 'name' | 'address' | 'serialNumber' | 'object', value: string) => void;
   removeOverride: (deviceId: string) => void;
   clearOverrides: () => void;
   getOverride: (deviceId: string) => DeviceOverrides[string] | undefined;
@@ -43,7 +43,7 @@ export function useBeliotDevicesStorage(): UseBeliotDevicesStorageReturn {
   // Обновление изменения для устройства
   const updateOverride = useCallback((
     deviceId: string,
-    field: 'name' | 'address' | 'serialNumber',
+    field: 'name' | 'address' | 'serialNumber' | 'object',
     value: string
   ) => {
     updateDeviceOverride(deviceId, { [field]: value });

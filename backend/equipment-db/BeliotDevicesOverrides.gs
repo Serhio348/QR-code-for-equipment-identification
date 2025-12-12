@@ -8,6 +8,7 @@
  * - address (пользовательский адрес)
  * - serialNumber (серийный номер, введенный вручную)
  * - group (группа устройства)
+ * - object (объект, под объектом основного меню)
  * 
  * Полные данные счетчиков получаются из Beliot API, а не хранятся здесь.
  */
@@ -25,19 +26,20 @@ function getBeliotDevicesSheet() {
     sheet = spreadsheet.insertSheet('Счетчики Beliot');
     
     // Заголовки колонок
-    sheet.getRange(1, 1, 1, 8).setValues([[
+    sheet.getRange(1, 1, 1, 9).setValues([[
       'deviceId',        // A: ID устройства из Beliot API (уникальный ключ)
       'name',            // B: Пользовательское имя (если изменено)
       'address',         // C: Пользовательский адрес (если изменен)
       'serialNumber',    // D: Серийный номер (если введен вручную)
       'group',           // E: Группа устройства (ХВО, АБК и т.д.)
-      'lastSync',        // F: Дата последней синхронизации с Beliot API
-      'lastModified',    // G: Дата последнего изменения пользователем
-      'modifiedBy'       // H: Email пользователя, который изменил
+      'object',          // F: Объект (под объектом основного меню)
+      'lastSync',        // G: Дата последней синхронизации с Beliot API
+      'lastModified',    // H: Дата последнего изменения пользователем
+      'modifiedBy'       // I: Email пользователя, который изменил
     ]]);
     
     // Форматирование заголовков
-    const headerRange = sheet.getRange(1, 1, 1, 8);
+    const headerRange = sheet.getRange(1, 1, 1, 9);
     headerRange.setFontWeight('bold');
     headerRange.setBackground('#4285f4');
     headerRange.setFontColor('#ffffff');
@@ -48,9 +50,10 @@ function getBeliotDevicesSheet() {
     sheet.setColumnWidth(3, 200);   // address
     sheet.setColumnWidth(4, 150);   // serialNumber
     sheet.setColumnWidth(5, 150);   // group
-    sheet.setColumnWidth(6, 150);   // lastSync
-    sheet.setColumnWidth(7, 150);   // lastModified
-    sheet.setColumnWidth(8, 200);   // modifiedBy
+    sheet.setColumnWidth(6, 150);   // object
+    sheet.setColumnWidth(7, 150);   // lastSync
+    sheet.setColumnWidth(8, 150);   // lastModified
+    sheet.setColumnWidth(9, 200);   // modifiedBy
   }
   
   return sheet;
@@ -97,15 +100,17 @@ function getBeliotDevicesOverrides() {
         const address = row[2] ? String(row[2]).trim() : '';
         const serialNumber = row[3] ? String(row[3]).trim() : '';
         const group = row[4] ? String(row[4]).trim() : '';
-        const lastSync = row[5] ? new Date(row[5]).getTime() : null;
-        const lastModified = row[6] ? new Date(row[6]).getTime() : null;
-        const modifiedBy = row[7] ? String(row[7]).trim() : '';
+        const object = row[5] ? String(row[5]).trim() : '';
+        const lastSync = row[6] ? new Date(row[6]).getTime() : null;
+        const lastModified = row[7] ? new Date(row[7]).getTime() : null;
+        const modifiedBy = row[8] ? String(row[8]).trim() : '';
         
         overrides[deviceId] = {
           name: name || undefined,
           address: address || undefined,
           serialNumber: serialNumber || undefined,
           group: group || undefined,
+          object: object || undefined,
           lastSync: lastSync || undefined,
           lastModified: lastModified || undefined,
           modifiedBy: modifiedBy || undefined,
@@ -146,15 +151,17 @@ function getBeliotDeviceOverride(deviceId) {
         const address = row[2] ? String(row[2]).trim() : '';
         const serialNumber = row[3] ? String(row[3]).trim() : '';
         const group = row[4] ? String(row[4]).trim() : '';
-        const lastSync = row[5] ? new Date(row[5]).getTime() : null;
-        const lastModified = row[6] ? new Date(row[6]).getTime() : null;
-        const modifiedBy = row[7] ? String(row[7]).trim() : '';
+        const object = row[5] ? String(row[5]).trim() : '';
+        const lastSync = row[6] ? new Date(row[6]).getTime() : null;
+        const lastModified = row[7] ? new Date(row[7]).getTime() : null;
+        const modifiedBy = row[8] ? String(row[8]).trim() : '';
         
         return {
           name: name || undefined,
           address: address || undefined,
           serialNumber: serialNumber || undefined,
           group: group || undefined,
+          object: object || undefined,
           lastSync: lastSync || undefined,
           lastModified: lastModified || undefined,
           modifiedBy: modifiedBy || undefined,
@@ -183,9 +190,17 @@ function getBeliotDeviceOverride(deviceId) {
  */
 function saveBeliotDeviceOverride(deviceId, data) {
   try {
+    Logger.log('💾 saveBeliotDeviceOverride: Начало сохранения для deviceId=' + deviceId);
+    Logger.log('💾 Данные для сохранения: ' + JSON.stringify(data));
+    
     const sheet = getBeliotDevicesSheet();
+    Logger.log('✅ Лист "Счетчики Beliot" получен');
+    Logger.log('📊 Имя листа: ' + sheet.getName());
+    Logger.log('📊 ID листа: ' + sheet.getSheetId());
+    
     const dataRange = sheet.getDataRange();
     const values = dataRange.getValues();
+    Logger.log('📊 Текущее количество строк в листе: ' + values.length);
     
     const deviceIdStr = String(deviceId).trim();
     if (!deviceIdStr) {
@@ -197,8 +212,13 @@ function saveBeliotDeviceOverride(deviceId, data) {
     for (let i = 1; i < values.length; i++) {
       if (String(values[i][0] || '').trim() === deviceIdStr) {
         rowIndex = i + 1; // Индекс строки в Sheets (начинается с 1)
+        Logger.log('📊 Найдена существующая строка для deviceId=' + deviceIdStr + ' в строке ' + rowIndex);
         break;
       }
+    }
+    
+    if (rowIndex === -1) {
+      Logger.log('📊 Строка для deviceId=' + deviceIdStr + ' не найдена, будет создана новая');
     }
     
     const now = new Date();
@@ -218,38 +238,66 @@ function saveBeliotDeviceOverride(deviceId, data) {
       if (data.group !== undefined) {
         sheet.getRange(rowIndex, 5).setValue(data.group || ''); // Колонка E: group
       }
-      sheet.getRange(rowIndex, 6).setValue(now); // Колонка F: lastSync
-      sheet.getRange(rowIndex, 7).setValue(now); // Колонка G: lastModified
-      if (modifiedBy) {
-        sheet.getRange(rowIndex, 8).setValue(modifiedBy); // Колонка H: modifiedBy
+      if (data.object !== undefined) {
+        sheet.getRange(rowIndex, 6).setValue(data.object || ''); // Колонка F: object
+        Logger.log('✅ Обновлено поле object: ' + (data.object || ''));
       }
+      sheet.getRange(rowIndex, 7).setValue(now); // Колонка G: lastSync
+      sheet.getRange(rowIndex, 8).setValue(now); // Колонка H: lastModified
+      if (modifiedBy) {
+        sheet.getRange(rowIndex, 9).setValue(modifiedBy); // Колонка I: modifiedBy
+      }
+      Logger.log('✅ Существующая строка обновлена в строке ' + rowIndex);
     } else {
       // Создаем новую строку
-      sheet.appendRow([
+      const newRow = [
         deviceIdStr,                    // A: deviceId
         data.name || '',                // B: name
         data.address || '',             // C: address
         data.serialNumber || '',        // D: serialNumber
         data.group || '',               // E: group
-        now,                            // F: lastSync
-        now,                            // G: lastModified
-        modifiedBy,                     // H: modifiedBy
-      ]);
+        data.object || '',              // F: object
+        now,                            // G: lastSync
+        now,                            // H: lastModified
+        modifiedBy,                     // I: modifiedBy
+      ];
+      Logger.log('📊 Создаем новую строку: ' + JSON.stringify(newRow));
+      sheet.appendRow(newRow);
+      Logger.log('✅ Новая строка добавлена в лист');
+      rowIndex = sheet.getLastRow();
+      Logger.log('📊 Номер новой строки: ' + rowIndex);
     }
     
+    // Проверяем, что данные действительно сохранились
+    const savedRow = sheet.getRange(rowIndex, 1, 1, 9).getValues()[0];
+    Logger.log('📊 Проверка сохраненных данных в строке ' + rowIndex + ':');
+    Logger.log('   deviceId: ' + savedRow[0]);
+    Logger.log('   name: ' + savedRow[1]);
+    Logger.log('   address: ' + savedRow[2]);
+    Logger.log('   serialNumber: ' + savedRow[3]);
+    Logger.log('   group: ' + savedRow[4]);
+    Logger.log('   object: ' + savedRow[5]);
+    Logger.log('   lastSync: ' + savedRow[6]);
+    Logger.log('   lastModified: ' + savedRow[7]);
+    Logger.log('   modifiedBy: ' + savedRow[8]);
+    
     // Возвращаем сохраненные данные
-    return {
+    const result = {
       deviceId: deviceIdStr,
       name: data.name || undefined,
       address: data.address || undefined,
       serialNumber: data.serialNumber || undefined,
       group: data.group || undefined,
+      object: data.object || undefined,
       lastSync: now.getTime(),
       lastModified: now.getTime(),
       modifiedBy: modifiedBy || undefined,
     };
+    Logger.log('✅ saveBeliotDeviceOverride завершено успешно');
+    return result;
   } catch (error) {
-    Logger.log('Ошибка при сохранении изменений для устройства ' + deviceId + ': ' + error);
+    Logger.log('❌ Ошибка при сохранении изменений для устройства ' + deviceId + ': ' + error);
+    Logger.log('❌ Стек ошибки: ' + (error.stack || 'нет стека'));
     throw error;
   }
 }
