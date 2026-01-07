@@ -283,3 +283,50 @@ export async function getBeliotReadingsByPeriod(
   }
 }
 
+/**
+ * Сохранить показание счетчика в Supabase
+ * 
+ * Использует RPC функцию insert_beliot_reading для безопасной вставки.
+ * Предотвращает дубликаты через ON CONFLICT.
+ * 
+ * @param reading - Данные показания для сохранения
+ * @returns Promise с ID созданного/обновленного показания
+ * @throws Error если произошла ошибка при сохранении
+ */
+export async function saveBeliotReading(reading: {
+  device_id: string;
+  reading_date: string | Date;
+  reading_value: number;
+  unit?: string;
+  reading_type?: 'hourly' | 'daily';
+  source?: string;
+  period?: 'current' | 'previous';
+}): Promise<string> {
+  try {
+    // Преобразуем дату в ISO строку, если это Date объект
+    const readingDate = reading.reading_date instanceof Date 
+      ? reading.reading_date.toISOString() 
+      : reading.reading_date;
+
+    const { data, error } = await supabase.rpc('insert_beliot_reading', {
+      p_device_id: reading.device_id,
+      p_reading_date: readingDate,
+      p_reading_value: reading.reading_value,
+      p_unit: reading.unit || 'м³',
+      p_reading_type: reading.reading_type || 'hourly',
+      p_source: reading.source || 'api',
+      p_period: reading.period || 'current',
+    });
+
+    if (error) {
+      console.error('Ошибка сохранения показания:', error);
+      throw new Error(`Ошибка сохранения показания: ${error.message}`);
+    }
+
+    return data as string;
+  } catch (error: any) {
+    console.error('Ошибка в saveBeliotReading:', error);
+    throw error;
+  }
+}
+

@@ -210,7 +210,7 @@ export async function register(data: RegisterData): Promise<AuthResponse> {
       sessionToken: sessionData?.session?.access_token || '',
       expiresAt: sessionData?.session?.expires_at
         ? new Date(sessionData.session.expires_at * 1000).toISOString()
-        : new Date(Date.now() + 3600000).toISOString(),
+        : new Date(Date.now() + (8 * 60 * 60 * 1000)).toISOString(), // 8 часов вместо 1 часа
       message: 'Регистрация успешна',
     };
   } catch (error: any) {
@@ -336,7 +336,7 @@ export async function login(data: LoginData): Promise<AuthResponse> {
       sessionToken: sessionData?.session?.access_token || '',
       expiresAt: sessionData?.session?.expires_at
         ? new Date(sessionData.session.expires_at * 1000).toISOString()
-        : new Date(Date.now() + 3600000).toISOString(),
+        : new Date(Date.now() + (8 * 60 * 60 * 1000)).toISOString(), // 8 часов вместо 1 часа
       message: 'Вход выполнен успешно',
     };
   } catch (error: any) {
@@ -450,7 +450,7 @@ async function performSessionCheck(): Promise<SessionCheckResponse> {
 
           // Сессия успешно восстановлена
           const refreshedSession = refreshData.session;
-          const expiresAt = refreshedSession.expires_at ? refreshedSession.expires_at * 1000 : Date.now() + 3600000;
+          const expiresAt = refreshedSession.expires_at ? refreshedSession.expires_at * 1000 : Date.now() + (8 * 60 * 60 * 1000); // 8 часов вместо 1 часа
           const now = Date.now();
           const remainingTime = expiresAt - now;
 
@@ -471,7 +471,7 @@ async function performSessionCheck(): Promise<SessionCheckResponse> {
       }
 
       // Шаг 3: Проверяем, не истекла ли текущая сессия
-      const expiresAt = session.expires_at ? session.expires_at * 1000 : Date.now() + 3600000;
+      const expiresAt = session.expires_at ? session.expires_at * 1000 : Date.now() + (8 * 60 * 60 * 1000); // 8 часов вместо 1 часа
       const now = Date.now();
       const remainingTime = expiresAt - now;
 

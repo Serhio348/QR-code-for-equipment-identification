@@ -93,6 +93,19 @@ export function updateLastActivity(): void {
 }
 
 /**
+ * Обновить expiresAt в сессии (используется при обновлении токена Supabase)
+ * 
+ * @param expiresAt - Новое время истечения сессии в формате ISO string
+ */
+export function updateSessionExpiresAt(expiresAt: string): void {
+  const session = loadSession();
+  if (session) {
+    session.expiresAt = expiresAt;
+    saveSession(session);
+  }
+}
+
+/**
  * Проверить, истекла ли сессия
  * 
  * @returns true если сессия истекла, false если активна
@@ -110,7 +123,7 @@ export function isSessionExpired(): boolean {
 }
 
 /**
- * Проверить таймаут сессии (1 час бездействия)
+ * Проверить таймаут сессии (8 часов бездействия)
  * 
  * @returns true если таймаут истек, false если сессия активна
  */
@@ -125,8 +138,8 @@ export function isSessionTimeout(): boolean {
   const diffMs = now.getTime() - lastActivity.getTime();
   const diffHours = diffMs / (1000 * 60 * 60);
   
-  // Таймаут: 1 час
-  return diffHours >= 1;
+  // Таймаут: 8 часов (увеличено с 1 часа для удобства пользователей)
+  return diffHours >= 8;
 }
 
 /**
@@ -143,7 +156,7 @@ export function getRemainingTime(): number {
   const lastActivity = new Date(session.lastActivityAt);
   const now = new Date();
   const diffMs = now.getTime() - lastActivity.getTime();
-  const timeoutMs = 3600000; // 1 час в миллисекундах
+  const timeoutMs = 8 * 60 * 60 * 1000; // 8 часов в миллисекундах (увеличено с 1 часа)
   
   const remaining = timeoutMs - diffMs;
   return remaining > 0 ? remaining : 0;
