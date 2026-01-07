@@ -38,7 +38,7 @@ DROP FUNCTION IF EXISTS public.is_admin() CASCADE;
 DROP FUNCTION IF EXISTS public.get_user_role(UUID) CASCADE;
 DROP FUNCTION IF EXISTS public.handle_new_user() CASCADE;
 DROP FUNCTION IF EXISTS public.handle_updated_at() CASCADE;
-DROP FUNCTION IF EXISTS public.log_login(UUID, BOOLEAN, TEXT, TEXT) CASCADE;
+DROP FUNCTION IF EXISTS public.log_login(BOOLEAN, UUID, TEXT, TEXT) CASCADE;
 
 -- ============================================================================
 -- ТАБЛИЦА: profiles
@@ -60,8 +60,11 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 -- Создаем/обновляем индексы
 DROP INDEX IF EXISTS idx_profiles_email;
 DROP INDEX IF EXISTS idx_profiles_role;
+DROP INDEX IF EXISTS idx_profiles_id_role; -- Составной индекс для оптимизации is_admin()
 CREATE INDEX idx_profiles_email ON public.profiles(email);
 CREATE INDEX idx_profiles_role ON public.profiles(role);
+-- Составной индекс для оптимизации функции is_admin() (WHERE id = auth.uid() AND role = 'admin')
+CREATE INDEX idx_profiles_id_role ON public.profiles(id, role) WHERE role = 'admin';
 
 -- ============================================================================
 -- ТАБЛИЦА: user_app_access
@@ -88,7 +91,7 @@ CREATE INDEX idx_user_app_access_user_id ON public.user_app_access(user_id);
 
 CREATE TABLE IF NOT EXISTS public.login_history (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE, -- Может быть NULL для неуспешных входов
   login_at TIMESTAMPTZ DEFAULT NOW(),
   ip_address TEXT,
   success BOOLEAN DEFAULT true,
@@ -98,11 +101,16 @@ CREATE TABLE IF NOT EXISTS public.login_history (
 -- Удаляем колонку email, если она существует (для миграции со старой схемы)
 ALTER TABLE public.login_history DROP COLUMN IF EXISTS email;
 
+-- ВАЖНО: Изменяем user_id, чтобы он мог быть NULL для неуспешных входов
+-- Если таблица уже создана, это изменит существующую колонку
+ALTER TABLE public.login_history ALTER COLUMN user_id DROP NOT NULL;
+
 -- Индексы
 DROP INDEX IF EXISTS idx_login_history_user_id;
 DROP INDEX IF EXISTS idx_login_history_login_at;
 DROP INDEX IF EXISTS idx_login_history_email; -- Удаляем индекс на email, так как колонка удалена
-CREATE INDEX idx_login_history_user_id ON public.login_history(user_id);
+-- Индекс на user_id (частичный индекс для оптимизации - только для NOT NULL значений)
+CREATE INDEX idx_login_history_user_id ON public.login_history(user_id) WHERE user_id IS NOT NULL;
 CREATE INDEX idx_login_history_login_at ON public.login_history(login_at DESC);
 
 -- ============================================================================
@@ -145,6 +153,8 @@ CREATE INDEX idx_beliot_overrides_group ON public.beliot_device_overrides(device
 -- STABLE: результат не меняется в рамках одной транзакции
 -- SECURITY DEFINER: выполняется с правами создателя функции
 -- ВАЖНО: search_path устанавливается через ALTER FUNCTION после создания (нельзя SET в STABLE функции)
+-- 
+-- ОПТИМИЗАЦИЯ: Использует составной индекс idx_profiles_id_role для быстрого поиска
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS boolean AS $$
 BEGIN
@@ -232,9 +242,12 @@ $$ LANGUAGE plpgsql;
 -- SECURITY DEFINER: обходит RLS, позволяя вставлять записи в login_history
 -- email не сохраняем: получаем через JOIN с profiles при запросах
 -- ВАЖНО: Прямой INSERT в login_history запрещен RLS, только через эту функцию
+-- 
+-- ВАЖНО: p_user_id может быть NULL для неуспешных входов (когда пользователь не найден)
+-- ВАЖНО: Порядок параметров: обязательные параметры идут первыми, затем параметры с DEFAULT
 CREATE OR REPLACE FUNCTION public.log_login(
-  p_user_id UUID,
-  p_success BOOLEAN,
+  p_success BOOLEAN, -- Обязательный параметр (должен быть первым)
+  p_user_id UUID DEFAULT NULL, -- Может быть NULL для неуспешных входов
   p_failure_reason TEXT DEFAULT NULL,
   p_ip_address TEXT DEFAULT NULL
 )
@@ -244,14 +257,14 @@ BEGIN
   SET search_path = public, pg_temp;
   
   INSERT INTO public.login_history (
-    user_id,
+    user_id, -- Может быть NULL для неуспешных входов
     login_at,
     ip_address,
     success,
     failure_reason
   )
   VALUES (
-    p_user_id,
+    p_user_id, -- Может быть NULL
     NOW(),
     p_ip_address,
     p_success,
@@ -274,11 +287,11 @@ CREATE OR REPLACE FUNCTION public.get_login_history_with_email(
 RETURNS TABLE (
   id UUID,
   user_id UUID,
+  email TEXT,
   login_at TIMESTAMPTZ,
   ip_address TEXT,
   success BOOLEAN,
-  failure_reason TEXT,
-  email TEXT
+  failure_reason TEXT
 ) AS $$
 BEGIN
   -- Защита от атак через подмену схемы (schema injection)
@@ -288,23 +301,26 @@ BEGIN
   SELECT 
     lh.id,
     lh.user_id,
-    lh.login_at,
-    lh.ip_address,
-    lh.success,
-    lh.failure_reason,
     COALESCE(p.email, 
       CASE 
         WHEN lh.user_id IS NULL THEN 'Неуспешный вход'
         ELSE 'Неизвестный пользователь'
       END
-    ) AS email
+    ) AS email,
+    lh.login_at,
+    lh.ip_address,
+    lh.success,
+    lh.failure_reason
   FROM public.login_history lh
   LEFT JOIN public.profiles p ON lh.user_id = p.id
-  WHERE (p_user_id IS NULL OR lh.user_id = p_user_id)
+  WHERE 
+    -- Если передан user_id, фильтруем по нему
+    (p_user_id IS NULL OR lh.user_id = p_user_id)
+    -- RLS политики добавят свои условия автоматически
   ORDER BY lh.login_at DESC
   LIMIT p_limit;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
+$$ LANGUAGE plpgsql SECURITY DEFINER VOLATILE;
 
 -- ============================================================================
 -- RLS ПОЛИТИКИ (Row Level Security)
@@ -463,7 +479,7 @@ CREATE TRIGGER update_beliot_overrides_updated_at
 ALTER FUNCTION public.is_admin() SET search_path = public, pg_temp;
 ALTER FUNCTION public.get_user_role(UUID) SET search_path = public, pg_temp;
 ALTER FUNCTION public.handle_new_user() SET search_path = public, auth, pg_temp;
-ALTER FUNCTION public.log_login(UUID, BOOLEAN, TEXT, TEXT) SET search_path = public, pg_temp;
+ALTER FUNCTION public.log_login(BOOLEAN, UUID, TEXT, TEXT) SET search_path = public, pg_temp;
 
 -- Настройка search_path для функции get_login_history_with_email
 ALTER FUNCTION public.get_login_history_with_email(INTEGER, UUID) SET search_path = public, pg_temp;
