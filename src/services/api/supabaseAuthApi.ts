@@ -5,9 +5,101 @@
  * Заменяет старый authApi.ts (Google Sheets)
  */
 
-import { supabase, getCurrentProfile } from '../../config/supabase';
+import { supabase, getCurrentProfile, type Profile } from '../../config/supabase';
 import type { RegisterData, LoginData, AuthResponse, User } from '../../types/user';
 import type { LoginHistoryEntry, SessionCheckResponse } from '../../types/auth';
+
+/**
+ * Кэш для проверки прав администратора
+ * 
+ * Структура: Map<userId, { data: результат проверки, timestamp: время создания }>
+ */
+const adminCache = new Map<string, { 
+  data: { isAdmin: boolean; role: 'admin' | 'user'; email: string }; 
+  timestamp: number;
+}>();
+
+/**
+ * Время жизни кэша в миллисекундах (30 секунд)
+ */
+const CACHE_TTL = 30000;
+
+/**
+ * Кэш для проверки сессии
+ * 
+ * Структура: { result: результат проверки, timestamp: время создания }
+ */
+let lastSessionCheck: { 
+  result: SessionCheckResponse; 
+  timestamp: number;
+} | null = null;
+
+/**
+ * Время жизни кэша проверки сессии в миллисекундах (10 секунд)
+ */
+const SESSION_CHECK_CACHE_TTL = 10000;
+
+/**
+ * Инвалидация кэша проверки сессии
+ * 
+ * Используется при выходе пользователя или изменении сессии.
+ */
+export function invalidateSessionCache(): void {
+  lastSessionCheck = null;
+}
+
+/**
+ * Инвалидация кэша для конкретного пользователя
+ * 
+ * Используется при изменении роли пользователя для немедленного обновления кэша.
+ * 
+ * @param userId - UUID пользователя (опционально, если не указан - очищает весь кэш)
+ */
+export function invalidateAdminCache(userId?: string): void {
+  if (userId) {
+    adminCache.delete(userId);
+  } else {
+    adminCache.clear();
+  }
+}
+
+/**
+ * Ожидание создания профиля пользователя с экспоненциальной backoff стратегией
+ * 
+ * Используется после регистрации, когда профиль создается через триггер.
+ * Экспоненциальная backoff уменьшает нагрузку на базу данных и улучшает производительность.
+ * 
+ * @param userId - UUID пользователя
+ * @param maxRetries - Максимальное количество попыток (по умолчанию 3)
+ * @param initialDelay - Начальная задержка в миллисекундах (по умолчанию 500ms)
+ * @returns Профиль пользователя или null, если не найден после всех попыток
+ */
+async function waitForProfile(
+  userId: string,
+  maxRetries: number = 3,
+  initialDelay: number = 500
+): Promise<Profile | null> {
+  for (let i = 0; i < maxRetries; i++) {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
+    
+    if (!error && data) {
+      return data;
+    }
+    
+    // Экспоненциальная backoff: 500ms, 1000ms, 2000ms
+    // Не ждем после последней попытки
+    if (i < maxRetries - 1) {
+      const delay = initialDelay * Math.pow(2, i);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  
+  return null;
+}
 
 /**
  * Логирование входа через RPC функцию log_login
@@ -54,7 +146,7 @@ export async function register(data: RegisterData): Promise<AuthResponse> {
   try {
     console.log('📤 Регистрация пользователя:', { email: data.email });
 
-    // 1. Создаем пользователя в Supabase Auth
+    // 1. Создаем пользователя в Supabase Auth (обязательная операция, должна быть первой)
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: data.email,
       password: data.password,
@@ -67,58 +159,49 @@ export async function register(data: RegisterData): Promise<AuthResponse> {
 
     if (authError) {
       console.error('❌ Ошибка регистрации:', authError.message);
-      // Логируем неуспешную регистрацию
-      await logLogin(null, false, authError.message);
+      // Логируем неуспешную регистрацию (неблокирующая операция)
+      logLogin(null, false, authError.message).catch(() => {});
       throw new Error(authError.message || 'Ошибка при регистрации');
     }
 
     if (!authData.user) {
       console.error('❌ Пользователь не создан');
-      await logLogin(null, false, 'Не удалось создать пользователя');
+      logLogin(null, false, 'Не удалось создать пользователя').catch(() => {});
       throw new Error('Не удалось создать пользователя');
     }
 
-    // 2. Профиль создается автоматически через триггер handle_new_user
-    // Ждем немного, чтобы триггер успел выполниться
-    await new Promise(resolve => setTimeout(resolve, 500));
+    // 2. Параллельно выполняем операции, которые не зависят друг от друга:
+    //    - Ожидание профиля (создается через триггер)
+    //    - Логирование успешной регистрации (неблокирующая)
+    //    - Получение сессии
+    const [profile, , sessionResult] = await Promise.allSettled([
+      // Ожидание профиля с экспоненциальной backoff стратегией
+      waitForProfile(authData.user.id),
+      // Логирование успешной регистрации (неблокирующая операция)
+      logLogin(authData.user.id, true),
+      // Получение сессии (если email подтвержден автоматически)
+      supabase.auth.getSession(),
+    ]);
 
-    // 3. Получаем профиль пользователя
-    let profile;
-    let retries = 3;
-    while (retries > 0) {
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', authData.user.id)
-        .single();
-
-      if (!profileError && profileData) {
-        profile = profileData;
-        break;
-      }
-
-      retries--;
-      if (retries > 0) {
-        await new Promise(resolve => setTimeout(resolve, 500));
-      } else {
-        console.warn('⚠️ Профиль не найден после регистрации, используем данные из auth');
-      }
+    // Обрабатываем результат ожидания профиля
+    const profileData = profile.status === 'fulfilled' ? profile.value : null;
+    if (!profileData) {
+      console.warn('⚠️ Профиль не найден после регистрации, используем данные из auth');
     }
 
-    // 4. Логируем успешную регистрацию
-    await logLogin(authData.user.id, true);
+    // Обрабатываем результат получения сессии
+    const sessionData = sessionResult.status === 'fulfilled' 
+      ? sessionResult.value.data 
+      : null;
 
-    // 5. Формируем объект User
+    // 3. Формируем объект User
     const user: User = {
       id: authData.user.id,
       email: authData.user.email!,
-      name: profile?.name || data.name || undefined,
-      role: (profile?.role as 'admin' | 'user') || 'user',
-      createdAt: profile?.created_at || authData.user.created_at || new Date().toISOString(),
+      name: profileData?.name || data.name || undefined,
+      role: (profileData?.role as 'admin' | 'user') || 'user',
+      createdAt: profileData?.created_at || authData.user.created_at || new Date().toISOString(),
     };
-
-    // 6. Получаем сессию (если email подтвержден автоматически)
-    const { data: sessionData } = await supabase.auth.getSession();
 
     console.log('✅ Регистрация успешна:', user.email);
 
@@ -177,32 +260,66 @@ export async function login(data: LoginData): Promise<AuthResponse> {
 
     if (!authData.user) {
       console.error('❌ Пользователь не найден');
-      await logLogin(null, false, 'Пользователь не найден');
+      logLogin(null, false, 'Пользователь не найден').catch(() => {});
       throw new Error('Не удалось войти');
     }
 
-    // 2. Логируем успешный вход
-    await logLogin(authData.user.id, true);
+    // 2. Параллельно выполняем операции, которые не зависят друг от друга:
+    //    - Логирование успешного входа (неблокирующая)
+    //    - Обновление last_login_at в профиле (неблокирующая)
+    //    - Получение профиля пользователя
+    //    - Получение сессии
+    const [logResult, updateResult, profileResult, sessionResult] = await Promise.allSettled([
+      // Логирование успешного входа (неблокирующая операция)
+      logLogin(authData.user.id, true),
+      // Обновление last_login_at в профиле (неблокирующая операция)
+      supabase
+        .from('profiles')
+        .update({ last_login_at: new Date().toISOString() })
+        .eq('id', authData.user.id),
+      // Получение профиля пользователя
+      supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', authData.user.id)
+        .single(),
+      // Получение сессии
+      supabase.auth.getSession(),
+    ]);
 
-    // 3. Обновляем last_login_at в профиле
-    await supabase
-      .from('profiles')
-      .update({ last_login_at: new Date().toISOString() })
-      .eq('id', authData.user.id);
+    // Обрабатываем ошибки логирования и обновления (не критичные)
+    if (logResult.status === 'rejected') {
+      console.debug('⚠️ Ошибка логирования входа (не критично):', logResult.reason);
+    }
+    if (updateResult.status === 'rejected' || 
+        (updateResult.status === 'fulfilled' && updateResult.value.error)) {
+      console.debug('⚠️ Ошибка обновления last_login_at (не критично):', 
+        updateResult.status === 'fulfilled' 
+          ? updateResult.value.error 
+          : updateResult.reason
+      );
+    }
 
-    // 4. Получаем профиль пользователя
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', authData.user.id)
-      .single();
+    // Обрабатываем результат получения профиля
+    const profile = profileResult.status === 'fulfilled' && !profileResult.value.error
+      ? profileResult.value.data
+      : null;
 
-    if (profileError) {
-      console.error('⚠️ Ошибка получения профиля:', profileError);
+    if (profileResult.status === 'rejected' || (profileResult.status === 'fulfilled' && profileResult.value.error)) {
+      console.error('⚠️ Ошибка получения профиля:', 
+        profileResult.status === 'fulfilled' 
+          ? profileResult.value.error 
+          : profileResult.reason
+      );
       // Продолжаем работу, используя данные из auth
     }
 
-    // 5. Формируем объект User
+    // Обрабатываем результат получения сессии
+    const sessionData = sessionResult.status === 'fulfilled'
+      ? sessionResult.value.data
+      : null;
+
+    // 3. Формируем объект User
     const user: User = {
       id: authData.user.id,
       email: authData.user.email!,
@@ -211,9 +328,6 @@ export async function login(data: LoginData): Promise<AuthResponse> {
       createdAt: profile?.created_at || authData.user.created_at || new Date().toISOString(),
       lastLoginAt: profile?.last_login_at || undefined,
     };
-
-    // 6. Получаем сессию
-    const { data: sessionData } = await supabase.auth.getSession();
 
     console.log('✅ Вход выполнен успешно:', user.email);
 
@@ -242,6 +356,10 @@ export async function login(data: LoginData): Promise<AuthResponse> {
 export async function logout(): Promise<void> {
   try {
     console.log('📤 Выход пользователя');
+    
+    // Инвалидируем кэш сессии перед выходом
+    invalidateSessionCache();
+    
     const { error } = await supabase.auth.signOut();
     if (error) {
       console.error('❌ Ошибка выхода:', error);
@@ -261,9 +379,43 @@ export async function logout(): Promise<void> {
  * Если сессия истекла, но refresh token еще действителен, пытается восстановить сессию.
  * Это улучшает UX - пользователь не будет разлогинен, если refresh token еще валиден.
  * 
+ * Использует кэширование для уменьшения количества запросов к Supabase.
+ * Кэш автоматически инвалидируется через 10 секунд.
+ * 
  * @returns Promise с информацией о сессии
  */
 export async function checkSession(): Promise<SessionCheckResponse> {
+  try {
+    // Проверяем кэш перед выполнением проверки
+    const now = Date.now();
+    if (lastSessionCheck && now - lastSessionCheck.timestamp < SESSION_CHECK_CACHE_TTL) {
+      return lastSessionCheck.result;
+    }
+
+    // Выполняем проверку сессии
+    const result = await performSessionCheck();
+    
+    // Сохраняем результат в кэш
+    lastSessionCheck = { result, timestamp: now };
+    
+    return result;
+  } catch (error: any) {
+    console.error('Ошибка проверки сессии:', error);
+    return {
+      active: false,
+      message: 'Ошибка при проверке сессии',
+    };
+  }
+}
+
+/**
+ * Внутренняя функция для выполнения проверки сессии
+ * 
+ * Вынесена в отдельную функцию для удобства тестирования и переиспользования.
+ * 
+ * @returns Promise с информацией о сессии
+ */
+async function performSessionCheck(): Promise<SessionCheckResponse> {
   try {
     // Добавляем таймаут для предотвращения зависания
     const timeoutPromise = new Promise<SessionCheckResponse>((resolve) => {
@@ -411,7 +563,10 @@ export async function getCurrentUser(): Promise<User | null> {
 }
 
 /**
- * Проверка прав администратора
+ * Проверка прав администратора с кэшированием
+ * 
+ * Использует кэш для уменьшения количества запросов к базе данных.
+ * Кэш автоматически инвалидируется через 30 секунд.
  * 
  * @returns Promise с информацией о правах
  */
@@ -431,11 +586,28 @@ export async function verifyAdmin(): Promise<{
       };
     }
 
-    return {
+    // Проверяем кэш
+    const cacheKey = user.id;
+    const cached = adminCache.get(cacheKey);
+    
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      return cached.data;
+    }
+
+    // Если кэш устарел или отсутствует, получаем данные
+    const result = {
       isAdmin: user.role === 'admin',
       role: user.role,
       email: user.email,
     };
+
+    // Сохраняем в кэш
+    adminCache.set(cacheKey, { 
+      data: result, 
+      timestamp: Date.now() 
+    });
+
+    return result;
   } catch (error: any) {
     console.error('Ошибка проверки прав администратора:', error);
     return {

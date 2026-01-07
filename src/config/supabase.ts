@@ -379,6 +379,17 @@ export async function updateUserRole(
       throw error;
     }
 
+    // Инвалидируем кэш прав администратора для обновленного пользователя
+    // Используем динамический импорт, чтобы избежать циклических зависимостей
+    // (supabaseAuthApi импортирует из config/supabase, поэтому прямой импорт создаст цикл)
+    try {
+      const { invalidateAdminCache } = await import('../services/api/supabaseAuthApi');
+      invalidateAdminCache(userId);
+    } catch (cacheError) {
+      // Игнорируем ошибки инвалидации кэша, чтобы не блокировать обновление роли
+      console.debug('⚠️ Не удалось инвалидировать кэш прав администратора:', cacheError);
+    }
+
     return profile as Profile;
   } catch (error: any) {
     console.error('Ошибка обновления роли:', error);
