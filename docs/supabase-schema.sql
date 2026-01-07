@@ -95,6 +95,9 @@ CREATE TABLE IF NOT EXISTS public.login_history (
   failure_reason TEXT
 );
 
+-- Удаляем колонку email, если она существует (для миграции со старой схемы)
+ALTER TABLE public.login_history DROP COLUMN IF EXISTS email;
+
 -- Индексы
 DROP INDEX IF EXISTS idx_login_history_user_id;
 DROP INDEX IF EXISTS idx_login_history_login_at;
@@ -257,6 +260,48 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- Функция для получения истории входов с email через JOIN
+-- Использует LEFT JOIN для корректной обработки NULL user_id (неуспешные входы)
+-- SECURITY DEFINER: обходит RLS для получения всех записей (с учетом прав через политики)
+CREATE OR REPLACE FUNCTION public.get_login_history_with_email(
+  p_limit INTEGER DEFAULT 100,
+  p_user_id UUID DEFAULT NULL
+)
+RETURNS TABLE (
+  id UUID,
+  user_id UUID,
+  login_at TIMESTAMPTZ,
+  ip_address TEXT,
+  success BOOLEAN,
+  failure_reason TEXT,
+  email TEXT
+) AS $$
+BEGIN
+  -- Защита от атак через подмену схемы (schema injection)
+  SET search_path = public, pg_temp;
+  
+  RETURN QUERY
+  SELECT 
+    lh.id,
+    lh.user_id,
+    lh.login_at,
+    lh.ip_address,
+    lh.success,
+    lh.failure_reason,
+    COALESCE(p.email, 
+      CASE 
+        WHEN lh.user_id IS NULL THEN 'Неуспешный вход'
+        ELSE 'Неизвестный пользователь'
+      END
+    ) AS email
+  FROM public.login_history lh
+  LEFT JOIN public.profiles p ON lh.user_id = p.id
+  WHERE (p_user_id IS NULL OR lh.user_id = p_user_id)
+  ORDER BY lh.login_at DESC
+  LIMIT p_limit;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
+
 -- ============================================================================
 -- RLS ПОЛИТИКИ (Row Level Security)
 -- ============================================================================
@@ -415,6 +460,9 @@ ALTER FUNCTION public.is_admin() SET search_path = public, pg_temp;
 ALTER FUNCTION public.get_user_role(UUID) SET search_path = public, pg_temp;
 ALTER FUNCTION public.handle_new_user() SET search_path = public, auth, pg_temp;
 ALTER FUNCTION public.log_login(UUID, BOOLEAN, TEXT, TEXT) SET search_path = public, pg_temp;
+
+-- Настройка search_path для функции get_login_history_with_email
+ALTER FUNCTION public.get_login_history_with_email(INTEGER, UUID) SET search_path = public, pg_temp;
 
 -- ============================================================================
 -- КОММЕНТАРИИ К ТАБЛИЦАМ И КОЛОНКАМ
