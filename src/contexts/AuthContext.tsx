@@ -107,6 +107,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
             setUser(currentUser);
             startActivityTracking();
             setError(null);
+            
+            // Создаем или обновляем user_session в localStorage для отслеживания активности
+            // Это нужно для проверки таймаута бездействия
+            try {
+              const { saveSession } = await import('../utils/sessionStorage');
+              const now = new Date().toISOString();
+              saveSession({
+                user: currentUser,
+                token: session.access_token || '',
+                expiresAt: session.expires_at 
+                  ? new Date(session.expires_at * 1000).toISOString()
+                  : new Date(Date.now() + (8 * 60 * 60 * 1000)).toISOString(),
+                lastActivityAt: now,
+              });
+              console.debug('✅ user_session создана/обновлена при SIGNED_IN');
+            } catch (error) {
+              console.debug('⚠️ Ошибка создания user_session (не критично):', error);
+            }
           } else {
             console.debug('⚠️ Пользователь не найден после SIGNED_IN, но сессия активна (профиль может быть создан позже)');
             // Не устанавливаем user в null, так как сессия есть
@@ -163,6 +181,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 startActivityTracking();
                 userRestored = true;
                 console.log('🔐 INITIAL_SESSION: пользователь восстановлен:', currentUser.email);
+                
+                // Создаем или обновляем user_session в localStorage для отслеживания активности
+                // Это нужно для проверки таймаута бездействия
+                try {
+                  const { saveSession } = await import('../utils/sessionStorage');
+                  const now = new Date().toISOString();
+                  saveSession({
+                    user: currentUser,
+                    token: session.access_token || '',
+                    expiresAt: session.expires_at 
+                      ? new Date(session.expires_at * 1000).toISOString()
+                      : new Date(Date.now() + (8 * 60 * 60 * 1000)).toISOString(),
+                    lastActivityAt: now,
+                  });
+                  console.debug('✅ user_session создана/обновлена при INITIAL_SESSION');
+                } catch (error) {
+                  console.debug('⚠️ Ошибка создания user_session (не критично):', error);
+                }
               } else {
                 console.debug('🔐 INITIAL_SESSION: профиль не найден (может быть создан позже)');
               }
