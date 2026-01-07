@@ -42,6 +42,10 @@ export const supabase: SupabaseClient = createClient(
       detectSessionInUrl: true,
       storageKey: 'sb-auth-token', // Единый ключ для хранения токенов (предотвращает множественные экземпляры)
       storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+      // Настройки для более длительных сессий
+      // ВАЖНО: Также нужно настроить в Supabase Dashboard:
+      // Authentication → Settings → JWT expiry: увеличить до нужного значения (например, 28800 секунд = 8 часов)
+      // Authentication → Settings → Session timeout: установить в 0 (без ограничения) или большое значение
     },
   }
 );

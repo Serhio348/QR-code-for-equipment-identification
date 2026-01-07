@@ -108,6 +108,10 @@ export function updateSessionExpiresAt(expiresAt: string): void {
 /**
  * Проверить, истекла ли сессия
  * 
+ * ВАЖНО: Для Supabase сессий эта функция не должна использоваться напрямую,
+ * так как Supabase сам управляет сессией через refresh token.
+ * Используйте checkSession() из supabaseAuthApi вместо этого.
+ * 
  * @returns true если сессия истекла, false если активна
  */
 export function isSessionExpired(): boolean {
@@ -119,7 +123,13 @@ export function isSessionExpired(): boolean {
   const expiresAt = new Date(session.expiresAt);
   const now = new Date();
   
-  return now >= expiresAt;
+  // Для Supabase сессий: если expiresAt истек, но это не критично,
+  // так как Supabase может обновить токен через refresh token
+  // Поэтому добавляем буфер в 5 минут для возможности обновления
+  const bufferMs = 5 * 60 * 1000; // 5 минут
+  const expiresAtWithBuffer = new Date(expiresAt.getTime() + bufferMs);
+  
+  return now >= expiresAtWithBuffer;
 }
 
 /**
