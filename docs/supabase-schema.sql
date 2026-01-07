@@ -263,6 +263,10 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- Функция для получения истории входов с email через JOIN
 -- Использует LEFT JOIN для корректной обработки NULL user_id (неуспешные входы)
 -- SECURITY DEFINER: обходит RLS для получения всех записей (с учетом прав через политики)
+-- 
+-- ВАЖНО: Сначала удаляем функцию, если она существует с другим типом возвращаемого значения
+DROP FUNCTION IF EXISTS public.get_login_history_with_email(INTEGER, UUID) CASCADE;
+
 CREATE OR REPLACE FUNCTION public.get_login_history_with_email(
   p_limit INTEGER DEFAULT 100,
   p_user_id UUID DEFAULT NULL
