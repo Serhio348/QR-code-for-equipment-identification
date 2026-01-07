@@ -17,7 +17,7 @@ import {
   getBeliotDevicesOverrides,
   saveBeliotDeviceOverride,
   BeliotDeviceOverride,
-} from '../services/api/beliotDevicesStorageApi';
+} from '../services/api/supabaseBeliotOverridesApi';
 import { useBeliotDeviceReadings } from '../hooks/useBeliotDeviceReadings';
 import { saveBeliotReading } from '../services/api/supabaseBeliotReadingsApi';
 import './BeliotDevicesTest.css';
@@ -84,7 +84,7 @@ const BeliotDevicesTest: React.FC = () => {
     getOverride: getLocalOverride,
   } = useBeliotDevicesStorage();
   
-  // Состояние для синхронизированных изменений из Google Sheets
+  // Состояние для синхронизированных изменений из Supabase
   const [syncedOverrides, setSyncedOverrides] = useState<Record<string, BeliotDeviceOverride>>({});
   const [syncing, setSyncing] = useState<boolean>(false);
   
@@ -97,16 +97,16 @@ const BeliotDevicesTest: React.FC = () => {
     syncOverridesFromServer();
   }, []);
 
-  // Синхронизация изменений с Google Sheets
+  // Синхронизация изменений с Supabase
   const syncOverridesFromServer = useCallback(async () => {
     try {
       setSyncing(true);
-      console.log('🔄 Синхронизация изменений счетчиков с Google Sheets...');
+      console.log('🔄 Синхронизация изменений счетчиков с Supabase...');
       const serverOverrides = await getBeliotDevicesOverrides();
       setSyncedOverrides(serverOverrides);
       console.log('✅ Синхронизация завершена:', Object.keys(serverOverrides).length, 'устройств');
     } catch (error: any) {
-      console.error('❌ Ошибка синхронизации с Google Sheets:', error);
+      console.error('❌ Ошибка синхронизации с Supabase:', error);
       // Не блокируем работу приложения при ошибке синхронизации
     } finally {
       setSyncing(false);
@@ -131,15 +131,15 @@ const BeliotDevicesTest: React.FC = () => {
   // Защита от повторных вызовов синхронизации
   const syncingRef = useRef<Set<string>>(new Set());
 
-  // Синхронизация изменений с Google Sheets (вызывается при onBlur или Enter)
-  const syncOverrideToSheets = useCallback(async (
+  // Синхронизация изменений с Supabase (вызывается при onBlur или Enter)
+  const syncOverrideToSupabase = useCallback(async (
     deviceId: string,
     field: 'name' | 'address' | 'serialNumber' | 'object'
   ) => {
-    console.log('💾 syncOverrideToSheets вызван:', { deviceId, field });
+    console.log('💾 syncOverrideToSupabase вызван:', { deviceId, field });
     
     if (!deviceId) {
-      console.error('❌ syncOverrideToSheets: deviceId не указан!', { deviceId, field });
+      console.error('❌ syncOverrideToSupabase: deviceId не указан!', { deviceId, field });
       return;
     }
 
@@ -154,13 +154,30 @@ const BeliotDevicesTest: React.FC = () => {
     syncingRef.current.add(syncKey);
     
     try {
-      const currentOverride = getLocalOverride(deviceId) || {};
-      const overrideData = {
-        ...currentOverride,
-      };
-      console.log('💾 Отправка данных в Google Sheets:', { deviceId, overrideData });
+      const currentOverride = getLocalOverride(deviceId);
+      
+      // Преобразуем поля из localStorage формата (camelCase) в Supabase формат (snake_case)
+      const overrideData: Partial<BeliotDeviceOverride> = {};
+      
+      if (currentOverride) {
+        if (currentOverride.name !== undefined) {
+          overrideData.name = currentOverride.name;
+        }
+        if (currentOverride.address !== undefined) {
+          overrideData.address = currentOverride.address;
+        }
+        if (currentOverride.serialNumber !== undefined) {
+          overrideData.serial_number = currentOverride.serialNumber; // serialNumber → serial_number
+        }
+        if (currentOverride.object !== undefined) {
+          overrideData.object_name = currentOverride.object; // object → object_name
+        }
+        // device_group не хранится в localStorage (только в Supabase), поэтому не включаем
+      }
+      
+      console.log('💾 Отправка данных в Supabase:', { deviceId, overrideData });
       await saveBeliotDeviceOverride(deviceId, overrideData);
-      console.log(`✅ Изменения для устройства ${deviceId} синхронизированы с Google Sheets`);
+      console.log(`✅ Изменения для устройства ${deviceId} синхронизированы с Supabase`);
       
       // Обновляем локальный кэш синхронизированных данных
       const updated = await getBeliotDevicesOverrides();
@@ -184,10 +201,22 @@ const BeliotDevicesTest: React.FC = () => {
       return localOverride[field]!;
     }
     
-    // Приоритет 2: Google Sheets (синхронизированные изменения)
+    // Приоритет 2: Supabase (синхронизированные изменения)
     const syncedOverride = syncedOverrides[id];
-    if (syncedOverride && syncedOverride[field] !== undefined) {
-      return syncedOverride[field]!;
+    if (syncedOverride) {
+      // Маппинг полей из Supabase формата в localStorage формат
+      if (field === 'serialNumber' && syncedOverride.serial_number !== undefined) {
+        return syncedOverride.serial_number;
+      }
+      if (field === 'object' && syncedOverride.object_name !== undefined) {
+        return syncedOverride.object_name;
+      }
+      if (field === 'name' && syncedOverride.name !== undefined) {
+        return syncedOverride.name;
+      }
+      if (field === 'address' && syncedOverride.address !== undefined) {
+        return syncedOverride.address;
+      }
     }
     
     // Приоритет 3: Значение по умолчанию
@@ -778,12 +807,12 @@ const BeliotDevicesTest: React.FC = () => {
                                   value={getEditableValue(deviceId, 'name', getDeviceName(device))}
                                   onChange={(e) => updateLocalValue(deviceId, 'name', e.target.value)}
                                   onBlur={async () => {
-                                    await syncOverrideToSheets(deviceId, 'name');
+                                    await syncOverrideToSupabase(deviceId, 'name');
                                     setEditingCell(null);
                                   }}
                                   onKeyDown={async (e) => {
                                     if (e.key === 'Enter') {
-                                      await syncOverrideToSheets(deviceId, 'name');
+                                      await syncOverrideToSupabase(deviceId, 'name');
                                       setEditingCell(null);
                                     } else if (e.key === 'Escape') {
                                       setEditingCell(null);
@@ -810,12 +839,12 @@ const BeliotDevicesTest: React.FC = () => {
                                   value={getEditableValue(deviceId, 'serialNumber', getDeviceSerialNumber(device))}
                                   onChange={(e) => updateLocalValue(deviceId, 'serialNumber', e.target.value)}
                                   onBlur={async () => {
-                                    await syncOverrideToSheets(deviceId, 'serialNumber');
+                                    await syncOverrideToSupabase(deviceId, 'serialNumber');
                                     setEditingCell(null);
                                   }}
                                   onKeyDown={async (e) => {
                                     if (e.key === 'Enter') {
-                                      await syncOverrideToSheets(deviceId, 'serialNumber');
+                                      await syncOverrideToSupabase(deviceId, 'serialNumber');
                                       setEditingCell(null);
                                     } else if (e.key === 'Escape') {
                                       setEditingCell(null);
@@ -842,12 +871,12 @@ const BeliotDevicesTest: React.FC = () => {
                                   value={getEditableValue(deviceId, 'object', getDeviceObject(device))}
                                   onChange={(e) => updateLocalValue(deviceId, 'object', e.target.value)}
                                   onBlur={async () => {
-                                    await syncOverrideToSheets(deviceId, 'object');
+                                    await syncOverrideToSupabase(deviceId, 'object');
                                     setEditingCell(null);
                                   }}
                                   onKeyDown={async (e) => {
                                     if (e.key === 'Enter') {
-                                      await syncOverrideToSheets(deviceId, 'object');
+                                      await syncOverrideToSupabase(deviceId, 'object');
                                       setEditingCell(null);
                                     } else if (e.key === 'Escape') {
                                       setEditingCell(null);
@@ -1260,12 +1289,12 @@ const BeliotDevicesTest: React.FC = () => {
                                   value={getEditableValue(deviceId, 'name', getDeviceName(device))}
                                   onChange={(e) => updateLocalValue(deviceId, 'name', e.target.value)}
                                   onBlur={async () => {
-                                    await syncOverrideToSheets(deviceId, 'name');
+                                    await syncOverrideToSupabase(deviceId, 'name');
                                     setEditingCell(null);
                                   }}
                                   onKeyDown={async (e) => {
                                     if (e.key === 'Enter') {
-                                      await syncOverrideToSheets(deviceId, 'name');
+                                      await syncOverrideToSupabase(deviceId, 'name');
                                       setEditingCell(null);
                                     } else if (e.key === 'Escape') {
                                       setEditingCell(null);
@@ -1292,12 +1321,12 @@ const BeliotDevicesTest: React.FC = () => {
                                   value={getEditableValue(deviceId, 'serialNumber', getDeviceSerialNumber(device))}
                                   onChange={(e) => updateLocalValue(deviceId, 'serialNumber', e.target.value)}
                                   onBlur={async () => {
-                                    await syncOverrideToSheets(deviceId, 'serialNumber');
+                                    await syncOverrideToSupabase(deviceId, 'serialNumber');
                                     setEditingCell(null);
                                   }}
                                   onKeyDown={async (e) => {
                                     if (e.key === 'Enter') {
-                                      await syncOverrideToSheets(deviceId, 'serialNumber');
+                                      await syncOverrideToSupabase(deviceId, 'serialNumber');
                                       setEditingCell(null);
                                     } else if (e.key === 'Escape') {
                                       setEditingCell(null);
