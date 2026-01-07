@@ -18,6 +18,7 @@ import {
   saveBeliotDeviceOverride,
   BeliotDeviceOverride,
 } from '../services/api/beliotDevicesStorageApi';
+import { useBeliotDeviceReadings } from '../hooks/useBeliotDeviceReadings';
 import './BeliotDevicesTest.css';
 
 interface StateTableRow {
@@ -42,6 +43,9 @@ const BeliotDevicesTest: React.FC = () => {
   const [loadingState, setLoadingState] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   
+  // Состояние для переключения между текущими (API) и историческими (Supabase) показаниями
+  const [readingsView, setReadingsView] = useState<'current' | 'history'>('current');
+  
   // Состояние для архивных данных (для будущего локального архива)
   const [archiveData, setArchiveData] = useState<any>(null);
   
@@ -49,6 +53,29 @@ const BeliotDevicesTest: React.FC = () => {
   const [isGroupsPanelOpen, setIsGroupsPanelOpen] = useState<boolean>(false);
   const [isDetailsPanelOpen, setIsDetailsPanelOpen] = useState<boolean>(false);
   
+  // Хук для работы с историческими показаниями из Supabase
+  const deviceId = selectedDevice ? String(selectedDevice.device_id || selectedDevice.id || selectedDevice._id) : null;
+  const {
+    readings: historicalReadings,
+    stats: readingStats,
+    loading: historicalLoading,
+    error: historicalError,
+    total: historicalTotal,
+    hasMore: historicalHasMore,
+    loadMore: loadMoreHistorical,
+    refresh: refreshHistorical,
+    loadStats,
+  } = useBeliotDeviceReadings(deviceId, {
+    reading_type: 'hourly',
+    limit: 50,
+  });
+  
+  // Загружаем статистику при переключении на исторический вид
+  useEffect(() => {
+    if (readingsView === 'history' && deviceId) {
+      loadStats();
+    }
+  }, [readingsView, deviceId, loadStats]);
   
   // Хранилище пользовательских изменений (localStorage)
   const {
@@ -803,15 +830,134 @@ const BeliotDevicesTest: React.FC = () => {
                 <div className="device-state-section">
                   <div className="section-header-with-actions">
                     <h4>Показания счетчика: {selectedDevice.name || selectedDevice.device_id || selectedDevice.id}</h4>
+                    <div className="readings-view-toggle">
+                      <button
+                        className={`toggle-btn ${readingsView === 'current' ? 'active' : ''}`}
+                        onClick={() => setReadingsView('current')}
+                        disabled={loadingState}
+                      >
+                        Текущие (API)
+                      </button>
+                      <button
+                        className={`toggle-btn ${readingsView === 'history' ? 'active' : ''}`}
+                        onClick={() => setReadingsView('history')}
+                        disabled={historicalLoading}
+                      >
+                        История (Supabase)
+                        {historicalTotal > 0 && (
+                          <span className="badge">({historicalTotal})</span>
+                        )}
+                      </button>
+                    </div>
                   </div>
-                  {loadingState ? (
+                  {(readingsView === 'current' && loadingState) || (readingsView === 'history' && historicalLoading) ? (
                     <div className="loading-state">
                       <div className="spinner"></div>
                       <p>Загрузка показаний...</p>
                     </div>
-                  ) : error ? (
+                  ) : (readingsView === 'current' && error) || (readingsView === 'history' && historicalError) ? (
                     <div className="error-state">
-                      <strong>❌ Ошибка:</strong> {error}
+                      <strong>❌ Ошибка:</strong> {readingsView === 'current' ? error : historicalError?.message || 'Не удалось загрузить показания'}
+                    </div>
+                  ) : readingsView === 'history' ? (
+                    // Отображение исторических показаний из Supabase
+                    <div className="readings-container">
+                      {historicalReadings.length === 0 ? (
+                        <div className="empty-state">
+                          <p>Исторические показания не найдены</p>
+                          <p className="hint">Показания будут доступны после настройки автоматического сбора через Railway</p>
+                        </div>
+                      ) : (
+                        <>
+                          {readingStats && (
+                            <div className="reading-stats">
+                              <h5>Статистика</h5>
+                              <div className="stats-grid">
+                                <div className="stat-item">
+                                  <span className="stat-label">Записей:</span>
+                                  <span className="stat-value">{readingStats.count}</span>
+                                </div>
+                                <div className="stat-item">
+                                  <span className="stat-label">Мин:</span>
+                                  <span className="stat-value">{readingStats.min_value.toFixed(2)}</span>
+                                </div>
+                                <div className="stat-item">
+                                  <span className="stat-label">Макс:</span>
+                                  <span className="stat-value">{readingStats.max_value.toFixed(2)}</span>
+                                </div>
+                                <div className="stat-item">
+                                  <span className="stat-label">Среднее:</span>
+                                  <span className="stat-value">{readingStats.avg_value.toFixed(2)}</span>
+                                </div>
+                                <div className="stat-item">
+                                  <span className="stat-label">Потребление:</span>
+                                  <span className="stat-value">{readingStats.total_consumption.toFixed(2)} м³</span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          <table className="readings-table">
+                            <thead>
+                              <tr>
+                                <th>Дата</th>
+                                <th>Значение</th>
+                                <th>Единица</th>
+                                <th>Тип</th>
+                                <th>Период</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {historicalReadings.map((reading, index) => {
+                                const readingDate = new Date(reading.reading_date);
+                                const prevReading = historicalReadings[index + 1];
+                                const consumption = prevReading 
+                                  ? reading.reading_value - prevReading.reading_value 
+                                  : null;
+                                
+                                return (
+                                  <tr key={reading.id} className="reading-row historical">
+                                    <td>{readingDate.toLocaleString('ru-RU')}</td>
+                                    <td className="reading-value">{reading.reading_value.toFixed(2)}</td>
+                                    <td>{reading.unit}</td>
+                                    <td>
+                                      <span className={`type-badge ${reading.reading_type}`}>
+                                        {reading.reading_type === 'hourly' ? 'Почасовой' : 'Ежедневный'}
+                                      </span>
+                                    </td>
+                                    <td>
+                                      {consumption !== null && consumption > 0 && (
+                                        <span className="consumption-value">+{consumption.toFixed(2)} м³</span>
+                                      )}
+                                      {consumption === null && '-'}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                          {historicalHasMore && (
+                            <div className="load-more-container">
+                              <button 
+                                className="load-more-btn"
+                                onClick={loadMoreHistorical}
+                                disabled={historicalLoading}
+                              >
+                                Загрузить еще
+                              </button>
+                            </div>
+                          )}
+                          <div className="readings-info">
+                            <p>Показано: {historicalReadings.length} из {historicalTotal}</p>
+                            <button 
+                              className="refresh-btn"
+                              onClick={refreshHistorical}
+                              disabled={historicalLoading}
+                            >
+                              Обновить
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </div>
                   ) : deviceReadings ? (() => {
                     // Вычисляем разницу значений и период между датами
