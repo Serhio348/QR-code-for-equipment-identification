@@ -135,12 +135,41 @@ export function isSessionExpired(): boolean {
 /**
  * Проверить таймаут сессии (8 часов бездействия)
  * 
+ * ВАЖНО: Если user_session не найдена, проверяем Supabase сессию напрямую.
+ * Это нужно, так как Supabase может хранить сессию в sb-auth-token, а не в user_session.
+ * 
  * @returns true если таймаут истек, false если сессия активна
  */
 export function isSessionTimeout(): boolean {
   const session = loadSession();
+  
+  // Если user_session не найдена, проверяем Supabase сессию напрямую
   if (!session) {
+    // Проверяем, есть ли Supabase сессия в localStorage
+    try {
+      const supabaseSession = localStorage.getItem('sb-auth-token');
+      if (supabaseSession) {
+        // Если есть Supabase сессия, но нет user_session, создаем её
+        // Это может произойти, если пользователь вошел через Supabase, но user_session не была создана
+        console.debug('⚠️ user_session не найдена, но Supabase сессия есть. Создаем user_session...');
+        // Не создаем сессию здесь, так как это должно быть сделано при входе
+        // Просто возвращаем false (сессия активна), так как Supabase сессия есть
+        return false;
+      }
+    } catch (error) {
+      // Игнорируем ошибки
+    }
+    
+    // Если нет ни user_session, ни Supabase сессии, сессия истекла
     return true;
+  }
+  
+  // Проверяем, что lastActivityAt существует
+  if (!session.lastActivityAt) {
+    console.warn('⚠️ lastActivityAt не установлен в сессии, устанавливаем текущее время');
+    session.lastActivityAt = new Date().toISOString();
+    saveSession(session);
+    return false; // Сессия активна, только что обновили lastActivityAt
   }
   
   const lastActivity = new Date(session.lastActivityAt);
