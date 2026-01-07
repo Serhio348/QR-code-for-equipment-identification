@@ -15,9 +15,10 @@ import './MainMenuPage.css';
 
 const MainMenuPage: React.FC = () => {
   const navigate = useNavigate();
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, logout } = useAuth();
   const [userAccess, setUserAccess] = useState<UserAppAccess | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [loggingOut, setLoggingOut] = useState<boolean>(false);
 
   // Очищаем сохраненный путь при переходе в главное меню
   useEffect(() => {
@@ -69,6 +70,18 @@ const MainMenuPage: React.FC = () => {
   // Фильтруем доступные приложения
   const availableApps = AVAILABLE_APPS.filter(app => hasAccessToApp(app.id));
 
+  // Обработчик выхода
+  const handleLogout = async () => {
+    try {
+      setLoggingOut(true);
+      await logout();
+      navigate(ROUTES.LOGIN);
+    } catch (error) {
+      console.error('Ошибка при выходе:', error);
+      setLoggingOut(false);
+    }
+  };
+
   return (
     <div className="main-menu-page">
       <div className="main-menu-container">
@@ -81,6 +94,15 @@ const MainMenuPage: React.FC = () => {
               {user.name && (
                 <p className="main-menu-user-name">{user.name}</p>
               )}
+              <button
+                className="main-menu-logout-link"
+                onClick={handleLogout}
+                disabled={loggingOut}
+                type="button"
+                aria-label="Выйти из системы"
+              >
+                {loggingOut ? 'Выход...' : 'Выйти из аккаунта'}
+              </button>
             </div>
           )}
         </div>

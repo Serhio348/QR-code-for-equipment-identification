@@ -6,14 +6,20 @@
  * Переменные окружения:
  * - VITE_SUPABASE_URL - URL проекта Supabase
  * - VITE_SUPABASE_ANON_KEY - Anon public key из Supabase Dashboard
+ * - VITE_SUPABASE_SERVICE_ROLE_KEY - Service Role key (опционально, только для админских операций)
  * 
  * Получить в Supabase Dashboard: Settings → API
+ * 
+ * ВАЖНО: Service Role key имеет полный доступ к базе данных и обходит RLS политики.
+ * Используйте только для админских операций на сервере или в защищенных функциях.
+ * НИКОГДА не используйте в клиентском коде, доступном пользователям!
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseServiceKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
 
 // Проверка наличия переменных окружения
 if (!supabaseUrl || !supabaseAnonKey) {
@@ -41,6 +47,37 @@ export const supabase: SupabaseClient = createClient(
 // Логируем успешную инициализацию, если переменные настроены
 if (supabaseUrl && supabaseAnonKey) {
   console.log('✅ Supabase клиент инициализирован');
+}
+
+/**
+ * Service Role клиент для админских операций
+ * 
+ * ВАЖНО: Этот клиент обходит RLS (Row Level Security) политики и имеет полный доступ к базе данных.
+ * Используйте ТОЛЬКО для:
+ * - Админских операций, требующих обхода RLS
+ * - Операций, которые должны выполняться от имени системы, а не пользователя
+ * 
+ * НИКОГДА не используйте в клиентском коде, доступном обычным пользователям!
+ * Service Role key должен храниться в секретах и использоваться только на сервере.
+ * 
+ * В клиентском коде используйте только для внутренних админских функций с проверкой прав.
+ */
+export const supabaseAdmin: SupabaseClient = createClient(
+  supabaseUrl || 'https://placeholder.supabase.co',
+  supabaseServiceKey || 'placeholder-service-key',
+  {
+    auth: {
+      autoRefreshToken: false, // Не обновляем токены для админского клиента
+      persistSession: false, // Не сохраняем сессию для админского клиента
+    },
+  }
+);
+
+// Предупреждение если Service Role key используется в клиентском коде
+if (supabaseServiceKey && typeof window !== 'undefined') {
+  console.warn('⚠️ ВНИМАНИЕ: Service Role key обнаружен в клиентском коде!');
+  console.warn('   Это небезопасно! Service Role key должен использоваться только на сервере.');
+  console.warn('   Рассмотрите использование Supabase Edge Functions для админских операций.');
 }
 
 /**
@@ -92,24 +129,69 @@ export interface Profile {
  */
 export async function getCurrentProfile(): Promise<Profile | null> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) {
-      return null;
-    }
+    // Добавляем таймаут для предотвращения зависания
+    const timeoutPromise = new Promise<null>((resolve) => {
+      setTimeout(() => {
+        // Используем debug вместо warn, чтобы не засорять консоль
+        console.debug('⚠️ Таймаут получения профиля (5 секунд)');
+        resolve(null);
+      }, 5000);
+    });
 
-    const { data: profile, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single();
+    const profilePromise = (async () => {
+      try {
+        // Получаем пользователя с таймаутом
+        const getUserPromise = supabase.auth.getUser();
+        const getUserTimeout = new Promise<{ data: { user: null }, error: null }>((resolve) => {
+          setTimeout(() => {
+            // Используем debug вместо warn, чтобы не засорять консоль
+            console.debug('⚠️ Таймаут getUser() (3 секунды)');
+            resolve({ data: { user: null }, error: null });
+          }, 3000);
+        });
 
-    if (error) {
-      console.error('Ошибка получения профиля:', error);
-      return null;
-    }
+        const getUserResult = await Promise.race([getUserPromise, getUserTimeout]);
+        
+        if (!getUserResult?.data?.user) {
+          return null;
+        }
 
-    return profile as Profile;
+        const { data: { user } } = getUserResult;
+        
+        // Получаем профиль с таймаутом
+        const profileQueryPromise = supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+
+        const profileQueryTimeout = new Promise<{ data: null, error: { message: string } }>((resolve) => {
+          setTimeout(() => {
+            // Используем debug вместо warn, чтобы не засорять консоль
+            console.debug('⚠️ Таймаут запроса профиля (3 секунды)');
+            resolve({ data: null, error: { message: 'Таймаут запроса' } });
+          }, 3000);
+        });
+
+        const profileResult = await Promise.race([profileQueryPromise, profileQueryTimeout]);
+        
+        if (profileResult.error) {
+          console.error('Ошибка получения профиля:', profileResult.error);
+          return null;
+        }
+
+        if (!profileResult.data) {
+          return null;
+        }
+
+        return profileResult.data as Profile;
+      } catch (error: any) {
+        console.error('Ошибка при получении профиля:', error.message);
+        return null;
+      }
+    })();
+
+    return await Promise.race([profilePromise, timeoutPromise]);
   } catch (error: any) {
     console.error('Ошибка при получении профиля:', error.message);
     return null;
@@ -119,20 +201,43 @@ export async function getCurrentProfile(): Promise<Profile | null> {
 /**
  * Проверить, является ли текущий пользователь администратором
  * 
+ * Оптимизированная версия: использует SQL функцию is_admin() через RPC
+ * для быстрой проверки без получения всего профиля.
+ * 
  * @returns true если пользователь администратор, false в противном случае
  */
 export async function isCurrentUserAdmin(): Promise<boolean> {
   try {
-    const profile = await getCurrentProfile();
-    return profile?.role === 'admin';
+    // Используем SQL функцию is_admin() через RPC - быстрее и эффективнее
+    const { data, error } = await supabase.rpc('is_admin');
+    
+    if (error) {
+      // Если RPC вызов не удался, используем fallback на getCurrentProfile
+      console.debug('⚠️ RPC is_admin() не удался, используем fallback:', error.message);
+      const profile = await getCurrentProfile();
+      return profile?.role === 'admin';
+    }
+    
+    // SQL функция возвращает boolean напрямую
+    return data === true;
   } catch (error: any) {
-    console.error('Ошибка при проверке роли администратора:', error.message);
-    return false;
+    // В случае любой ошибки используем fallback
+    console.debug('⚠️ Ошибка при проверке роли администратора, используем fallback:', error.message);
+    try {
+      const profile = await getCurrentProfile();
+      return profile?.role === 'admin';
+    } catch (fallbackError) {
+      console.error('Ошибка при fallback проверке роли администратора:', fallbackError);
+      return false;
+    }
   }
 }
 
 /**
  * Получить профиль пользователя по ID
+ * 
+ * ВАЖНО: В настоящее время не используется в UI.
+ * Предназначено для будущей админ-панели управления пользователями.
  * 
  * @param userId - UUID пользователя
  * @returns Профиль пользователя или null если не найден
@@ -160,6 +265,9 @@ export async function getProfileById(userId: string): Promise<Profile | null> {
 /**
  * Получить профиль пользователя по email
  * 
+ * ВАЖНО: Используется внутри updateUserRoleByEmail().
+ * Может быть полезно для будущей админ-панели управления пользователями.
+ * 
  * @param email - Email пользователя
  * @returns Профиль пользователя или null если не найден
  */
@@ -186,15 +294,16 @@ export async function getProfileByEmail(email: string): Promise<Profile | null> 
 /**
  * Обновить профиль текущего пользователя
  * 
- * Обычные пользователи могут обновлять только name, но НЕ role
- * Администраторы могут обновлять любые поля
+ * ВАЖНО: Пользователи могут обновлять ТОЛЬКО name.
+ * Роль НЕ может быть изменена через эту функцию (используйте updateUserRole для администраторов).
  * 
- * @param updates - Объект с полями для обновления
+ * КРИТИЧНО: Явно удаляем поле role из обновлений для предотвращения попыток изменения роли.
+ * 
+ * @param updates - Объект с полями для обновления (только name)
  * @returns Обновленный профиль
  */
 export async function updateCurrentProfile(updates: {
   name?: string;
-  role?: 'admin' | 'user';
 }): Promise<Profile | null> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
@@ -203,9 +312,23 @@ export async function updateCurrentProfile(updates: {
       throw new Error('Пользователь не авторизован');
     }
 
+    // КРИТИЧНО: Явно удаляем role если кто-то попытался его передать
+    // Используем деструктуризацию для безопасного удаления
+    const { role, ...safeUpdates } = updates as any;
+    
+    // Если кто-то попытался передать role, логируем предупреждение
+    if (role !== undefined) {
+      console.warn('⚠️ Попытка изменить роль через updateCurrentProfile() заблокирована. Используйте updateUserRole() для администраторов.');
+    }
+
+    // Если нет полей для обновления, возвращаем текущий профиль
+    if (Object.keys(safeUpdates).length === 0) {
+      return await getCurrentProfile();
+    }
+
     const { data: profile, error } = await supabase
       .from('profiles')
-      .update(updates)
+      .update(safeUpdates)
       .eq('id', user.id)
       .select('*')
       .single();
@@ -223,6 +346,10 @@ export async function updateCurrentProfile(updates: {
 
 /**
  * Обновить роль пользователя (только для администраторов)
+ * 
+ * ВАЖНО: В настоящее время не используется в UI.
+ * Используется внутри updateUserRoleByEmail().
+ * Предназначено для будущей админ-панели управления пользователями.
  * 
  * @param userId - UUID пользователя
  * @param role - Новая роль ('admin' | 'user')
@@ -262,6 +389,10 @@ export async function updateUserRole(
 /**
  * Обновить роль пользователя по email (только для администраторов)
  * 
+ * ВАЖНО: В настоящее время не используется в UI.
+ * Предназначено для будущей админ-панели управления пользователями.
+ * Используется для назначения/снятия роли администратора через SQL (см. docs/ASSIGN_ADMIN.md).
+ * 
  * @param email - Email пользователя
  * @param role - Новая роль ('admin' | 'user')
  * @returns Обновленный профиль
@@ -288,6 +419,10 @@ export async function updateUserRoleByEmail(
 
 /**
  * Получить список всех пользователей (только для администраторов)
+ * 
+ * ВАЖНО: В настоящее время не используется в UI.
+ * Предназначено для будущей админ-панели управления пользователями.
+ * Может быть полезно для отображения списка всех пользователей с их ролями.
  * 
  * @returns Список всех профилей пользователей
  * @throws Error если текущий пользователь не администратор
