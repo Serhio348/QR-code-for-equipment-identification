@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Equipment } from '../../types/equipment';
-import DateEditor from './DateEditor';
 import './EquipmentPageHeader.css';
 
 interface EquipmentPageHeaderProps {
@@ -14,12 +13,6 @@ interface EquipmentPageHeaderProps {
   onExportPDF?: () => void;
   documentationAvailable?: boolean;
   deleting?: boolean;
-  commissioningDate: string;
-  lastMaintenanceDate: string;
-  onCommissioningDateChange: (date: string) => void;
-  onLastMaintenanceDateChange: (date: string) => void;
-  onSaveDates: () => void;
-  savingDates: boolean;
 }
 
 export const EquipmentPageHeader: React.FC<EquipmentPageHeaderProps> = ({
@@ -32,13 +25,7 @@ export const EquipmentPageHeader: React.FC<EquipmentPageHeaderProps> = ({
   onDeleteEquipment,
   onExportPDF,
   documentationAvailable = false,
-  deleting = false,
-  commissioningDate,
-  lastMaintenanceDate,
-  onCommissioningDateChange,
-  onLastMaintenanceDateChange,
-  onSaveDates,
-  savingDates
+  deleting = false
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const title = loading ? 'Загрузка...' : (equipment?.name || '');
@@ -84,20 +71,6 @@ export const EquipmentPageHeader: React.FC<EquipmentPageHeaderProps> = ({
             </div>
             
             <div className="mobile-menu-content">
-              {isAdmin && (
-                <div className="mobile-menu-section">
-                  <h4>Даты</h4>
-                  <DateEditor
-                    commissioningDate={commissioningDate}
-                    lastMaintenanceDate={lastMaintenanceDate}
-                    onCommissioningDateChange={onCommissioningDateChange}
-                    onLastMaintenanceDateChange={onLastMaintenanceDateChange}
-                    onSave={onSaveDates}
-                    saving={savingDates || loading}
-                  />
-                </div>
-              )}
-
               <div className="mobile-menu-section">
                 <h4>Действия</h4>
                 <div className="mobile-menu-actions">
@@ -163,19 +136,6 @@ export const EquipmentPageHeader: React.FC<EquipmentPageHeaderProps> = ({
 
       {/* Десктопная версия */}
       <div className="desktop-actions">
-        {isAdmin && (
-          <div className="header-dates">
-            <DateEditor
-              commissioningDate={commissioningDate}
-              lastMaintenanceDate={lastMaintenanceDate}
-              onCommissioningDateChange={onCommissioningDateChange}
-              onLastMaintenanceDateChange={onLastMaintenanceDateChange}
-              onSave={onSaveDates}
-              saving={savingDates || loading}
-            />
-          </div>
-        )}
-
         <div className="header-actions">
           {onOpenDocumentation && documentationAvailable && (
             <button

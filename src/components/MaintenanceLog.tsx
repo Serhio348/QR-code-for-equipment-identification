@@ -10,7 +10,8 @@ import { MaintenanceEntry, MaintenanceEntryInput } from '../types/equipment';
 import { 
   getMaintenanceLog, 
   addMaintenanceEntry, 
-  deleteMaintenanceEntry 
+  deleteMaintenanceEntry,
+  updateEquipment
 } from '../services/equipmentApi';
 import { formatDate } from '../utils/dateFormatting';
 import './MaintenanceLog.css';
@@ -104,6 +105,26 @@ const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanc
         // Если это реальная запись, просто добавляем её
         setEntries([newEntry, ...entries]);
         setError(null);
+        
+        // Обновляем дату последнего обслуживания оборудования из последней записи
+        // Берем самую позднюю дату из всех записей (включая новую)
+        const allEntries = [newEntry, ...entries];
+        const sortedEntries = allEntries
+          .filter(e => e.status === 'completed' && e.date)
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        
+        if (sortedEntries.length > 0) {
+          const lastMaintenanceDate = sortedEntries[0].date;
+          try {
+            await updateEquipment(equipmentId, {
+              lastMaintenanceDate: lastMaintenanceDate
+            });
+            console.log('✅ Дата последнего обслуживания обновлена:', lastMaintenanceDate);
+          } catch (updateError) {
+            console.warn('⚠️ Не удалось обновить дату последнего обслуживания:', updateError);
+          }
+        }
+        
         // Очищаем форму
         setFormData({
           date: new Date().toISOString().split('T')[0],

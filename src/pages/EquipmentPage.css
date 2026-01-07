@@ -110,6 +110,7 @@
   flex: 1;
   min-width: 0;
   padding: 20px;
+  padding-top: 100px; /* Отступ сверху для фиксированного заголовка */
   overflow: visible !important;
   overflow-x: visible !important;
   overflow-y: visible !important;
@@ -231,6 +232,7 @@
     padding: 10px;
     padding-left: 15px;
     padding-right: 15px;
+    padding-top: 90px; /* Отступ сверху для фиксированного заголовка на мобильных */
     width: 100%;
     box-sizing: border-box;
     /* Контент остается на месте, sidebar открывается поверх */
@@ -262,6 +264,7 @@
 @media (max-width: 480px) {
   .plate-container {
     padding: 5px;
+    padding-top: 85px; /* Отступ сверху для фиксированного заголовка на маленьких экранах */
   }
 
   .controls {

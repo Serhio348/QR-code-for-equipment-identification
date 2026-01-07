@@ -8,6 +8,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ROUTES } from '../utils/routes';
 import { saveRedirectPath } from '../utils/pathStorage';
+import LoadingSpinner from './LoadingSpinner';
 import type { ReactNode } from 'react';
 
 interface ProtectedRouteProps {
@@ -29,17 +30,9 @@ export default function ProtectedRoute({ children, requireAdmin = false }: Prote
   const location = useLocation();
 
   // Показываем загрузку во время проверки аутентификации
+  // Важно: не редиректим на логин, пока идет загрузка, чтобы избежать мигания страницы
   if (loading) {
-    return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '100vh' 
-      }}>
-        <div>Загрузка...</div>
-      </div>
-    );
+    return <LoadingSpinner fullScreen text="Проверка авторизации..." />;
   }
 
   // Если не авторизован, сохраняем текущий путь и редиректим на страницу входа

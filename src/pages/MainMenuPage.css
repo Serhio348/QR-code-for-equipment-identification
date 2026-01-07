@@ -50,6 +50,34 @@
   opacity: 0.8;
 }
 
+.main-menu-logout-link {
+  margin-top: 12px;
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  color: white;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-family: inherit;
+}
+
+.main-menu-logout-link:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: translateY(-1px);
+}
+
+.main-menu-logout-link:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.main-menu-logout-link:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .main-menu-content {
   padding: 30px 20px;
   display: flex;

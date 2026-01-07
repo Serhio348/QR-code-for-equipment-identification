@@ -6,13 +6,13 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { login as loginApi, logout as logoutApi, register as registerApi, checkSession, verifyAdmin } from '../services/api/authApi';
-import { saveSession, loadSession, clearSession, isSessionExpired, isSessionTimeout } from '../utils/sessionStorage';
+import { supabase } from '../config/supabase';
+import { login as loginApi, logout as logoutApi, register as registerApi, getCurrentUser } from '../services/api/supabaseAuthApi';
 import { startActivityTracking, stopActivityTracking, checkSessionTimeout as checkTimeout } from '../utils/sessionTimeout';
 import { clearLastPath } from '../utils/pathStorage';
 import { ROUTES } from '../utils/routes';
 import type { User } from '../types/user';
-import type { AuthState, UserSession } from '../types/auth';
+import type { AuthState } from '../types/auth';
 import type { LoginData, RegisterData } from '../types/user';
 
 interface AuthContextType extends AuthState {
@@ -33,81 +33,195 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Загрузка сессии при монтировании компонента
+  // Инициализация аутентификации и отслеживание изменений сессии
   useEffect(() => {
-    const initializeAuth = async () => {
+    let mounted = true;
+    let initializationComplete = false;
+    let userRestored = false;
+
+    // Инициализация: быстро проверяем сессию синхронно
+    console.log('🔐 Инициализация аутентификации...');
+    
+    // Быстрая проверка сессии для немедленного восстановления пользователя
+    const quickSessionCheck = async () => {
       try {
-        const session = loadSession();
+        const { data: { session } } = await supabase.auth.getSession();
         
-        if (!session) {
-          setLoading(false);
-          return;
-        }
-
-        // Проверяем, не истекла ли сессия
-        if (isSessionExpired() || isSessionTimeout()) {
-          clearSession();
-          setLoading(false);
-          return;
-        }
-
-        // Проверяем сессию на сервере (с обработкой ошибок)
-        let sessionCheck;
-        try {
-          sessionCheck = await checkSession(session.user.email);
+        if (session?.user && mounted) {
+          console.log('🔐 Найдена активная сессия, восстанавливаем пользователя...');
           
-          if (!sessionCheck.active) {
-            clearSession();
-            setLoading(false);
-            return;
+          // Восстанавливаем пользователя - это может занять время
+          const currentUser = await getCurrentUser();
+          
+          if (currentUser && mounted) {
+            setUser(currentUser);
+            startActivityTracking();
+            userRestored = true;
+            console.log('🔐 Пользователь восстановлен:', currentUser.email);
+          } else {
+            console.log('🔐 Сессия найдена, но профиль не восстановлен');
           }
-        } catch (sessionError: any) {
-          // Если ошибка при проверке сессии, но сессия не истекла по времени,
-          // продолжаем работу (возможно, временная проблема с сетью)
-          console.warn('⚠️ Ошибка проверки сессии на сервере, продолжаем с локальной сессией:', sessionError.message);
-          // Не очищаем сессию при временных ошибках сети
+        } else {
+          console.log('🔐 Активная сессия не найдена');
         }
-
-        // Обновляем роль пользователя (может измениться)
-        let adminCheck;
-        try {
-          adminCheck = await verifyAdmin(session.user.email);
-        } catch (adminError: any) {
-          // Если ошибка при проверке роли, используем роль из сессии
-          console.warn('⚠️ Ошибка проверки роли, используем роль из сессии:', adminError.message);
-          adminCheck = { role: session.user.role || 'user' };
+      } catch (error) {
+        console.debug('⚠️ Ошибка быстрой проверки сессии (не критично):', error);
+      } finally {
+        // Устанавливаем loading = false только после завершения проверки
+        // Это гарантирует, что пользователь либо восстановлен, либо точно его нет
+        if (mounted && !initializationComplete) {
+          initializationComplete = true;
+          setLoading(false);
+          console.log('🔐 Инициализация завершена');
         }
-        
-        setUser({
-          ...session.user,
-          role: adminCheck.role,
-        });
-
-        // Обновляем сессию с новыми данными
-        saveSession({
-          ...session,
-          user: {
-            ...session.user,
-            role: adminCheck.role,
-          },
-        });
-
-        // Начинаем отслеживание активности
-        startActivityTracking();
-        
-        setLoading(false);
-      } catch (error: any) {
-        console.error('Ошибка инициализации аутентификации:', error);
-        // Не очищаем сессию при ошибках инициализации, если сессия валидна по времени
-        // Пользователь может продолжить работу с локальной сессией
-        if (isSessionExpired() || isSessionTimeout()) {
-          clearSession();
-        }
-        setLoading(false);
       }
     };
 
-    initializeAuth();
+    quickSessionCheck();
+    
+    // Резервный таймаут на случай зависания запросов (например, проблемы с сетью)
+    // Увеличен до 5 секунд, чтобы дать время getCurrentUser() завершиться
+    setTimeout(() => {
+      if (mounted && !initializationComplete) {
+        initializationComplete = true;
+        setLoading(false);
+        console.log('🔐 Инициализация завершена (резервный таймаут 5 секунд)');
+      }
+    }, 5000);
+
+    // Подписываемся на изменения состояния аутентификации
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('🔐 Auth state changed:', event, session?.user?.email);
+
+      if (!mounted) return;
+
+      try {
+        if (event === 'SIGNED_IN' && session) {
+          // Пользователь вошел или сессия обновлена
+          // getCurrentUser() уже имеет таймауты внутри
+          const currentUser = await getCurrentUser();
+          
+          if (currentUser) {
+            setUser(currentUser);
+            startActivityTracking();
+            setError(null);
+            
+            // Создаем или обновляем user_session в localStorage для отслеживания активности
+            // Это нужно для проверки таймаута бездействия
+            try {
+              const { saveSession } = await import('../utils/sessionStorage');
+              const now = new Date().toISOString();
+              saveSession({
+                user: currentUser,
+                token: session.access_token || '',
+                expiresAt: session.expires_at 
+                  ? new Date(session.expires_at * 1000).toISOString()
+                  : new Date(Date.now() + (8 * 60 * 60 * 1000)).toISOString(),
+                lastActivityAt: now,
+              });
+              console.debug('✅ user_session создана/обновлена при SIGNED_IN');
+            } catch (error) {
+              console.debug('⚠️ Ошибка создания user_session (не критично):', error);
+            }
+          } else {
+            console.debug('⚠️ Пользователь не найден после SIGNED_IN, но сессия активна (профиль может быть создан позже)');
+            // Не устанавливаем user в null, так как сессия есть
+            // Профиль может быть создан с задержкой
+          }
+        } else if (event === 'SIGNED_OUT') {
+          // Пользователь вышел
+          setUser(null);
+          stopActivityTracking();
+          setError(null);
+        } else if (event === 'TOKEN_REFRESHED' && session) {
+          // Токен обновлен, обновляем данные пользователя и expiresAt в localStorage
+          try {
+            // Обновляем expiresAt в localStorage
+            if (session.expires_at) {
+              const { updateSessionExpiresAt } = await import('../utils/sessionStorage');
+              const newExpiresAt = new Date(session.expires_at * 1000).toISOString();
+              updateSessionExpiresAt(newExpiresAt);
+              console.debug('✅ expiresAt обновлен в localStorage:', newExpiresAt);
+            } else {
+              console.warn('⚠️ TOKEN_REFRESHED: expires_at отсутствует в сессии');
+            }
+            
+            const currentUser = await getCurrentUser();
+            if (currentUser) {
+              setUser(currentUser);
+            }
+          } catch (error) {
+            // Игнорируем ошибки при обновлении токена
+            console.debug('⚠️ Ошибка обновления пользователя после TOKEN_REFRESHED (не критично):', error);
+          }
+        } else if (event === 'USER_UPDATED' && session) {
+          // Данные пользователя обновлены (не критично)
+          try {
+            const currentUser = await getCurrentUser();
+            if (currentUser) {
+              setUser(currentUser);
+            }
+          } catch (error) {
+            // Игнорируем ошибки при обновлении пользователя
+            console.debug('⚠️ Ошибка обновления пользователя после USER_UPDATED (не критично):', error);
+          }
+        } else if (event === 'INITIAL_SESSION') {
+          // Начальная сессия при загрузке страницы
+          // Если пользователь еще не восстановлен, восстанавливаем его
+          if (session?.user && mounted && !userRestored) {
+            try {
+              console.log('🔐 INITIAL_SESSION: восстановление сессии для', session.user.email);
+              
+              const currentUser = await getCurrentUser();
+              
+              if (currentUser && mounted) {
+                setUser(currentUser);
+                startActivityTracking();
+                userRestored = true;
+                console.log('🔐 INITIAL_SESSION: пользователь восстановлен:', currentUser.email);
+                
+                // Создаем или обновляем user_session в localStorage для отслеживания активности
+                // Это нужно для проверки таймаута бездействия
+                try {
+                  const { saveSession } = await import('../utils/sessionStorage');
+                  const now = new Date().toISOString();
+                  saveSession({
+                    user: currentUser,
+                    token: session.access_token || '',
+                    expiresAt: session.expires_at 
+                      ? new Date(session.expires_at * 1000).toISOString()
+                      : new Date(Date.now() + (8 * 60 * 60 * 1000)).toISOString(),
+                    lastActivityAt: now,
+                  });
+                  console.debug('✅ user_session создана/обновлена при INITIAL_SESSION');
+                } catch (error) {
+                  console.debug('⚠️ Ошибка создания user_session (не критично):', error);
+                }
+              } else {
+                console.debug('🔐 INITIAL_SESSION: профиль не найден (может быть создан позже)');
+              }
+            } catch (error) {
+              console.debug('⚠️ Ошибка получения пользователя при INITIAL_SESSION (не критично):', error);
+            }
+          } else if (!session?.user) {
+            console.log('🔐 INITIAL_SESSION: сессия не найдена');
+          } else {
+            console.debug('🔐 INITIAL_SESSION: пользователь уже восстановлен ранее');
+          }
+          
+          // Не устанавливаем loading = false здесь, так как это уже сделано в quickSessionCheck
+          // INITIAL_SESSION может прийти позже, но мы уже завершили загрузку
+        }
+      } catch (error: any) {
+        // Ошибки не критичны - продолжаем работу
+        console.warn('⚠️ Ошибка обработки изменения состояния аутентификации (не критично):', error.message || error);
+      } finally {
+        // INITIAL_SESSION обрабатывается выше и устанавливает loading = false
+        // Для других событий ничего не делаем здесь
+      }
+    });
 
     // Обработчик события истечения сессии
     const handleSessionTimeout = () => {
@@ -118,19 +232,26 @@ export function AuthProvider({ children }: AuthProviderProps) {
     window.addEventListener('session-timeout', handleSessionTimeout);
 
     return () => {
+      mounted = false;
+      subscription.unsubscribe();
       stopActivityTracking();
       window.removeEventListener('session-timeout', handleSessionTimeout);
     };
   }, []);
 
   // Периодическая проверка таймаута
+  // ВАЖНО: checkTimeout проверяет только таймаут бездействия (8 часов),
+  // но не проверяет истечение Supabase токена - это делает сам Supabase через autoRefreshToken
   useEffect(() => {
     if (!user) {
       return;
     }
 
     const interval = setInterval(() => {
+      // Проверяем только таймаут бездействия, не истечение токена
+      // Supabase сам управляет токенами через autoRefreshToken
       if (!checkTimeout()) {
+        console.log('🔐 Таймаут бездействия истек (8 часов)');
         setUser(null);
         setError('Сессия истекла из-за бездействия. Пожалуйста, войдите снова.');
       }
@@ -144,20 +265,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setLoading(true);
       setError(null);
 
+      // Вход через Supabase Auth
+      // onAuthStateChange автоматически обновит состояние пользователя
       const response = await loginApi(data);
-
-      const session: UserSession = {
-        user: response.user,
-        token: response.sessionToken,
-        expiresAt: response.expiresAt,
-        lastActivityAt: new Date().toISOString(),
-      };
-
-      saveSession(session);
-      setUser(response.user);
-
-      // Начинаем отслеживание активности
-      startActivityTracking();
+      
+      // Пользователь уже установлен через onAuthStateChange
+      // Но можем обновить для немедленного отклика
+      if (response.user) {
+        setUser(response.user);
+        startActivityTracking();
+      }
       
       setLoading(false);
     } catch (error: any) {
@@ -172,20 +289,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setLoading(true);
       setError(null);
 
+      // Регистрация через Supabase Auth
+      // onAuthStateChange автоматически обновит состояние пользователя
       const response = await registerApi(data);
-
-      const session: UserSession = {
-        user: response.user,
-        token: response.sessionToken,
-        expiresAt: response.expiresAt,
-        lastActivityAt: new Date().toISOString(),
-      };
-
-      saveSession(session);
-      setUser(response.user);
-
-      // Начинаем отслеживание активности
-      startActivityTracking();
+      
+      // Пользователь уже установлен через onAuthStateChange (если email подтвержден автоматически)
+      // Но можем обновить для немедленного отклика
+      if (response.user) {
+        setUser(response.user);
+        startActivityTracking();
+      }
       
       setLoading(false);
     } catch (error: any) {
@@ -198,48 +311,35 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const logout = useCallback(async () => {
     try {
       setLoading(true);
-      if (user) {
-        await logoutApi(user.email);
-      }
+      // Выход через Supabase Auth
+      // onAuthStateChange автоматически обновит состояние (SIGNED_OUT)
+      await logoutApi();
     } catch (error) {
       console.error('Ошибка при выходе:', error);
     } finally {
-      clearSession();
       clearLastPath(); // Очищаем сохраненный путь при выходе
       stopActivityTracking();
       setUser(null);
       setError(null);
       setLoading(false);
     }
-  }, [user]);
+  }, []);
 
   const refreshUser = useCallback(async () => {
-    if (!user) {
-      return;
-    }
-
     try {
-      const adminCheck = await verifyAdmin(user.email);
+      // Получаем актуальные данные пользователя из Supabase
+      const currentUser = await getCurrentUser();
       
-      const updatedUser: User = {
-        ...user,
-        role: adminCheck.role,
-      };
-
-      setUser(updatedUser);
-
-      // Обновляем сессию
-      const session = loadSession();
-      if (session) {
-        saveSession({
-          ...session,
-          user: updatedUser,
-        });
+      if (currentUser) {
+        setUser(currentUser);
+      } else {
+        // Если пользователь не найден, возможно сессия истекла
+        setUser(null);
       }
     } catch (error) {
       console.error('Ошибка обновления пользователя:', error);
     }
-  }, [user]);
+  }, []);
 
   const value: AuthContextType = {
     user,
