@@ -125,6 +125,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
               const { updateSessionExpiresAt } = await import('../utils/sessionStorage');
               const newExpiresAt = new Date(session.expires_at * 1000).toISOString();
               updateSessionExpiresAt(newExpiresAt);
+              console.debug('✅ expiresAt обновлен в localStorage:', newExpiresAt);
+            } else {
+              console.warn('⚠️ TOKEN_REFRESHED: expires_at отсутствует в сессии');
             }
             
             const currentUser = await getCurrentUser();
@@ -201,13 +204,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   // Периодическая проверка таймаута
+  // ВАЖНО: checkTimeout проверяет только таймаут бездействия (8 часов),
+  // но не проверяет истечение Supabase токена - это делает сам Supabase через autoRefreshToken
   useEffect(() => {
     if (!user) {
       return;
     }
 
     const interval = setInterval(() => {
+      // Проверяем только таймаут бездействия, не истечение токена
+      // Supabase сам управляет токенами через autoRefreshToken
       if (!checkTimeout()) {
+        console.log('🔐 Таймаут бездействия истек (8 часов)');
         setUser(null);
         setError('Сессия истекла из-за бездействия. Пожалуйста, войдите снова.');
       }

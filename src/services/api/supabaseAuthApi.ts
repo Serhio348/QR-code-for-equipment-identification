@@ -142,8 +142,37 @@ async function logLogin(
  * @param data - Данные для регистрации (email, password, name)
  * @returns Promise с ответом сервера
  */
+/**
+ * Очистить старую сессию из localStorage, если она есть
+ * Используется для очистки старых сессий с коротким expiresAt
+ */
+function clearOldSessionIfNeeded(): void {
+  try {
+    const sessionData = localStorage.getItem('user_session');
+    if (sessionData) {
+      const session = JSON.parse(sessionData);
+      if (session.expiresAt) {
+        const expiresAt = new Date(session.expiresAt);
+        const now = new Date();
+        // Если expiresAt истек более чем на 1 час, очищаем сессию
+        // Это помогает избавиться от старых сессий с коротким expiresAt
+        if (now.getTime() - expiresAt.getTime() > 3600000) {
+          console.log('🧹 Очищаем старую сессию с истекшим expiresAt');
+          localStorage.removeItem('user_session');
+        }
+      }
+    }
+  } catch (error) {
+    // Игнорируем ошибки при очистке
+    console.debug('⚠️ Ошибка при очистке старой сессии (не критично):', error);
+  }
+}
+
 export async function register(data: RegisterData): Promise<AuthResponse> {
   try {
+    // Очищаем старую сессию перед регистрацией
+    clearOldSessionIfNeeded();
+    
     console.log('📤 Регистрация пользователя:', { email: data.email });
 
     // 1. Создаем пользователя в Supabase Auth (обязательная операция, должна быть первой)
@@ -230,6 +259,9 @@ export async function register(data: RegisterData): Promise<AuthResponse> {
  */
 export async function login(data: LoginData): Promise<AuthResponse> {
   try {
+    // Очищаем старую сессию перед входом
+    clearOldSessionIfNeeded();
+    
     console.log('📤 Вход пользователя:', { email: data.email });
 
     // 1. Входим через Supabase Auth
@@ -491,7 +523,7 @@ async function performSessionCheck(): Promise<SessionCheckResponse> {
 
           // Сессия успешно обновлена
           const refreshedSession = refreshData.session;
-          const newExpiresAt = refreshedSession.expires_at ? refreshedSession.expires_at * 1000 : Date.now() + 3600000;
+          const newExpiresAt = refreshedSession.expires_at ? refreshedSession.expires_at * 1000 : Date.now() + (8 * 60 * 60 * 1000); // 8 часов вместо 1 часа
           const newRemainingTime = newExpiresAt - now;
 
           console.debug('✅ Сессия успешно обновлена через refresh token');
