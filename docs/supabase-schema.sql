@@ -18,10 +18,13 @@
 -- ============================================================================
 -- Сначала удаляем существующие политики и функции, чтобы избежать конфликтов
 DROP POLICY IF EXISTS "Users can view profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Admins can view all profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Trigger can insert profiles" ON public.profiles;
 DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
 DROP POLICY IF EXISTS "Admins can update all profiles" ON public.profiles;
 
 DROP POLICY IF EXISTS "Users can view own access" ON public.user_app_access;
+DROP POLICY IF EXISTS "Trigger can insert access" ON public.user_app_access;
 DROP POLICY IF EXISTS "Admins can manage all access" ON public.user_app_access;
 
 DROP POLICY IF EXISTS "Users can view own login history" ON public.login_history;
@@ -32,6 +35,7 @@ DROP POLICY IF EXISTS "Only admins can modify overrides" ON public.beliot_device
 
 -- Удаляем существующие функции
 DROP FUNCTION IF EXISTS public.is_admin() CASCADE;
+DROP FUNCTION IF EXISTS public.get_user_role(UUID) CASCADE;
 DROP FUNCTION IF EXISTS public.handle_new_user() CASCADE;
 DROP FUNCTION IF EXISTS public.handle_updated_at() CASCADE;
 DROP FUNCTION IF EXISTS public.log_login(UUID, BOOLEAN, TEXT, TEXT) CASCADE;
@@ -94,6 +98,7 @@ CREATE TABLE IF NOT EXISTS public.login_history (
 -- Индексы
 DROP INDEX IF EXISTS idx_login_history_user_id;
 DROP INDEX IF EXISTS idx_login_history_login_at;
+DROP INDEX IF EXISTS idx_login_history_email; -- Удаляем индекс на email, так как колонка удалена
 CREATE INDEX idx_login_history_user_id ON public.login_history(user_id);
 CREATE INDEX idx_login_history_login_at ON public.login_history(login_at DESC);
 
@@ -118,9 +123,9 @@ CREATE TABLE IF NOT EXISTS public.beliot_device_overrides (
 );
 
 -- Индексы
-DROP INDEX IF EXISTS idx_beliot_overrides_device_id;
+-- ВАЖНО: Не создаем idx_beliot_overrides_device_id, так как UNIQUE индекс beliot_device_overrides_device_id_key уже создает индекс на device_id
+DROP INDEX IF EXISTS idx_beliot_overrides_device_id; -- Удаляем избыточный индекс (UNIQUE уже создает индекс)
 DROP INDEX IF EXISTS idx_beliot_overrides_group;
-CREATE INDEX idx_beliot_overrides_device_id ON public.beliot_device_overrides(device_id);
 CREATE INDEX idx_beliot_overrides_group ON public.beliot_device_overrides(device_group);
 
 -- ============================================================================
@@ -136,16 +141,38 @@ CREATE INDEX idx_beliot_overrides_group ON public.beliot_device_overrides(device
 -- Используется в RLS политиках для оптимизации запросов
 -- STABLE: результат не меняется в рамках одной транзакции
 -- SECURITY DEFINER: выполняется с правами создателя функции
+-- ВАЖНО: search_path устанавливается через ALTER FUNCTION после создания (нельзя SET в STABLE функции)
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS boolean AS $$
 BEGIN
-  -- Защита от атак через подмену схемы (schema injection)
-  SET search_path = public, pg_temp;
-  
+  -- SECURITY DEFINER автоматически обходит RLS
+  -- Явно указываем схему для безопасности
   RETURN EXISTS (
     SELECT 1 FROM public.profiles
     WHERE id = auth.uid() AND role = 'admin'
   );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
+
+-- Функция для получения роли пользователя (обходит RLS)
+-- Используется в RLS политиках для предотвращения рекурсии
+-- SECURITY DEFINER: выполняется с правами создателя функции (обходит RLS)
+-- ВАЖНО: search_path устанавливается через ALTER FUNCTION после создания (нельзя SET в STABLE функции)
+CREATE OR REPLACE FUNCTION public.get_user_role(p_user_id UUID)
+RETURNS TEXT AS $$
+DECLARE
+  user_role TEXT;
+BEGIN
+  -- SECURITY DEFINER автоматически обходит RLS
+  -- Явно указываем схему public для безопасности
+  SELECT role INTO user_role
+  FROM public.profiles
+  WHERE id = p_user_id;
+  
+  RETURN COALESCE(user_role, 'user');
+EXCEPTION
+  WHEN OTHERS THEN
+    RETURN 'user';
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
 
@@ -157,7 +184,8 @@ CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 BEGIN
   -- Защита от атак через подмену схемы (schema injection)
-  SET search_path = public, pg_temp;
+  -- ВАЖНО: Включаем auth схему для доступа к auth.users и NEW, но явно указываем public для наших таблиц
+  SET search_path = public, auth, pg_temp;
   
   -- КРИТИЧЕСКИ ВАЖНО: Игнорируем role из user_metadata для безопасности
   -- Всегда устанавливаем роль 'user' при регистрации
@@ -178,6 +206,11 @@ BEGIN
   ON CONFLICT (user_id) DO NOTHING;  -- Защита от повторных вызовов триггера
   
   RETURN NEW;
+EXCEPTION
+  WHEN OTHERS THEN
+    -- Логируем ошибку для диагностики, но не блокируем создание пользователя
+    RAISE WARNING 'Ошибка в handle_new_user() для пользователя %: %', NEW.email, SQLERRM;
+    RETURN NEW; -- Возвращаем NEW, чтобы не блокировать создание пользователя в auth.users
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -244,20 +277,39 @@ ALTER TABLE public.login_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.beliot_device_overrides ENABLE ROW LEVEL SECURITY;
 
 -- Таблица: profiles
--- Пользователи могут просматривать свой профиль, администраторы - все профили
+-- Пользователи могут просматривать свой профиль
+-- ВАЖНО: Разделяем политики для избежания рекурсии
+-- Политика для обычных пользователей (без is_admin() для предотвращения рекурсии)
 CREATE POLICY "Users can view profiles"
   ON public.profiles FOR SELECT
   USING (
-    public.is_admin() OR auth.uid() = id
+    -- Пользователи могут видеть свой профиль
+    auth.uid() = id
   );
 
+-- Администраторы могут просматривать все профили
+-- Эта политика проверяется отдельно, поэтому рекурсии не будет
+CREATE POLICY "Admins can view all profiles"
+  ON public.profiles FOR SELECT
+  USING (public.is_admin());
+
+-- ВАЖНО: Политика INSERT для функции handle_new_user (триггер регистрации)
+-- Функция имеет SECURITY DEFINER, но для надежности добавляем явную политику
+-- Это позволяет триггеру создавать профили при регистрации
+CREATE POLICY "Trigger can insert profiles"
+  ON public.profiles FOR INSERT
+  WITH CHECK (true);  -- Разрешаем INSERT для всех (функция с SECURITY DEFINER обходит это)
+
 -- Пользователи могут обновлять свой профиль, но НЕ могут изменять role
+-- ВАЖНО: Используем функцию get_user_role() для предотвращения рекурсии RLS
 CREATE POLICY "Users can update own profile"
   ON public.profiles FOR UPDATE
   USING (auth.uid() = id)
   WITH CHECK (
     auth.uid() = id AND
-    role = (SELECT p.role FROM public.profiles p WHERE p.id = auth.uid())
+    -- Используем функцию для получения текущей роли без рекурсии
+    -- Функция обходит RLS, поэтому безопасна
+    role = public.get_user_role(auth.uid())
   );
 
 -- Администраторы могут обновлять все профили (включая role)
@@ -271,6 +323,13 @@ CREATE POLICY "Admins can update all profiles"
 CREATE POLICY "Users can view own access"
   ON public.user_app_access FOR SELECT
   USING (auth.uid() = user_id);
+
+-- ВАЖНО: Политика INSERT для функции handle_new_user (триггер регистрации)
+-- Функция имеет SECURITY DEFINER, но для надежности добавляем явную политику
+-- Это позволяет триггеру создавать записи доступа при регистрации
+CREATE POLICY "Trigger can insert access"
+  ON public.user_app_access FOR INSERT
+  WITH CHECK (true);  -- Разрешаем INSERT для всех (функция с SECURITY DEFINER обходит это)
 
 -- Администраторы могут управлять всем доступом
 CREATE POLICY "Admins can manage all access"
@@ -353,7 +412,8 @@ CREATE TRIGGER update_beliot_overrides_updated_at
 -- ============================================================================
 
 ALTER FUNCTION public.is_admin() SET search_path = public, pg_temp;
-ALTER FUNCTION public.handle_new_user() SET search_path = public, pg_temp;
+ALTER FUNCTION public.get_user_role(UUID) SET search_path = public, pg_temp;
+ALTER FUNCTION public.handle_new_user() SET search_path = public, auth, pg_temp;
 ALTER FUNCTION public.log_login(UUID, BOOLEAN, TEXT, TEXT) SET search_path = public, pg_temp;
 
 -- ============================================================================
