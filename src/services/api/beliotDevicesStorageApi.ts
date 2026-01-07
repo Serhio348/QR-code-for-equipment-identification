@@ -1,8 +1,12 @@
 /**
  * API клиент для синхронизации пользовательских изменений счетчиков Beliot
  * 
+ * ⚠️ УСТАРЕЛО: Используйте supabaseBeliotOverridesApi.ts вместо этого файла
+ * 
  * Работает с Google Sheets через Google Apps Script API
  * Хранит только пользовательские изменения (overrides), не полные данные счетчиков
+ * 
+ * @deprecated Используйте src/services/api/supabaseBeliotOverridesApi.ts
  */
 
 import { apiRequest } from './apiRequest';

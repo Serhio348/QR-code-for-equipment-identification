@@ -31,15 +31,10 @@ const EquipmentPage: React.FC = () => {
   // Преобразуем данные в один объект (если это одно оборудование)
   const currentEquipment = equipmentData && !Array.isArray(equipmentData) ? equipmentData : null;
   
-  // Используем хук для управления датами
+  // Используем хук для получения дат (только для отображения в карточке)
   const {
     commissioningDate,
     lastMaintenanceDate,
-    setCommissioningDate,
-    setLastMaintenanceDate,
-    saveDates,
-    saving: datesSaving,
-    success: datesSuccess,
     error: datesError
   } = useEquipmentDates({ equipment: currentEquipment });
   
@@ -49,10 +44,8 @@ const EquipmentPage: React.FC = () => {
   const [isMaintenanceLogOpen, setMaintenanceLogOpen] = useState(false);
   const [isDocumentationOpen, setDocumentationOpen] = useState(false);
   
-  // Объединяем ошибки загрузки, сохранения дат и удаления
+  // Объединяем ошибки загрузки и удаления
   const error = loadError || datesError || deleteError;
-  const saving = datesSaving;
-  const saveSuccess = datesSuccess;
 
   useEffect(() => {
     if (!currentEquipment && isMaintenanceLogOpen) {
@@ -143,18 +136,12 @@ const EquipmentPage: React.FC = () => {
         onExportPDF={handleExportPDF}
         documentationAvailable={!!currentEquipment?.googleDriveUrl}
         deleting={deleting}
-        commissioningDate={commissioningDate}
-        lastMaintenanceDate={lastMaintenanceDate}
-        onCommissioningDateChange={setCommissioningDate}
-        onLastMaintenanceDateChange={setLastMaintenanceDate}
-        onSaveDates={saveDates}
-        savingDates={saving}
       />
 
       <div className="plate-container">
         <StatusMessages
-          saving={saving}
-          success={saveSuccess}
+          saving={false}
+          success={false}
           error={error}
           loading={loading}
         />

@@ -62,12 +62,45 @@
         };
         
         console.error = function(...args) {
+          // Игнорируем ошибки расширений браузера
+          const errorMessage = args[0]?.toString() || '';
+          if (errorMessage.includes('runtime.lastError') || 
+              errorMessage.includes('Could not establish connection') ||
+              errorMessage.includes('Receiving end does not exist')) {
+            // Игнорируем ошибки расширений браузера
+            return;
+          }
+          
           // Ошибки всегда логируем, но ограничиваем их количество
           if (logCount++ < maxLogs * 2) {
             originalConsoleError.apply(console, args);
           }
         };
       }
+      
+      // Глобальный обработчик необработанных ошибок
+      window.addEventListener('error', (event) => {
+        // Игнорируем ошибки расширений браузера
+        const errorMessage = event.message || '';
+        if (errorMessage.includes('runtime.lastError') || 
+            errorMessage.includes('Could not establish connection') ||
+            errorMessage.includes('Receiving end does not exist')) {
+          event.preventDefault();
+          return false;
+        }
+      });
+      
+      // Обработчик необработанных промисов
+      window.addEventListener('unhandledrejection', (event) => {
+        // Игнорируем ошибки расширений браузера
+        const errorMessage = event.reason?.toString() || '';
+        if (errorMessage.includes('runtime.lastError') || 
+            errorMessage.includes('Could not establish connection') ||
+            errorMessage.includes('Receiving end does not exist')) {
+          event.preventDefault();
+          return false;
+        }
+      });
     </script>
   </body>
 </html>

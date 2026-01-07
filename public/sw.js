@@ -54,16 +54,33 @@ self.addEventListener('activate', (event) => {
 
 // Перехват запросов
 self.addEventListener('fetch', (event) => {
+  const requestUrl = new URL(event.request.url);
+  
+  // Игнорируем запросы от расширений браузера (chrome-extension://, moz-extension:// и т.д.)
+  // Cache API не поддерживает кэширование таких запросов
+  if (requestUrl.protocol === 'chrome-extension:' || 
+      requestUrl.protocol === 'moz-extension:' ||
+      requestUrl.protocol === 'safari-extension:' ||
+      requestUrl.protocol === 'ms-browser-extension:') {
+    return; // Пропускаем запросы от расширений без обработки
+  }
+  
   // Пропускаем запросы к API (они должны идти на сервер)
   if (event.request.url.includes('/exec') || 
       event.request.url.includes('script.google.com') ||
-      event.request.url.includes('beliot.by')) {
+      event.request.url.includes('beliot.by') ||
+      event.request.url.includes('supabase.co')) {
     return; // Не кэшируем API запросы
   }
   
   // Не кэшируем POST, PUT, DELETE и другие не-GET запросы
   if (event.request.method !== 'GET') {
     return; // Пропускаем не-GET запросы без кэширования
+  }
+  
+  // Кэшируем только http:// и https:// запросы
+  if (requestUrl.protocol !== 'http:' && requestUrl.protocol !== 'https:') {
+    return; // Пропускаем другие протоколы
   }
   
   // Для остальных GET запросов используем стратегию "Network First, Cache Fallback"
@@ -76,7 +93,16 @@ self.addEventListener('fetch', (event) => {
         // Кэшируем только успешные GET ответы
         if (response.status === 200 && event.request.method === 'GET') {
           caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
+            // Дополнительная проверка перед кэшированием
+            try {
+              cache.put(event.request, responseToCache).catch((error) => {
+                // Игнорируем ошибки кэширования (например, для неподдерживаемых схем)
+                console.warn('[SW] Failed to cache request:', event.request.url, error);
+              });
+            } catch (error) {
+              // Игнорируем ошибки кэширования
+              console.warn('[SW] Failed to cache request:', event.request.url, error);
+            }
           });
         }
         
