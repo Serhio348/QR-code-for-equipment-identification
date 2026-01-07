@@ -1,7 +1,7 @@
 /**
  * sessionTimeout.ts
  * 
- * Управление таймаутом сессии (1 час бездействия)
+ * Управление таймаутом сессии (8 часов бездействия)
  */
 
 import { updateLastActivity, isSessionTimeout, clearSession } from './sessionStorage';

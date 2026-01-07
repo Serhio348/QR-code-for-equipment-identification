@@ -19,6 +19,7 @@ import {
   BeliotDeviceOverride,
 } from '../services/api/beliotDevicesStorageApi';
 import { useBeliotDeviceReadings } from '../hooks/useBeliotDeviceReadings';
+import { saveBeliotReading } from '../services/api/supabaseBeliotReadingsApi';
 import './BeliotDevicesTest.css';
 
 interface StateTableRow {
@@ -477,6 +478,49 @@ const BeliotDevicesTest: React.FC = () => {
       
       console.log('✅ Показания получены:', readings);
       setDeviceReadings(readings);
+
+      // Сохраняем текущие показания в Supabase для истории
+      // Это позволит видеть данные в таблице Supabase сразу, без ожидания Railway скрипта
+      try {
+        if (readings.current?.value !== undefined && readings.current?.date) {
+          const currentDateValue = readings.current.date;
+          const currentDate = (currentDateValue && typeof currentDateValue === 'object' && 'getTime' in currentDateValue)
+            ? currentDateValue as Date
+            : new Date(String(currentDateValue));
+          
+          await saveBeliotReading({
+            device_id: deviceId.toString(),
+            reading_date: currentDate,
+            reading_value: Number(readings.current.value),
+            unit: 'м³',
+            reading_type: 'hourly',
+            source: 'api',
+            period: 'current',
+          });
+          console.log('✅ Текущее показание сохранено в Supabase');
+        }
+
+        if (readings.previous?.value !== undefined && readings.previous?.date) {
+          const previousDateValue = readings.previous.date;
+          const previousDate = (previousDateValue && typeof previousDateValue === 'object' && 'getTime' in previousDateValue)
+            ? previousDateValue as Date
+            : new Date(String(previousDateValue));
+          
+          await saveBeliotReading({
+            device_id: deviceId.toString(),
+            reading_date: previousDate,
+            reading_value: Number(readings.previous.value),
+            unit: 'м³',
+            reading_type: 'hourly',
+            source: 'api',
+            period: 'previous',
+          });
+          console.log('✅ Предыдущее показание сохранено в Supabase');
+        }
+      } catch (saveError: any) {
+        // Не блокируем отображение показаний, если сохранение в Supabase не удалось
+        console.warn('⚠️ Не удалось сохранить показания в Supabase (не критично):', saveError.message);
+      }
     } catch (err: any) {
       console.error('❌ Ошибка получения показаний:', err);
       setError(err.message || 'Не удалось получить показания устройства');

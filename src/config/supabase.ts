@@ -40,6 +40,8 @@ export const supabase: SupabaseClient = createClient(
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
+      storageKey: 'sb-auth-token', // Единый ключ для хранения токенов (предотвращает множественные экземпляры)
+      storage: typeof window !== 'undefined' ? window.localStorage : undefined,
     },
   }
 );

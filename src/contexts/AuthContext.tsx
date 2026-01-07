@@ -118,8 +118,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
           stopActivityTracking();
           setError(null);
         } else if (event === 'TOKEN_REFRESHED' && session) {
-          // Токен обновлен, обновляем данные пользователя (не критично)
+          // Токен обновлен, обновляем данные пользователя и expiresAt в localStorage
           try {
+            // Обновляем expiresAt в localStorage
+            if (session.expires_at) {
+              const { updateSessionExpiresAt } = await import('../utils/sessionStorage');
+              const newExpiresAt = new Date(session.expires_at * 1000).toISOString();
+              updateSessionExpiresAt(newExpiresAt);
+            }
+            
             const currentUser = await getCurrentUser();
             if (currentUser) {
               setUser(currentUser);
