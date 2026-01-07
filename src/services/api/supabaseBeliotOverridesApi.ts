@@ -116,7 +116,7 @@ export async function saveBeliotDeviceOverride(
   try {
     // Получаем текущего пользователя для modified_by
     const { data: { user } } = await supabase.auth.getUser();
-    const modifiedBy = user?.email || null;
+    const modifiedBy = user?.email || undefined;
 
     const overrideData = {
       device_id: deviceId,
@@ -125,7 +125,7 @@ export async function saveBeliotDeviceOverride(
       serial_number: override.serial_number,
       device_group: override.device_group,
       object_name: override.object_name,
-      modified_by: modifiedBy,
+      modified_by: modifiedBy || undefined, // Преобразуем null в undefined
       last_modified: new Date().toISOString(),
     };
 
@@ -166,7 +166,7 @@ export async function saveBeliotDevicesOverrides(
     // Получаем текущего пользователя для modified_by
     if (!modifiedBy) {
       const { data: { user } } = await supabase.auth.getUser();
-      modifiedBy = user?.email || null;
+      modifiedBy = user?.email || undefined;
     }
 
     const overrideArray = Object.entries(overrides).map(([deviceId, override]) => ({
@@ -176,7 +176,7 @@ export async function saveBeliotDevicesOverrides(
       serial_number: override.serial_number,
       device_group: override.device_group,
       object_name: override.object_name,
-      modified_by: modifiedBy,
+      modified_by: modifiedBy || undefined, // Преобразуем null в undefined
       last_modified: new Date().toISOString(),
     }));
 
