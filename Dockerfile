@@ -13,7 +13,7 @@ RUN npm ci
 COPY . .
 
 # Build arguments for VITE environment variables
-# These will be available during build time
+# Railway passes environment variables as build args automatically
 ARG VITE_SUPABASE_URL
 ARG VITE_SUPABASE_ANON_KEY
 ARG VITE_SUPABASE_SERVICE_ROLE_KEY
@@ -22,14 +22,18 @@ ARG VITE_BELIOT_API_BASE_URL
 ARG VITE_BELIOT_API_KEY
 ARG VITE_BELIOT_LOGIN
 
-# Set environment variables for build
-ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
-ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
-ENV VITE_SUPABASE_SERVICE_ROLE_KEY=$VITE_SUPABASE_SERVICE_ROLE_KEY
-ENV VITE_EQUIPMENT_API_URL=$VITE_EQUIPMENT_API_URL
-ENV VITE_BELIOT_API_BASE_URL=$VITE_BELIOT_API_BASE_URL
-ENV VITE_BELIOT_API_KEY=$VITE_BELIOT_API_KEY
-ENV VITE_BELIOT_LOGIN=$VITE_BELIOT_LOGIN
+# Create .env file from build args for Vite to use during build
+# Railway automatically passes all environment variables as build args
+RUN echo "Creating .env file from build args..." && \
+    echo "VITE_SUPABASE_URL=${VITE_SUPABASE_URL}" > .env && \
+    echo "VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}" >> .env && \
+    [ -n "$VITE_SUPABASE_SERVICE_ROLE_KEY" ] && echo "VITE_SUPABASE_SERVICE_ROLE_KEY=${VITE_SUPABASE_SERVICE_ROLE_KEY}" >> .env || true && \
+    [ -n "$VITE_EQUIPMENT_API_URL" ] && echo "VITE_EQUIPMENT_API_URL=${VITE_EQUIPMENT_API_URL}" >> .env || true && \
+    [ -n "$VITE_BELIOT_API_BASE_URL" ] && echo "VITE_BELIOT_API_BASE_URL=${VITE_BELIOT_API_BASE_URL}" >> .env || true && \
+    [ -n "$VITE_BELIOT_API_KEY" ] && echo "VITE_BELIOT_API_KEY=${VITE_BELIOT_API_KEY}" >> .env || true && \
+    [ -n "$VITE_BELIOT_LOGIN" ] && echo "VITE_BELIOT_LOGIN=${VITE_BELIOT_LOGIN}" >> .env || true && \
+    echo "✅ .env file created" && \
+    echo "Checking VITE_SUPABASE_URL: $(head -1 .env | cut -d'=' -f2 | cut -c1-30)..." || echo "⚠️ VITE_SUPABASE_URL not set"
 
 # Build the application
 RUN npm run build
