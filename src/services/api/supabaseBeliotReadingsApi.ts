@@ -304,9 +304,24 @@ export async function saveBeliotReading(reading: {
 }): Promise<string> {
   try {
     // Преобразуем дату в ISO строку, если это Date объект
-    const readingDate = reading.reading_date instanceof Date 
-      ? reading.reading_date.toISOString() 
-      : reading.reading_date;
+    let readingDate: string;
+    
+    if (reading.reading_date instanceof Date) {
+      // Проверяем валидность даты
+      if (isNaN(reading.reading_date.getTime())) {
+        throw new Error('Invalid date: Date object is invalid');
+      }
+      readingDate = reading.reading_date.toISOString();
+    } else if (typeof reading.reading_date === 'string') {
+      // Проверяем, что строка может быть преобразована в валидную дату
+      const dateObj = new Date(reading.reading_date);
+      if (isNaN(dateObj.getTime())) {
+        throw new Error(`Invalid date string: ${reading.reading_date}`);
+      }
+      readingDate = dateObj.toISOString();
+    } else {
+      throw new Error(`Invalid date type: ${typeof reading.reading_date}`);
+    }
 
     const { data, error } = await supabase.rpc('insert_beliot_reading', {
       p_device_id: reading.device_id,

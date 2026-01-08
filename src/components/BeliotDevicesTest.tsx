@@ -686,38 +686,88 @@ const BeliotDevicesTest: React.FC = () => {
       try {
         if (readings.current?.value !== undefined && readings.current?.date) {
           const currentDateValue = readings.current.date;
-          const currentDate = (currentDateValue && typeof currentDateValue === 'object' && 'getTime' in currentDateValue)
-            ? currentDateValue as Date
-            : new Date(String(currentDateValue));
+          let currentDate: Date;
           
-          await saveBeliotReading({
-            device_id: deviceId.toString(),
-            reading_date: currentDate,
-            reading_value: Number(readings.current.value),
-            unit: 'м³',
-            reading_type: 'hourly',
-            source: 'api',
-            period: 'current',
-          });
-          console.log('✅ Текущее показание сохранено в Supabase');
+          if (currentDateValue && typeof currentDateValue === 'object' && 'getTime' in currentDateValue) {
+            // Проверяем, что это Date объект
+            const dateObj = currentDateValue as any;
+            if (dateObj instanceof Date) {
+              currentDate = dateObj;
+            } else {
+              currentDate = new Date(String(currentDateValue));
+            }
+          } else if (typeof currentDateValue === 'number') {
+            // Если это timestamp в секундах, конвертируем в миллисекунды
+            const timestamp = currentDateValue < 10000000000 ? currentDateValue * 1000 : currentDateValue;
+            currentDate = new Date(timestamp);
+          } else {
+            currentDate = new Date(String(currentDateValue));
+          }
+          
+          // Проверяем валидность даты перед сохранением
+          if (!isNaN(currentDate.getTime()) && currentDate.getFullYear() > 2000) {
+            // Округляем до начала часа
+            const hourStart = new Date(currentDate);
+            hourStart.setMinutes(0, 0, 0);
+            hourStart.setSeconds(0, 0);
+            hourStart.setMilliseconds(0);
+            
+            await saveBeliotReading({
+              device_id: deviceId.toString(),
+              reading_date: hourStart,
+              reading_value: Number(readings.current.value),
+              unit: 'м³',
+              reading_type: 'hourly',
+              source: 'api',
+              period: 'current',
+            });
+            console.log('✅ Текущее показание сохранено в Supabase');
+          } else {
+            console.warn('⚠️ Некорректная дата текущего показания, пропускаем сохранение');
+          }
         }
 
         if (readings.previous?.value !== undefined && readings.previous?.date) {
           const previousDateValue = readings.previous.date;
-          const previousDate = (previousDateValue && typeof previousDateValue === 'object' && 'getTime' in previousDateValue)
-            ? previousDateValue as Date
-            : new Date(String(previousDateValue));
+          let previousDate: Date;
           
-          await saveBeliotReading({
-            device_id: deviceId.toString(),
-            reading_date: previousDate,
-            reading_value: Number(readings.previous.value),
-            unit: 'м³',
-            reading_type: 'hourly',
-            source: 'api',
-            period: 'previous',
-          });
-          console.log('✅ Предыдущее показание сохранено в Supabase');
+          if (previousDateValue && typeof previousDateValue === 'object' && 'getTime' in previousDateValue) {
+            // Проверяем, что это Date объект
+            const dateObj = previousDateValue as any;
+            if (dateObj instanceof Date) {
+              previousDate = dateObj;
+            } else {
+              previousDate = new Date(String(previousDateValue));
+            }
+          } else if (typeof previousDateValue === 'number') {
+            // Если это timestamp в секундах, конвертируем в миллисекунды
+            const timestamp = previousDateValue < 10000000000 ? previousDateValue * 1000 : previousDateValue;
+            previousDate = new Date(timestamp);
+          } else {
+            previousDate = new Date(String(previousDateValue));
+          }
+          
+          // Проверяем валидность даты перед сохранением
+          if (!isNaN(previousDate.getTime()) && previousDate.getFullYear() > 2000) {
+            // Округляем до начала часа
+            const hourStart = new Date(previousDate);
+            hourStart.setMinutes(0, 0, 0);
+            hourStart.setSeconds(0, 0);
+            hourStart.setMilliseconds(0);
+            
+            await saveBeliotReading({
+              device_id: deviceId.toString(),
+              reading_date: hourStart,
+              reading_value: Number(readings.previous.value),
+              unit: 'м³',
+              reading_type: 'hourly',
+              source: 'api',
+              period: 'previous',
+            });
+            console.log('✅ Предыдущее показание сохранено в Supabase');
+          } else {
+            console.warn('⚠️ Некорректная дата предыдущего показания, пропускаем сохранение');
+          }
         }
       } catch (saveError: any) {
         // Не блокируем отображение показаний, если сохранение в Supabase не удалось
@@ -1131,7 +1181,7 @@ const BeliotDevicesTest: React.FC = () => {
                                 </td>
                                 <td className="reading-value">{deviceReadings.previous.value !== undefined ? deviceReadings.previous.value : '-'}</td>
                                 <td>{deviceReadings.previous.unit || 'м³'}</td>
-                                <td rowSpan={deviceReadings.current ? 2 : 1}>
+                                <td rowSpan={(deviceReadings.current ? 1 : 0) + (volume !== null ? 1 : 0) + 1}>
                                   <button
                                     className={`archive-btn ${isArchiveOpen ? 'active' : ''}`}
                                     onClick={() => setIsArchiveOpen(!isArchiveOpen)}
@@ -1160,6 +1210,18 @@ const BeliotDevicesTest: React.FC = () => {
                                 </td>
                                 <td className="reading-value">{deviceReadings.current.value !== undefined ? deviceReadings.current.value : '-'}</td>
                                 <td>{deviceReadings.current.unit || 'м³'}</td>
+                                {!deviceReadings.previous && (
+                                  <td rowSpan={(volume !== null ? 1 : 0) + 1}>
+                                    <button
+                                      className={`archive-btn ${isArchiveOpen ? 'active' : ''}`}
+                                      onClick={() => setIsArchiveOpen(!isArchiveOpen)}
+                                      title="Показать архив"
+                                    >
+                                      <span className="archive-icon">☰</span>
+                                      <span className="archive-text">Архив</span>
+                                    </button>
+                                  </td>
+                                )}
                               </tr>
                             )}
                             {volume !== null && (
@@ -1168,13 +1230,34 @@ const BeliotDevicesTest: React.FC = () => {
                                 <td>-</td>
                                 <td className="reading-value difference-value">{volume.toFixed(2)}</td>
                                 <td>м³</td>
-                                <td></td>
+                                {!deviceReadings.previous && !deviceReadings.current && (
+                                  <td>
+                                    <button
+                                      className={`archive-btn ${isArchiveOpen ? 'active' : ''}`}
+                                      onClick={() => setIsArchiveOpen(!isArchiveOpen)}
+                                      title="Показать архив"
+                                    >
+                                      <span className="archive-icon">☰</span>
+                                      <span className="archive-text">Архив</span>
+                                    </button>
+                                  </td>
+                                )}
                               </tr>
                             )}
                             {!deviceReadings.current && !deviceReadings.previous && (
                               <tr>
-                                <td colSpan={5} className="no-readings">
+                                <td colSpan={4} className="no-readings">
                                   Показания не найдены
+                                </td>
+                                <td>
+                                  <button
+                                    className={`archive-btn ${isArchiveOpen ? 'active' : ''}`}
+                                    onClick={() => setIsArchiveOpen(!isArchiveOpen)}
+                                    title="Показать архив"
+                                  >
+                                    <span className="archive-icon">☰</span>
+                                    <span className="archive-text">Архив</span>
+                                  </button>
                                 </td>
                               </tr>
                             )}
