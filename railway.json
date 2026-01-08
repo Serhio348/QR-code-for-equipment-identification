@@ -4,7 +4,7 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "echo 'This is a cron-only service'",
+    "startCommand": "npx serve -s dist -l ${PORT:-3000}",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
   },
