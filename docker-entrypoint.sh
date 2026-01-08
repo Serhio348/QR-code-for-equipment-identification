@@ -1,17 +1,19 @@
 #!/bin/sh
 set -e
 
-# Get PORT from environment variable, default to 80
-PORT=${PORT:-80}
+# Railway proxies to port 80 inside the container
+# So we always listen on port 80, regardless of PORT env var
+NGINX_PORT=80
 
-echo "PORT environment variable: $PORT"
+echo "PORT environment variable: ${PORT:-not set}"
+echo "Railway proxies to port 80, nginx will listen on port $NGINX_PORT"
 echo "Contents of /usr/share/nginx/html:"
 ls -la /usr/share/nginx/html/ | head -10
-echo "Starting nginx on port $PORT"
+echo "Starting nginx on port $NGINX_PORT"
 
-# Create nginx config with PORT substitution
-# Use sed to replace PORT placeholder
-sed "s/\${PORT}/$PORT/g" /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf
+# Create nginx config with fixed port 80
+# Use sed to replace PORT placeholder with 80
+sed "s/\${PORT}/$NGINX_PORT/g" /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf
 
 # Verify config file was created
 if [ ! -f /etc/nginx/conf.d/default.conf ]; then
