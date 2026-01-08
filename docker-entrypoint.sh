@@ -23,6 +23,10 @@ fi
 echo "Generated nginx config (first 5 lines):"
 head -5 /etc/nginx/conf.d/default.conf
 
+# Verify nginx is listening on the correct port
+echo "Checking if nginx will listen on port $PORT..."
+netstat -tlnp 2>/dev/null || echo "netstat not available, skipping port check"
+
 # Test nginx configuration
 echo "Testing nginx configuration..."
 nginx -t
