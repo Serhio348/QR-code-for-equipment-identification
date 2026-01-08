@@ -600,7 +600,6 @@ async function collectReadings(): Promise<void> {
         }
 
         const currentReading = readings.current;
-        let readingDate = new Date(currentReading.date);
         const readingValue = Number(currentReading.value);
         const unit = currentReading.unit || 'м³';
 
@@ -611,19 +610,29 @@ async function collectReadings(): Promise<void> {
           continue;
         }
 
-        // Проверяем, что дата валидна (не 1970 год)
-        if (isNaN(readingDate.getTime()) || readingDate.getFullYear() < 2000) {
-          console.warn(`   ⚠️ Некорректная дата показания (${readingDate.toISOString()}), используем текущую дату`);
-          readingDate = new Date(); // Используем текущую дату как fallback
-        }
-
-        // Для почасовых показаний округляем до начала часа
-        const hourStart = new Date(readingDate);
+        // ВАЖНО: Всегда используем текущее время для показаний
+        // Так как скрипт запускается каждый час и собирает актуальные данные в момент запуска
+        // Дата из API может быть устаревшей (например, последнее обновление было вчера)
+        // Но мы собираем показания сейчас, поэтому используем текущее время
+        const now = new Date();
+        
+        // Для почасовых показаний округляем текущее время до начала часа
+        // Например: 08.01.2025 14:30 → 08.01.2025 14:00
+        const hourStart = new Date(now);
         hourStart.setMinutes(0, 0, 0);
         hourStart.setSeconds(0, 0);
         hourStart.setMilliseconds(0);
 
-        console.log(`   📅 Дата показания: ${readingDate.toISOString()} → округлено до: ${hourStart.toISOString()}`);
+        // Логируем дату из API для информации, но используем текущее время
+        const apiDate = currentReading.date instanceof Date 
+          ? currentReading.date 
+          : new Date(currentReading.date);
+        const apiDateStr = !isNaN(apiDate.getTime()) && apiDate.getFullYear() > 2000
+          ? apiDate.toISOString()
+          : 'неизвестна';
+
+        console.log(`   📅 Дата показания из API: ${apiDateStr}`);
+        console.log(`   📅 Используемая дата (текущее время): ${now.toISOString()} → округлено до: ${hourStart.toISOString()}`);
         console.log(`   📊 Значение: ${readingValue} ${unit}`);
 
         // Вставляем показание через RPC функцию (предотвращает дубликаты через ON CONFLICT DO UPDATE)

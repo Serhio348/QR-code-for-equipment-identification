@@ -2241,6 +2241,228 @@
   cursor: not-allowed;
 }
 
+/* ============================================================================
+   АРХИВ ТЕКУЩИХ ПОКАЗАНИЙ
+   ============================================================================ */
+
+.archive-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #f5f5f5;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #666;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.archive-btn:hover {
+  background: #e8e8e8;
+  border-color: #667eea;
+  color: #667eea;
+}
+
+.archive-btn.active {
+  background: #667eea;
+  border-color: #667eea;
+  color: white;
+}
+
+.archive-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.archive-text {
+  font-weight: 500;
+}
+
+.archive-section {
+  margin-top: 24px;
+  padding: 16px;
+  background: #fafafa;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+}
+
+.archive-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.archive-header h5 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+.archive-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.archive-date-range {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.archive-date-range label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #666;
+  white-space: nowrap;
+}
+
+.archive-group-select {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.archive-group-select label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #666;
+  white-space: nowrap;
+}
+
+.group-by-select {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+  cursor: pointer;
+  min-width: 150px;
+}
+
+.group-by-select:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.archive-view-toggle {
+  display: flex;
+  gap: 4px;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 2px;
+}
+
+.toggle-btn-small {
+  padding: 6px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: #666;
+  transition: all 0.2s;
+}
+
+.toggle-btn-small:hover:not(.active) {
+  background: #f5f5f5;
+}
+
+.toggle-btn-small.active {
+  background: #667eea;
+  color: white;
+}
+
+.page-size-select {
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 12px;
+  background: white;
+  cursor: pointer;
+  color: #333;
+}
+
+.page-size-select:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.archive-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.archive-table thead {
+  background: #f8f9fa;
+}
+
+.archive-table th {
+  padding: 12px;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.archive-table td {
+  padding: 10px 12px;
+  font-size: 13px;
+  color: #333;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.archive-row {
+  transition: background 0.2s;
+}
+
+.archive-row:hover {
+  background: #f8f9fa;
+}
+
+.archive-row:last-child td {
+  border-bottom: none;
+}
+
+.archive-row.no-data {
+  opacity: 0.6;
+  color: #999;
+}
+
+.archive-row.no-data:hover {
+  background: #f5f5f5;
+}
+
+.archive-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: white;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #666;
+}
+
 .empty-state {
   text-align: center;
   padding: 40px 20px;

@@ -11,7 +11,7 @@
     {
       "name": "collect-beliot-readings",
       "schedule": "0 * * * *",
-      "command": "npm run collect-readings"
+      "command": "cd /app && npm run collect-readings"
     }
   ]
 }
