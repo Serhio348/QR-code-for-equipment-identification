@@ -55,10 +55,11 @@ const BeliotDevicesTest: React.FC = () => {
   const [archiveDataLoaded, setArchiveDataLoaded] = useState<boolean>(false);
   const [archiveCurrentPage, setArchiveCurrentPage] = useState<number>(1);
   const [archiveStartDate, setArchiveStartDate] = useState<string>(() => {
-    // По умолчанию: начало текущих суток
+    // По умолчанию: первое число текущего месяца
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return today.toISOString().split('T')[0];
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    // Используем локальное форматирование, чтобы избежать проблем с часовыми поясами
+    return `${monthStart.getFullYear()}-${String(monthStart.getMonth() + 1).padStart(2, '0')}-${String(monthStart.getDate()).padStart(2, '0')}`;
   });
   const [archiveEndDate, setArchiveEndDate] = useState<string>(() => {
     // По умолчанию: конец текущих суток
@@ -71,45 +72,20 @@ const BeliotDevicesTest: React.FC = () => {
   const [isGroupsPanelOpen, setIsGroupsPanelOpen] = useState<boolean>(false);
   const [isDetailsPanelOpen, setIsDetailsPanelOpen] = useState<boolean>(false);
   
-  // Функция для установки дат по умолчанию в зависимости от группировки
-  const updateDefaultDates = useCallback((groupBy: 'hour' | 'day' | 'week' | 'month' | 'year') => {
+  // Функция для установки дат по умолчанию
+  // Начальная дата всегда: первое число текущего месяца (независимо от группировки)
+  const updateDefaultDates = useCallback((_groupBy: 'hour' | 'day' | 'week' | 'month' | 'year') => {
     const today = new Date();
+    // Начальная дата всегда: первое число текущего месяца
+    // Используем локальное время, чтобы избежать проблем с часовыми поясами
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const monthStartStr = `${monthStart.getFullYear()}-${String(monthStart.getMonth() + 1).padStart(2, '0')}-${String(monthStart.getDate()).padStart(2, '0')}`;
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     
-    switch (groupBy) {
-      case 'hour':
-        // Для часов: последние сутки
-        const yesterday = new Date(today);
-        yesterday.setDate(yesterday.getDate() - 1);
-        yesterday.setHours(0, 0, 0, 0);
-        today.setHours(23, 59, 59, 999);
-        setArchiveStartDate(yesterday.toISOString().split('T')[0]);
-        setArchiveEndDate(today.toISOString().split('T')[0]);
-        break;
-      case 'day':
-        // Для дней: текущий месяц
-        const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-        setArchiveStartDate(monthStart.toISOString().split('T')[0]);
-        setArchiveEndDate(today.toISOString().split('T')[0]);
-        break;
-      case 'week':
-        // Для недель: текущий месяц
-        const weekMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-        setArchiveStartDate(weekMonthStart.toISOString().split('T')[0]);
-        setArchiveEndDate(today.toISOString().split('T')[0]);
-        break;
-      case 'month':
-        // Для месяцев: текущий год
-        const yearStart = new Date(today.getFullYear(), 0, 1);
-        setArchiveStartDate(yearStart.toISOString().split('T')[0]);
-        setArchiveEndDate(today.toISOString().split('T')[0]);
-        break;
-      case 'year':
-        // Для лет: последние 5 лет
-        const fiveYearsAgo = new Date(today.getFullYear() - 5, 0, 1);
-        setArchiveStartDate(fiveYearsAgo.toISOString().split('T')[0]);
-        setArchiveEndDate(today.toISOString().split('T')[0]);
-        break;
-    }
+    // Для всех группировок: с первого числа текущего месяца до сегодня
+    setArchiveStartDate(monthStartStr);
+    setArchiveEndDate(todayStr);
+    
     // Сбрасываем флаг загрузки при изменении группировки
     setArchiveDataLoaded(false);
   }, []);
@@ -274,6 +250,8 @@ const BeliotDevicesTest: React.FC = () => {
       // Проверяем, есть ли данные для этого периода
       const groupReadings = grouped.get(key);
       let reading: typeof archiveReadingsRaw[0] | undefined;
+      // consumption не рассчитываем здесь - он будет рассчитан при отображении
+      // по принципу "текущее показание - предыдущее показание с данными"
       let consumption = 0;
       
       if (groupReadings && groupReadings.length > 0) {
@@ -282,21 +260,16 @@ const BeliotDevicesTest: React.FC = () => {
           new Date(a.reading_date).getTime() - new Date(b.reading_date).getTime()
         );
         
-        // Берем последнее показание в группе как основное
+        // Берем последнее показание в группе как основное (показание на конец периода)
+        // Это показание будет использоваться для расчета объема относительно предыдущего периода
         reading = sorted[sorted.length - 1];
-        const firstReading = sorted[0];
-        
-        // Вычисляем потребление (разница между первым и последним показанием в группе)
-        if (sorted.length > 1) {
-          consumption = Number(reading.reading_value) - Number(firstReading.reading_value);
-        }
       }
       
       allPeriods.push({
         groupKey: key,
         groupDate: periodDate,
         reading,
-        consumption,
+        consumption, // Всегда 0 здесь, будет рассчитан при отображении
       });
     }
 
@@ -1374,256 +1347,6 @@ const BeliotDevicesTest: React.FC = () => {
                           </tbody>
                         </table>
                         
-                        {/* Архивная таблица */}
-                        {isArchiveOpen && (
-                          <div className="archive-section">
-                            <div className="archive-header">
-                              <h5>Архивные данные</h5>
-                              <div className="archive-controls">
-                                {/* Выбор диапазона дат */}
-                                <div className="archive-date-range">
-                                  <label>С:</label>
-                                  <input
-                                    type="date"
-                                    className="archive-date-input"
-                                    value={archiveStartDate}
-                                    onChange={(e) => {
-                                      setArchiveStartDate(e.target.value);
-                                      setArchiveDataLoaded(false); // Сбрасываем флаг загрузки при изменении даты
-                                    }}
-                                  />
-                                  <label>По:</label>
-                                  <input
-                                    type="date"
-                                    className="archive-date-input"
-                                    value={archiveEndDate}
-                                    onChange={(e) => {
-                                      setArchiveEndDate(e.target.value);
-                                      setArchiveDataLoaded(false); // Сбрасываем флаг загрузки при изменении даты
-                                    }}
-                                  />
-                                </div>
-                                
-                                {/* Выбор группировки */}
-                                <div className="archive-group-select">
-                                  <label>Группировка:</label>
-                                  <select
-                                    className="group-by-select"
-                                    value={archiveGroupBy}
-                                    onChange={(e) => handleGroupByChange(e.target.value as 'hour' | 'day' | 'week' | 'month' | 'year')}
-                                  >
-                                    <option value="hour">По часам</option>
-                                    <option value="day">По дням</option>
-                                    <option value="week">По неделям</option>
-                                    <option value="month">По месяцам</option>
-                                    <option value="year">По годам</option>
-                                  </select>
-                                </div>
-                                
-                                {/* Переключатель показания/объем */}
-                                <div className="archive-view-toggle">
-                                  <button
-                                    className={`toggle-btn-small ${archiveViewType === 'readings' ? 'active' : ''}`}
-                                    onClick={() => setArchiveViewType('readings')}
-                                  >
-                                    Показания
-                                  </button>
-                                  <button
-                                    className={`toggle-btn-small ${archiveViewType === 'volume' ? 'active' : ''}`}
-                                    onClick={() => setArchiveViewType('volume')}
-                                  >
-                                    Объем (м³)
-                                  </button>
-                                </div>
-                                
-                                {/* Размер пагинации */}
-                                <select
-                                  className="page-size-select"
-                                  value={archivePageSize}
-                                  onChange={(e) => {
-                                    const newSize = Number(e.target.value);
-                                    setArchivePageSize(newSize);
-                                  }}
-                                >
-                                  <option value={10}>10</option>
-                                  <option value={25}>25</option>
-                                  <option value={50}>50</option>
-                                  <option value={100}>100</option>
-                                </select>
-                                
-                                {/* Кнопка загрузки данных */}
-                                {!archiveDataLoaded && (
-                                  <button
-                                    className="archive-load-button"
-                                    onClick={handleLoadArchiveData}
-                                    disabled={!currentDeviceId || archiveLoading}
-                                    title="Загрузить данные за выбранный период"
-                                  >
-                                    {archiveLoading ? 'Загрузка...' : '📥 Загрузить данные'}
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                            
-                            {!archiveDataLoaded ? (
-                              <div className="empty-state">
-                                <p>Нажмите кнопку "Загрузить данные" для просмотра архива</p>
-                                <p style={{ fontSize: '12px', color: '#999', marginTop: '8px' }}>
-                                  Период: {archiveStartDate} - {archiveEndDate} ({archiveGroupBy === 'hour' ? 'последние сутки' : archiveGroupBy === 'day' ? 'текущий месяц' : archiveGroupBy === 'week' ? 'текущий месяц' : archiveGroupBy === 'month' ? 'текущий год' : 'последние 5 лет'})
-                                </p>
-                              </div>
-                            ) : archiveLoading ? (
-                              <div className="loading-state">
-                                <div className="spinner"></div>
-                                <p>Загрузка архива...</p>
-                              </div>
-                            ) : archiveError ? (
-                              <div className="error-state">
-                                <strong>❌ Ошибка:</strong> {archiveError.message || 'Не удалось загрузить архив'}
-                              </div>
-                            ) : archiveReadings.length === 0 ? (
-                              <div className="empty-state">
-                                <p>Архивные данные не найдены</p>
-                              </div>
-                            ) : (
-                              <>
-                                <table className="archive-table">
-                                  <thead>
-                                    <tr>
-                                      <th>Период</th>
-                                      {archiveViewType === 'readings' ? (
-                                        <th>Показание</th>
-                                      ) : (
-                                        <th>Объем (м³)</th>
-                                      )}
-                                      <th>Единица</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {archiveDisplayedReadings.map((groupedReading: any, displayIndex) => {
-                                      // Вычисляем реальный индекс в полном массиве для получения предыдущего показания
-                                      const realIndex = archiveStartIndex + displayIndex;
-                                      const readingDate = groupedReading.groupDate;
-                                      const hasReading = !!groupedReading.reading;
-                                      
-                                      // Форматируем дату в зависимости от группировки (всегда отображаем дату, даже если нет данных)
-                                      let dateLabel = '';
-                                      switch (archiveGroupBy) {
-                                        case 'hour':
-                                          dateLabel = readingDate.toLocaleString('ru-RU', {
-                                            year: 'numeric',
-                                            month: '2-digit',
-                                            day: '2-digit',
-                                            hour: '2-digit',
-                                            minute: '2-digit',
-                                          });
-                                          break;
-                                        case 'day':
-                                          dateLabel = readingDate.toLocaleDateString('ru-RU', {
-                                            year: 'numeric',
-                                            month: '2-digit',
-                                            day: '2-digit',
-                                          });
-                                          break;
-                                        case 'week':
-                                          const weekNum = Math.ceil(readingDate.getDate() / 7);
-                                          dateLabel = `Неделя ${weekNum}, ${readingDate.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })}`;
-                                          break;
-                                        case 'month':
-                                          dateLabel = readingDate.toLocaleDateString('ru-RU', {
-                                            year: 'numeric',
-                                            month: 'long',
-                                          });
-                                          break;
-                                        case 'year':
-                                          dateLabel = readingDate.getFullYear().toString();
-                                          break;
-                                      }
-                                      
-                                      // Потребление: разница между текущим и предыдущим показанием
-                                      // Для всех группировок (hour, day, week, month, year) используем фактический подсчет
-                                      let consumption = 0;
-                                      if (hasReading) {
-                                        // Ищем предыдущее показание с данными
-                                        // Так как сортировка от новых к старым, предыдущее по времени = следующее по индексу
-                                        let foundPreviousReading = null;
-                                        for (let i = realIndex + 1; i < archiveReadings.length; i++) {
-                                          if (archiveReadings[i]?.reading) {
-                                            foundPreviousReading = archiveReadings[i];
-                                            break;
-                                          }
-                                        }
-                                        
-                                        if (foundPreviousReading?.reading) {
-                                          // Есть предыдущее показание - вычисляем разницу (текущее - предыдущее)
-                                          // Так как сортировка от новых к старым, текущее больше предыдущего
-                                          consumption = Number(groupedReading.reading.reading_value) - Number(foundPreviousReading.reading.reading_value);
-                                        } else {
-                                          // Это последнее (самое старое) показание - потребление равно 0
-                                          consumption = 0;
-                                        }
-                                      }
-                                      
-                                      return (
-                                        <tr key={groupedReading.groupKey} className={`archive-row ${!hasReading ? 'no-data' : ''}`}>
-                                          <td style={{ minWidth: '180px', textAlign: 'left' }}>{dateLabel}</td>
-                                          {archiveViewType === 'readings' ? (
-                                            <td className="reading-value">
-                                              {hasReading ? Number(groupedReading.reading.reading_value).toFixed(2) : '-'}
-                                            </td>
-                                          ) : (
-                                            <td className={`volume-value ${consumption > 0 ? 'positive' : ''}`}>
-                                              {hasReading && consumption !== 0 ? (consumption > 0 ? `+${consumption.toFixed(2)}` : consumption.toFixed(2)) : '-'}
-                                            </td>
-                                          )}
-                                          <td>{hasReading ? groupedReading.reading.unit : '-'}</td>
-                                        </tr>
-                                      );
-                                    })}
-                                  </tbody>
-                                </table>
-                                
-                                {/* Навигация по страницам */}
-                                {archiveTotalPages > 1 && (
-                                  <div className="archive-pagination">
-                                    <button
-                                      className="pagination-btn"
-                                      onClick={handlePreviousPage}
-                                      disabled={archiveCurrentPage === 1}
-                                      title="Предыдущая страница"
-                                    >
-                                      ←
-                                    </button>
-                                    <span className="pagination-info">
-                                      Страница {archiveCurrentPage} из {archiveTotalPages}
-                                      <span style={{ marginLeft: '8px', fontSize: '12px', color: '#666' }}>
-                                        (Показано {archiveStartIndex + 1}-{Math.min(archiveEndIndex, archiveReadings.length)} из {archiveReadings.length})
-                                      </span>
-                                    </span>
-                                    <button
-                                      className="pagination-btn"
-                                      onClick={handleNextPage}
-                                      disabled={archiveCurrentPage >= archiveTotalPages}
-                                      title="Следующая страница"
-                                    >
-                                      →
-                                    </button>
-                                  </div>
-                                )}
-                                
-                                <div className="archive-info">
-                                  <button
-                                    className="refresh-btn"
-                                    onClick={refreshArchive}
-                                    disabled={archiveLoading}
-                                  >
-                                    Обновить
-                                  </button>
-                                </div>
-                              </>
-                            )}
-                          </div>
-                        )}
                       </div>
                     );
                   })() : (
@@ -1967,6 +1690,469 @@ const BeliotDevicesTest: React.FC = () => {
             setIsDetailsPanelOpen(false);
           }}
         />
+      )}
+
+      {/* Модальное окно архива */}
+      {isArchiveOpen && (
+        <>
+          {/* Затемненный фон */}
+          <div 
+            className="archive-modal-overlay"
+            onClick={() => setIsArchiveOpen(false)}
+          />
+          
+          {/* Модальное окно */}
+          <div className="archive-modal">
+            <div className="archive-modal-header">
+              <h3>Архивные данные</h3>
+              <button
+                className="archive-modal-close"
+                onClick={() => setIsArchiveOpen(false)}
+                title="Закрыть"
+              >
+                ×
+              </button>
+            </div>
+            
+            <div className="archive-modal-content">
+              <div className="archive-controls">
+                {/* Выбор диапазона дат */}
+                <div className="archive-date-range">
+                  <label>С:</label>
+                  <input
+                    type="date"
+                    className="archive-date-input"
+                    value={archiveStartDate}
+                    onChange={(e) => {
+                      setArchiveStartDate(e.target.value);
+                      setArchiveDataLoaded(false);
+                    }}
+                  />
+                  <label>По:</label>
+                  <input
+                    type="date"
+                    className="archive-date-input"
+                    value={archiveEndDate}
+                    onChange={(e) => {
+                      setArchiveEndDate(e.target.value);
+                      setArchiveDataLoaded(false);
+                    }}
+                  />
+                </div>
+                
+                {/* Выбор группировки */}
+                <div className="archive-group-select">
+                  <label>Группировка:</label>
+                  <select
+                    className="group-by-select"
+                    value={archiveGroupBy}
+                    onChange={(e) => handleGroupByChange(e.target.value as 'hour' | 'day' | 'week' | 'month' | 'year')}
+                  >
+                    <option value="hour">По часам</option>
+                    <option value="day">По дням</option>
+                    <option value="week">По неделям</option>
+                    <option value="month">По месяцам</option>
+                    <option value="year">По годам</option>
+                  </select>
+                </div>
+                
+                {/* Переключатель показания/объем */}
+                <div className="archive-view-toggle">
+                  <button
+                    className={`toggle-btn-small ${archiveViewType === 'readings' ? 'active' : ''}`}
+                    onClick={() => setArchiveViewType('readings')}
+                  >
+                    Показания
+                  </button>
+                  <button
+                    className={`toggle-btn-small ${archiveViewType === 'volume' ? 'active' : ''}`}
+                    onClick={() => setArchiveViewType('volume')}
+                  >
+                    Объем (м³)
+                  </button>
+                </div>
+                
+                {/* Размер пагинации */}
+                <select
+                  className="page-size-select"
+                  value={archivePageSize}
+                  onChange={(e) => {
+                    const newSize = Number(e.target.value);
+                    setArchivePageSize(newSize);
+                  }}
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+                
+                {/* Кнопка загрузки данных */}
+                {!archiveDataLoaded && (
+                  <button
+                    className="archive-load-button"
+                    onClick={handleLoadArchiveData}
+                    disabled={!currentDeviceId || archiveLoading}
+                    title="Загрузить данные за выбранный период"
+                  >
+                    {archiveLoading ? 'Загрузка...' : '📥 Загрузить данные'}
+                  </button>
+                )}
+              </div>
+              
+              {!archiveDataLoaded ? (
+                <div className="empty-state">
+                  <p>Нажмите кнопку "Загрузить данные" для просмотра архива</p>
+                  <p style={{ fontSize: '12px', color: '#999', marginTop: '8px' }}>
+                    Период: {archiveStartDate} - {archiveEndDate} ({archiveGroupBy === 'hour' ? 'последние сутки' : archiveGroupBy === 'day' ? 'текущий месяц' : archiveGroupBy === 'week' ? 'текущий месяц' : archiveGroupBy === 'month' ? 'текущий год' : 'последние 5 лет'})
+                  </p>
+                </div>
+              ) : archiveLoading ? (
+                <div className="loading-state">
+                  <div className="spinner"></div>
+                  <p>Загрузка архива...</p>
+                </div>
+              ) : archiveError ? (
+                <div className="error-state">
+                  <strong>❌ Ошибка:</strong> {archiveError.message || 'Не удалось загрузить архив'}
+                </div>
+              ) : archiveReadings.length === 0 ? (
+                <div className="empty-state">
+                  <p>Архивные данные не найдены</p>
+                </div>
+              ) : (
+                <>
+                  <div className="archive-table-container">
+                    <table className="archive-table">
+                      <thead>
+                        <tr>
+                          <th>Период</th>
+                          {archiveViewType === 'readings' ? (
+                            <th>Показание</th>
+                          ) : (
+                            <th>Объем (м³)</th>
+                          )}
+                          <th>Единица</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {archiveDisplayedReadings.map((groupedReading: any, displayIndex) => {
+                          const realIndex = archiveStartIndex + displayIndex;
+                          const readingDate = groupedReading.groupDate;
+                          const hasReading = !!groupedReading.reading;
+                          
+                          let dateLabel = '';
+                          switch (archiveGroupBy) {
+                            case 'hour':
+                              dateLabel = readingDate.toLocaleString('ru-RU', {
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              });
+                              break;
+                            case 'day':
+                              dateLabel = readingDate.toLocaleDateString('ru-RU', {
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit',
+                              });
+                              break;
+                            case 'week':
+                              const weekNum = Math.ceil(readingDate.getDate() / 7);
+                              dateLabel = `Неделя ${weekNum}, ${readingDate.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })}`;
+                              break;
+                            case 'month':
+                              dateLabel = readingDate.toLocaleDateString('ru-RU', {
+                                year: 'numeric',
+                                month: 'long',
+                              });
+                              break;
+                            case 'year':
+                              dateLabel = readingDate.getFullYear().toString();
+                              break;
+                          }
+                          
+                          let consumption: number = 0;
+                          if (hasReading && groupedReading.reading) {
+                            if (archiveGroupBy === 'hour') {
+                              let foundPreviousReading = null;
+                              for (let i = realIndex + 1; i < archiveReadings.length; i++) {
+                                const candidate = archiveReadings[i];
+                                if (candidate?.reading) {
+                                  foundPreviousReading = candidate;
+                                  break;
+                                }
+                              }
+                              
+                              if (foundPreviousReading?.reading) {
+                                const currentValue = Number(groupedReading.reading.reading_value);
+                                const previousValue = Number(foundPreviousReading.reading.reading_value);
+                                if (!isNaN(currentValue) && !isNaN(previousValue)) {
+                                  consumption = currentValue - previousValue;
+                                }
+                              }
+                            } else if (archiveGroupBy === 'day') {
+                              const dayKey = groupedReading.groupKey;
+                              const dayReadings = archiveReadingsRaw
+                                ?.filter(r => {
+                                  const rDate = new Date(r.reading_date);
+                                  const rDayKey = `${rDate.getFullYear()}-${String(rDate.getMonth() + 1).padStart(2, '0')}-${String(rDate.getDate()).padStart(2, '0')}`;
+                                  return rDayKey === dayKey;
+                                }) || [];
+                              
+                              if (dayReadings.length > 0) {
+                                const sorted = [...dayReadings].sort((a, b) => 
+                                  new Date(a.reading_date).getTime() - new Date(b.reading_date).getTime()
+                                );
+                                
+                                let previousHourValue: number | null = null;
+                                if (archiveReadingsRaw) {
+                                  const dayDate = new Date(sorted[0].reading_date);
+                                  dayDate.setDate(dayDate.getDate() - 1);
+                                  const prevDayKey = `${dayDate.getFullYear()}-${String(dayDate.getMonth() + 1).padStart(2, '0')}-${String(dayDate.getDate()).padStart(2, '0')}`;
+                                  
+                                  const prevDayReadings = archiveReadingsRaw.filter(r => {
+                                    const rDate = new Date(r.reading_date);
+                                    const rDayKey = `${rDate.getFullYear()}-${String(rDate.getMonth() + 1).padStart(2, '0')}-${String(rDate.getDate()).padStart(2, '0')}`;
+                                    return rDayKey === prevDayKey;
+                                  });
+                                  
+                                  if (prevDayReadings.length > 0) {
+                                    const sortedPrevDay = [...prevDayReadings].sort((a, b) => 
+                                      new Date(b.reading_date).getTime() - new Date(a.reading_date).getTime()
+                                    );
+                                    previousHourValue = Number(sortedPrevDay[0].reading_value);
+                                  }
+                                }
+                                
+                                for (let i = 0; i < sorted.length; i++) {
+                                  const currentValue = Number(sorted[i].reading_value);
+                                  const previousValue = i === 0 
+                                    ? (previousHourValue !== null ? previousHourValue : Number(sorted[0].reading_value))
+                                    : Number(sorted[i - 1].reading_value);
+                                  
+                                  if (!isNaN(currentValue) && !isNaN(previousValue)) {
+                                    const hourConsumption = currentValue - previousValue;
+                                    consumption += hourConsumption;
+                                  }
+                                }
+                              }
+                            } else if (archiveGroupBy === 'week') {
+                              const weekKey = groupedReading.groupKey;
+                              const [year, month, weekNum] = weekKey.split('-');
+                              const monthNum = parseInt(month);
+                              const weekStartDay = (parseInt(weekNum.replace('W', '')) - 1) * 7 + 1;
+                              const weekEndDay = Math.min(weekStartDay + 6, new Date(parseInt(year), monthNum, 0).getDate());
+                              
+                              const weekReadings = archiveReadingsRaw
+                                ?.filter(r => {
+                                  const rDate = new Date(r.reading_date);
+                                  return rDate.getFullYear() === parseInt(year) &&
+                                         rDate.getMonth() + 1 === monthNum &&
+                                         rDate.getDate() >= weekStartDay &&
+                                         rDate.getDate() <= weekEndDay;
+                                }) || [];
+                              
+                              if (weekReadings.length > 0) {
+                                const sorted = [...weekReadings].sort((a, b) => 
+                                  new Date(a.reading_date).getTime() - new Date(b.reading_date).getTime()
+                                );
+                                
+                                let previousHourValue: number | null = null;
+                                if (archiveReadingsRaw) {
+                                  const weekStartDate = new Date(parseInt(year), monthNum - 1, weekStartDay);
+                                  weekStartDate.setDate(weekStartDate.getDate() - 1);
+                                  const prevDayKey = `${weekStartDate.getFullYear()}-${String(weekStartDate.getMonth() + 1).padStart(2, '0')}-${String(weekStartDate.getDate()).padStart(2, '0')}`;
+                                  
+                                  const prevDayReadings = archiveReadingsRaw.filter(r => {
+                                    const rDate = new Date(r.reading_date);
+                                    const rDayKey = `${rDate.getFullYear()}-${String(rDate.getMonth() + 1).padStart(2, '0')}-${String(rDate.getDate()).padStart(2, '0')}`;
+                                    return rDayKey === prevDayKey;
+                                  });
+                                  
+                                  if (prevDayReadings.length > 0) {
+                                    const sortedPrevDay = [...prevDayReadings].sort((a, b) => 
+                                      new Date(b.reading_date).getTime() - new Date(a.reading_date).getTime()
+                                    );
+                                    previousHourValue = Number(sortedPrevDay[0].reading_value);
+                                  }
+                                }
+                                
+                                for (let i = 0; i < sorted.length; i++) {
+                                  const currentValue = Number(sorted[i].reading_value);
+                                  const previousValue = i === 0 
+                                    ? (previousHourValue !== null ? previousHourValue : Number(sorted[0].reading_value))
+                                    : Number(sorted[i - 1].reading_value);
+                                  
+                                  if (!isNaN(currentValue) && !isNaN(previousValue)) {
+                                    const hourConsumption = currentValue - previousValue;
+                                    consumption += hourConsumption;
+                                  }
+                                }
+                              }
+                            } else if (archiveGroupBy === 'month') {
+                              const monthKey = groupedReading.groupKey;
+                              const [year, month] = monthKey.split('-');
+                              
+                              const monthReadings = archiveReadingsRaw
+                                ?.filter(r => {
+                                  const rDate = new Date(r.reading_date);
+                                  return rDate.getFullYear() === parseInt(year) &&
+                                         rDate.getMonth() + 1 === parseInt(month);
+                                }) || [];
+                              
+                              if (monthReadings.length > 0) {
+                                const sorted = [...monthReadings].sort((a, b) => 
+                                  new Date(a.reading_date).getTime() - new Date(b.reading_date).getTime()
+                                );
+                                
+                                let previousHourValue: number | null = null;
+                                if (archiveReadingsRaw) {
+                                  const monthStartDate = new Date(parseInt(year), parseInt(month) - 1, 1);
+                                  monthStartDate.setDate(monthStartDate.getDate() - 1);
+                                  const prevDayKey = `${monthStartDate.getFullYear()}-${String(monthStartDate.getMonth() + 1).padStart(2, '0')}-${String(monthStartDate.getDate()).padStart(2, '0')}`;
+                                  
+                                  const prevDayReadings = archiveReadingsRaw.filter(r => {
+                                    const rDate = new Date(r.reading_date);
+                                    const rDayKey = `${rDate.getFullYear()}-${String(rDate.getMonth() + 1).padStart(2, '0')}-${String(rDate.getDate()).padStart(2, '0')}`;
+                                    return rDayKey === prevDayKey;
+                                  });
+                                  
+                                  if (prevDayReadings.length > 0) {
+                                    const sortedPrevDay = [...prevDayReadings].sort((a, b) => 
+                                      new Date(b.reading_date).getTime() - new Date(a.reading_date).getTime()
+                                    );
+                                    previousHourValue = Number(sortedPrevDay[0].reading_value);
+                                  }
+                                }
+                                
+                                for (let i = 0; i < sorted.length; i++) {
+                                  const currentValue = Number(sorted[i].reading_value);
+                                  const previousValue = i === 0 
+                                    ? (previousHourValue !== null ? previousHourValue : Number(sorted[0].reading_value))
+                                    : Number(sorted[i - 1].reading_value);
+                                  
+                                  if (!isNaN(currentValue) && !isNaN(previousValue)) {
+                                    const hourConsumption = currentValue - previousValue;
+                                    consumption += hourConsumption;
+                                  }
+                                }
+                              }
+                            } else if (archiveGroupBy === 'year') {
+                              const yearKey = groupedReading.groupKey;
+                              
+                              const yearReadings = archiveReadingsRaw
+                                ?.filter(r => {
+                                  const rDate = new Date(r.reading_date);
+                                  return rDate.getFullYear() === parseInt(yearKey);
+                                }) || [];
+                              
+                              if (yearReadings.length > 0) {
+                                const sorted = [...yearReadings].sort((a, b) => 
+                                  new Date(a.reading_date).getTime() - new Date(b.reading_date).getTime()
+                                );
+                                
+                                let previousHourValue: number | null = null;
+                                if (archiveReadingsRaw) {
+                                  const yearStartDate = new Date(parseInt(yearKey), 0, 1);
+                                  yearStartDate.setDate(yearStartDate.getDate() - 1);
+                                  const prevDayKey = `${yearStartDate.getFullYear()}-${String(yearStartDate.getMonth() + 1).padStart(2, '0')}-${String(yearStartDate.getDate()).padStart(2, '0')}`;
+                                  
+                                  const prevDayReadings = archiveReadingsRaw.filter(r => {
+                                    const rDate = new Date(r.reading_date);
+                                    const rDayKey = `${rDate.getFullYear()}-${String(rDate.getMonth() + 1).padStart(2, '0')}-${String(rDate.getDate()).padStart(2, '0')}`;
+                                    return rDayKey === prevDayKey;
+                                  });
+                                  
+                                  if (prevDayReadings.length > 0) {
+                                    const sortedPrevDay = [...prevDayReadings].sort((a, b) => 
+                                      new Date(b.reading_date).getTime() - new Date(a.reading_date).getTime()
+                                    );
+                                    previousHourValue = Number(sortedPrevDay[0].reading_value);
+                                  }
+                                }
+                                
+                                for (let i = 0; i < sorted.length; i++) {
+                                  const currentValue = Number(sorted[i].reading_value);
+                                  const previousValue = i === 0 
+                                    ? (previousHourValue !== null ? previousHourValue : Number(sorted[0].reading_value))
+                                    : Number(sorted[i - 1].reading_value);
+                                  
+                                  if (!isNaN(currentValue) && !isNaN(previousValue)) {
+                                    const hourConsumption = currentValue - previousValue;
+                                    consumption += hourConsumption;
+                                  }
+                                }
+                              }
+                            }
+                          }
+                          
+                          return (
+                            <tr key={groupedReading.groupKey} className={`archive-row ${!hasReading ? 'no-data' : ''}`}>
+                              <td style={{ minWidth: '180px', textAlign: 'left' }}>{dateLabel}</td>
+                              {archiveViewType === 'readings' ? (
+                                <td className="reading-value">
+                                  {hasReading ? Number(groupedReading.reading.reading_value).toFixed(2) : '-'}
+                                </td>
+                              ) : (
+                                <td className={`volume-value ${consumption > 0 ? 'positive' : ''}`}>
+                                  {hasReading && !isNaN(consumption) ? (
+                                    consumption > 0 ? `+${consumption.toFixed(2)}` : consumption.toFixed(2)
+                                  ) : '-'}
+                                </td>
+                              )}
+                              <td>{hasReading ? groupedReading.reading.unit : '-'}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  
+                  {/* Навигация по страницам */}
+                  {archiveTotalPages > 1 && (
+                    <div className="archive-pagination">
+                      <button
+                        className="pagination-btn"
+                        onClick={handlePreviousPage}
+                        disabled={archiveCurrentPage === 1}
+                        title="Предыдущая страница"
+                      >
+                        ←
+                      </button>
+                      <span className="pagination-info">
+                        Страница {archiveCurrentPage} из {archiveTotalPages}
+                        <span style={{ marginLeft: '8px', fontSize: '12px', color: '#666' }}>
+                          (Показано {archiveStartIndex + 1}-{Math.min(archiveEndIndex, archiveReadings.length)} из {archiveReadings.length})
+                        </span>
+                      </span>
+                      <button
+                        className="pagination-btn"
+                        onClick={handleNextPage}
+                        disabled={archiveCurrentPage >= archiveTotalPages}
+                        title="Следующая страница"
+                      >
+                        →
+                      </button>
+                    </div>
+                  )}
+                  
+                  <div className="archive-info">
+                    <button
+                      className="refresh-btn"
+                      onClick={refreshArchive}
+                      disabled={archiveLoading}
+                    >
+                      Обновить
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
