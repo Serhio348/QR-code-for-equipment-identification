@@ -329,12 +329,19 @@
   margin-top: 0; /* Убираем отступ, так как хедер не фиксированный */
 }
 
+/* Убираем отступ для страницы воды (beliot-devices-admin) на всех экранах */
+.app-content:has(.beliot-devices-admin) {
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  height: calc(100vh - 80px - 60px) !important; /* Высота экрана минус хедер (80px) минус футер (~60px) */
+  display: flex;
+  flex-direction: column;
+}
+
 /* Убираем отступ сверху для страницы воды на мобильных */
 @media (max-width: 768px) {
   .app-content:has(.beliot-devices-admin) {
-    margin-top: 0 !important; /* Убираем отступ, beliot-devices-admin сам позиционируется */
-    padding-bottom: 0 !important; /* Убираем отступ для футера */
-    overflow: hidden;
     height: calc(100vh - 70px - 60px);
     max-height: calc(100vh - 70px - 60px);
   }
