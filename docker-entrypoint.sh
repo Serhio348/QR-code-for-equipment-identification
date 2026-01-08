@@ -11,6 +11,9 @@ echo "Contents of /usr/share/nginx/html:"
 ls -la /usr/share/nginx/html/ | head -10
 echo "Starting nginx on port $NGINX_PORT"
 
+# Create nginx config directory if it doesn't exist
+mkdir -p /etc/nginx/conf.d
+
 # Create nginx config with fixed port 80
 # Use sed to replace PORT placeholder with 80
 sed "s/\${PORT}/$NGINX_PORT/g" /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf

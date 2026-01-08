@@ -42,7 +42,9 @@ RUN npm run build
 FROM node:20-alpine
 
 # Install nginx and envsubst for serving static files
-RUN apk add --no-cache nginx gettext
+RUN apk add --no-cache nginx gettext && \
+    mkdir -p /etc/nginx/conf.d && \
+    mkdir -p /etc/nginx/templates
 
 # Set working directory for cron jobs
 WORKDIR /app
