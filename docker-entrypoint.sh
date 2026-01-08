@@ -31,7 +31,11 @@ netstat -tlnp 2>/dev/null || echo "netstat not available, skipping port check"
 echo "Testing nginx configuration..."
 nginx -t
 
+# Show full nginx config for debugging
+echo "Full nginx config:"
+cat /etc/nginx/conf.d/default.conf
+
 # Start nginx
-echo "Starting nginx..."
+echo "Starting nginx on port $PORT..."
 exec nginx -g 'daemon off;'
 
