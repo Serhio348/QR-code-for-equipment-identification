@@ -4,10 +4,14 @@ set -e
 # Get PORT from environment variable, default to 80
 PORT=${PORT:-80}
 
+echo "PORT environment variable: $PORT"
+echo "Contents of /usr/share/nginx/html:"
+ls -la /usr/share/nginx/html/ | head -10
 echo "Starting nginx on port $PORT"
 
-# Replace PORT in nginx config template
-envsubst '${PORT}' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf
+# Create nginx config with PORT substitution
+# Use sed to replace PORT placeholder
+sed "s/\${PORT}/$PORT/g" /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf
 
 # Verify config file was created
 if [ ! -f /etc/nginx/conf.d/default.conf ]; then
@@ -15,7 +19,12 @@ if [ ! -f /etc/nginx/conf.d/default.conf ]; then
     exit 1
 fi
 
+# Show generated config (first few lines)
+echo "Generated nginx config (first 5 lines):"
+head -5 /etc/nginx/conf.d/default.conf
+
 # Test nginx configuration
+echo "Testing nginx configuration..."
 nginx -t
 
 # Start nginx
