@@ -27,10 +27,13 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 # Copy nginx configuration template
 COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 
+# Copy entrypoint script
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
 # Expose port (Railway will set PORT env var)
 EXPOSE 80
 
-# Start nginx with environment variable substitution
-# Default PORT to 80 if not set
-CMD ["/bin/sh", "-c", "export PORT=${PORT:-80} && envsubst '$$PORT' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
+# Use entrypoint script
+ENTRYPOINT ["/docker-entrypoint.sh"]
 
