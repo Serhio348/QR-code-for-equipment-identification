@@ -688,8 +688,14 @@ const BeliotDevicesTest: React.FC = () => {
           const currentDateValue = readings.current.date;
           let currentDate: Date;
           
-          if (currentDateValue instanceof Date) {
-            currentDate = currentDateValue;
+          if (currentDateValue && typeof currentDateValue === 'object' && 'getTime' in currentDateValue) {
+            // Проверяем, что это Date объект
+            const dateObj = currentDateValue as any;
+            if (dateObj instanceof Date) {
+              currentDate = dateObj;
+            } else {
+              currentDate = new Date(String(currentDateValue));
+            }
           } else if (typeof currentDateValue === 'number') {
             // Если это timestamp в секундах, конвертируем в миллисекунды
             const timestamp = currentDateValue < 10000000000 ? currentDateValue * 1000 : currentDateValue;
@@ -725,8 +731,14 @@ const BeliotDevicesTest: React.FC = () => {
           const previousDateValue = readings.previous.date;
           let previousDate: Date;
           
-          if (previousDateValue instanceof Date) {
-            previousDate = previousDateValue;
+          if (previousDateValue && typeof previousDateValue === 'object' && 'getTime' in previousDateValue) {
+            // Проверяем, что это Date объект
+            const dateObj = previousDateValue as any;
+            if (dateObj instanceof Date) {
+              previousDate = dateObj;
+            } else {
+              previousDate = new Date(String(previousDateValue));
+            }
           } else if (typeof previousDateValue === 'number') {
             // Если это timestamp в секундах, конвертируем в миллисекунды
             const timestamp = previousDateValue < 10000000000 ? previousDateValue * 1000 : previousDateValue;
