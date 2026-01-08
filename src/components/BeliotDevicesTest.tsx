@@ -20,6 +20,8 @@ import {
 } from '../services/api/supabaseBeliotOverridesApi';
 import { useBeliotDeviceReadings } from '../hooks/useBeliotDeviceReadings';
 import { saveBeliotReading } from '../services/api/supabaseBeliotReadingsApi';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import './BeliotDevicesTest.css';
 
 interface StateTableRow {
@@ -320,16 +322,25 @@ const BeliotDevicesTest: React.FC = () => {
     }
   }, [archiveStartDate, archiveEndDate, currentDeviceId, isArchiveOpen, archiveDataLoaded, refreshArchive]);
   
-  // При открытии/закрытии архива сбрасываем флаг загрузки
+  // При открытии/закрытии архива сбрасываем флаг загрузки и блокируем прокрутку основного контента
   useEffect(() => {
     if (!isArchiveOpen) {
       setArchiveDataLoaded(false);
       setArchiveCurrentPage(1);
+      // Разблокируем прокрутку основного контента
+      document.body.style.overflow = '';
     } else {
       // При открытии архива также сбрасываем флаг, чтобы показать кнопку загрузки
       setArchiveDataLoaded(false);
       setArchiveCurrentPage(1);
+      // Блокируем прокрутку основного контента при открытии модального окна
+      document.body.style.overflow = 'hidden';
     }
+    
+    // Очистка при размонтировании
+    return () => {
+      document.body.style.overflow = '';
+    };
   }, [isArchiveOpen]);
   
   // Группировка применяется автоматически через useMemo при изменении archiveGroupBy
@@ -344,8 +355,49 @@ const BeliotDevicesTest: React.FC = () => {
   const [syncedOverrides, setSyncedOverrides] = useState<Record<string, BeliotDeviceOverride>>({});
   const [syncing, setSyncing] = useState<boolean>(false);
   
-  // Состояние для отслеживания редактируемой ячейки
+  // Состояние для отслеживания редактируемой ячейки (устаревшее, будет удалено)
   const [editingCell, setEditingCell] = useState<{ deviceId: string; field: 'name' | 'address' | 'serialNumber' | 'object' } | null>(null);
+  
+  // Состояние для модального окна паспорта счетчика
+  const [isPassportOpen, setIsPassportOpen] = useState<boolean>(false);
+  const [passportDevice, setPassportDevice] = useState<BeliotDevice | null>(null);
+  const [passportData, setPassportData] = useState<{
+    name: string;
+    serialNumber: string;
+    object: string;
+    manufactureDate: string;
+    manufacturer: string;
+    verificationDate: string;
+    nextVerificationDate: string;
+  }>({
+    name: '',
+    serialNumber: '',
+    object: '',
+    manufactureDate: '',
+    manufacturer: '',
+    verificationDate: '',
+    nextVerificationDate: '',
+  });
+  const [passportSaving, setPassportSaving] = useState<boolean>(false);
+  
+  // Состояние для перетаскивания модального окна паспорта
+  const [passportModalPosition, setPassportModalPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isDraggingPassport, setIsDraggingPassport] = useState<boolean>(false);
+  const [dragStartPassport, setDragStartPassport] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // Блокировка прокрутки при открытии модального окна паспорта
+  useEffect(() => {
+    if (isPassportOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    
+    // Очистка при размонтировании
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isPassportOpen]);
 
   // Загрузка устройств и синхронизация при монтировании компонента
   useEffect(() => {
@@ -478,6 +530,65 @@ const BeliotDevicesTest: React.FC = () => {
     // Приоритет 3: Значение по умолчанию
     return defaultValue;
   }, [getLocalOverride, syncedOverrides]);
+
+  // Закрытие модального окна паспорта
+  const handleClosePassport = useCallback(() => {
+    setIsPassportOpen(false);
+    setPassportDevice(null);
+    setPassportData({
+      name: '',
+      serialNumber: '',
+      object: '',
+      manufactureDate: '',
+      manufacturer: '',
+      verificationDate: '',
+      nextVerificationDate: '',
+    });
+  }, []);
+
+  // Сохранение данных паспорта
+  const handleSavePassport = useCallback(async () => {
+    if (!passportDevice) return;
+    
+    const deviceId = String(passportDevice.device_id || passportDevice.id || passportDevice._id);
+    setPassportSaving(true);
+    
+    try {
+      // Подготавливаем данные для сохранения
+      const overrideData: Partial<BeliotDeviceOverride> = {
+        name: passportData.name || undefined,
+        serial_number: passportData.serialNumber || undefined,
+        object_name: passportData.object || undefined,
+        manufacture_date: passportData.manufactureDate || undefined,
+        manufacturer: passportData.manufacturer || undefined,
+        verification_date: passportData.verificationDate || undefined,
+        next_verification_date: passportData.nextVerificationDate || undefined,
+      };
+      
+      // Сохраняем в Supabase
+      await saveBeliotDeviceOverride(deviceId, overrideData);
+      
+      // Обновляем локальный кэш
+      const updated = await getBeliotDevicesOverrides();
+      setSyncedOverrides(updated);
+      
+      // Обновляем localStorage
+      if (passportData.name) updateLocalValue(deviceId, 'name', passportData.name);
+      if (passportData.serialNumber) updateLocalValue(deviceId, 'serialNumber', passportData.serialNumber);
+      if (passportData.object) updateLocalValue(deviceId, 'object', passportData.object);
+      
+      // Закрываем модальное окно
+      handleClosePassport();
+      
+      // Обновляем синхронизацию
+      await syncOverridesFromServer();
+    } catch (error: any) {
+      console.error('Ошибка сохранения паспорта:', error);
+      alert(`Ошибка сохранения: ${error.message}`);
+    } finally {
+      setPassportSaving(false);
+    }
+  }, [passportDevice, passportData, saveBeliotDeviceOverride, getBeliotDevicesOverrides, updateLocalValue, handleClosePassport, syncOverridesFromServer]);
 
   const handleGetDevices = async () => {
     setLoading(true);
@@ -713,6 +824,355 @@ const BeliotDevicesTest: React.FC = () => {
     
     return '-';
   };
+
+  // Открытие модального окна паспорта (после объявления getDeviceName, getDeviceSerialNumber, getDeviceObject)
+  const handleOpenPassport = useCallback((device: BeliotDevice) => {
+    const deviceId = String(device.device_id || device.id || device._id);
+    setPassportDevice(device);
+    
+    // Загружаем данные из Supabase
+    const override = syncedOverrides[deviceId];
+    
+    // Форматируем даты для input type="date" (YYYY-MM-DD)
+    const formatDate = (dateStr: string | undefined): string => {
+      if (!dateStr) return '';
+      try {
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) return '';
+        return date.toISOString().split('T')[0];
+      } catch {
+        return '';
+      }
+    };
+    
+    setPassportData({
+      name: getEditableValue(deviceId, 'name', getDeviceName(device)),
+      serialNumber: getEditableValue(deviceId, 'serialNumber', getDeviceSerialNumber(device)),
+      object: getEditableValue(deviceId, 'object', getDeviceObject(device)),
+      manufactureDate: formatDate(override?.manufacture_date),
+      manufacturer: override?.manufacturer || '',
+      verificationDate: formatDate(override?.verification_date),
+      nextVerificationDate: formatDate(override?.next_verification_date),
+    });
+    
+    // Сбрасываем позицию модального окна при открытии
+    setPassportModalPosition({ x: 0, y: 0 });
+    setIsDraggingPassport(false);
+    setIsPassportOpen(true);
+  }, [syncedOverrides, getEditableValue, getDeviceName, getDeviceSerialNumber, getDeviceObject]);
+
+  // Обработчики для перетаскивания модального окна паспорта
+  const handlePassportModalMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    // Перетаскивание только за заголовок
+    if ((e.target as HTMLElement).closest('.passport-modal-header') && 
+        !(e.target as HTMLElement).closest('.passport-modal-close')) {
+      setIsDraggingPassport(true);
+      setDragStartPassport({
+        x: e.clientX - passportModalPosition.x,
+        y: e.clientY - passportModalPosition.y,
+      });
+    }
+  }, [passportModalPosition]);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isDraggingPassport) {
+        setPassportModalPosition({
+          x: e.clientX - dragStartPassport.x,
+          y: e.clientY - dragStartPassport.y,
+        });
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsDraggingPassport(false);
+    };
+
+    if (isDraggingPassport) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDraggingPassport, dragStartPassport]);
+
+  // Форматирование даты для отображения
+  const formatDateForDisplay = useCallback((dateStr: string | undefined): string => {
+    if (!dateStr) return '—';
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return '—';
+      return date.toLocaleDateString('ru-RU', { 
+        year: 'numeric', 
+        month: '2-digit', 
+        day: '2-digit' 
+      });
+    } catch {
+      return '—';
+    }
+  }, []);
+
+  // Печать паспорта
+  const handlePrintPassport = useCallback(() => {
+    if (!passportDevice) return;
+    
+    // Создаем скрытый контейнер для печати
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Пожалуйста, разрешите всплывающие окна для печати');
+      return;
+    }
+
+    const deviceName = getDeviceName(passportDevice);
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8">
+          <title>Паспорт счетчика: ${deviceName}</title>
+          <style>
+            @media print {
+              @page {
+                margin: 20mm;
+                size: A4;
+              }
+              body {
+                margin: 0;
+                padding: 0;
+                font-family: Arial, sans-serif;
+                font-size: 12pt;
+                color: #000;
+              }
+            }
+            body {
+              font-family: Arial, sans-serif;
+              max-width: 210mm;
+              margin: 0 auto;
+              padding: 20px;
+              color: #333;
+            }
+            .passport-header {
+              text-align: center;
+              border-bottom: 3px solid #667eea;
+              padding-bottom: 20px;
+              margin-bottom: 30px;
+            }
+            .passport-header h1 {
+              margin: 0;
+              font-size: 24pt;
+              color: #667eea;
+            }
+            .passport-section {
+              margin-bottom: 30px;
+              page-break-inside: avoid;
+            }
+            .passport-section h2 {
+              font-size: 18pt;
+              color: #667eea;
+              border-bottom: 2px solid #e0e0e0;
+              padding-bottom: 10px;
+              margin-bottom: 20px;
+            }
+            .passport-row {
+              display: flex;
+              justify-content: space-between;
+              padding: 10px 0;
+              border-bottom: 1px solid #f0f0f0;
+            }
+            .passport-label {
+              font-weight: bold;
+              width: 40%;
+              color: #666;
+            }
+            .passport-value {
+              width: 60%;
+              text-align: right;
+            }
+            .passport-footer {
+              margin-top: 50px;
+              padding-top: 20px;
+              border-top: 2px solid #e0e0e0;
+              text-align: center;
+              font-size: 10pt;
+              color: #666;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="passport-header">
+            <h1>ПАСПОРТ СЧЕТЧИКА</h1>
+          </div>
+          
+          <div class="passport-section">
+            <h2>Основные данные</h2>
+            <div class="passport-row">
+              <span class="passport-label">Название счетчика:</span>
+              <span class="passport-value">${passportData.name || '—'}</span>
+            </div>
+            <div class="passport-row">
+              <span class="passport-label">Серийный номер:</span>
+              <span class="passport-value">${passportData.serialNumber || '—'}</span>
+            </div>
+            <div class="passport-row">
+              <span class="passport-label">Объект:</span>
+              <span class="passport-value">${passportData.object || '—'}</span>
+            </div>
+          </div>
+          
+          <div class="passport-section">
+            <h2>Паспортные данные</h2>
+            <div class="passport-row">
+              <span class="passport-label">Дата выпуска:</span>
+              <span class="passport-value">${formatDateForDisplay(passportData.manufactureDate)}</span>
+            </div>
+            <div class="passport-row">
+              <span class="passport-label">Производитель:</span>
+              <span class="passport-value">${passportData.manufacturer || '—'}</span>
+            </div>
+            <div class="passport-row">
+              <span class="passport-label">Дата поверки:</span>
+              <span class="passport-value">${formatDateForDisplay(passportData.verificationDate)}</span>
+            </div>
+            <div class="passport-row">
+              <span class="passport-label">Дата следующей поверки:</span>
+              <span class="passport-value">${formatDateForDisplay(passportData.nextVerificationDate)}</span>
+            </div>
+          </div>
+          
+          <div class="passport-footer">
+            <p>Документ сформирован: ${new Date().toLocaleDateString('ru-RU', { 
+              year: 'numeric', 
+              month: 'long', 
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            })}</p>
+          </div>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    
+    // Ждем загрузки и открываем диалог печати
+    setTimeout(() => {
+      printWindow.print();
+    }, 250);
+  }, [passportDevice, passportData, getDeviceName, formatDateForDisplay]);
+
+  // Сохранение паспорта в PDF
+  const handleSavePassportAsPDF = useCallback(async () => {
+    if (!passportDevice) return;
+    
+    try {
+      // Создаем скрытый контейнер для рендеринга
+      const printContainer = document.createElement('div');
+      printContainer.style.position = 'absolute';
+      printContainer.style.left = '-9999px';
+      printContainer.style.width = '210mm';
+      printContainer.style.padding = '20mm';
+      printContainer.style.backgroundColor = 'white';
+      printContainer.style.fontFamily = 'Arial, sans-serif';
+      printContainer.style.fontSize = '12pt';
+      printContainer.style.color = '#333';
+      
+      const deviceName = getDeviceName(passportDevice);
+      
+      printContainer.innerHTML = `
+        <div style="text-align: center; border-bottom: 3px solid #667eea; padding-bottom: 20px; margin-bottom: 30px;">
+          <h1 style="margin: 0; font-size: 24pt; color: #667eea;">ПАСПОРТ СЧЕТЧИКА</h1>
+        </div>
+        
+        <div style="margin-bottom: 30px;">
+          <h2 style="font-size: 18pt; color: #667eea; border-bottom: 2px solid #e0e0e0; padding-bottom: 10px; margin-bottom: 20px;">Основные данные</h2>
+          <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f0f0f0;">
+            <span style="font-weight: bold; width: 40%; color: #666;">Название счетчика:</span>
+            <span style="width: 60%; text-align: right;">${passportData.name || '—'}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f0f0f0;">
+            <span style="font-weight: bold; width: 40%; color: #666;">Серийный номер:</span>
+            <span style="width: 60%; text-align: right;">${passportData.serialNumber || '—'}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f0f0f0;">
+            <span style="font-weight: bold; width: 40%; color: #666;">Объект:</span>
+            <span style="width: 60%; text-align: right;">${passportData.object || '—'}</span>
+          </div>
+        </div>
+        
+        <div style="margin-bottom: 30px;">
+          <h2 style="font-size: 18pt; color: #667eea; border-bottom: 2px solid #e0e0e0; padding-bottom: 10px; margin-bottom: 20px;">Паспортные данные</h2>
+          <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f0f0f0;">
+            <span style="font-weight: bold; width: 40%; color: #666;">Дата выпуска:</span>
+            <span style="width: 60%; text-align: right;">${formatDateForDisplay(passportData.manufactureDate)}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f0f0f0;">
+            <span style="font-weight: bold; width: 40%; color: #666;">Производитель:</span>
+            <span style="width: 60%; text-align: right;">${passportData.manufacturer || '—'}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f0f0f0;">
+            <span style="font-weight: bold; width: 40%; color: #666;">Дата поверки:</span>
+            <span style="width: 60%; text-align: right;">${formatDateForDisplay(passportData.verificationDate)}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f0f0f0;">
+            <span style="font-weight: bold; width: 40%; color: #666;">Дата следующей поверки:</span>
+            <span style="width: 60%; text-align: right;">${formatDateForDisplay(passportData.nextVerificationDate)}</span>
+          </div>
+        </div>
+        
+        <div style="margin-top: 50px; padding-top: 20px; border-top: 2px solid #e0e0e0; text-align: center; font-size: 10pt; color: #666;">
+          <p>Документ сформирован: ${new Date().toLocaleDateString('ru-RU', { 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          })}</p>
+        </div>
+      `;
+      
+      document.body.appendChild(printContainer);
+      
+      // Конвертируем в canvas
+      const canvas = await html2canvas(printContainer, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+      });
+      
+      // Удаляем временный контейнер
+      document.body.removeChild(printContainer);
+      
+      // Создаем PDF
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgWidth = 210;
+      const pageHeight = 297;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = 0;
+      
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+      
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+      
+      // Сохраняем PDF
+      const fileName = `Паспорт_${deviceName.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+      pdf.save(fileName);
+    } catch (error) {
+      console.error('Ошибка при сохранении PDF:', error);
+      alert('Ошибка при сохранении PDF. Пожалуйста, попробуйте снова.');
+    }
+  }, [passportDevice, passportData, getDeviceName, formatDateForDisplay]);
 
   const getLastReading = (device: BeliotDevice): string => {
     let value: number | undefined;
@@ -1074,128 +1534,46 @@ const BeliotDevicesTest: React.FC = () => {
                   <table className="group-devices-table">
                     <thead>
                       <tr>
+                        <th>Объект</th>
                         <th>Счётчик</th>
                         <th>Серийный номер</th>
-                        <th>Объект</th>
                         <th>Показание</th>
+                        <th>Документация</th>
                       </tr>
                     </thead>
                     <tbody>
                       {selectedGroup.devices.map((device, index) => {
                         const deviceId = String(device.device_id || device.id || device._id);
                         const isSelected = selectedDevice === device;
-                        const isEditingName = editingCell?.deviceId === deviceId && editingCell?.field === 'name';
-                        const isEditingSerial = editingCell?.deviceId === deviceId && editingCell?.field === 'serialNumber';
                         
                         return (
                           <tr
                             key={deviceId || index}
                             className={isSelected ? 'selected' : ''}
                             onClick={(e) => {
-                              // Не вызываем handleDeviceClick если кликнули на редактируемую ячейку
-                              if ((e.target as HTMLElement).tagName !== 'INPUT') {
+                              // Не вызываем handleDeviceClick если кликнули на кнопку паспорта
+                              if ((e.target as HTMLElement).tagName !== 'BUTTON') {
                                 handleDeviceClick(device);
                               }
                             }}
                             style={{ cursor: 'pointer' }}
                           >
-                            <td
-                              className="editable-cell"
-                              onDoubleClick={(e) => {
-                                e.stopPropagation();
-                                setEditingCell({ deviceId, field: 'name' });
-                              }}
-                            >
-                              {isEditingName ? (
-                                <input
-                                  type="text"
-                                  className="editable-input"
-                                  value={getEditableValue(deviceId, 'name', getDeviceName(device))}
-                                  onChange={(e) => updateLocalValue(deviceId, 'name', e.target.value)}
-                                  onBlur={async () => {
-                                    await syncOverrideToSupabase(deviceId, 'name');
-                                    setEditingCell(null);
-                                  }}
-                                  onKeyDown={async (e) => {
-                                    if (e.key === 'Enter') {
-                                      await syncOverrideToSupabase(deviceId, 'name');
-                                      setEditingCell(null);
-                                    } else if (e.key === 'Escape') {
-                                      setEditingCell(null);
-                                    }
-                                  }}
-                                  onClick={(e) => e.stopPropagation()}
-                                  autoFocus
-                                />
-                              ) : (
-                                <span className="editable-text">{getDeviceName(device)}</span>
-                              )}
-                            </td>
-                            <td
-                              className="editable-cell"
-                              onDoubleClick={(e) => {
-                                e.stopPropagation();
-                                setEditingCell({ deviceId, field: 'serialNumber' });
-                              }}
-                            >
-                              {isEditingSerial ? (
-                                <input
-                                  type="text"
-                                  className="editable-input"
-                                  value={getEditableValue(deviceId, 'serialNumber', getDeviceSerialNumber(device))}
-                                  onChange={(e) => updateLocalValue(deviceId, 'serialNumber', e.target.value)}
-                                  onBlur={async () => {
-                                    await syncOverrideToSupabase(deviceId, 'serialNumber');
-                                    setEditingCell(null);
-                                  }}
-                                  onKeyDown={async (e) => {
-                                    if (e.key === 'Enter') {
-                                      await syncOverrideToSupabase(deviceId, 'serialNumber');
-                                      setEditingCell(null);
-                                    } else if (e.key === 'Escape') {
-                                      setEditingCell(null);
-                                    }
-                                  }}
-                                  onClick={(e) => e.stopPropagation()}
-                                  autoFocus
-                                />
-                              ) : (
-                                <span className="editable-text">{getDeviceSerialNumber(device)}</span>
-                              )}
-                            </td>
-                            <td
-                              className="editable-cell"
-                              onDoubleClick={(e) => {
-                                e.stopPropagation();
-                                setEditingCell({ deviceId, field: 'object' });
-                              }}
-                            >
-                              {editingCell?.deviceId === deviceId && editingCell?.field === 'object' ? (
-                                <input
-                                  type="text"
-                                  className="editable-input"
-                                  value={getEditableValue(deviceId, 'object', getDeviceObject(device))}
-                                  onChange={(e) => updateLocalValue(deviceId, 'object', e.target.value)}
-                                  onBlur={async () => {
-                                    await syncOverrideToSupabase(deviceId, 'object');
-                                    setEditingCell(null);
-                                  }}
-                                  onKeyDown={async (e) => {
-                                    if (e.key === 'Enter') {
-                                      await syncOverrideToSupabase(deviceId, 'object');
-                                      setEditingCell(null);
-                                    } else if (e.key === 'Escape') {
-                                      setEditingCell(null);
-                                    }
-                                  }}
-                                  onClick={(e) => e.stopPropagation()}
-                                  autoFocus
-                                />
-                              ) : (
-                                <span className="editable-text">{getDeviceObject(device)}</span>
-                              )}
-                            </td>
+                            <td>{getDeviceObject(device)}</td>
+                            <td>{getDeviceName(device)}</td>
+                            <td>{getDeviceSerialNumber(device)}</td>
                             <td className="reading-cell">{getLastReading(device)}</td>
+                            <td className="actions-cell">
+                              <button
+                                className="passport-btn"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenPassport(device);
+                                }}
+                                title="Открыть паспорт счетчика"
+                              >
+                                📄 Паспорт
+                              </button>
+                            </td>
                           </tr>
                         );
                       })}
@@ -2150,6 +2528,168 @@ const BeliotDevicesTest: React.FC = () => {
                   </div>
                 </>
               )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Модальное окно паспорта счетчика */}
+      {isPassportOpen && passportDevice && (
+        <>
+          {/* Затемненный фон */}
+          <div 
+            className="passport-modal-overlay"
+            onClick={handleClosePassport}
+          />
+          
+          {/* Модальное окно */}
+          <div 
+            className="passport-modal"
+            style={{
+              transform: passportModalPosition.x !== 0 || passportModalPosition.y !== 0
+                ? `translate(calc(-50% + ${passportModalPosition.x}px), calc(-50% + ${passportModalPosition.y}px))`
+                : 'translate(-50%, -50%)',
+              cursor: isDraggingPassport ? 'grabbing' : 'default',
+            }}
+          >
+            <div 
+              className="passport-modal-header"
+              onMouseDown={handlePassportModalMouseDown}
+              style={{ cursor: isDraggingPassport ? 'grabbing' : 'grab' }}
+            >
+              <h3>Паспорт счетчика: {getDeviceName(passportDevice)}</h3>
+              <div className="passport-modal-header-actions">
+                <button
+                  className="passport-btn-print"
+                  onClick={handlePrintPassport}
+                  title="Печать"
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  🖨️ Печать
+                </button>
+                <button
+                  className="passport-btn-pdf"
+                  onClick={handleSavePassportAsPDF}
+                  title="Сохранить в PDF"
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  📄 PDF
+                </button>
+                <button
+                  className="passport-modal-close"
+                  onClick={handleClosePassport}
+                  title="Закрыть"
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+            
+            <div className="passport-modal-content">
+              {/* Основные данные */}
+              <div className="passport-section">
+                <h4>Основные данные</h4>
+                <div className="passport-form-grid">
+                  <div className="passport-form-field">
+                    <label>Название счетчика:</label>
+                    <input
+                      type="text"
+                      className="passport-input"
+                      value={passportData.name}
+                      onChange={(e) => setPassportData({ ...passportData, name: e.target.value })}
+                      placeholder="Введите название"
+                    />
+                  </div>
+                  
+                  <div className="passport-form-field">
+                    <label>Серийный номер:</label>
+                    <input
+                      type="text"
+                      className="passport-input"
+                      value={passportData.serialNumber}
+                      onChange={(e) => setPassportData({ ...passportData, serialNumber: e.target.value })}
+                      placeholder="Введите серийный номер"
+                    />
+                  </div>
+                  
+                  <div className="passport-form-field">
+                    <label>Объект:</label>
+                    <input
+                      type="text"
+                      className="passport-input"
+                      value={passportData.object}
+                      onChange={(e) => setPassportData({ ...passportData, object: e.target.value })}
+                      placeholder="Введите объект"
+                    />
+                  </div>
+                </div>
+              </div>
+              
+              {/* Паспортные данные */}
+              <div className="passport-section">
+                <h4>Паспортные данные</h4>
+                <div className="passport-form-grid">
+                  <div className="passport-form-field">
+                    <label>Дата выпуска:</label>
+                    <input
+                      type="date"
+                      className="passport-input"
+                      value={passportData.manufactureDate}
+                      onChange={(e) => setPassportData({ ...passportData, manufactureDate: e.target.value })}
+                    />
+                  </div>
+                  
+                  <div className="passport-form-field">
+                    <label>Производитель:</label>
+                    <input
+                      type="text"
+                      className="passport-input"
+                      value={passportData.manufacturer}
+                      onChange={(e) => setPassportData({ ...passportData, manufacturer: e.target.value })}
+                      placeholder="Введите производителя"
+                    />
+                  </div>
+                  
+                  <div className="passport-form-field">
+                    <label>Дата поверки:</label>
+                    <input
+                      type="date"
+                      className="passport-input"
+                      value={passportData.verificationDate}
+                      onChange={(e) => setPassportData({ ...passportData, verificationDate: e.target.value })}
+                    />
+                  </div>
+                  
+                  <div className="passport-form-field">
+                    <label>Дата следующей поверки:</label>
+                    <input
+                      type="date"
+                      className="passport-input"
+                      value={passportData.nextVerificationDate}
+                      onChange={(e) => setPassportData({ ...passportData, nextVerificationDate: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </div>
+              
+              {/* Кнопки действий */}
+              <div className="passport-modal-actions">
+                <button
+                  className="passport-btn-save"
+                  onClick={handleSavePassport}
+                  disabled={passportSaving}
+                >
+                  {passportSaving ? 'Сохранение...' : '💾 Сохранить'}
+                </button>
+                <button
+                  className="passport-btn-cancel"
+                  onClick={handleClosePassport}
+                  disabled={passportSaving}
+                >
+                  Отмена
+                </button>
+              </div>
             </div>
           </div>
         </>

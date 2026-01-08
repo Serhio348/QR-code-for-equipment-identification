@@ -14,6 +14,12 @@ export interface BeliotDeviceOverride {
   serial_number?: string;
   device_group?: string;
   object_name?: string;
+  // Паспортные данные
+  manufacture_date?: string; // Дата выпуска (формат: YYYY-MM-DD)
+  manufacturer?: string; // Производитель
+  verification_date?: string; // Дата поверки (формат: YYYY-MM-DD)
+  next_verification_date?: string; // Дата следующей поверки (формат: YYYY-MM-DD)
+  // Служебные поля
   last_sync?: string;
   last_modified?: string;
   modified_by?: string;
@@ -54,6 +60,10 @@ export async function getBeliotDevicesOverrides(): Promise<BeliotDevicesOverride
           serial_number: override.serial_number,
           device_group: override.device_group,
           object_name: override.object_name,
+          manufacture_date: override.manufacture_date,
+          manufacturer: override.manufacturer,
+          verification_date: override.verification_date,
+          next_verification_date: override.next_verification_date,
           last_sync: override.last_sync,
           last_modified: override.last_modified,
           modified_by: override.modified_by,
@@ -125,6 +135,10 @@ export async function saveBeliotDeviceOverride(
       serial_number: override.serial_number,
       device_group: override.device_group,
       object_name: override.object_name,
+      manufacture_date: override.manufacture_date || null,
+      manufacturer: override.manufacturer || null,
+      verification_date: override.verification_date || null,
+      next_verification_date: override.next_verification_date || null,
       modified_by: modifiedBy || undefined, // Преобразуем null в undefined
       last_modified: new Date().toISOString(),
     };
@@ -176,6 +190,10 @@ export async function saveBeliotDevicesOverrides(
       serial_number: override.serial_number,
       device_group: override.device_group,
       object_name: override.object_name,
+      manufacture_date: override.manufacture_date || null,
+      manufacturer: override.manufacturer || null,
+      verification_date: override.verification_date || null,
+      next_verification_date: override.next_verification_date || null,
       modified_by: modifiedBy || undefined, // Преобразуем null в undefined
       last_modified: new Date().toISOString(),
     }));
