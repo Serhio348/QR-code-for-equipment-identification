@@ -1,9 +1,12 @@
 /* Основной контейнер админ-панели */
 .beliot-devices-admin {
   display: flex;
-  max-height: calc(100vh - 80px);
+  height: 100%; /* Занимает всю доступную высоту родителя */
+  max-height: 100%;
   overflow: hidden;
-  background: #f5f5f5;
+  background: white;
+  margin: 0;
+  padding: 0;
 }
 
 /* Левая панель: Таблица счетчиков */
@@ -2544,7 +2547,6 @@
   bottom: 0;
   background: rgba(0, 0, 0, 0.5);
   z-index: 9998;
-  backdrop-filter: blur(2px);
 }
 
 .archive-modal {
