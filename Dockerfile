@@ -39,13 +39,21 @@ RUN echo "Creating .env file from build args..." && \
 RUN npm run build
 
 # Production stage
-FROM nginx:alpine
+FROM node:20-alpine
 
-# Install envsubst for environment variable substitution
-RUN apk add --no-cache gettext
+# Install nginx and envsubst for serving static files
+RUN apk add --no-cache nginx gettext
+
+# Set working directory for cron jobs
+WORKDIR /app
 
 # Copy built files from builder
 COPY --from=builder /app/dist /usr/share/nginx/html
+
+# Copy source code and dependencies for cron job execution
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/node_modules ./node_modules
 
 # Verify dist files exist
 RUN ls -la /usr/share/nginx/html/ || echo "WARNING: dist directory is empty"
