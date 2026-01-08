@@ -69,6 +69,7 @@ export function useBeliotDeviceReadings(
     reading_type = 'all',
     start_date,
     end_date,
+    autoLoad = true,
   } = options;
 
   /**
@@ -201,11 +202,13 @@ export function useBeliotDeviceReadings(
     ]);
   }, [loadReadings, loadLastReading]);
 
-  // Автоматическая загрузка при изменении device_id или опций
+  // Автоматическая загрузка при изменении device_id или опций (только если autoLoad !== false)
   useEffect(() => {
-    loadReadings(0, false);
-    loadLastReading();
-  }, [loadReadings, loadLastReading]);
+    if (autoLoad) {
+      loadReadings(0, false);
+      loadLastReading();
+    }
+  }, [autoLoad, loadReadings, loadLastReading]);
 
   return {
     readings,

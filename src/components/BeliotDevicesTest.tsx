@@ -52,6 +52,8 @@ const BeliotDevicesTest: React.FC = () => {
   const [archiveViewType, setArchiveViewType] = useState<'readings' | 'volume'>('readings');
   const [archivePageSize, setArchivePageSize] = useState<number>(10);
   const [archiveGroupBy, setArchiveGroupBy] = useState<'hour' | 'day' | 'week' | 'month' | 'year'>('hour');
+  const [archiveDataLoaded, setArchiveDataLoaded] = useState<boolean>(false);
+  const [archiveCurrentPage, setArchiveCurrentPage] = useState<number>(1);
   const [archiveStartDate, setArchiveStartDate] = useState<string>(() => {
     // По умолчанию: начало текущих суток
     const today = new Date();
@@ -69,22 +71,78 @@ const BeliotDevicesTest: React.FC = () => {
   const [isGroupsPanelOpen, setIsGroupsPanelOpen] = useState<boolean>(false);
   const [isDetailsPanelOpen, setIsDetailsPanelOpen] = useState<boolean>(false);
   
+  // Функция для установки дат по умолчанию в зависимости от группировки
+  const updateDefaultDates = useCallback((groupBy: 'hour' | 'day' | 'week' | 'month' | 'year') => {
+    const today = new Date();
+    
+    switch (groupBy) {
+      case 'hour':
+        // Для часов: последние сутки
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        yesterday.setHours(0, 0, 0, 0);
+        today.setHours(23, 59, 59, 999);
+        setArchiveStartDate(yesterday.toISOString().split('T')[0]);
+        setArchiveEndDate(today.toISOString().split('T')[0]);
+        break;
+      case 'day':
+        // Для дней: текущий месяц
+        const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+        setArchiveStartDate(monthStart.toISOString().split('T')[0]);
+        setArchiveEndDate(today.toISOString().split('T')[0]);
+        break;
+      case 'week':
+        // Для недель: текущий месяц
+        const weekMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+        setArchiveStartDate(weekMonthStart.toISOString().split('T')[0]);
+        setArchiveEndDate(today.toISOString().split('T')[0]);
+        break;
+      case 'month':
+        // Для месяцев: текущий год
+        const yearStart = new Date(today.getFullYear(), 0, 1);
+        setArchiveStartDate(yearStart.toISOString().split('T')[0]);
+        setArchiveEndDate(today.toISOString().split('T')[0]);
+        break;
+      case 'year':
+        // Для лет: последние 5 лет
+        const fiveYearsAgo = new Date(today.getFullYear() - 5, 0, 1);
+        setArchiveStartDate(fiveYearsAgo.toISOString().split('T')[0]);
+        setArchiveEndDate(today.toISOString().split('T')[0]);
+        break;
+    }
+    // Сбрасываем флаг загрузки при изменении группировки
+    setArchiveDataLoaded(false);
+  }, []);
+  
   // Хук для работы с архивными данными текущего устройства
+  // autoLoad: false - не загружаем автоматически, только по кнопке
   const currentDeviceId = selectedDevice ? String(selectedDevice.device_id || selectedDevice.id || selectedDevice._id) : null;
   const {
     readings: archiveReadingsRaw,
     loading: archiveLoading,
     error: archiveError,
-    total: archiveTotal,
-    hasMore: archiveHasMore,
-    loadMore: loadMoreArchive,
     refresh: refreshArchive,
-  } = useBeliotDeviceReadings(isArchiveOpen ? currentDeviceId : null, {
+  } = useBeliotDeviceReadings((isArchiveOpen && archiveDataLoaded) ? currentDeviceId : null, {
     reading_type: 'hourly',
     limit: archivePageSize,
     start_date: archiveStartDate ? `${archiveStartDate}T00:00:00.000Z` : undefined,
     end_date: archiveEndDate ? `${archiveEndDate}T23:59:59.999Z` : undefined,
+    autoLoad: false, // Не загружаем автоматически
   });
+  
+  // Обработчик изменения группировки
+  const handleGroupByChange = useCallback((newGroupBy: 'hour' | 'day' | 'week' | 'month' | 'year') => {
+    setArchiveGroupBy(newGroupBy);
+    updateDefaultDates(newGroupBy);
+  }, [updateDefaultDates]);
+  
+  // Обработчик загрузки данных
+  const handleLoadArchiveData = useCallback(() => {
+    if (!currentDeviceId) return;
+    setArchiveDataLoaded(true);
+    // Данные загрузятся автоматически, так как currentDeviceId теперь передается в хук
+    refreshArchive();
+  }, [currentDeviceId, refreshArchive]);
 
   // Функция группировки показаний и генерации всех периодов в диапазоне
   const groupReadings = useCallback((
@@ -138,7 +196,22 @@ const BeliotDevicesTest: React.FC = () => {
       grouped.get(key)!.push(reading);
     });
 
-    // Генерируем все периоды в диапазоне
+    // Для группировки по часам: генерируем только до последнего часа с данными
+    // Для остальных группировок: генерируем все периоды в выбранном диапазоне
+    let effectiveEnd = end;
+    
+    if (groupBy === 'hour' && readings.length > 0) {
+      // Для часов: находим последний час с данными
+      const maxDate = new Date(Math.max(...readings.map(r => new Date(r.reading_date).getTime())));
+      const lastHourWithData = new Date(maxDate);
+      lastHourWithData.setMinutes(0, 0, 0);
+      lastHourWithData.setSeconds(0, 0);
+      lastHourWithData.setMilliseconds(0);
+      effectiveEnd = lastHourWithData;
+    }
+    // Для остальных группировок (day, week, month, year) используем весь выбранный диапазон
+    
+    // Генерируем периоды в диапазоне
     const allPeriods: Array<{
       groupKey: string;
       groupDate: Date;
@@ -148,7 +221,7 @@ const BeliotDevicesTest: React.FC = () => {
     
     const current = new Date(start);
     
-    while (current <= end) {
+    while (current <= effectiveEnd) {
       let key: string;
       let periodDate: Date;
       
@@ -227,8 +300,8 @@ const BeliotDevicesTest: React.FC = () => {
       });
     }
 
-    // Сортируем по дате (от старых к новым - по нарастанию)
-    return allPeriods.sort((a, b) => a.groupDate.getTime() - b.groupDate.getTime());
+    // Сортируем по дате (от новых к старым - по убыванию)
+    return allPeriods.sort((a, b) => b.groupDate.getTime() - a.groupDate.getTime());
   }, []);
 
   // Группированные показания со всеми периодами в диапазоне
@@ -241,13 +314,50 @@ const BeliotDevicesTest: React.FC = () => {
     return groupReadings(archiveReadingsRaw, archiveGroupBy, startDateStr, endDateStr);
   }, [archiveReadingsRaw, archiveGroupBy, archiveStartDate, archiveEndDate, groupReadings]);
   
-  // Перезагружаем архив при изменении параметров
+  // Пагинация: вычисляем отображаемые записи (по 10 на страницу)
+  const archivePageSizeDisplay = 10; // Фиксированный размер страницы для отображения
+  const archiveTotalPages = Math.ceil(archiveReadings.length / archivePageSizeDisplay);
+  const archiveStartIndex = (archiveCurrentPage - 1) * archivePageSizeDisplay;
+  const archiveEndIndex = archiveStartIndex + archivePageSizeDisplay;
+  const archiveDisplayedReadings = archiveReadings.slice(archiveStartIndex, archiveEndIndex);
+  
+  // Сброс страницы при изменении группировки или загрузке данных
   useEffect(() => {
-    if (isArchiveOpen && currentDeviceId) {
-      // При изменении диапазона дат или группировки перезагружаем данные
+    setArchiveCurrentPage(1);
+  }, [archiveGroupBy, archiveDataLoaded]);
+  
+  // Обработчики навигации по страницам
+  const handlePreviousPage = useCallback(() => {
+    if (archiveCurrentPage > 1) {
+      setArchiveCurrentPage(archiveCurrentPage - 1);
+    }
+  }, [archiveCurrentPage]);
+  
+  const handleNextPage = useCallback(() => {
+    if (archiveCurrentPage < archiveTotalPages) {
+      setArchiveCurrentPage(archiveCurrentPage + 1);
+    }
+  }, [archiveCurrentPage, archiveTotalPages]);
+  
+  // Перезагружаем архив при изменении параметров (только если данные уже загружены)
+  useEffect(() => {
+    if (isArchiveOpen && currentDeviceId && archiveDataLoaded) {
+      // При изменении диапазона дат перезагружаем данные
       refreshArchive();
     }
-  }, [archiveStartDate, archiveEndDate, currentDeviceId, isArchiveOpen, refreshArchive]);
+  }, [archiveStartDate, archiveEndDate, currentDeviceId, isArchiveOpen, archiveDataLoaded, refreshArchive]);
+  
+  // При открытии/закрытии архива сбрасываем флаг загрузки
+  useEffect(() => {
+    if (!isArchiveOpen) {
+      setArchiveDataLoaded(false);
+      setArchiveCurrentPage(1);
+    } else {
+      // При открытии архива также сбрасываем флаг, чтобы показать кнопку загрузки
+      setArchiveDataLoaded(false);
+      setArchiveCurrentPage(1);
+    }
+  }, [isArchiveOpen]);
   
   // Группировка применяется автоматически через useMemo при изменении archiveGroupBy
   
@@ -1277,14 +1387,20 @@ const BeliotDevicesTest: React.FC = () => {
                                     type="date"
                                     className="archive-date-input"
                                     value={archiveStartDate}
-                                    onChange={(e) => setArchiveStartDate(e.target.value)}
+                                    onChange={(e) => {
+                                      setArchiveStartDate(e.target.value);
+                                      setArchiveDataLoaded(false); // Сбрасываем флаг загрузки при изменении даты
+                                    }}
                                   />
                                   <label>По:</label>
                                   <input
                                     type="date"
                                     className="archive-date-input"
                                     value={archiveEndDate}
-                                    onChange={(e) => setArchiveEndDate(e.target.value)}
+                                    onChange={(e) => {
+                                      setArchiveEndDate(e.target.value);
+                                      setArchiveDataLoaded(false); // Сбрасываем флаг загрузки при изменении даты
+                                    }}
                                   />
                                 </div>
                                 
@@ -1294,7 +1410,7 @@ const BeliotDevicesTest: React.FC = () => {
                                   <select
                                     className="group-by-select"
                                     value={archiveGroupBy}
-                                    onChange={(e) => setArchiveGroupBy(e.target.value as 'hour' | 'day' | 'week' | 'month' | 'year')}
+                                    onChange={(e) => handleGroupByChange(e.target.value as 'hour' | 'day' | 'week' | 'month' | 'year')}
                                   >
                                     <option value="hour">По часам</option>
                                     <option value="day">По дням</option>
@@ -1334,10 +1450,29 @@ const BeliotDevicesTest: React.FC = () => {
                                   <option value={50}>50</option>
                                   <option value={100}>100</option>
                                 </select>
+                                
+                                {/* Кнопка загрузки данных */}
+                                {!archiveDataLoaded && (
+                                  <button
+                                    className="archive-load-button"
+                                    onClick={handleLoadArchiveData}
+                                    disabled={!currentDeviceId || archiveLoading}
+                                    title="Загрузить данные за выбранный период"
+                                  >
+                                    {archiveLoading ? 'Загрузка...' : '📥 Загрузить данные'}
+                                  </button>
+                                )}
                               </div>
                             </div>
                             
-                            {archiveLoading ? (
+                            {!archiveDataLoaded ? (
+                              <div className="empty-state">
+                                <p>Нажмите кнопку "Загрузить данные" для просмотра архива</p>
+                                <p style={{ fontSize: '12px', color: '#999', marginTop: '8px' }}>
+                                  Период: {archiveStartDate} - {archiveEndDate} ({archiveGroupBy === 'hour' ? 'последние сутки' : archiveGroupBy === 'day' ? 'текущий месяц' : archiveGroupBy === 'week' ? 'текущий месяц' : archiveGroupBy === 'month' ? 'текущий год' : 'последние 5 лет'})
+                                </p>
+                              </div>
+                            ) : archiveLoading ? (
                               <div className="loading-state">
                                 <div className="spinner"></div>
                                 <p>Загрузка архива...</p>
@@ -1365,12 +1500,13 @@ const BeliotDevicesTest: React.FC = () => {
                                     </tr>
                                   </thead>
                                   <tbody>
-                                    {archiveReadings.map((groupedReading: any, index) => {
+                                    {archiveDisplayedReadings.map((groupedReading: any, displayIndex) => {
+                                      // Вычисляем реальный индекс в полном массиве для получения предыдущего показания
+                                      const realIndex = archiveStartIndex + displayIndex;
                                       const readingDate = groupedReading.groupDate;
-                                      const nextReading = archiveReadings[index + 1] as any;
                                       const hasReading = !!groupedReading.reading;
                                       
-                                      // Форматируем дату в зависимости от группировки
+                                      // Форматируем дату в зависимости от группировки (всегда отображаем дату, даже если нет данных)
                                       let dateLabel = '';
                                       switch (archiveGroupBy) {
                                         case 'hour':
@@ -1404,24 +1540,40 @@ const BeliotDevicesTest: React.FC = () => {
                                           break;
                                       }
                                       
-                                      // Потребление: разница между следующей и текущей группой (так как теперь сортировка от старых к новым)
+                                      // Потребление: разница между текущим и предыдущим показанием
+                                      // Для всех группировок (hour, day, week, month, year) используем фактический подсчет
                                       let consumption = 0;
-                                      if (hasReading && nextReading?.reading) {
-                                        consumption = Number(nextReading.reading.reading_value) - Number(groupedReading.reading.reading_value);
-                                      } else if (hasReading) {
-                                        consumption = groupedReading.consumption || 0;
+                                      if (hasReading) {
+                                        // Ищем предыдущее показание с данными
+                                        // Так как сортировка от новых к старым, предыдущее по времени = следующее по индексу
+                                        let foundPreviousReading = null;
+                                        for (let i = realIndex + 1; i < archiveReadings.length; i++) {
+                                          if (archiveReadings[i]?.reading) {
+                                            foundPreviousReading = archiveReadings[i];
+                                            break;
+                                          }
+                                        }
+                                        
+                                        if (foundPreviousReading?.reading) {
+                                          // Есть предыдущее показание - вычисляем разницу (текущее - предыдущее)
+                                          // Так как сортировка от новых к старым, текущее больше предыдущего
+                                          consumption = Number(groupedReading.reading.reading_value) - Number(foundPreviousReading.reading.reading_value);
+                                        } else {
+                                          // Это последнее (самое старое) показание - потребление равно 0
+                                          consumption = 0;
+                                        }
                                       }
                                       
                                       return (
                                         <tr key={groupedReading.groupKey} className={`archive-row ${!hasReading ? 'no-data' : ''}`}>
-                                          <td>{dateLabel}</td>
+                                          <td style={{ minWidth: '180px', textAlign: 'left' }}>{dateLabel}</td>
                                           {archiveViewType === 'readings' ? (
                                             <td className="reading-value">
                                               {hasReading ? Number(groupedReading.reading.reading_value).toFixed(2) : '-'}
                                             </td>
                                           ) : (
                                             <td className={`volume-value ${consumption > 0 ? 'positive' : ''}`}>
-                                              {consumption > 0 ? `+${consumption.toFixed(2)}` : consumption !== 0 ? consumption.toFixed(2) : '-'}
+                                              {hasReading && consumption !== 0 ? (consumption > 0 ? `+${consumption.toFixed(2)}` : consumption.toFixed(2)) : '-'}
                                             </td>
                                           )}
                                           <td>{hasReading ? groupedReading.reading.unit : '-'}</td>
@@ -1431,20 +1583,35 @@ const BeliotDevicesTest: React.FC = () => {
                                   </tbody>
                                 </table>
                                 
-                                {archiveHasMore && (
-                                  <div className="load-more-container">
+                                {/* Навигация по страницам */}
+                                {archiveTotalPages > 1 && (
+                                  <div className="archive-pagination">
                                     <button
-                                      className="load-more-btn"
-                                      onClick={loadMoreArchive}
-                                      disabled={archiveLoading}
+                                      className="pagination-btn"
+                                      onClick={handlePreviousPage}
+                                      disabled={archiveCurrentPage === 1}
+                                      title="Предыдущая страница"
                                     >
-                                      Загрузить еще ({archivePageSize})
+                                      ←
+                                    </button>
+                                    <span className="pagination-info">
+                                      Страница {archiveCurrentPage} из {archiveTotalPages}
+                                      <span style={{ marginLeft: '8px', fontSize: '12px', color: '#666' }}>
+                                        (Показано {archiveStartIndex + 1}-{Math.min(archiveEndIndex, archiveReadings.length)} из {archiveReadings.length})
+                                      </span>
+                                    </span>
+                                    <button
+                                      className="pagination-btn"
+                                      onClick={handleNextPage}
+                                      disabled={archiveCurrentPage >= archiveTotalPages}
+                                      title="Следующая страница"
+                                    >
+                                      →
                                     </button>
                                   </div>
                                 )}
                                 
                                 <div className="archive-info">
-                                  <p>Показано: {archiveReadings.length} из {archiveTotal}</p>
                                   <button
                                     className="refresh-btn"
                                     onClick={refreshArchive}
