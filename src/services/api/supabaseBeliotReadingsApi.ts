@@ -39,6 +39,8 @@ export interface GetReadingsOptions {
   limit?: number;
   /** Смещение для пагинации (по умолчанию 0) */
   offset?: number;
+  /** Автоматическая загрузка при изменении параметров (по умолчанию true) */
+  autoLoad?: boolean;
 }
 
 /**
