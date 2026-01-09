@@ -74,6 +74,9 @@ const BeliotDevicesTest: React.FC = () => {
   const [isGroupsPanelOpen, setIsGroupsPanelOpen] = useState<boolean>(false);
   const [isDetailsPanelOpen, setIsDetailsPanelOpen] = useState<boolean>(false);
   
+  // Состояние для выпадающего меню действий на мобильных
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
+  
   // Функция для установки дат по умолчанию
   // Начальная дата всегда: первое число текущего месяца (независимо от группировки)
   const updateDefaultDates = useCallback((_groupBy: 'hour' | 'day' | 'week' | 'month' | 'year') => {
@@ -121,6 +124,18 @@ const BeliotDevicesTest: React.FC = () => {
     // Данные загрузятся автоматически, так как currentDeviceId теперь передается в хук
     refreshArchive();
   }, [currentDeviceId, refreshArchive]);
+
+  // Управление классом body для скрытия футера на мобильных при открытии архива
+  useEffect(() => {
+    if (isArchiveOpen) {
+      document.body.classList.add('archive-open');
+    } else {
+      document.body.classList.remove('archive-open');
+    }
+    return () => {
+      document.body.classList.remove('archive-open');
+    };
+  }, [isArchiveOpen]);
 
   // Функция группировки показаний и генерации всех периодов в диапазоне
   const groupReadings = useCallback((
@@ -1760,7 +1775,37 @@ const BeliotDevicesTest: React.FC = () => {
           <div className="mobile-groups-list">
             <div className="mobile-groups-header">
               <h3>Объекты</h3>
+              <button
+                className="mobile-menu-toggle"
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                title="Меню"
+              >
+                ☰
+              </button>
             </div>
+            
+            {/* Выпадающее меню действий для списка объектов */}
+            {isMobileMenuOpen && !selectedGroup && (
+              <>
+                <div 
+                  className="mobile-menu-overlay"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                />
+                <div className="mobile-actions-menu">
+                  <button
+                    className="mobile-menu-item"
+                    onClick={() => {
+                      handleGetDevices();
+                      setIsMobileMenuOpen(false);
+                    }}
+                    disabled={loading}
+                  >
+                    <span className="mobile-menu-icon">🔄</span>
+                    <span className="mobile-menu-text">Обновить</span>
+                  </button>
+                </div>
+              </>
+            )}
             {loading ? (
               <div className="loading-state">
                 <div className="spinner"></div>
@@ -1804,10 +1849,51 @@ const BeliotDevicesTest: React.FC = () => {
                   setError(null);
                 }}
               >
-                назад
+                ←
               </button>
               <h3>{selectedGroup.name}</h3>
+              <button
+                className="mobile-menu-toggle"
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                title="Меню"
+              >
+                ☰
+              </button>
             </div>
+            
+            {/* Выпадающее меню действий */}
+            {isMobileMenuOpen && (
+              <>
+                <div 
+                  className="mobile-menu-overlay"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                />
+                <div className="mobile-actions-menu">
+                  <button
+                    className="mobile-menu-item"
+                    onClick={() => {
+                      syncOverridesFromServer();
+                      setIsMobileMenuOpen(false);
+                    }}
+                    disabled={syncing}
+                  >
+                    <span className="mobile-menu-icon">🔄</span>
+                    <span className="mobile-menu-text">Синхронизировать</span>
+                  </button>
+                  <button
+                    className="mobile-menu-item"
+                    onClick={() => {
+                      setSearchQuery('');
+                      setIsMobileMenuOpen(false);
+                      // Можно добавить поиск здесь
+                    }}
+                  >
+                    <span className="mobile-menu-icon">🔍</span>
+                    <span className="mobile-menu-text">Поиск</span>
+                  </button>
+                </div>
+              </>
+            )}
             <div className="group-devices-table-container">
               <table className="group-devices-table">
                 <thead>
@@ -1926,10 +2012,49 @@ const BeliotDevicesTest: React.FC = () => {
                   setError(null);
                 }}
               >
-                назад
+                ←
               </button>
               <h3>{getDeviceName(selectedDevice) || selectedDevice.device_id || selectedDevice.id}</h3>
+              <button
+                className="mobile-menu-toggle"
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                title="Меню"
+              >
+                ☰
+              </button>
             </div>
+            
+            {/* Выпадающее меню действий для показаний */}
+            {isMobileMenuOpen && selectedDevice && (
+              <>
+                <div 
+                  className="mobile-menu-overlay"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                />
+                <div className="mobile-actions-menu">
+                  <button
+                    className="mobile-menu-item"
+                    onClick={() => {
+                      handleOpenPassport(selectedDevice);
+                      setIsMobileMenuOpen(false);
+                    }}
+                  >
+                    <span className="mobile-menu-icon">📄</span>
+                    <span className="mobile-menu-text">Паспорт</span>
+                  </button>
+                  <button
+                    className="mobile-menu-item"
+                    onClick={() => {
+                      setIsArchiveOpen(true);
+                      setIsMobileMenuOpen(false);
+                    }}
+                  >
+                    <span className="mobile-menu-icon">📊</span>
+                    <span className="mobile-menu-text">Архив</span>
+                  </button>
+                </div>
+              </>
+            )}
             <div className="mobile-readings-content">
               {loadingState ? (
                 <div className="loading-state">
@@ -2179,11 +2304,8 @@ const BeliotDevicesTest: React.FC = () => {
               </div>
               
               {!archiveDataLoaded ? (
-                <div className="empty-state">
-                  <p>Нажмите кнопку "Загрузить данные" для просмотра архива</p>
-                  <p style={{ fontSize: '12px', color: '#999', marginTop: '8px' }}>
-                    Период: {archiveStartDate} - {archiveEndDate} ({archiveGroupBy === 'hour' ? 'последние сутки' : archiveGroupBy === 'day' ? 'текущий месяц' : archiveGroupBy === 'week' ? 'текущий месяц' : archiveGroupBy === 'month' ? 'текущий год' : 'последние 5 лет'})
-                  </p>
+                <div className="empty-state" style={{ padding: '20px', fontSize: '14px', color: '#666' }}>
+                  <p>Выберите период и нажмите "Загрузить данные"</p>
                 </div>
               ) : archiveLoading ? (
                 <div className="loading-state">
