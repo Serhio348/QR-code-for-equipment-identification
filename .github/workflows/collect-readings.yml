@@ -1,0 +1,38 @@
+name: Collect Beliot Readings
+
+on:
+  schedule:
+    - cron: '0 * * * *'  # Каждый час в начале часа (00:00, 01:00, 02:00, ...)
+  workflow_dispatch:  # Позволяет запускать вручную
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run collection script
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BELIOT_LOGIN: ${{ secrets.BELIOT_LOGIN }}
+          BELIOT_PASSWORD: ${{ secrets.BELIOT_PASSWORD }}
+          BELIOT_API_BASE_URL: ${{ secrets.BELIOT_API_BASE_URL }}
+        run: npm run collect-readings
+      
+      - name: Check script result
+        if: failure()
+        run: |
+          echo "❌ Скрипт завершился с ошибкой"
+          exit 1
+
