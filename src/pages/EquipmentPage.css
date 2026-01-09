@@ -120,6 +120,35 @@
   box-sizing: border-box;
 }
 
+/* Оптимизация для больших экранов */
+@media (min-width: 1440px) {
+  .plate-container {
+    max-width: 1400px;
+    padding: 30px;
+    padding-top: 100px;
+  }
+  
+  .controls {
+    max-width: 1000px;
+  }
+}
+
+@media (min-width: 1920px) {
+  .plate-container {
+    max-width: 1600px;
+    padding: 40px;
+    padding-top: 100px;
+  }
+  
+  .controls {
+    max-width: 1200px;
+  }
+  
+  .home-page-header h1 {
+    font-size: 32px;
+  }
+}
+
 .controls {
   max-width: 800px;
   margin: 0 auto 20px;

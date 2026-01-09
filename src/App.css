@@ -27,6 +27,33 @@
   align-items: center;
 }
 
+/* Оптимизация для больших экранов */
+@media (min-width: 1440px) {
+  .header-content {
+    max-width: 1400px;
+  }
+}
+
+@media (min-width: 1920px) {
+  .header-content {
+    max-width: 1600px;
+    padding: 0 40px;
+  }
+  
+  .header-title h1 {
+    font-size: 32px;
+  }
+  
+  .header-title p {
+    font-size: 18px;
+  }
+  
+  .nav-link {
+    font-size: 18px;
+    padding: 10px 20px;
+  }
+}
+
 .header-title {
   text-decoration: none;
   color: white;

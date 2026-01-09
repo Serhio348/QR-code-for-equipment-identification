@@ -14,6 +14,42 @@
   padding: 30px;
 }
 
+/* Оптимизация для больших экранов */
+@media (min-width: 1440px) {
+  .access-settings-container {
+    max-width: 1600px;
+    padding: 40px;
+  }
+  
+  .access-settings-header h1 {
+    font-size: 32px;
+  }
+  
+  .access-settings-header p {
+    font-size: 18px;
+  }
+}
+
+@media (min-width: 1920px) {
+  .access-settings-container {
+    max-width: 1800px;
+    padding: 50px;
+  }
+  
+  .access-settings-header h1 {
+    font-size: 36px;
+  }
+  
+  .access-settings-table {
+    font-size: 16px;
+  }
+  
+  .access-settings-table th,
+  .access-settings-table td {
+    padding: 18px 20px;
+  }
+}
+
 .access-settings-header {
   margin-bottom: 30px;
   padding-bottom: 20px;
@@ -82,7 +118,7 @@
   border-color: #667eea;
 }
 
-.refresh-button {
+.access-settings-controls .refresh-button {
   background: #667eea;
   color: white;
   border: none;
@@ -91,15 +127,20 @@
   cursor: pointer;
   font-size: 16px;
   white-space: nowrap;
+  transition: all 0.2s ease;
+  transform: none !important; /* Явно отключаем вращение */
 }
 
-.refresh-button:hover:not(:disabled) {
+.access-settings-controls .refresh-button:hover:not(:disabled) {
   background: #5568d3;
+  transform: scale(1.05) !important; /* Легкое увеличение вместо вращения */
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
 }
 
-.refresh-button:disabled {
+.access-settings-controls .refresh-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+  transform: none !important;
 }
 
 .access-settings-table-container {
