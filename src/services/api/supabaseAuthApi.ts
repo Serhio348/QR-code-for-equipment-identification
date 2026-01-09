@@ -119,11 +119,15 @@ async function logLogin(
   try {
     // IP адрес не получаем на клиенте - передаем null
     // Для получения IP используйте Supabase Edge Functions или бэкенд
+    // ВАЖНО: Порядок параметров должен соответствовать определению функции в SQL
+    // Функция: log_login(p_success BOOLEAN, p_user_id UUID DEFAULT NULL, p_failure_reason TEXT DEFAULT NULL, p_ip_address TEXT DEFAULT NULL)
+    // Первый параметр обязательный, остальные с DEFAULT
+    // Передаем ВСЕ параметры явно (даже NULL), чтобы PostgreSQL мог однозначно определить функцию
     const { error } = await supabase.rpc('log_login', {
-      p_user_id: userId || null,
-      p_success: success,
-      p_failure_reason: failureReason || null,
-      p_ip_address: null, // IP не получаем на клиенте
+      p_success: success, // Обязательный параметр (первый)
+      p_user_id: userId || null, // Второй параметр
+      p_failure_reason: failureReason || null, // Третий параметр
+      p_ip_address: null, // Четвертый параметр (IP не получаем на клиенте)
     });
 
     if (error) {
@@ -208,7 +212,7 @@ export async function register(data: RegisterData): Promise<AuthResponse> {
       waitForProfile(authData.user.id),
       // Логирование успешной регистрации (неблокирующая операция)
       logLogin(authData.user.id, true),
-      // Получение сессии (если email подтвержден автоматически)
+      // Получение сессии
       supabase.auth.getSession(),
     ]);
 
@@ -279,8 +283,6 @@ export async function login(data: LoginData): Promise<AuthResponse> {
       let errorMessage = 'Неверный email или пароль';
       if (authError.message.includes('Invalid login credentials')) {
         errorMessage = 'Неверный email или пароль';
-      } else if (authError.message.includes('Email not confirmed')) {
-        errorMessage = 'Email не подтвержден. Проверьте почту и подтвердите регистрацию.';
       } else if (authError.message.includes('User not found')) {
         errorMessage = 'Пользователь не найден';
       } else {

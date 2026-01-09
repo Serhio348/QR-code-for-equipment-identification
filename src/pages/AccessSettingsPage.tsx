@@ -7,7 +7,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getAllUserAccess, updateUserAccess } from '../services/api/accessApi';
+import { getAllUserAccess, updateUserAccess } from '../services/api/supabaseAccessApi';
 import { AVAILABLE_APPS, type UserAppAccess, type AppId } from '../types/access';
 import { ROUTES } from '../utils/routes';
 import LoadingSpinner from '../components/LoadingSpinner';

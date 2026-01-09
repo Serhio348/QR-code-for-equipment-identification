@@ -7,7 +7,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getUserAccess } from '../services/api/accessApi';
+import { getUserAccess } from '../services/api/supabaseAccessApi';
 import { AVAILABLE_APPS, type UserAppAccess } from '../types/access';
 import { ROUTES } from '../utils/routes';
 import { clearLastPath } from '../utils/pathStorage';

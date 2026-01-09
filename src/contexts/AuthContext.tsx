@@ -293,7 +293,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // onAuthStateChange автоматически обновит состояние пользователя
       const response = await registerApi(data);
       
-      // Пользователь уже установлен через onAuthStateChange (если email подтвержден автоматически)
+      // Пользователь уже установлен через onAuthStateChange
       // Но можем обновить для немедленного отклика
       if (response.user) {
         setUser(response.user);
