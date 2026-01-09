@@ -633,14 +633,15 @@ async function collectReadings(): Promise<void> {
 
         console.log(`   📅 Дата показания из API: ${apiDateStr}`);
         console.log(`   📅 Используемая дата (текущее время): ${now.toISOString()} → округлено до: ${hourStart.toISOString()}`);
-        console.log(`   📊 Значение: ${readingValue} ${unit}`);
+        console.log(`   📊 Значение: ${readingValue} ${unit} (точность: ${readingValue.toFixed(3)})`);
 
         // Вставляем показание через RPC функцию (предотвращает дубликаты через ON CONFLICT DO UPDATE)
         // Функция возвращает UUID нового или обновленного показания
+        // ВАЖНО: Значение передается как число с точностью до 0.001 (3 знака после запятой)
         const { data: readingId, error } = await supabase.rpc('insert_beliot_reading', {
           p_device_id: deviceId,
           p_reading_date: hourStart.toISOString(),
-          p_reading_value: readingValue,
+          p_reading_value: readingValue, // Передаем как число, PostgreSQL сохранит с точностью NUMERIC(12, 3)
           p_unit: unit,
           p_reading_type: 'hourly',
           p_source: 'api',
@@ -681,7 +682,7 @@ async function collectReadings(): Promise<void> {
           // Функция insert_beliot_reading возвращает UUID нового или обновленного показания
           // Если readingId есть, значит показание было успешно вставлено или обновлено
           successCount++;
-          console.log(`   ✅ Показание сохранено/обновлено (ID: ${readingId}): ${readingValue} ${unit} на ${hourStart.toISOString()}`);
+          console.log(`   ✅ Показание сохранено/обновлено (ID: ${readingId}): ${readingValue.toFixed(3)} ${unit} на ${hourStart.toISOString()}`);
         } else {
           // Если readingId нет, но ошибки тоже нет - возможно, функция вернула NULL
           // Это может означать, что запись была обновлена, но функция не вернула ID
