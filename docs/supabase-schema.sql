@@ -33,12 +33,19 @@ DROP POLICY IF EXISTS "Admins can view all login history" ON public.login_histor
 DROP POLICY IF EXISTS "Authenticated users can view overrides" ON public.beliot_device_overrides;
 DROP POLICY IF EXISTS "Only admins can modify overrides" ON public.beliot_device_overrides;
 
+DROP POLICY IF EXISTS "Users can read readings" ON public.beliot_device_readings;
+DROP POLICY IF EXISTS "Only system can insert readings" ON public.beliot_device_readings;
+DROP POLICY IF EXISTS "Users cannot update readings" ON public.beliot_device_readings;
+DROP POLICY IF EXISTS "Users cannot delete readings" ON public.beliot_device_readings;
+
 -- Удаляем существующие функции
 DROP FUNCTION IF EXISTS public.is_admin() CASCADE;
 DROP FUNCTION IF EXISTS public.get_user_role(UUID) CASCADE;
 DROP FUNCTION IF EXISTS public.handle_new_user() CASCADE;
 DROP FUNCTION IF EXISTS public.handle_updated_at() CASCADE;
 DROP FUNCTION IF EXISTS public.log_login(BOOLEAN, UUID, TEXT, TEXT) CASCADE;
+DROP FUNCTION IF EXISTS public.insert_beliot_reading(TEXT, TIMESTAMPTZ, NUMERIC, TEXT, TEXT, TEXT, TEXT) CASCADE;
+DROP FUNCTION IF EXISTS public.get_last_beliot_reading(TEXT, TEXT) CASCADE;
 
 -- ============================================================================
 -- ТАБЛИЦА: profiles
@@ -138,6 +145,48 @@ CREATE TABLE IF NOT EXISTS public.beliot_device_overrides (
 DROP INDEX IF EXISTS idx_beliot_overrides_device_id; -- Удаляем избыточный индекс (UNIQUE уже создает индекс)
 DROP INDEX IF EXISTS idx_beliot_overrides_group;
 CREATE INDEX idx_beliot_overrides_group ON public.beliot_device_overrides(device_group);
+
+-- ============================================================================
+-- ТАБЛИЦА: beliot_device_readings
+-- Показания счетчиков Beliot
+-- 
+-- ВАЖНО: 
+-- - Точность reading_value: NUMERIC(12, 3) - до 0.001 м³
+-- - Функция insert_beliot_reading всегда обновляет updated_at при каждом вызове
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS public.beliot_device_readings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  device_id TEXT NOT NULL,
+  reading_date TIMESTAMPTZ NOT NULL,
+  reading_value NUMERIC(12, 3) NOT NULL,
+  unit TEXT DEFAULT 'м³',
+  reading_type TEXT DEFAULT 'hourly' CHECK (reading_type IN ('hourly', 'daily')),
+  source TEXT DEFAULT 'api',
+  period TEXT DEFAULT 'current' CHECK (period IN ('current', 'previous')),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  
+  -- Уникальность: одно показание за период для устройства
+  CONSTRAINT unique_device_reading UNIQUE (device_id, reading_date, reading_type)
+);
+
+-- Индексы
+DROP INDEX IF EXISTS idx_beliot_readings_device_date;
+DROP INDEX IF EXISTS idx_beliot_readings_date;
+DROP INDEX IF EXISTS idx_beliot_readings_device_type;
+
+-- Составной индекс для быстрого поиска по устройству и дате
+CREATE INDEX idx_beliot_readings_device_date 
+  ON public.beliot_device_readings(device_id, reading_date DESC);
+
+-- Индекс для сортировки по дате (для общих запросов)
+CREATE INDEX idx_beliot_readings_date 
+  ON public.beliot_device_readings(reading_date DESC);
+
+-- Индекс для поиска по устройству и типу показания
+CREATE INDEX idx_beliot_readings_device_type 
+  ON public.beliot_device_readings(device_id, reading_type);
 
 -- ============================================================================
 -- ФУНКЦИИ
@@ -322,6 +371,117 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER VOLATILE;
 
+-- Функция для безопасной вставки показаний счетчиков Beliot (используется Railway cron job)
+-- SECURITY DEFINER: обходит RLS, позволяя вставлять записи через Service Role
+-- ВАЖНО: Поддерживает точность до 0.001 м³ (NUMERIC(12, 3))
+-- Всегда обновляет updated_at при каждом вызове для отслеживания последнего опроса
+CREATE OR REPLACE FUNCTION public.insert_beliot_reading(
+  p_device_id TEXT,
+  p_reading_date TIMESTAMPTZ,
+  p_reading_value NUMERIC,
+  p_unit TEXT DEFAULT 'м³',
+  p_reading_type TEXT DEFAULT 'hourly',
+  p_source TEXT DEFAULT 'api',
+  p_period TEXT DEFAULT 'current'
+)
+RETURNS UUID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_id UUID;
+BEGIN
+  -- Защита от атак через подмену схемы (schema injection)
+  SET search_path = public, pg_temp;
+  
+  -- Вставляем или обновляем показание
+  -- ВАЖНО: Всегда обновляем updated_at, даже если значение не изменилось
+  -- Это позволяет отслеживать последний успешный опрос устройства
+  INSERT INTO public.beliot_device_readings (
+    device_id,
+    reading_date,
+    reading_value,
+    unit,
+    reading_type,
+    source,
+    period
+  )
+  VALUES (
+    p_device_id,
+    p_reading_date,
+    p_reading_value,
+    p_unit,
+    p_reading_type,
+    p_source,
+    p_period
+  )
+  ON CONFLICT (device_id, reading_date, reading_type) 
+  DO UPDATE SET
+    -- Обновляем значение (даже если оно изменилось на 0.001)
+    reading_value = EXCLUDED.reading_value,
+    -- ВСЕГДА обновляем updated_at, чтобы отслеживать последний опрос
+    updated_at = NOW()
+  RETURNING id INTO v_id;
+  
+  -- Если это обновление существующей записи, но RETURNING не вернул ID
+  -- (что не должно происходить, но на всякий случай)
+  IF v_id IS NULL THEN
+    SELECT id INTO v_id
+    FROM public.beliot_device_readings
+    WHERE device_id = p_device_id
+      AND reading_date = p_reading_date
+      AND reading_type = p_reading_type
+    LIMIT 1;
+  END IF;
+  
+  RETURN v_id;
+END;
+$$;
+
+-- Функция для получения последнего показания устройства
+CREATE OR REPLACE FUNCTION public.get_last_beliot_reading(
+  p_device_id TEXT,
+  p_reading_type TEXT DEFAULT 'hourly'
+)
+RETURNS TABLE (
+  id UUID,
+  device_id TEXT,
+  reading_date TIMESTAMPTZ,
+  reading_value NUMERIC,
+  unit TEXT,
+  reading_type TEXT,
+  source TEXT,
+  period TEXT,
+  created_at TIMESTAMPTZ
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  -- Защита от атак через подмену схемы (schema injection)
+  SET search_path = public, pg_temp;
+  
+  RETURN QUERY
+  SELECT 
+    r.id,
+    r.device_id,
+    r.reading_date,
+    r.reading_value,
+    r.unit,
+    r.reading_type,
+    r.source,
+    r.period,
+    r.created_at
+  FROM public.beliot_device_readings r
+  WHERE r.device_id = p_device_id
+    AND r.reading_type = p_reading_type
+  ORDER BY r.reading_date DESC
+  LIMIT 1;
+END;
+$$;
+
 -- ============================================================================
 -- RLS ПОЛИТИКИ (Row Level Security)
 -- ============================================================================
@@ -340,6 +500,7 @@ ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_app_access ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.login_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.beliot_device_overrides ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.beliot_device_readings ENABLE ROW LEVEL SECURITY;
 
 -- Таблица: profiles
 -- Пользователи могут просматривать свой профиль
@@ -425,6 +586,30 @@ CREATE POLICY "Only admins can modify overrides"
   USING (public.is_admin())
   WITH CHECK (public.is_admin());
 
+-- Таблица: beliot_device_readings
+-- Все авторизованные пользователи могут читать показания
+CREATE POLICY "Users can read readings"
+  ON public.beliot_device_readings FOR SELECT
+  USING (auth.role() = 'authenticated');
+
+-- Только система (через Service Role) может вставлять показания
+-- Пользователи не могут вставлять показания напрямую
+-- Вставка возможна только через функцию insert_beliot_reading (SECURITY DEFINER)
+CREATE POLICY "Only system can insert readings"
+  ON public.beliot_device_readings FOR INSERT
+  WITH CHECK (false); -- Блокируем прямые вставки, только через функцию
+
+-- Пользователи не могут обновлять показания
+CREATE POLICY "Users cannot update readings"
+  ON public.beliot_device_readings FOR UPDATE
+  USING (false)
+  WITH CHECK (false);
+
+-- Пользователи не могут удалять показания
+CREATE POLICY "Users cannot delete readings"
+  ON public.beliot_device_readings FOR DELETE
+  USING (false);
+
 -- ============================================================================
 -- ТРИГГЕРЫ
 -- ============================================================================
@@ -443,6 +628,7 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 DROP TRIGGER IF EXISTS update_profiles_updated_at ON public.profiles;
 DROP TRIGGER IF EXISTS update_user_app_access_updated_at ON public.user_app_access;
 DROP TRIGGER IF EXISTS update_beliot_overrides_updated_at ON public.beliot_device_overrides;
+DROP TRIGGER IF EXISTS update_beliot_readings_updated_at ON public.beliot_device_readings;
 
 -- Триггер для автоматического создания профиля
 CREATE TRIGGER on_auth_user_created
@@ -460,6 +646,10 @@ CREATE TRIGGER update_user_app_access_updated_at
 
 CREATE TRIGGER update_beliot_overrides_updated_at
   BEFORE UPDATE ON public.beliot_device_overrides
+  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+CREATE TRIGGER update_beliot_readings_updated_at
+  BEFORE UPDATE ON public.beliot_device_readings
   FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
 -- ============================================================================
@@ -480,6 +670,8 @@ ALTER FUNCTION public.is_admin() SET search_path = public, pg_temp;
 ALTER FUNCTION public.get_user_role(UUID) SET search_path = public, pg_temp;
 ALTER FUNCTION public.handle_new_user() SET search_path = public, auth, pg_temp;
 ALTER FUNCTION public.log_login(BOOLEAN, UUID, TEXT, TEXT) SET search_path = public, pg_temp;
+ALTER FUNCTION public.insert_beliot_reading(TEXT, TIMESTAMPTZ, NUMERIC, TEXT, TEXT, TEXT, TEXT) SET search_path = public, pg_temp;
+ALTER FUNCTION public.get_last_beliot_reading(TEXT, TEXT) SET search_path = public, pg_temp;
 
 -- Настройка search_path для функции get_login_history_with_email
 ALTER FUNCTION public.get_login_history_with_email(INTEGER, UUID) SET search_path = public, pg_temp;
@@ -497,7 +689,27 @@ COMMENT ON TABLE public.profiles IS 'Профили пользователей (
 COMMENT ON TABLE public.user_app_access IS 'Настройки доступа пользователей к приложениям (equipment, water). Email получается через JOIN с profiles.';
 COMMENT ON TABLE public.login_history IS 'История входов пользователей. Email получается через JOIN с profiles. Вставка записей возможна ТОЛЬКО через функцию log_login() (SECURITY DEFINER).';
 COMMENT ON TABLE public.beliot_device_overrides IS 'Пользовательские изменения данных счетчиков Beliot. Только администраторы могут изменять записи.';
+COMMENT ON TABLE public.beliot_device_readings IS 'Показания счетчиков Beliot. Автоматически собираются через Railway cron job. Точность reading_value: NUMERIC(12, 3) - до 0.001 м³. Вставка возможна ТОЛЬКО через функцию insert_beliot_reading() (SECURITY DEFINER).';
 
 -- Колонки с внешними ключами
 COMMENT ON COLUMN public.user_app_access.user_id IS 'Ссылка на profiles.id. Email получается через JOIN с profiles.';
 COMMENT ON COLUMN public.login_history.user_id IS 'Ссылка на profiles.id. Email получается через JOIN с profiles.';
+
+-- Комментарии к функциям Beliot
+COMMENT ON FUNCTION public.insert_beliot_reading IS 
+  'Безопасная вставка показания счетчика. Используется Railway cron job. 
+   Предотвращает дубликаты через ON CONFLICT. 
+   Всегда обновляет updated_at при каждом вызове для отслеживания последнего опроса. 
+   Поддерживает точность до 0.001 м³ (NUMERIC(12, 3)).';
+COMMENT ON FUNCTION public.get_last_beliot_reading IS 'Получение последнего показания устройства. Используется для отображения текущих значений.';
+
+-- Комментарии к колонкам beliot_device_readings
+COMMENT ON COLUMN public.beliot_device_readings.device_id IS 'ID устройства из Beliot API';
+COMMENT ON COLUMN public.beliot_device_readings.reading_date IS 'Дата и время снятия показания';
+COMMENT ON COLUMN public.beliot_device_readings.reading_value IS 'Значение показания (точность до 0.001 м³)';
+COMMENT ON COLUMN public.beliot_device_readings.unit IS 'Единица измерения (по умолчанию: м³)';
+COMMENT ON COLUMN public.beliot_device_readings.reading_type IS 'Тип показания: hourly (почасовой) или daily (ежедневный)';
+COMMENT ON COLUMN public.beliot_device_readings.source IS 'Источник данных: всегда "api" (из Beliot API)';
+COMMENT ON COLUMN public.beliot_device_readings.period IS 'Период: current (текущее) или previous (предыдущее)';
+COMMENT ON COLUMN public.beliot_device_readings.created_at IS 'Дата и время создания записи';
+COMMENT ON COLUMN public.beliot_device_readings.updated_at IS 'Дата и время последнего обновления записи';

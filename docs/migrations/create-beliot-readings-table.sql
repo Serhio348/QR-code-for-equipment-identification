@@ -3,7 +3,12 @@
 -- Показания счетчиков Beliot
 -- 
 -- Дата создания: 2026-01-07
+-- Обновлено: 2026-01-08 (точность до 3 знаков после запятой)
 -- Статус: Этап 1 миграции Beliot на Supabase
+-- 
+-- ВАЖНО: 
+-- - Точность reading_value: NUMERIC(12, 3) - до 0.001 м³
+-- - Функция insert_beliot_reading всегда обновляет updated_at при каждом вызове
 -- ============================================================================
 
 -- ============================================================================
@@ -14,7 +19,7 @@ CREATE TABLE IF NOT EXISTS public.beliot_device_readings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   device_id TEXT NOT NULL,
   reading_date TIMESTAMPTZ NOT NULL,
-  reading_value NUMERIC(12, 2) NOT NULL,
+  reading_value NUMERIC(12, 3) NOT NULL,
   unit TEXT DEFAULT 'м³',
   reading_type TEXT DEFAULT 'hourly' CHECK (reading_type IN ('hourly', 'daily')),
   source TEXT DEFAULT 'api',
@@ -83,6 +88,8 @@ CREATE POLICY "Users cannot delete readings"
 
 -- Функция для безопасной вставки показаний (используется Railway скриптом)
 -- SECURITY DEFINER: обходит RLS, позволяя вставлять записи через Service Role
+-- ВАЖНО: Поддерживает точность до 0.001 м³ (NUMERIC(12, 3))
+-- Всегда обновляет updated_at при каждом вызове для отслеживания последнего опроса
 CREATE OR REPLACE FUNCTION public.insert_beliot_reading(
   p_device_id TEXT,
   p_reading_date TIMESTAMPTZ,
@@ -103,8 +110,9 @@ BEGIN
   -- Защита от атак через подмену схемы (schema injection)
   SET search_path = public, pg_temp;
   
-  -- Проверяем на дубликаты (по device_id + reading_date + reading_type)
-  -- Используем ON CONFLICT для upsert (обновление при конфликте)
+  -- Вставляем или обновляем показание
+  -- ВАЖНО: Всегда обновляем updated_at, даже если значение не изменилось
+  -- Это позволяет отслеживать последний успешный опрос устройства
   INSERT INTO public.beliot_device_readings (
     device_id,
     reading_date,
@@ -125,16 +133,33 @@ BEGIN
   )
   ON CONFLICT (device_id, reading_date, reading_type) 
   DO UPDATE SET
+    -- Обновляем значение (даже если оно изменилось на 0.001)
     reading_value = EXCLUDED.reading_value,
+    -- ВСЕГДА обновляем updated_at, чтобы отслеживать последний опрос
     updated_at = NOW()
   RETURNING id INTO v_id;
+  
+  -- Если это обновление существующей записи, но RETURNING не вернул ID
+  -- (что не должно происходить, но на всякий случай)
+  IF v_id IS NULL THEN
+    SELECT id INTO v_id
+    FROM public.beliot_device_readings
+    WHERE device_id = p_device_id
+      AND reading_date = p_reading_date
+      AND reading_type = p_reading_type
+    LIMIT 1;
+  END IF;
   
   RETURN v_id;
 END;
 $$;
 
 -- Комментарий к функции
-COMMENT ON FUNCTION public.insert_beliot_reading IS 'Безопасная вставка показания счетчика. Используется Railway cron job. Предотвращает дубликаты через ON CONFLICT.';
+COMMENT ON FUNCTION public.insert_beliot_reading IS 
+  'Безопасная вставка показания счетчика. Используется Railway cron job. 
+   Предотвращает дубликаты через ON CONFLICT. 
+   Всегда обновляет updated_at при каждом вызове для отслеживания последнего опроса. 
+   Поддерживает точность до 0.001 м³ (NUMERIC(12, 3)).';
 
 -- Настройка search_path для функции
 ALTER FUNCTION public.insert_beliot_reading(TEXT, TIMESTAMPTZ, NUMERIC, TEXT, TEXT, TEXT, TEXT) 
@@ -207,7 +232,7 @@ CREATE TRIGGER update_beliot_readings_updated_at
 COMMENT ON TABLE public.beliot_device_readings IS 'Показания счетчиков Beliot. Автоматически собираются через Railway cron job.';
 COMMENT ON COLUMN public.beliot_device_readings.device_id IS 'ID устройства из Beliot API';
 COMMENT ON COLUMN public.beliot_device_readings.reading_date IS 'Дата и время снятия показания';
-COMMENT ON COLUMN public.beliot_device_readings.reading_value IS 'Значение показания';
+COMMENT ON COLUMN public.beliot_device_readings.reading_value IS 'Значение показания (точность до 0.001 м³)';
 COMMENT ON COLUMN public.beliot_device_readings.unit IS 'Единица измерения (по умолчанию: м³)';
 COMMENT ON COLUMN public.beliot_device_readings.reading_type IS 'Тип показания: hourly (почасовой) или daily (ежедневный)';
 COMMENT ON COLUMN public.beliot_device_readings.source IS 'Источник данных: всегда "api" (из Beliot API)';
@@ -265,4 +290,44 @@ SELECT
 FROM pg_proc 
 WHERE pronamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public')
   AND proname IN ('insert_beliot_reading', 'get_last_beliot_reading');
+
+-- ============================================================================
+-- ПРОВЕРКА ТОЧНОСТИ ДАННЫХ
+-- ============================================================================
+
+-- Проверяем, что reading_value имеет точность до 3 знаков после запятой
+SELECT 
+  'Проверка точности reading_value' AS check_name,
+  column_name,
+  data_type,
+  numeric_precision,
+  numeric_scale,
+  CASE 
+    WHEN numeric_scale = 3 THEN '✅ Правильно (3 знака после запятой)'
+    WHEN numeric_scale = 2 THEN '⚠️ Нужно обновить до 3 знаков (см. раздел МИГРАЦИЯ ниже)'
+    ELSE '❌ Неожиданная точность'
+  END AS status
+FROM information_schema.columns
+WHERE table_schema = 'public'
+  AND table_name = 'beliot_device_readings'
+  AND column_name = 'reading_value';
+
+-- ============================================================================
+-- МИГРАЦИЯ: Обновление существующей таблицы до точности 3 знака
+-- ============================================================================
+-- Если таблица уже создана с NUMERIC(12, 2), выполните этот блок для обновления:
+-- ============================================================================
+
+/*
+-- 1. Изменяем тип колонки reading_value на NUMERIC(12, 3)
+ALTER TABLE public.beliot_device_readings 
+  ALTER COLUMN reading_value TYPE NUMERIC(12, 3);
+
+-- 2. Обновляем комментарий к колонке
+COMMENT ON COLUMN public.beliot_device_readings.reading_value IS 
+  'Значение показания (точность до 0.001 м³)';
+
+-- 3. Обновляем функцию insert_beliot_reading (уже включена выше, но можно пересоздать)
+-- Функция уже обновлена в разделе ФУНКЦИИ выше
+*/
 
