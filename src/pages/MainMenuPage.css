@@ -21,6 +21,22 @@
   flex-direction: column;
 }
 
+/* Оптимизация для больших экранов */
+@media (min-width: 1920px) {
+  .main-menu-container {
+    max-width: 700px;
+  }
+  
+  .main-menu-title {
+    font-size: 36px;
+  }
+  
+  .main-menu-button {
+    padding: 28px;
+    font-size: 18px;
+  }
+}
+
 .main-menu-header {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
