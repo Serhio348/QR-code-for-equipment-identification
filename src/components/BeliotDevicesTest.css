@@ -2762,12 +2762,19 @@
   border-bottom: 1px solid #e0e0e0;
 }
 
-.archive-table-container {
-  flex: 1;
-  overflow-y: auto;
-  max-height: calc(90vh - 300px);
-  margin-bottom: 16px;
-}
+  .archive-table-container {
+    flex: 1;
+    overflow-y: auto;
+    max-height: calc(90vh - 300px);
+    margin-bottom: 16px;
+    min-height: 200px;
+  }
+  
+  @media (max-width: 768px) {
+    .archive-table-container {
+      min-height: 150px;
+    }
+  }
 
 .archive-modal-content .archive-table {
   margin-bottom: 0;
@@ -2789,6 +2796,8 @@
     left: 0;
     transform: none;
     border-radius: 0;
+    display: flex;
+    flex-direction: column;
   }
 
   .archive-modal-header {
@@ -2813,6 +2822,10 @@
     padding: 12px;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
   }
 
   /* Элементы управления - вертикально */
@@ -2821,6 +2834,7 @@
     gap: 10px;
     margin-bottom: 12px;
     padding-bottom: 12px;
+    flex-shrink: 0;
   }
 
   .archive-date-range {
@@ -2879,12 +2893,40 @@
     width: 100%;
     padding: 12px;
     font-size: 14px;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    margin-top: 8px;
+    order: 999;
+    position: relative;
+    z-index: 10;
+  }
+  
+  .archive-controls:has(.archive-load-button) {
+    position: relative;
   }
 
   .archive-table-container {
-    max-height: calc(100vh - 480px);
+    flex: 1;
+    min-height: 200px;
+    max-height: none;
     overflow-x: auto;
+    overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+    margin-top: 12px;
+    display: block;
+  }
+  
+  .archive-modal-content:has(.empty-state) .archive-table-container {
+    display: none;
+  }
+  
+  .archive-modal-content:has(.loading-state) .archive-table-container {
+    display: none;
+  }
+  
+  .archive-modal-content:has(.error-state) .archive-table-container {
+    display: none;
   }
 
   /* Упрощенная таблица для мобильных */
@@ -2945,6 +2987,42 @@
   .archive-table th:nth-child(3),
   .archive-table td:nth-child(3) {
     display: none;
+  }
+
+  /* Empty state и loading state для мобильных */
+  .archive-modal-content .empty-state {
+    padding: 20px 12px;
+    font-size: 14px;
+    text-align: center;
+    color: #666;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 150px;
+  }
+
+  .archive-modal-content .loading-state {
+    padding: 20px 12px;
+    text-align: center;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 150px;
+  }
+
+  .archive-modal-content .error-state {
+    padding: 20px 12px;
+    font-size: 14px;
+    text-align: center;
+    color: #d32f2f;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 150px;
   }
 }
 

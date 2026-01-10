@@ -114,6 +114,9 @@ const BeliotDevicesTest: React.FC = () => {
   // Обработчик изменения группировки
   const handleGroupByChange = useCallback((newGroupBy: 'hour' | 'day' | 'week' | 'month' | 'year') => {
     setArchiveGroupBy(newGroupBy);
+    // Сбрасываем загруженные данные при изменении группировки
+    setArchiveDataLoaded(false);
+    // Обновляем даты по умолчанию для новой группировки
     updateDefaultDates(newGroupBy);
   }, [updateDefaultDates]);
   
