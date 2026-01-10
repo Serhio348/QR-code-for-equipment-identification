@@ -126,7 +126,12 @@ export async function getFolderFiles(folderUrl: string): Promise<DriveFile[]> {
         statusText: response.statusText,
         body: errorText
       });
-      throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+      
+      // Создаем ошибку с информацией о статусе для лучшей диагностики
+      const error: any = new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+      error.status = response.status;
+      error.statusText = response.statusText;
+      throw error;
     }
 
     const data = await response.json();

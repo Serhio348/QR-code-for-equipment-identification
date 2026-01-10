@@ -16,9 +16,15 @@ const DriveFilesList: React.FC<DriveFilesListProps> = ({ folderUrl, equipmentNam
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [isCheckingAccess, setIsCheckingAccess] = useState<boolean>(false);
+  const checkIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
+  const isCheckingAccessRef = React.useRef<boolean>(false);
+  const accessGrantedRef = React.useRef<boolean>(false);
 
-  const loadFiles = useCallback(async () => {
-    setLoading(true);
+  const loadFiles = useCallback(async (silent: boolean = false, checkAccess: boolean = false) => {
+    if (!silent) {
+      setLoading(true);
+    }
     setError(null);
     
     try {
@@ -27,6 +33,26 @@ const DriveFilesList: React.FC<DriveFilesListProps> = ({ folderUrl, equipmentNam
       console.log('📁 Получено файлов:', filesList.length, filesList);
       setFiles(filesList);
       
+      // Если доступ получен и ранее была ошибка, останавливаем проверку и открываем папку
+      if (checkAccess && isCheckingAccessRef.current && !accessGrantedRef.current) {
+        console.log('✅ Доступ к папке получен!');
+        accessGrantedRef.current = true;
+        setIsCheckingAccess(false);
+        isCheckingAccessRef.current = false;
+        
+        // Останавливаем периодическую проверку
+        if (checkIntervalRef.current) {
+          clearInterval(checkIntervalRef.current);
+          checkIntervalRef.current = null;
+        }
+        
+        // Показываем уведомление и автоматически открываем папку
+        setTimeout(() => {
+          alert('✅ Доступ к папке получен! Папка откроется автоматически.');
+          window.open(folderUrl, '_blank', 'noopener,noreferrer');
+        }, 500);
+      }
+      
       if (filesList.length === 0) {
         console.log('⚠️ Папка пуста или файлы не найдены');
       }
@@ -34,9 +60,63 @@ const DriveFilesList: React.FC<DriveFilesListProps> = ({ folderUrl, equipmentNam
       console.error('❌ Ошибка загрузки файлов:', err);
       console.error('  - URL папки:', folderUrl);
       console.error('  - Сообщение ошибки:', err.message);
-      setError(`Не удалось загрузить список файлов: ${err.message || 'Неизвестная ошибка'}`);
+      
+      // Проверяем, является ли ошибка ошибкой доступа
+      const httpStatus = (err as any)?.status;
+      const isAccessError = httpStatus === 403 || 
+                           httpStatus === 401 ||
+                           err.message?.toLowerCase().includes('access') || 
+                           err.message?.toLowerCase().includes('permission') ||
+                           err.message?.toLowerCase().includes('доступ') ||
+                           err.message?.toLowerCase().includes('разрешение') ||
+                           err.message?.toLowerCase().includes('403') ||
+                           err.message?.toLowerCase().includes('401') ||
+                           err.message?.toLowerCase().includes('forbidden') ||
+                           err.message?.toLowerCase().includes('unauthorized');
+      
+      if (isAccessError && !isCheckingAccessRef.current) {
+        // Начинаем периодическую проверку доступа
+        console.log('🔍 Начинаем проверку доступа к папке...');
+        setIsCheckingAccess(true);
+        isCheckingAccessRef.current = true;
+        accessGrantedRef.current = false;
+        
+        // Проверяем доступ каждые 3 секунды (максимум 2 минуты = 40 попыток)
+        let attempts = 0;
+        const maxAttempts = 40;
+        
+        checkIntervalRef.current = setInterval(async () => {
+          attempts++;
+          console.log(`🔍 Проверка доступа (попытка ${attempts}/${maxAttempts})...`);
+          
+          try {
+            // Тихая проверка доступа с флагом checkAccess
+            await loadFiles(true, true);
+          } catch (checkErr: any) {
+            // Если все еще ошибка доступа, продолжаем проверку
+            if (attempts >= maxAttempts) {
+              console.log('⏱️ Превышено время ожидания доступа');
+              setIsCheckingAccess(false);
+              isCheckingAccessRef.current = false;
+              if (checkIntervalRef.current) {
+                clearInterval(checkIntervalRef.current);
+                checkIntervalRef.current = null;
+              }
+              setError('Доступ к папке не получен в течение 2 минут. Попробуйте позже или обратитесь к администратору.');
+            }
+          }
+        }, 3000);
+      } else if (!isAccessError) {
+        // Если это не ошибка доступа, показываем обычную ошибку
+        setError(`Не удалось загрузить список файлов: ${err.message || 'Неизвестная ошибка'}`);
+      } else {
+        // Если это ошибка доступа и мы уже проверяем, не показываем ошибку
+        // Просто продолжаем проверку
+      }
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   }, [folderUrl]);
 
@@ -44,6 +124,14 @@ const DriveFilesList: React.FC<DriveFilesListProps> = ({ folderUrl, equipmentNam
     if (folderUrl) {
       loadFiles();
     }
+    
+    // Очистка интервала при размонтировании компонента
+    return () => {
+      if (checkIntervalRef.current) {
+        clearInterval(checkIntervalRef.current);
+        checkIntervalRef.current = null;
+      }
+    };
   }, [folderUrl, loadFiles]);
 
   const formatFileSize = (bytes: number): string => {
@@ -96,12 +184,42 @@ const DriveFilesList: React.FC<DriveFilesListProps> = ({ folderUrl, equipmentNam
     );
   }
 
-  if (error) {
+  if (error && !isCheckingAccess) {
     return (
       <div className="drive-files-list">
         <div className="files-error">
           <span>⚠️ {error}</span>
-          <button onClick={loadFiles} className="retry-button">Повторить</button>
+          <button onClick={() => loadFiles(false)} className="retry-button">Повторить</button>
+        </div>
+      </div>
+    );
+  }
+  
+  if (isCheckingAccess) {
+    return (
+      <div className="drive-files-list">
+        <div className="files-checking-access">
+          <div className="checking-spinner">⏳</div>
+          <p>⏳ Ожидание доступа к папке...</p>
+          <p className="checking-hint">
+            Администратор должен предоставить доступ к папке в Google Drive.
+            <br />
+            Папка откроется автоматически после получения доступа.
+          </p>
+          <button 
+            onClick={() => {
+              setIsCheckingAccess(false);
+              isCheckingAccessRef.current = false;
+              if (checkIntervalRef.current) {
+                clearInterval(checkIntervalRef.current);
+                checkIntervalRef.current = null;
+              }
+              setError('Доступ к папке не получен. Попробуйте позже или обратитесь к администратору.');
+            }} 
+            className="cancel-check-button"
+          >
+            Отменить проверку
+          </button>
         </div>
       </div>
     );
@@ -112,7 +230,7 @@ const DriveFilesList: React.FC<DriveFilesListProps> = ({ folderUrl, equipmentNam
       <div className="files-header">
         <h3>📁 Документация {equipmentName && `(${equipmentName})`}</h3>
         <div className="files-actions">
-          <button onClick={loadFiles} className="refresh-button" title="Обновить список">
+          <button onClick={() => loadFiles(false)} className="refresh-button" title="Обновить список">
             🔄
           </button>
           <button onClick={handleOpenFolder} className="open-folder-button">
