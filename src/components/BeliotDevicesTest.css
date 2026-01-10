@@ -3086,6 +3086,35 @@
   gap: 8px;
 }
 
+.passport-btn-back {
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+  margin-right: 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.passport-btn-back:hover {
+  background: rgba(255, 255, 255, 0.35);
+  transform: translateX(-2px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.passport-btn-back:active {
+  transform: translateX(0);
+  background: rgba(255, 255, 255, 0.3);
+}
+
 .passport-btn-print,
 .passport-btn-pdf {
   padding: 6px 12px;
@@ -3300,10 +3329,26 @@
 
   .passport-modal-header {
     padding: 16px 20px;
+    flex-wrap: wrap;
+    gap: 8px;
   }
 
   .passport-modal-header h3 {
     font-size: 18px;
+    order: 2;
+    width: 100%;
+    margin-top: 8px;
+  }
+
+  .passport-btn-back {
+    order: 1;
+    padding: 6px 12px;
+    font-size: 13px;
+    margin-right: 8px;
+  }
+
+  .passport-modal-header-actions {
+    order: 1;
   }
 
   .passport-modal-content {
