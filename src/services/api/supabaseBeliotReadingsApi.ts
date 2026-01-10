@@ -262,16 +262,20 @@ export async function getBeliotReadingStats(
 export async function getBeliotReadingsByPeriod(
   device_id: string,
   start_date: string,
-  end_date: string
+  end_date: string,
+  reading_type: string = 'hourly'
 ): Promise<BeliotDeviceReading[]> {
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('beliot_device_readings')
       .select('*')
       .eq('device_id', device_id)
+      .eq('reading_type', reading_type)
       .gte('reading_date', start_date)
       .lte('reading_date', end_date)
       .order('reading_date', { ascending: true });
+
+    const { data, error } = await query;
 
     if (error) {
       console.error('Ошибка получения показаний за период:', error);
