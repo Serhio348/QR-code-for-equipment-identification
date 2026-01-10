@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Equipment } from '../../types/equipment';
+import { ROUTES } from '../../utils/routes';
 import './EquipmentPageHeader.css';
 
 interface EquipmentPageHeaderProps {
@@ -27,6 +29,7 @@ export const EquipmentPageHeader: React.FC<EquipmentPageHeaderProps> = ({
   documentationAvailable = false,
   deleting = false
 }) => {
+  const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const title = loading ? 'Загрузка...' : (equipment?.name || '');
 
@@ -43,6 +46,14 @@ export const EquipmentPageHeader: React.FC<EquipmentPageHeaderProps> = ({
 
   return (
     <div className="page-header">
+      <button
+        className="header-back-button"
+        onClick={() => navigate(ROUTES.EQUIPMENT)}
+        title="Назад к списку оборудования"
+        disabled={loading}
+      >
+        ← Назад
+      </button>
       <h1>{title}</h1>
       
       {/* Кнопка меню для мобильных */}

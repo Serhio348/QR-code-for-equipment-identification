@@ -946,9 +946,13 @@ const BeliotDevicesTest: React.FC = () => {
 
   // Обработчики для перетаскивания модального окна паспорта
   const handlePassportModalMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    // Перетаскивание только за заголовок
+    // Перетаскивание только за заголовок, исключая кнопки
     if ((e.target as HTMLElement).closest('.passport-modal-header') && 
-        !(e.target as HTMLElement).closest('.passport-modal-close')) {
+        !(e.target as HTMLElement).closest('.passport-modal-close') &&
+        !(e.target as HTMLElement).closest('.passport-btn-back') &&
+        !(e.target as HTMLElement).closest('.passport-btn-print') &&
+        !(e.target as HTMLElement).closest('.passport-btn-pdf') &&
+        !(e.target as HTMLElement).closest('button')) {
       setIsDraggingPassport(true);
       setDragStartPassport({
         x: e.clientX - passportModalPosition.x,
@@ -2747,6 +2751,14 @@ const BeliotDevicesTest: React.FC = () => {
               onMouseDown={handlePassportModalMouseDown}
               style={{ cursor: isDraggingPassport ? 'grabbing' : 'grab' }}
             >
+              <button
+                className="passport-btn-back"
+                onClick={handleClosePassport}
+                title="Назад к списку счетчиков"
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                ← Назад
+              </button>
               <h3>Паспорт счетчика: {getDeviceName(passportDevice)}</h3>
               <div className="passport-modal-header-actions">
                 <button
