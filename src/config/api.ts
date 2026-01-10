@@ -13,11 +13,14 @@ export const API_CONFIG = {
    * 1. Откройте backend/equipment-db/Code.gs в Google Apps Script
    * 2. Разверните как веб-приложение
    * 3. Скопируйте URL веб-приложения
-   * 4. Вставьте сюда
+   * 4. Установите переменную окружения VITE_EQUIPMENT_API_URL
    * 
    * Пример: 'https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec'
+   * 
+   * ВАЖНО: URL должен быть установлен через переменную окружения VITE_EQUIPMENT_API_URL
+   * Не храните URL в коде для безопасности!
    */
-  EQUIPMENT_API_URL: import.meta.env.VITE_EQUIPMENT_API_URL || 'https://script.google.com/macros/s/AKfycbxNzOohInLlT8u6FbcxQ3Ngx_fDUh_vtouphvZBD_fAGbOEDmBKalZZkp_Lbsul54onEg/exec',
+  EQUIPMENT_API_URL: import.meta.env.VITE_EQUIPMENT_API_URL || '',
 
   /**
    * URL веб-приложения для журнала обслуживания (существующий)
@@ -78,10 +81,38 @@ export const API_CONFIG = {
  * @returns {boolean} true если конфигурация валидна, false если нет
  */
 export function validateApiConfig(): boolean {
+  const envUrl = import.meta.env.VITE_EQUIPMENT_API_URL;
+  
+  console.log('🔍 Проверка конфигурации API:', {
+    envUrl: envUrl ? `${envUrl.substring(0, 50)}...` : 'не установлен',
+    finalUrl: API_CONFIG.EQUIPMENT_API_URL ? `${API_CONFIG.EQUIPMENT_API_URL.substring(0, 50)}...` : 'не установлен',
+    isProduction: import.meta.env.PROD,
+    mode: import.meta.env.MODE
+  });
+  
   if (!API_CONFIG.EQUIPMENT_API_URL) {
-    console.warn('⚠️ EQUIPMENT_API_URL не настроен. Установите URL в src/config/api.ts');
+    console.error('❌ EQUIPMENT_API_URL не настроен!');
+    console.error('   Установите переменную окружения VITE_EQUIPMENT_API_URL');
+    console.error('   Локально: создайте файл .env.local с VITE_EQUIPMENT_API_URL=ваш_url');
+    console.error('   На Railway: Settings → Variables → VITE_EQUIPMENT_API_URL');
+    console.error('   URL должен быть вида: https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec');
     return false;
   }
+  
+  // Проверка формата URL
+  try {
+    const url = new URL(API_CONFIG.EQUIPMENT_API_URL);
+    if (!url.hostname.includes('script.google.com')) {
+      console.warn('⚠️ URL не похож на Google Apps Script URL');
+    }
+    if (!url.pathname.includes('/exec')) {
+      console.warn('⚠️ URL должен заканчиваться на /exec');
+    }
+  } catch (e) {
+    console.error('❌ Некорректный формат URL:', e);
+    return false;
+  }
+  
   return true;
 }
 

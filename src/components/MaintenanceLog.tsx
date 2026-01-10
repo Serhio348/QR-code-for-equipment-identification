@@ -49,19 +49,44 @@ const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanc
    * Загрузить журнал обслуживания с сервера
    */
   const loadMaintenanceLog = async () => {
-    if (!equipmentId) return;
+    if (!equipmentId) {
+      console.warn('⚠️ loadMaintenanceLog: equipmentId не указан');
+      return;
+    }
+
+    console.log('📋 loadMaintenanceLog вызвана:', {
+      equipmentId,
+      maintenanceSheetId,
+      timestamp: new Date().toISOString()
+    });
 
     setLoading(true);
     setError(null);
 
     try {
       const log = await getMaintenanceLog(equipmentId, maintenanceSheetId);
+      console.log('📋 loadMaintenanceLog: получено записей:', log.length);
+      console.log('📋 loadMaintenanceLog: записи:', log);
       setEntries(log);
+      
+      if (log.length === 0) {
+        console.warn('⚠️ loadMaintenanceLog: журнал пустой. Проверьте:');
+        console.warn('  1. Есть ли записи в Google Sheets таблице');
+        console.warn('  2. Правильный ли equipmentId:', equipmentId);
+        console.warn('  3. Настройки переменных окружения на Railway');
+      }
     } catch (err: any) {
-      console.error('Ошибка загрузки журнала:', err);
+      console.error('❌ Ошибка загрузки журнала в компоненте:', {
+        error: err,
+        message: err.message,
+        stack: err.stack,
+        equipmentId,
+        maintenanceSheetId
+      });
       setError(`Не удалось загрузить журнал обслуживания: ${err.message || 'Неизвестная ошибка'}`);
     } finally {
       setLoading(false);
+      console.log('📋 loadMaintenanceLog: завершена');
     }
   };
 
