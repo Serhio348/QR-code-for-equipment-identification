@@ -204,11 +204,17 @@ export function useBeliotDeviceReadings(
 
   // Автоматическая загрузка при изменении device_id или опций (только если autoLoad !== false)
   useEffect(() => {
-    if (autoLoad) {
+    if (autoLoad && device_id) {
       loadReadings(0, false);
       loadLastReading();
+    } else if (!device_id) {
+      // Если device_id стал null, очищаем данные
+      setReadings([]);
+      setLastReading(null);
+      setTotal(0);
+      setHasMore(false);
     }
-  }, [autoLoad, loadReadings, loadLastReading]);
+  }, [autoLoad, device_id, loadReadings, loadLastReading]);
 
   return {
     readings,

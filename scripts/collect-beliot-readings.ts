@@ -596,7 +596,12 @@ async function collectReadings(): Promise<void> {
         if (!readings.current) {
           console.log(`⚠️ Текущее показание не найдено для устройства ${deviceId} (${device.name || 'Без названия'})`);
           console.log(`   🔍 Проверка: readings.current = ${readings.current}, readings.previous = ${readings.previous ? 'есть' : 'нет'}`);
+          console.log(`   🔍 Полный объект readings:`, JSON.stringify(readings, null, 2));
           console.log(`   ⚠️ Устройство пропущено - данные не будут сохранены за сегодня`);
+          console.log(`   💡 Возможные причины:`);
+          console.log(`      - API не вернул данные для этого устройства`);
+          console.log(`      - Устройство не передает показания`);
+          console.log(`      - Проблема с парсингом данных из API`);
           skippedCount++;
           continue;
         }
@@ -609,6 +614,8 @@ async function collectReadings(): Promise<void> {
         if (isNaN(readingValue) || readingValue < 0) {
           console.log(`⚠️ Некорректное значение показания для устройства ${deviceId} (${device.name || 'Без названия'}): ${readingValue}`);
           console.log(`   🔍 Проверка: readingValue = ${readingValue}, isNaN = ${isNaN(readingValue)}, < 0 = ${readingValue < 0}`);
+          console.log(`   🔍 Исходное значение из API:`, currentReading.value);
+          console.log(`   🔍 Тип значения:`, typeof currentReading.value);
           console.log(`   ⚠️ Устройство пропущено - данные не будут сохранены за сегодня`);
           skippedCount++;
           continue;
@@ -632,25 +639,42 @@ async function collectReadings(): Promise<void> {
           : Infinity;
         
         // Определяем, какое время использовать для reading_date
+        // ВАЖНО: Опрос происходит за 10-15 минут до окончания часа (45-50 минут)
+        // Данные записываются за текущий час, а не предыдущий
+        // Например: опрос в 9:50 → запись за 9:00 (текущий час)
         let hourStart: Date;
         let dateSource: string;
         
-        if (isApiDateValid && hoursDiff >= 0 && hoursDiff < 2) {
+        const currentMinute = now.getMinutes();
+        const currentHour = now.getHours();
+        
+        // Если опрос в 45-59 минут часа → запись за текущий час
+        // Если опрос в 0-44 минуты часа → запись за предыдущий час
+        if (currentMinute >= 45) {
+          // Опрос за 15-10 минут до окончания часа
+          // Записываем данные за текущий час
+          hourStart = new Date(now);
+          hourStart.setMinutes(0, 0, 0);
+          hourStart.setSeconds(0, 0);
+          hourStart.setMilliseconds(0);
+          dateSource = 'текущий час (опрос за 15-10 минут до окончания часа)';
+        } else if (isApiDateValid && hoursDiff >= 0 && hoursDiff < 2) {
           // Используем время из API, если оно валидно и не старше 2 часов
+          // Округляем до начала часа
           hourStart = new Date(apiDate);
           hourStart.setMinutes(0, 0, 0);
           hourStart.setSeconds(0, 0);
           hourStart.setMilliseconds(0);
-          dateSource = 'API';
+          dateSource = 'API (округлено до начала часа)';
         } else {
-          // Используем предыдущий час от текущего времени
-          // Это нужно, если API не обновился или время из API невалидно
+          // Если опрос в начале часа (0-44 минуты) или время из API невалидно
+          // Используем предыдущий час
           hourStart = new Date(now);
           hourStart.setHours(now.getHours() - 1);
           hourStart.setMinutes(0, 0, 0);
           hourStart.setSeconds(0, 0);
           hourStart.setMilliseconds(0);
-          dateSource = 'предыдущий час (API невалидно или устарело)';
+          dateSource = 'предыдущий час (опрос в начале часа или API невалидно)';
         }
 
         const apiDateStr = isApiDateValid
@@ -757,8 +781,15 @@ async function collectReadings(): Promise<void> {
     console.log(`   ⚠️ Дубликаты: ${duplicateCount}`);
     console.log(`   ⚠️ Пропущено: ${skippedCount} (устройства без данных или с невалидными данными)`);
     console.log(`   ❌ Ошибок: ${errorCount}`);
-    console.log(`   📋 Всего устройств: ${devices.length}`);
+    console.log(`   📋 Всего устройств получено из API: ${devices.length}`);
     console.log(`   📈 Процент успеха: ${((successCount / devices.length) * 100).toFixed(1)}%`);
+    
+    // Выводим список всех устройств для сравнения
+    console.log(`\n📋 Список всех устройств из API (${devices.length}):`);
+    devices.forEach((device, index) => {
+      const deviceId = device.device_id || device.id || device._id;
+      console.log(`   ${index + 1}. ${deviceId} - ${device.name || 'Без названия'}`);
+    });
     
     // Предупреждение, если много пропущенных устройств
     if (skippedCount > 0) {
