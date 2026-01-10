@@ -169,7 +169,8 @@ export function useBeliotDeviceReadings(
     setError(null);
 
     try {
-      const periodReadings = await getBeliotReadingsByPeriod(device_id, startDate, endDate);
+      // Используем reading_type из опций (по умолчанию 'hourly')
+      const periodReadings = await getBeliotReadingsByPeriod(device_id, startDate, endDate, reading_type === 'all' ? 'hourly' : reading_type);
       setReadings(periodReadings);
       setTotal(periodReadings.length);
       setHasMore(false);
@@ -179,7 +180,7 @@ export function useBeliotDeviceReadings(
     } finally {
       setLoading(false);
     }
-  }, [device_id]);
+  }, [device_id, reading_type]);
 
   /**
    * Загрузить следующую страницу
