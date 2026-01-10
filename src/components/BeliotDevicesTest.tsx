@@ -64,10 +64,10 @@ const BeliotDevicesTest: React.FC = () => {
     return `${monthStart.getFullYear()}-${String(monthStart.getMonth() + 1).padStart(2, '0')}-${String(monthStart.getDate()).padStart(2, '0')}`;
   });
   const [archiveEndDate, setArchiveEndDate] = useState<string>(() => {
-    // По умолчанию: конец текущих суток
+    // По умолчанию: сегодня (включая все данные за сегодня)
     const today = new Date();
-    today.setHours(23, 59, 59, 999);
-    return today.toISOString().split('T')[0];
+    // Используем локальное форматирование, чтобы избежать проблем с часовыми поясами
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
   });
   
   // Состояние для управления мобильными панелями
@@ -87,7 +87,7 @@ const BeliotDevicesTest: React.FC = () => {
     const monthStartStr = `${monthStart.getFullYear()}-${String(monthStart.getMonth() + 1).padStart(2, '0')}-${String(monthStart.getDate()).padStart(2, '0')}`;
     const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     
-    // Для всех группировок: с первого числа текущего месяца до сегодня
+    // Для всех группировок: с первого числа текущего месяца до сегодня (включая сегодня)
     setArchiveStartDate(monthStartStr);
     setArchiveEndDate(todayStr);
     
@@ -99,10 +99,9 @@ const BeliotDevicesTest: React.FC = () => {
   // autoLoad: false - не загружаем автоматически, только по кнопке
   const currentDeviceId = selectedDevice ? String(selectedDevice.device_id || selectedDevice.id || selectedDevice._id) : null;
   
-  // Для группировки по дням, неделям, месяцам, годам нужно загружать ВСЕ данные за период
-  // Для группировки по часам можно использовать limit для пагинации
-  const shouldLoadAllData = archiveGroupBy !== 'hour';
-  const effectiveLimit = shouldLoadAllData ? 10000 : archivePageSize; // 10000 - достаточно большой лимит для всех данных
+  // Для всех группировок нужно загружать ВСЕ данные за период
+  // Используем большой лимит, чтобы загрузить все данные за месяц
+  const effectiveLimit = 10000; // 10000 - достаточно большой лимит для всех данных за месяц
   
   const {
     readings: archiveReadingsRaw,
@@ -114,7 +113,12 @@ const BeliotDevicesTest: React.FC = () => {
     reading_type: 'hourly',
     limit: effectiveLimit,
     start_date: archiveStartDate ? `${archiveStartDate}T00:00:00.000Z` : undefined,
-    end_date: archiveEndDate ? `${archiveEndDate}T23:59:59.999Z` : undefined,
+    // Добавляем 1 день к end_date и используем начало следующего дня, чтобы включить все данные за выбранный день
+    end_date: archiveEndDate ? (() => {
+      const endDate = new Date(archiveEndDate + 'T23:59:59.999Z');
+      endDate.setDate(endDate.getDate() + 1);
+      return endDate.toISOString();
+    })() : undefined,
     autoLoad: false, // Не загружаем автоматически
   });
   
@@ -132,18 +136,33 @@ const BeliotDevicesTest: React.FC = () => {
     if (!currentDeviceId || !archiveStartDate || !archiveEndDate) return;
     setArchiveDataLoaded(true);
     
-    // Для группировки по дням, неделям, месяцам, годам используем loadByPeriod
+    // Для всех группировок используем loadByPeriod
     // чтобы загрузить ВСЕ данные за период без ограничений
-    // Для группировки по часам используем обычную загрузку с limit
-    if (archiveGroupBy !== 'hour' && loadByPeriod) {
+    if (loadByPeriod) {
       const startDateStr = `${archiveStartDate}T00:00:00.000Z`;
-      const endDateStr = `${archiveEndDate}T23:59:59.999Z`;
+      // Добавляем 1 день к end_date, чтобы включить все данные за выбранный день
+      const endDate = new Date(`${archiveEndDate}T23:59:59.999Z`);
+      endDate.setDate(endDate.getDate() + 1);
+      const endDateStr = endDate.toISOString();
+      
+      console.log('📥 Загрузка данных архива:', {
+        deviceId: currentDeviceId,
+        startDate: startDateStr,
+        endDate: endDateStr,
+        groupBy: archiveGroupBy
+      });
+      
       await loadByPeriod(startDateStr, endDateStr);
+      
+      console.log('✅ Данные загружены, проверяем количество:', {
+        deviceId: currentDeviceId,
+        // Проверим количество после загрузки через useEffect
+      });
     } else {
-      // Для часов используем обычную загрузку
+      // Fallback: используем обычную загрузку
       await refreshArchive();
     }
-  }, [currentDeviceId, archiveStartDate, archiveEndDate, archiveGroupBy, refreshArchive, loadByPeriod]);
+  }, [currentDeviceId, archiveStartDate, archiveEndDate, archiveGroupBy, loadByPeriod, refreshArchive]);
 
   // Управление классом body для скрытия футера на мобильных при открытии архива
   useEffect(() => {
@@ -319,10 +338,28 @@ const BeliotDevicesTest: React.FC = () => {
     if (!archiveStartDate || !archiveEndDate) return [];
     
     const startDateStr = `${archiveStartDate}T00:00:00.000Z`;
-    const endDateStr = `${archiveEndDate}T23:59:59.999Z`;
+    // Добавляем 1 день к end_date, чтобы включить все данные за выбранный день
+    const endDate = new Date(`${archiveEndDate}T23:59:59.999Z`);
+    endDate.setDate(endDate.getDate() + 1);
+    const endDateStr = endDate.toISOString();
     
-    return groupReadings(archiveReadingsRaw, archiveGroupBy, startDateStr, endDateStr);
-  }, [archiveReadingsRaw, archiveGroupBy, archiveStartDate, archiveEndDate, groupReadings]);
+    const grouped = groupReadings(archiveReadingsRaw, archiveGroupBy, startDateStr, endDateStr);
+    
+    // Логирование для диагностики
+    if (archiveReadingsRaw && archiveReadingsRaw.length > 0) {
+      console.log('📊 Группировка данных:', {
+        deviceId: currentDeviceId,
+        rawReadingsCount: archiveReadingsRaw.length,
+        groupedReadingsCount: grouped.length,
+        groupBy: archiveGroupBy,
+        dateRange: `${archiveStartDate} - ${archiveEndDate}`,
+        firstReading: archiveReadingsRaw[0]?.reading_date,
+        lastReading: archiveReadingsRaw[archiveReadingsRaw.length - 1]?.reading_date,
+      });
+    }
+    
+    return grouped;
+  }, [archiveReadingsRaw, archiveGroupBy, archiveStartDate, archiveEndDate, currentDeviceId, groupReadings]);
   
   // Пагинация: вычисляем отображаемые записи (по 10 на страницу)
   const archivePageSizeDisplay = 10; // Фиксированный размер страницы для отображения
@@ -353,17 +390,20 @@ const BeliotDevicesTest: React.FC = () => {
   useEffect(() => {
     if (isArchiveOpen && currentDeviceId && archiveDataLoaded && archiveStartDate && archiveEndDate) {
       // При изменении диапазона дат перезагружаем данные
-      // Для группировки по дням, неделям, месяцам, годам используем loadByPeriod
-      if (archiveGroupBy !== 'hour' && loadByPeriod) {
+      // Для всех группировок используем loadByPeriod
+      if (loadByPeriod) {
         const startDateStr = `${archiveStartDate}T00:00:00.000Z`;
-        const endDateStr = `${archiveEndDate}T23:59:59.999Z`;
+        // Добавляем 1 день к end_date, чтобы включить все данные за выбранный день
+        const endDate = new Date(`${archiveEndDate}T23:59:59.999Z`);
+        endDate.setDate(endDate.getDate() + 1);
+        const endDateStr = endDate.toISOString();
         loadByPeriod(startDateStr, endDateStr);
       } else {
-        // Для часов используем обычную загрузку
+        // Fallback: используем обычную загрузку
         refreshArchive();
       }
     }
-  }, [archiveStartDate, archiveEndDate, currentDeviceId, isArchiveOpen, archiveDataLoaded, archiveGroupBy, refreshArchive, loadByPeriod]);
+  }, [archiveStartDate, archiveEndDate, currentDeviceId, isArchiveOpen, archiveDataLoaded, loadByPeriod, refreshArchive]);
   
   // При открытии/закрытии архива сбрасываем флаг загрузки и блокируем прокрутку основного контента
   useEffect(() => {
