@@ -39,11 +39,22 @@ export async function getMaintenanceLog(
     throw new Error('ID оборудования не указан');
   }
 
+  // Логирование для диагностики
+  console.log('📋 getMaintenanceLog вызвана:', {
+    equipmentId,
+    maintenanceSheetId,
+    apiUrl: API_CONFIG.EQUIPMENT_API_URL,
+    isProduction: import.meta.env.PROD,
+    env: import.meta.env.MODE
+  });
+
   try {
     const params: Record<string, string> = { equipmentId };
     if (maintenanceSheetId) {
       params.maintenanceSheetId = maintenanceSheetId;
     }
+    
+    console.log('📤 Отправка запроса getMaintenanceLog:', { params, url: API_CONFIG.EQUIPMENT_API_URL });
     
     const response = await apiRequest<MaintenanceEntry[]>(
       'getMaintenanceLog',
@@ -51,13 +62,35 @@ export async function getMaintenanceLog(
       undefined,
       params
     );
+    
+    console.log('📥 Получен ответ getMaintenanceLog:', {
+      success: response.success,
+      dataLength: response.data?.length || 0,
+      error: response.error
+    });
+    
     const log = response.data || [];
     console.log(`✅ Загружен журнал обслуживания: ${log.length} записей для equipmentId="${equipmentId}"`);
     if (log.length === 0) {
       console.warn(`⚠️ Журнал пустой для equipmentId="${equipmentId}". Проверьте, что записи существуют в таблице.`);
+      console.warn('⚠️ Возможные причины:');
+      console.warn('  1. Записи отсутствуют в Google Sheets таблице');
+      console.warn('  2. Неправильный equipmentId');
+      console.warn('  3. Проблемы с доступом к Google Apps Script API');
+      console.warn('  4. Неправильный URL API:', API_CONFIG.EQUIPMENT_API_URL);
     }
     return log;
   } catch (error: any) {
+    console.error('❌ Ошибка при получении журнала обслуживания:', {
+      error,
+      message: error.message,
+      stack: error.stack,
+      equipmentId,
+      maintenanceSheetId,
+      apiUrl: API_CONFIG.EQUIPMENT_API_URL,
+      isCorsError: isCorsError(error)
+    });
+    
     // Если это CORS ошибка, пробуем fallback через GET с параметрами в URL
     if (isCorsError(error)) {
       console.log('⚠️ CORS ошибка при загрузке журнала, пробуем fallback через GET...');
@@ -71,31 +104,55 @@ export async function getMaintenanceLog(
           url.searchParams.append('maintenanceSheetId', maintenanceSheetId);
         }
         
+        console.log('📤 Fallback запрос:', url.toString());
+        
         // Пробуем через обычный fetch с CORS
         const response = await fetch(url.toString(), {
           method: 'GET',
           mode: 'cors',
         });
         
+        console.log('📥 Fallback ответ:', {
+          status: response.status,
+          statusText: response.statusText,
+          ok: response.ok
+        });
+        
         if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+          const errorText = await response.text();
+          console.error('❌ Fallback HTTP error:', errorText);
+          throw new Error(`HTTP error! status: ${response.status}, body: ${errorText.substring(0, 200)}`);
         }
         
         const data: ApiResponse<MaintenanceEntry[]> = await response.json();
+        console.log('📥 Fallback JSON ответ:', {
+          success: data.success,
+          dataLength: data.data?.length || 0,
+          error: data.error
+        });
+        
         if (data.success && data.data) {
           console.log(`✅ Загружен журнал через fallback: ${data.data.length} записей`);
           return data.data;
         }
         throw new Error(data.error || 'Неизвестная ошибка');
       } catch (fallbackError: any) {
-        console.error('Ошибка в fallback загрузки журнала:', fallbackError);
+        console.error('❌ Ошибка в fallback загрузки журнала:', {
+          error: fallbackError,
+          message: fallbackError.message,
+          stack: fallbackError.stack
+        });
         // Возвращаем пустой массив вместо ошибки, чтобы не блокировать интерфейс
         console.warn('⚠️ Не удалось загрузить журнал, возвращаем пустой массив');
+        console.warn('⚠️ Проверьте:');
+        console.warn('  1. Переменную окружения VITE_EQUIPMENT_API_URL на Railway');
+        console.warn('  2. Доступность Google Apps Script API');
+        console.warn('  3. Настройки CORS в Google Apps Script');
         return [];
       }
     }
     
-    console.error('Ошибка при получении журнала обслуживания:', error);
+    console.error('❌ Критическая ошибка при получении журнала обслуживания:', error);
     throw new Error(`Не удалось загрузить журнал обслуживания: ${error.message || 'Неизвестная ошибка'}`);
   }
 }

@@ -5,6 +5,10 @@ import { AuthProvider } from './contexts/AuthContext'
 import App from './App'
 import './index.css'
 import { registerServiceWorker } from './utils/registerServiceWorker'
+import { validateApiConfig } from './config/api'
+
+// Проверка конфигурации API при загрузке приложения
+validateApiConfig();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
