@@ -639,18 +639,29 @@ async function collectReadings(): Promise<void> {
           : Infinity;
         
         // Определяем, какое время использовать для reading_date
-        // ВАЖНО: Опрос происходит за 10-15 минут до окончания часа (45-50 минут)
-        // Данные записываются за текущий час, а не предыдущий
-        // Например: опрос в 9:50 → запись за 9:00 (текущий час)
+        // ВАЖНО: Опрос запланирован на 50 минут каждого часа (00:50, 01:50, 02:50, ...)
+        // Но GitHub Actions может запускаться с задержкой (до 30 минут)
+        // Данные записываются за час, который был запланирован для опроса
+        // Например: запланирован опрос в 15:50 → запись за 15:00, даже если запуск в 16:21
         let hourStart: Date;
         let dateSource: string;
         
         const currentMinute = now.getMinutes();
         const currentHour = now.getHours();
         
-        // Если опрос в 45-59 минут часа → запись за текущий час
-        // Если опрос в 0-44 минуты часа → запись за предыдущий час
-        if (currentMinute >= 45) {
+        // Приоритет 1: Используем время из API, если оно валидно и свежее (не старше 2 часов)
+        // Это наиболее точный способ определить, за какой час записывать данные
+        if (isApiDateValid && hoursDiff >= 0 && hoursDiff < 2) {
+          // Используем время из API, округляем до начала часа
+          hourStart = new Date(apiDate);
+          hourStart.setMinutes(0, 0, 0);
+          hourStart.setSeconds(0, 0);
+          hourStart.setMilliseconds(0);
+          dateSource = 'API (округлено до начала часа)';
+        } 
+        // Приоритет 2: Если опрос в 45-59 минут часа → запись за текущий час
+        // Это нормальный случай, когда скрипт запускается вовремя
+        else if (currentMinute >= 45) {
           // Опрос за 15-10 минут до окончания часа
           // Записываем данные за текущий час
           hourStart = new Date(now);
@@ -658,23 +669,19 @@ async function collectReadings(): Promise<void> {
           hourStart.setSeconds(0, 0);
           hourStart.setMilliseconds(0);
           dateSource = 'текущий час (опрос за 15-10 минут до окончания часа)';
-        } else if (isApiDateValid && hoursDiff >= 0 && hoursDiff < 2) {
-          // Используем время из API, если оно валидно и не старше 2 часов
-          // Округляем до начала часа
-          hourStart = new Date(apiDate);
-          hourStart.setMinutes(0, 0, 0);
-          hourStart.setSeconds(0, 0);
-          hourStart.setMilliseconds(0);
-          dateSource = 'API (округлено до начала часа)';
-        } else {
-          // Если опрос в начале часа (0-44 минуты) или время из API невалидно
+        } 
+        // Приоритет 3: Если опрос в 0-44 минуты часа → запись за предыдущий час
+        // Это может быть задержка GitHub Actions или опрос в начале часа
+        else {
           // Используем предыдущий час
+          // Это правильно, так как если скрипт запустился в 16:21, значит он должен был запуститься в 15:50
+          // и записать данные за 15:00
           hourStart = new Date(now);
           hourStart.setHours(now.getHours() - 1);
           hourStart.setMinutes(0, 0, 0);
           hourStart.setSeconds(0, 0);
           hourStart.setMilliseconds(0);
-          dateSource = 'предыдущий час (опрос в начале часа или API невалидно)';
+          dateSource = 'предыдущий час (задержка запуска или опрос в начале часа)';
         }
 
         const apiDateStr = isApiDateValid
