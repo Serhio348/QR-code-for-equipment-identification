@@ -98,14 +98,21 @@ const BeliotDevicesTest: React.FC = () => {
   // Хук для работы с архивными данными текущего устройства
   // autoLoad: false - не загружаем автоматически, только по кнопке
   const currentDeviceId = selectedDevice ? String(selectedDevice.device_id || selectedDevice.id || selectedDevice._id) : null;
+  
+  // Для группировки по дням, неделям, месяцам, годам нужно загружать ВСЕ данные за период
+  // Для группировки по часам можно использовать limit для пагинации
+  const shouldLoadAllData = archiveGroupBy !== 'hour';
+  const effectiveLimit = shouldLoadAllData ? 10000 : archivePageSize; // 10000 - достаточно большой лимит для всех данных
+  
   const {
     readings: archiveReadingsRaw,
     loading: archiveLoading,
     error: archiveError,
     refresh: refreshArchive,
+    loadByPeriod,
   } = useBeliotDeviceReadings((isArchiveOpen && archiveDataLoaded) ? currentDeviceId : null, {
     reading_type: 'hourly',
-    limit: archivePageSize,
+    limit: effectiveLimit,
     start_date: archiveStartDate ? `${archiveStartDate}T00:00:00.000Z` : undefined,
     end_date: archiveEndDate ? `${archiveEndDate}T23:59:59.999Z` : undefined,
     autoLoad: false, // Не загружаем автоматически
@@ -121,12 +128,22 @@ const BeliotDevicesTest: React.FC = () => {
   }, [updateDefaultDates]);
   
   // Обработчик загрузки данных
-  const handleLoadArchiveData = useCallback(() => {
-    if (!currentDeviceId) return;
+  const handleLoadArchiveData = useCallback(async () => {
+    if (!currentDeviceId || !archiveStartDate || !archiveEndDate) return;
     setArchiveDataLoaded(true);
-    // Данные загрузятся автоматически, так как currentDeviceId теперь передается в хук
-    refreshArchive();
-  }, [currentDeviceId, refreshArchive]);
+    
+    // Для группировки по дням, неделям, месяцам, годам используем loadByPeriod
+    // чтобы загрузить ВСЕ данные за период без ограничений
+    // Для группировки по часам используем обычную загрузку с limit
+    if (archiveGroupBy !== 'hour' && loadByPeriod) {
+      const startDateStr = `${archiveStartDate}T00:00:00.000Z`;
+      const endDateStr = `${archiveEndDate}T23:59:59.999Z`;
+      await loadByPeriod(startDateStr, endDateStr);
+    } else {
+      // Для часов используем обычную загрузку
+      await refreshArchive();
+    }
+  }, [currentDeviceId, archiveStartDate, archiveEndDate, archiveGroupBy, refreshArchive, loadByPeriod]);
 
   // Управление классом body для скрытия футера на мобильных при открытии архива
   useEffect(() => {
@@ -334,11 +351,19 @@ const BeliotDevicesTest: React.FC = () => {
   
   // Перезагружаем архив при изменении параметров (только если данные уже загружены)
   useEffect(() => {
-    if (isArchiveOpen && currentDeviceId && archiveDataLoaded) {
+    if (isArchiveOpen && currentDeviceId && archiveDataLoaded && archiveStartDate && archiveEndDate) {
       // При изменении диапазона дат перезагружаем данные
-      refreshArchive();
+      // Для группировки по дням, неделям, месяцам, годам используем loadByPeriod
+      if (archiveGroupBy !== 'hour' && loadByPeriod) {
+        const startDateStr = `${archiveStartDate}T00:00:00.000Z`;
+        const endDateStr = `${archiveEndDate}T23:59:59.999Z`;
+        loadByPeriod(startDateStr, endDateStr);
+      } else {
+        // Для часов используем обычную загрузку
+        refreshArchive();
+      }
     }
-  }, [archiveStartDate, archiveEndDate, currentDeviceId, isArchiveOpen, archiveDataLoaded, refreshArchive]);
+  }, [archiveStartDate, archiveEndDate, currentDeviceId, isArchiveOpen, archiveDataLoaded, archiveGroupBy, refreshArchive, loadByPeriod]);
   
   // При открытии/закрытии архива сбрасываем флаг загрузки и блокируем прокрутку основного контента
   useEffect(() => {
