@@ -699,3 +699,73 @@ export async function getLoginHistory(limit: number = 100): Promise<LoginHistory
   }
 }
 
+/**
+ * Отправка ссылки для восстановления пароля
+ * 
+ * @param email - Email пользователя
+ * @returns Promise<void>
+ */
+export async function resetPassword(email: string): Promise<void> {
+  try {
+    console.log('📤 Отправка ссылки для восстановления пароля:', { email });
+    
+    // Валидация email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      throw new Error('Неверный формат email');
+    }
+
+    // Отправляем ссылку для восстановления пароля через Supabase
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+
+    if (error) {
+      console.error('❌ Ошибка отправки ссылки для восстановления пароля:', error);
+      throw new Error(error.message || 'Ошибка при отправке ссылки для восстановления пароля');
+    }
+
+    console.log('✅ Ссылка для восстановления пароля отправлена на:', email);
+  } catch (error: any) {
+    console.error('❌ Ошибка восстановления пароля:', error);
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error(error?.message || 'Ошибка при отправке ссылки для восстановления пароля');
+  }
+}
+
+/**
+ * Обновление пароля по токену из ссылки
+ * 
+ * @param newPassword - Новый пароль
+ * @returns Promise<void>
+ */
+export async function updatePassword(newPassword: string): Promise<void> {
+  try {
+    console.log('📤 Обновление пароля');
+    
+    // Валидация пароля
+    if (!newPassword || newPassword.length < 6) {
+      throw new Error('Пароль должен содержать минимум 6 символов');
+    }
+
+    // Обновляем пароль через Supabase
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+
+    if (error) {
+      console.error('❌ Ошибка обновления пароля:', error);
+      throw new Error(error.message || 'Ошибка при обновлении пароля');
+    }
+
+    console.log('✅ Пароль успешно обновлен');
+  } catch (error: any) {
+    console.error('❌ Ошибка обновления пароля:', error);
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error(error?.message || 'Ошибка при обновлении пароля');
+  }
+}

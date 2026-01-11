@@ -10,6 +10,7 @@ import { useAuth } from '../contexts/AuthContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { loadRedirectPath, clearRedirectPath, clearLastPath } from '../utils/pathStorage';
 import { ROUTES } from '../utils/routes';
+import { resetPassword } from '../services/api/supabaseAuthApi';
 import './LoginPage.css';
 
 export default function LoginPage() {
@@ -18,6 +19,10 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
+  const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
+  const [forgotPasswordSuccess, setForgotPasswordSuccess] = useState(false);
 
   const { login, isAuthenticated, loading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -110,12 +115,14 @@ export default function LoginPage() {
   return (
     <div className="login-page">
       <div className="login-container">
-        <div className="login-header">
-          <h1>Вход в систему</h1>
-          <p>Введите ваши учетные данные для входа</p>
-        </div>
+        {!showForgotPassword ? (
+          <>
+            <div className="login-header">
+              <h1>Вход в систему</h1>
+              <p>Введите ваши учетные данные для входа</p>
+            </div>
 
-        <form onSubmit={handleSubmit} className="login-form">
+            <form onSubmit={handleSubmit} className="login-form">
           {error && (
             <div className="error-message" role="alert">
               {error}
@@ -178,14 +185,127 @@ export default function LoginPage() {
         </form>
 
         <div className="login-footer">
-          <p>
-            Нет аккаунта?{' '}
-            <Link to="/register" className="link">
-              Зарегистрироваться
-            </Link>
-          </p>
-          {/* TODO: Добавить ссылку "Забыли пароль?" когда будет реализовано */}
-        </div>
+            <p>
+              Нет аккаунта?{' '}
+              <Link to="/register" className="link">
+                Зарегистрироваться
+              </Link>
+            </p>
+            <p>
+              <button
+                type="button"
+                className="link-button"
+                onClick={() => setShowForgotPassword(true)}
+              >
+                Забыли пароль?
+              </button>
+            </p>
+          </div>
+          </>
+        ) : (
+          <div className="forgot-password-section">
+            <div className="login-header">
+              <h1>Восстановление пароля</h1>
+              <p>Введите ваш email для восстановления доступа</p>
+            </div>
+            {forgotPasswordSuccess ? (
+              <div className="success-message" role="alert">
+                <p>✅ Ссылка для восстановления пароля отправлена на ваш email.</p>
+                <p>Проверьте почту и следуйте инструкциям в письме.</p>
+                <button
+                  type="button"
+                  className="back-to-login-button"
+                  onClick={() => {
+                    setShowForgotPassword(false);
+                    setForgotPasswordEmail('');
+                    setForgotPasswordSuccess(false);
+                  }}
+                >
+                  ← Вернуться к входу
+                </button>
+              </div>
+            ) : (
+              <>
+                <form
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    setError(null);
+                    setForgotPasswordLoading(true);
+
+                    if (!forgotPasswordEmail.trim()) {
+                      setError('Введите email');
+                      setForgotPasswordLoading(false);
+                      return;
+                    }
+
+                    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                    if (!emailRegex.test(forgotPasswordEmail.trim())) {
+                      setError('Неверный формат email');
+                      setForgotPasswordLoading(false);
+                      return;
+                    }
+
+                    try {
+                      await resetPassword(forgotPasswordEmail.trim());
+                      setForgotPasswordSuccess(true);
+                    } catch (err: any) {
+                      setError(err.message || 'Ошибка при отправке ссылки для восстановления пароля');
+                    } finally {
+                      setForgotPasswordLoading(false);
+                    }
+                  }}
+                >
+                  {error && (
+                    <div className="error-message" role="alert">
+                      {error}
+                    </div>
+                  )}
+
+                  <div className="form-group">
+                    <label htmlFor="forgot-email">Email</label>
+                    <input
+                      id="forgot-email"
+                      type="email"
+                      value={forgotPasswordEmail}
+                      onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                      placeholder="user@example.com"
+                      required
+                      autoComplete="email"
+                      disabled={forgotPasswordLoading}
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="submit-button"
+                    disabled={forgotPasswordLoading}
+                  >
+                    {forgotPasswordLoading ? (
+                      <>
+                        <span className="button-spinner"></span>
+                        Отправка...
+                      </>
+                    ) : (
+                      'Отправить ссылку'
+                    )}
+                  </button>
+                </form>
+                <button
+                  type="button"
+                  className="back-to-login-button"
+                  onClick={() => {
+                    setShowForgotPassword(false);
+                    setForgotPasswordEmail('');
+                    setError(null);
+                  }}
+                  disabled={forgotPasswordLoading}
+                >
+                  ← Вернуться к входу
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
