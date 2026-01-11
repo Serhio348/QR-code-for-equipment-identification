@@ -195,7 +195,10 @@ export default function LoginPage() {
               <button
                 type="button"
                 className="link-button"
-                onClick={() => setShowForgotPassword(true)}
+                onClick={() => {
+                  setShowForgotPassword(true);
+                  setError(null); // Очищаем ошибку при переходе к форме восстановления пароля
+                }}
               >
                 Забыли пароль?
               </button>
@@ -219,6 +222,7 @@ export default function LoginPage() {
                     setShowForgotPassword(false);
                     setForgotPasswordEmail('');
                     setForgotPasswordSuccess(false);
+                    setError(null); // Очищаем ошибку при возврате к форме входа
                   }}
                 >
                   ← Вернуться к входу

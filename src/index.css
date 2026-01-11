@@ -12,8 +12,14 @@ html {
 
 html,
 body,
-#root,
-* {
+#root {
+  font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif !important;
+}
+
+/* Применяем шрифт ко всем элементам, кроме code и pre */
+*:not(code):not(pre) {
   font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif !important;
@@ -27,9 +33,10 @@ body {
   overflow-x: hidden;
 }
 
-code {
+code,
+pre {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+    monospace !important;
 }
 
 /* Общие утилиты для адаптивности */
