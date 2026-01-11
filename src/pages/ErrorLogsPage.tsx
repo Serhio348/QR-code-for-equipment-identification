@@ -28,12 +28,12 @@ export default function ErrorLogsPage() {
   const [statistics, setStatistics] = useState<any>(null);
   const [unresolvedCount, setUnresolvedCount] = useState(0);
   const [filters, setFilters] = useState<ErrorLogFilters>({
-    resolved: false, // По умолчанию показываем нерешенные
+    resolved: false, // По умолчанию показываем активные (нерешенные)
   });
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
-  const [daysBack, setDaysBack] = useState(7);
+  const [daysBack] = useState(7); // Фиксированный период для статистики
 
   const limit = 50;
 
@@ -144,7 +144,7 @@ export default function ErrorLogsPage() {
           <p>Мониторинг и анализ ошибок приложения</p>
         </div>
 
-        {/* Статистика */}
+        {/* Статистика - упрощенная версия */}
         {statistics && (
           <div className="error-logs-statistics">
             <div className="stat-card">
@@ -152,96 +152,34 @@ export default function ErrorLogsPage() {
               <div className="stat-value">{statistics.total_errors}</div>
               <div className="stat-period">за {daysBack} дней</div>
             </div>
-            <div className="stat-card critical">
-              <div className="stat-label">Критичные</div>
-              <div className="stat-value">{statistics.critical_errors}</div>
-            </div>
-            <div className="stat-card high">
-              <div className="stat-label">Высокие</div>
-              <div className="stat-value">{statistics.high_errors}</div>
-            </div>
-            <div className="stat-card medium">
-              <div className="stat-label">Средние</div>
-              <div className="stat-value">{statistics.medium_errors}</div>
-            </div>
-            <div className="stat-card low">
-              <div className="stat-label">Низкие</div>
-              <div className="stat-value">{statistics.low_errors}</div>
-            </div>
             <div className="stat-card unresolved">
-              <div className="stat-label">Нерешенные</div>
+              <div className="stat-label">Активные</div>
               <div className="stat-value">{unresolvedCount}</div>
+            </div>
+            <div className="stat-card resolved">
+              <div className="stat-label">Решенные</div>
+              <div className="stat-value">{statistics.total_errors - unresolvedCount}</div>
             </div>
           </div>
         )}
 
-        {/* Фильтры */}
+        {/* Фильтры - упрощенная версия */}
         <div className="error-logs-filters">
           <div className="filter-group">
-            <label>Статус:</label>
+            <label>Показать:</label>
             <select
               value={filters.resolved === undefined ? 'all' : filters.resolved ? 'resolved' : 'unresolved'}
               onChange={(e) => {
                 const value = e.target.value;
                 setFilters({
-                  ...filters,
                   resolved: value === 'all' ? undefined : value === 'resolved',
                 });
                 setPage(0);
               }}
             >
-              <option value="all">Все</option>
-              <option value="unresolved">Нерешенные</option>
-              <option value="resolved">Решенные</option>
-            </select>
-          </div>
-
-          <div className="filter-group">
-            <label>Уровень серьезности:</label>
-            <select
-              value={filters.severity || 'all'}
-              onChange={(e) => {
-                setFilters({
-                  ...filters,
-                  severity: e.target.value === 'all' ? undefined : e.target.value as any,
-                });
-                setPage(0);
-              }}
-            >
-              <option value="all">Все</option>
-              <option value="critical">Критичные</option>
-              <option value="high">Высокие</option>
-              <option value="medium">Средние</option>
-              <option value="low">Низкие</option>
-            </select>
-          </div>
-
-          <div className="filter-group">
-            <label>Поиск:</label>
-            <input
-              type="text"
-              placeholder="Поиск по сообщению, коду или email..."
-              value={filters.search || ''}
-              onChange={(e) => {
-                setFilters({
-                  ...filters,
-                  search: e.target.value || undefined,
-                });
-                setPage(0);
-              }}
-            />
-          </div>
-
-          <div className="filter-group">
-            <label>Период статистики:</label>
-            <select
-              value={daysBack}
-              onChange={(e) => setDaysBack(Number(e.target.value))}
-            >
-              <option value={1}>1 день</option>
-              <option value={7}>7 дней</option>
-              <option value={30}>30 дней</option>
-              <option value={90}>90 дней</option>
+              <option value="all">Все ошибки</option>
+              <option value="unresolved">Только активные (нерешенные)</option>
+              <option value="resolved">Только неактивные (решенные)</option>
             </select>
           </div>
         </div>

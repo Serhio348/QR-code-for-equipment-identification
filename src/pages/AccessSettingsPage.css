@@ -1,459 +1,319 @@
 .access-settings-page {
-  min-height: auto;
-  background: #f5f5f5;
+  min-height: 100vh;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.30) 0%, rgba(118, 75, 162, 0.30) 100%);
   padding: 20px;
-  padding-bottom: 20px; /* Обычный отступ снизу */
 }
 
 .access-settings-container {
-  max-width: 1400px;
+  max-width: 800px;
   margin: 0 auto;
   background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
   padding: 30px;
-}
-
-/* Оптимизация для больших экранов */
-@media (min-width: 1440px) {
-  .access-settings-container {
-    max-width: 1600px;
-    padding: 40px;
-  }
-  
-  .access-settings-header h1 {
-    font-size: 32px;
-  }
-  
-  .access-settings-header p {
-    font-size: 18px;
-  }
-}
-
-@media (min-width: 1920px) {
-  .access-settings-container {
-    max-width: 1800px;
-    padding: 50px;
-  }
-  
-  .access-settings-header h1 {
-    font-size: 36px;
-  }
-  
-  .access-settings-table {
-    font-size: 16px;
-  }
-  
-  .access-settings-table th,
-  .access-settings-table td {
-    padding: 18px 20px;
-  }
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
 .access-settings-header {
   margin-bottom: 30px;
+  border-bottom: 2px solid #e5e7eb;
   padding-bottom: 20px;
-  border-bottom: 2px solid #e0e0e0;
+}
+
+.access-settings-header-top {
+  margin-bottom: 16px;
+}
+
+.back-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-decoration: none;
+}
+
+.back-button:hover {
+  background: #e5e7eb;
+  border-color: #9ca3af;
+  color: #1f2937;
+}
+
+.back-button:active {
+  background: #d1d5db;
 }
 
 .access-settings-header h1 {
-  margin: 0 0 10px 0;
   font-size: 28px;
-  color: #333;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 8px;
 }
 
 .access-settings-header p {
-  margin: 0;
-  color: #666;
-  font-size: 16px;
-}
-
-.error-message {
-  background: #fee;
-  border: 1px solid #fcc;
-  color: #c33;
-  padding: 15px;
-  border-radius: 4px;
-  margin-bottom: 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.retry-button {
-  background: #c33;
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 4px;
-  cursor: pointer;
+  color: #6b7280;
   font-size: 14px;
 }
 
-.retry-button:hover {
-  background: #a22;
+/* Выбор пользователя */
+.user-select-section {
+  margin-bottom: 30px;
+  padding: 20px;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
 }
 
-.access-settings-controls {
-  display: flex;
-  gap: 15px;
-  margin-bottom: 20px;
-  align-items: center;
+.user-select-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 12px;
 }
 
-.search-box {
-  flex: 1;
-}
-
-.search-input {
+.user-select {
   width: 100%;
-  padding: 10px 15px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  padding: 12px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
   font-size: 16px;
+  background: white;
+  color: #1f2937;
+  cursor: pointer;
+  transition: all 0.2s;
 }
 
-.search-input:focus {
+.user-select:hover {
+  border-color: #9ca3af;
+}
+
+.user-select:focus {
   outline: none;
   border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
-.access-settings-controls .refresh-button {
-  background: #667eea;
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 16px;
-  white-space: nowrap;
-  transition: all 0.2s ease;
-  transform: none !important; /* Явно отключаем вращение */
-}
-
-.access-settings-controls .refresh-button:hover:not(:disabled) {
-  background: #5568d3;
-  transform: scale(1.05) !important; /* Легкое увеличение вместо вращения */
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
-}
-
-.access-settings-controls .refresh-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none !important;
-}
-
-.access-settings-table-container {
-  overflow-x: auto;
-  overflow-y: auto;
-  margin-bottom: 20px;
-  max-height: 600px;
-  position: relative;
-  border: 1px solid #e0e0e0;
+/* Информация о доступе */
+.user-access-info {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
   border-radius: 8px;
+  padding: 24px;
 }
 
-/* Стилизация скроллбара */
-.access-settings-table-container::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+.user-access-header {
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e5e7eb;
 }
 
-.access-settings-table-container::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 4px;
-}
-
-.access-settings-table-container::-webkit-scrollbar-thumb {
-  background: #888;
-  border-radius: 4px;
-}
-
-.access-settings-table-container::-webkit-scrollbar-thumb:hover {
-  background: #555;
-}
-
-.access-settings-table {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  min-width: 800px;
-}
-
-.access-settings-table thead {
-  background: #f0f0f0;
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.access-settings-table th {
-  padding: 15px;
-  text-align: left;
+.user-access-header h2 {
+  font-size: 20px;
   font-weight: 600;
-  color: #333;
-  border-bottom: 2px solid #e0e0e0;
-  vertical-align: middle;
-  background: #f0f0f0;
-  position: sticky;
-  top: 0;
-  z-index: 10;
+  color: #1f2937;
+  margin-bottom: 8px;
 }
 
-.access-settings-table th:first-child {
-  border-top-left-radius: 8px;
+.user-name {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0;
 }
 
-.access-settings-table th:last-child {
-  border-top-right-radius: 8px;
-}
-
-.app-header {
-  text-align: center;
-  background: #f0f0f0;
-}
-
-.app-header-content {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-
-.app-name {
-  font-weight: 600;
-  color: #333;
-}
-
-.app-description {
-  font-size: 12px;
-  color: #666;
-  font-weight: normal;
-}
-
-.access-settings-table td {
-  padding: 15px;
-  border-bottom: 1px solid #e0e0e0;
-  vertical-align: middle;
-}
-
-.user-info {
-  min-width: 250px;
-}
-
-.user-info-container {
+.access-permissions {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 16px;
 }
 
-.user-name,
-.user-email,
-.user-id {
+.permission-item {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
-  font-size: 13px;
-  line-height: 1.4;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  transition: all 0.2s;
 }
 
-.user-label {
-  font-weight: 600;
-  color: #666;
-  min-width: 45px;
-  flex-shrink: 0;
+.permission-item:hover {
+  border-color: #d1d5db;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
-.user-value {
-  color: #333;
-  word-break: break-word;
+.permission-info {
   flex: 1;
 }
 
-.user-name .user-value {
-  font-weight: 500;
-  color: #333;
+.permission-app-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 4px;
 }
 
-.user-email .user-value {
-  color: #667eea;
-  font-weight: 500;
+.permission-app-description {
+  font-size: 13px;
+  color: #6b7280;
 }
 
-.user-id .user-value {
-  font-family: 'Courier New', monospace;
-  font-size: 12px;
-  color: #999;
-}
-
-.access-cell {
-  text-align: center;
-}
-
+/* Toggle switch */
 .toggle-switch {
-  display: inline-block;
   position: relative;
+  display: inline-block;
+  width: 60px;
+  height: 32px;
   cursor: pointer;
 }
 
 .toggle-switch input {
-  display: none;
+  opacity: 0;
+  width: 0;
+  height: 0;
 }
 
 .toggle-slider {
-  display: inline-block;
-  width: 60px;
-  height: 30px;
-  background: #ccc;
-  border-radius: 15px;
-  position: relative;
-  transition: background 0.3s;
-  cursor: pointer;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #d1d5db;
+  border-radius: 32px;
+  transition: 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: bold;
+  color: white;
 }
 
-.toggle-slider::before {
-  content: '';
+.toggle-slider:before {
   position: absolute;
-  width: 24px;
+  content: "";
   height: 24px;
-  background: white;
+  width: 24px;
+  left: 4px;
+  background-color: white;
   border-radius: 50%;
-  top: 3px;
-  left: 3px;
-  transition: transform 0.3s;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: 0.3s;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background-color: #10b981;
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+  transform: translateX(28px);
+}
+
+.toggle-switch input:disabled + .toggle-slider {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .toggle-slider.active {
-  background: #667eea;
+  background-color: #10b981;
 }
 
-.toggle-slider.active::before {
-  transform: translateX(30px);
-}
-
-.toggle-slider::after {
-  content: attr(data-label);
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 12px;
-  font-weight: bold;
-  color: white;
-  pointer-events: none;
+.user-access-footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
 }
 
 .updated-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   font-size: 12px;
-  color: #666;
-  min-width: 150px;
+  color: #6b7280;
 }
 
-.updated-time {
-  color: #999;
-  margin-top: 2px;
-}
-
-.updated-by {
-  color: #999;
-  margin-top: 5px;
-  font-size: 11px;
-}
-
-.no-data {
+.no-user-selected {
   text-align: center;
-  padding: 40px;
-  color: #999;
-}
-
-.access-settings-footer {
-  margin-top: 30px;
-  padding-top: 20px;
-  border-top: 1px solid #e0e0e0;
-}
-
-.back-button {
-  background: #6c757d;
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 4px;
-  cursor: pointer;
+  padding: 60px 20px;
+  color: #6b7280;
   font-size: 16px;
 }
 
-.back-button:hover {
-  background: #5a6268;
-}
-
-/* Пагинация */
-.pagination {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 15px;
-  margin: 30px 0;
-  padding: 20px 0;
-  border-top: 1px solid #e0e0e0;
-  border-bottom: 1px solid #e0e0e0;
-}
-
-.pagination-button {
-  background: #667eea;
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  transition: background 0.3s;
-}
-
-.pagination-button:hover:not(:disabled) {
-  background: #5568d3;
-}
-
-.pagination-button:disabled {
-  background: #ccc;
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.pagination-info {
-  font-size: 14px;
-  color: #666;
-  font-weight: 500;
-}
-
-/* Адаптивность */
+/* Адаптивность для мобильных */
 @media (max-width: 768px) {
+  .access-settings-page {
+    padding: 10px;
+  }
+
   .access-settings-container {
-    padding: 15px;
+    padding: 20px;
   }
 
   .access-settings-header h1 {
     font-size: 24px;
   }
 
-  .access-settings-controls {
+  .user-select-section {
+    padding: 16px;
+  }
+
+  .user-select {
+    font-size: 16px; /* Предотвращает зум на iOS */
+  }
+
+  .user-access-info {
+    padding: 20px;
+  }
+
+  .user-access-header h2 {
+    font-size: 18px;
+  }
+
+  .permission-item {
     flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px;
   }
 
-  .search-box {
-    width: 100%;
+  .toggle-switch {
+    align-self: flex-end;
   }
 
-  .access-settings-table {
-    font-size: 14px;
+  .permission-app-name {
+    font-size: 15px;
   }
 
-  .access-settings-table th,
-  .access-settings-table td {
-    padding: 10px;
+  .permission-app-description {
+    font-size: 12px;
   }
 }
 
+@media (max-width: 480px) {
+  .access-settings-container {
+    padding: 16px;
+  }
+
+  .access-settings-header h1 {
+    font-size: 20px;
+  }
+
+  .user-select-section {
+    padding: 12px;
+  }
+
+  .user-access-info {
+    padding: 16px;
+  }
+
+  .permission-item {
+    padding: 12px;
+  }
+}
