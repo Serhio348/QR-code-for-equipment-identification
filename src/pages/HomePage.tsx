@@ -44,11 +44,12 @@ const HomePage: React.FC = () => {
             padding: '20px',
             maxWidth: '1200px',
             margin: '0 auto',
-            width: '100%'
+            width: '100%',
+            boxSizing: 'border-box'
           }}>
             <p style={{ 
               marginBottom: '20px', 
-              color: '#666',
+              color: 'var(--text-secondary, #475569)',
               fontSize: '16px'
             }}>
               Выберите оборудование для просмотра документации и журнала обслуживания

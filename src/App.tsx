@@ -17,6 +17,7 @@ import InstallPWA from './components/InstallPWA';
 import AppFooter from './components/AppFooter';
 import { isEquipmentRoute, ROUTES } from './utils/routes';
 import { saveLastPath, loadLastPath } from './utils/pathStorage';
+import './styles/colors.css';
 import './App.css';
 
 const App: React.FC = () => {
@@ -64,33 +65,49 @@ const App: React.FC = () => {
   }, [location.pathname, location.search, isAuthenticated, isAuthPage, isMainMenuPage]);
 
   return (
-    <div className="app">
+    <div className="app" data-theme="modern-minimal">
       {!isMainMenuPage && (
       <header className="app-header">
         <div className="header-content">
-          <Link to={ROUTES.HOME} className="header-title">
-            <h1>
-              {isWaterPage ? 'Вода' : isEquipmentPage ? 'Оборудование' : 'Система идентификации оборудования'}
-            </h1>
-          </Link>
-          <div className="header-right">
-              {(isEquipmentPage || isWaterPage) && (
+          {/* Левая часть: Логотип и заголовок */}
+          <div className="header-left">
+            <Link to={ROUTES.HOME} className="header-logo" title="Главное меню">
+              {/* Можно заменить на <img src="/logo.svg" alt="Logo" /> когда будет логотип */}
+              <span>EQ</span>
+            </Link>
+            <Link to={ROUTES.HOME} className="header-title">
+              <h1>
+                {isWaterPage ? 'Вода' : isEquipmentPage ? 'Оборудование' : 'Система идентификации оборудования'}
+              </h1>
+              {isEquipmentPage && <p>Управление оборудованием</p>}
+              {isWaterPage && <p>Мониторинг счетчиков воды</p>}
+            </Link>
+          </div>
+
+          {/* Центральная часть: Навигация (если нужно) */}
+          <div className="header-center">
+            {(isEquipmentPage || isWaterPage) && (
               <nav className="header-nav">
                 <Link to={ROUTES.HOME} className="nav-link">
-                    ← Главное меню
+                  Главное меню
                 </Link>
               </nav>
             )}
+          </div>
+
+          {/* Правая часть: Информация о пользователе */}
+          <div className="header-right">
             {isAuthenticated && user && (
               <div className="user-info">
-                <span className="user-email">{user.email}</span>
+                <span className="user-email" title={user.email}>{user.email}</span>
                 {user.role === 'admin' && (
-                  <span className="user-role">Администратор</span>
+                  <span className="user-role">Админ</span>
                 )}
                 <button 
                   onClick={logout} 
                   className="logout-button"
                   disabled={loading}
+                  title="Выйти из системы"
                 >
                   {loading ? (
                     <>
