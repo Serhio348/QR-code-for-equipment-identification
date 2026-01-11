@@ -22,6 +22,20 @@ import { useBeliotDeviceReadings } from '../hooks/useBeliotDeviceReadings';
 import { saveBeliotReading } from '../services/api/supabaseBeliotReadingsApi';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from 'recharts';
 import './BeliotDevicesTest.css';
 
 interface StateTableRow {
@@ -52,6 +66,7 @@ const BeliotDevicesTest: React.FC = () => {
   // Состояние для управления архивом текущих показаний
   const [isArchiveOpen, setIsArchiveOpen] = useState<boolean>(false);
   const [archiveViewType, setArchiveViewType] = useState<'readings' | 'volume'>('readings');
+  const [archiveDisplayMode, setArchiveDisplayMode] = useState<'table' | 'chart'>('table');
   const [archivePageSize, setArchivePageSize] = useState<number>(10);
   const [archiveGroupBy, setArchiveGroupBy] = useState<'hour' | 'day' | 'week' | 'month' | 'year'>('hour');
   const [archiveDataLoaded, setArchiveDataLoaded] = useState<boolean>(false);
@@ -351,6 +366,146 @@ const BeliotDevicesTest: React.FC = () => {
     
     return grouped;
   }, [archiveReadingsRaw, archiveGroupBy, archiveStartDate, archiveEndDate, currentDeviceId, groupReadings]);
+  
+  // Подготовка данных для графиков
+  const chartData = useMemo(() => {
+    if (!archiveReadings || archiveReadings.length === 0 || !archiveReadingsRaw) return [];
+    
+    return archiveReadings.map((groupedReading: any, index: number) => {
+      const readingDate = groupedReading.groupDate;
+      const hasReading = !!groupedReading.reading;
+      
+      // Форматируем дату в зависимости от группировки
+      let dateLabel = '';
+      switch (archiveGroupBy) {
+        case 'hour':
+          dateLabel = readingDate.toLocaleString('ru-RU', {
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+          });
+          break;
+        case 'day':
+          dateLabel = readingDate.toLocaleDateString('ru-RU', {
+            month: '2-digit',
+            day: '2-digit',
+          });
+          break;
+        case 'week':
+          const weekNum = Math.ceil(readingDate.getDate() / 7);
+          dateLabel = `Н${weekNum}`;
+          break;
+        case 'month':
+          dateLabel = readingDate.toLocaleDateString('ru-RU', {
+            month: 'short',
+          });
+          break;
+        case 'year':
+          dateLabel = readingDate.getFullYear().toString();
+          break;
+      }
+      
+      let readingValue = 0;
+      let volume = 0;
+      
+      if (hasReading && groupedReading.reading) {
+        readingValue = Number(groupedReading.reading.reading_value) || 0;
+        
+        // Вычисляем объем потребления (используем ту же логику, что и в таблице)
+        if (archiveViewType === 'volume') {
+          let consumption = 0;
+          
+          if (archiveGroupBy === 'hour') {
+            // Для часов: ищем следующее показание (более раннее по времени)
+            let foundPreviousReading = null;
+            for (let i = index + 1; i < archiveReadings.length; i++) {
+              const candidate = archiveReadings[i];
+              if (candidate?.reading) {
+                foundPreviousReading = candidate;
+                break;
+              }
+            }
+            
+            if (foundPreviousReading?.reading) {
+              const currentValue = Number(groupedReading.reading.reading_value);
+              const previousValue = Number(foundPreviousReading.reading.reading_value);
+              if (!isNaN(currentValue) && !isNaN(previousValue)) {
+                consumption = currentValue - previousValue;
+              }
+            }
+          } else if (archiveGroupBy === 'day') {
+            // Для дней: суммируем потребление по часам за день
+            const dayKey = groupedReading.groupKey;
+            const dayReadings = archiveReadingsRaw
+              ?.filter(r => {
+                const rDate = new Date(r.reading_date);
+                const rDayKey = `${rDate.getFullYear()}-${String(rDate.getMonth() + 1).padStart(2, '0')}-${String(rDate.getDate()).padStart(2, '0')}`;
+                return rDayKey === dayKey;
+              }) || [];
+            
+            if (dayReadings.length > 0) {
+              const sorted = [...dayReadings].sort((a, b) => 
+                new Date(a.reading_date).getTime() - new Date(b.reading_date).getTime()
+              );
+              
+              let previousHourValue: number | null = null;
+              const dayDate = new Date(sorted[0].reading_date);
+              dayDate.setDate(dayDate.getDate() - 1);
+              const prevDayKey = `${dayDate.getFullYear()}-${String(dayDate.getMonth() + 1).padStart(2, '0')}-${String(dayDate.getDate()).padStart(2, '0')}`;
+              
+              const prevDayReadings = archiveReadingsRaw.filter(r => {
+                const rDate = new Date(r.reading_date);
+                const rDayKey = `${rDate.getFullYear()}-${String(rDate.getMonth() + 1).padStart(2, '0')}-${String(rDate.getDate()).padStart(2, '0')}`;
+                return rDayKey === prevDayKey;
+              });
+              
+              if (prevDayReadings.length > 0) {
+                const sortedPrevDay = [...prevDayReadings].sort((a, b) => 
+                  new Date(b.reading_date).getTime() - new Date(a.reading_date).getTime()
+                );
+                previousHourValue = Number(sortedPrevDay[0].reading_value);
+              }
+              
+              for (let i = 0; i < sorted.length; i++) {
+                const currentValue = Number(sorted[i].reading_value);
+                const previousValue = i === 0 
+                  ? (previousHourValue !== null ? previousHourValue : Number(sorted[0].reading_value))
+                  : Number(sorted[i - 1].reading_value);
+                
+                if (!isNaN(currentValue) && !isNaN(previousValue)) {
+                  const hourConsumption = currentValue - previousValue;
+                  consumption += hourConsumption;
+                }
+              }
+            }
+          } else {
+            // Для недель, месяцев, лет - упрощенная логика: разница с предыдущим периодом
+            if (index < archiveReadings.length - 1) {
+              const nextReading = archiveReadings[index + 1];
+              if (nextReading?.reading) {
+                const currentValue = Number(groupedReading.reading.reading_value);
+                const previousValue = Number(nextReading.reading.reading_value);
+                if (!isNaN(currentValue) && !isNaN(previousValue)) {
+                  consumption = currentValue - previousValue;
+                }
+              }
+            }
+          }
+          
+          volume = consumption > 0 ? consumption : 0;
+        }
+      }
+      
+      return {
+        date: dateLabel,
+        fullDate: readingDate.toISOString(),
+        reading: readingValue,
+        volume: volume,
+        hasData: hasReading,
+      };
+    }).reverse(); // Обращаем порядок для отображения от старых к новым
+  }, [archiveReadings, archiveGroupBy, archiveViewType, archiveReadingsRaw]);
   
   // Пагинация: вычисляем отображаемые записи (по 10 на страницу)
   const archivePageSizeDisplay = 10; // Фиксированный размер страницы для отображения
@@ -2394,6 +2549,24 @@ const BeliotDevicesTest: React.FC = () => {
                   </select>
                 </div>
                 
+                {/* Переключатель режима отображения (таблица/графики) */}
+                <div className="archive-view-toggle archive-display-mode-toggle">
+                  <button
+                    className={`toggle-btn-small ${archiveDisplayMode === 'table' ? 'active' : ''}`}
+                    onClick={() => setArchiveDisplayMode('table')}
+                    title="Таблица"
+                  >
+                    📋 Таблица
+                  </button>
+                  <button
+                    className={`toggle-btn-small ${archiveDisplayMode === 'chart' ? 'active' : ''}`}
+                    onClick={() => setArchiveDisplayMode('chart')}
+                    title="Графики"
+                  >
+                    📊 Графики
+                  </button>
+                </div>
+                
                 {/* Переключатель показания/объем */}
                 <div className="archive-view-toggle">
                   <button
@@ -2460,8 +2633,128 @@ const BeliotDevicesTest: React.FC = () => {
                 </div>
               ) : (
                 <>
-                  <div className="archive-table-container">
-                    <table className="archive-table">
+                  {archiveDisplayMode === 'chart' ? (
+                    /* Режим графиков */
+                    <div className="archive-charts-container">
+                      {archiveViewType === 'readings' ? (
+                        /* Линейный график показаний */
+                        <div className="archive-chart-wrapper">
+                          <h4 style={{ marginBottom: '16px', color: '#333' }}>График показаний</h4>
+                          <ResponsiveContainer width="100%" height={400}>
+                            <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 60 }}>
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis 
+                                dataKey="date" 
+                                angle={-45}
+                                textAnchor="end"
+                                height={80}
+                                interval={Math.floor(chartData.length / 20)}
+                              />
+                              <YAxis 
+                                label={{ value: 'Показание (м³)', angle: -90, position: 'insideLeft' }}
+                              />
+                              <Tooltip 
+                                formatter={(value: any) => [`${Number(value).toFixed(3)} м³`, 'Показание']}
+                                labelFormatter={(label) => `Период: ${label}`}
+                              />
+                              <Legend />
+                              <Line 
+                                type="monotone" 
+                                dataKey="reading" 
+                                stroke="#667eea" 
+                                strokeWidth={2}
+                                dot={{ r: 4 }}
+                                activeDot={{ r: 6 }}
+                                name="Показание"
+                              />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
+                      ) : (
+                        /* Барчарт объемов */
+                        <div className="archive-chart-wrapper">
+                          <h4 style={{ marginBottom: '16px', color: '#333' }}>График объемов потребления</h4>
+                          <ResponsiveContainer width="100%" height={400}>
+                            <BarChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 60 }}>
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis 
+                                dataKey="date" 
+                                angle={-45}
+                                textAnchor="end"
+                                height={80}
+                                interval={Math.floor(chartData.length / 20)}
+                              />
+                              <YAxis 
+                                label={{ value: 'Объем (м³)', angle: -90, position: 'insideLeft' }}
+                              />
+                              <Tooltip 
+                                formatter={(value: any) => [`${Number(value).toFixed(3)} м³`, 'Объем']}
+                                labelFormatter={(label) => `Период: ${label}`}
+                              />
+                              <Legend />
+                              <Bar 
+                                dataKey="volume" 
+                                fill="#667eea"
+                                name="Объем потребления"
+                              />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      )}
+                      
+                      {/* Дополнительный график - Area Chart для общего обзора */}
+                      <div className="archive-chart-wrapper" style={{ marginTop: '32px' }}>
+                        <h4 style={{ marginBottom: '16px', color: '#333' }}>
+                          {archiveViewType === 'readings' ? 'Динамика показаний' : 'Динамика объемов'}
+                        </h4>
+                        <ResponsiveContainer width="100%" height={300}>
+                          <AreaChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 60 }}>
+                            <defs>
+                              <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#667eea" stopOpacity={0.8}/>
+                                <stop offset="95%" stopColor="#667eea" stopOpacity={0}/>
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis 
+                              dataKey="date" 
+                              angle={-45}
+                              textAnchor="end"
+                              height={80}
+                              interval={Math.floor(chartData.length / 15)}
+                            />
+                            <YAxis 
+                              label={{ 
+                                value: archiveViewType === 'readings' ? 'Показание (м³)' : 'Объем (м³)', 
+                                angle: -90, 
+                                position: 'insideLeft' 
+                              }}
+                            />
+                            <Tooltip 
+                              formatter={(value: any) => [
+                                `${Number(value).toFixed(3)} м³`, 
+                                archiveViewType === 'readings' ? 'Показание' : 'Объем'
+                              ]}
+                              labelFormatter={(label) => `Период: ${label}`}
+                            />
+                            <Legend />
+                            <Area 
+                              type="monotone" 
+                              dataKey={archiveViewType === 'readings' ? 'reading' : 'volume'} 
+                              stroke="#667eea" 
+                              fillOpacity={1}
+                              fill="url(#colorValue)"
+                              name={archiveViewType === 'readings' ? 'Показание' : 'Объем потребления'}
+                            />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Режим таблицы */
+                    <>
+                    <div className="archive-table-container">
+                      <table className="archive-table">
                       <thead>
                         <tr>
                           <th>Период</th>
@@ -2775,6 +3068,8 @@ const BeliotDevicesTest: React.FC = () => {
                         →
                       </button>
                     </div>
+                  )}
+                    </>
                   )}
                   
                   <div className="archive-info">

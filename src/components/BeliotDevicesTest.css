@@ -3320,6 +3320,56 @@
   display: inline-block;
 }
 
+/* Стили для графиков архива */
+.archive-charts-container {
+  padding: 20px;
+  background: white;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.archive-chart-wrapper {
+  margin-bottom: 32px;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.archive-chart-wrapper h4 {
+  margin: 0 0 16px 0;
+  color: #333;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.archive-chart-wrapper .recharts-wrapper {
+  background: white;
+  border-radius: 4px;
+  padding: 8px;
+}
+
+/* Адаптивность для графиков */
+@media (max-width: 768px) {
+  .archive-charts-container {
+    padding: 12px;
+  }
+  
+  .archive-chart-wrapper {
+    padding: 12px;
+    margin-bottom: 24px;
+  }
+  
+  .archive-chart-wrapper h4 {
+    font-size: 16px;
+  }
+  
+  /* Скрываем переключатель режима отображения (таблица/графики) на мобильных */
+  .archive-display-mode-toggle {
+    display: none !important;
+  }
+}
+
 /* Адаптивность для мобильных устройств */
 @media (max-width: 768px) {
   .passport-modal {
