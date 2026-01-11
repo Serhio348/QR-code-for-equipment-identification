@@ -249,6 +249,33 @@ export function logError(error: unknown, context?: Record<string, any>): void {
       context,
     });
   }
+
+  // Записываем ошибку в базу данных (асинхронно, не блокируем выполнение)
+  // Определяем уровень серьезности на основе типа ошибки
+  let severity: 'low' | 'medium' | 'high' | 'critical' = 'medium';
+  
+  if (error instanceof AppError) {
+    // Критичные ошибки
+    if ([ErrorCode.NETWORK_ERROR, ErrorCode.SERVER_ERROR].includes(error.code)) {
+      severity = 'critical';
+    } else if ([ErrorCode.UNAUTHORIZED, ErrorCode.ACCESS_DENIED].includes(error.code)) {
+      severity = 'high';
+    } else if ([ErrorCode.VALIDATION_ERROR, ErrorCode.INVALID_EMAIL].includes(error.code)) {
+      severity = 'low';
+    }
+  }
+
+  // Импортируем динамически, чтобы избежать циклических зависимостей
+  import('../services/api/errorLogsApi')
+    .then(({ logErrorToDatabase }) => {
+      logErrorToDatabase(error, context, severity).catch((logErr) => {
+        // Игнорируем ошибки логирования, чтобы не создавать бесконечный цикл
+        console.debug('Failed to log error to database:', logErr);
+      });
+    })
+    .catch(() => {
+      // Игнорируем ошибки импорта
+    });
 }
 
 /**
