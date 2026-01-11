@@ -11,6 +11,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import { loadRedirectPath, clearRedirectPath, clearLastPath } from '../utils/pathStorage';
 import { ROUTES } from '../utils/routes';
 import { resetPassword } from '../services/api/supabaseAuthApi';
+import { showError, showSuccess } from '../utils/toast';
 import './LoginPage.css';
 
 export default function LoginPage() {
@@ -91,6 +92,9 @@ export default function LoginPage() {
     try {
       await login({ email: email.trim(), password });
       
+      // Показываем успешное уведомление
+      showSuccess('Вход выполнен успешно');
+      
       // Очищаем сохраненный путь при логировании, чтобы не восстанавливать старую сессию
       clearLastPath();
       
@@ -107,6 +111,8 @@ export default function LoginPage() {
         navigate(ROUTES.HOME);
       }
     } catch (err: any) {
+      // Используем централизованную обработку ошибок
+      showError(err);
       setError(err.message || 'Ошибка при входе. Проверьте email и пароль.');
       setLoading(false);
     }
@@ -252,7 +258,10 @@ export default function LoginPage() {
                     try {
                       await resetPassword(forgotPasswordEmail.trim());
                       setForgotPasswordSuccess(true);
+                      setForgotPasswordEmail('');
+                      showSuccess('Ссылка для восстановления пароля отправлена на ваш email');
                     } catch (err: any) {
+                      showError(err);
                       setError(err.message || 'Ошибка при отправке ссылки для восстановления пароля');
                     } finally {
                       setForgotPasswordLoading(false);

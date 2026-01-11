@@ -1,5 +1,7 @@
 import React, { useEffect } from 'react';
 import { Routes, Route, Link, useLocation, Navigate, useNavigate } from 'react-router-dom';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import { useAuth } from './contexts/AuthContext';
 import MainMenuPage from './pages/MainMenuPage';
 import HomePage from './pages/HomePage';
@@ -220,6 +222,20 @@ const App: React.FC = () => {
 
       {/* Футер приложения */}
       {!isAuthPage && !isMainMenuPage && <AppFooter />}
+
+      {/* Toast уведомления */}
+      <ToastContainer
+        position="top-right"
+        autoClose={5000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="light"
+      />
     </div>
   );
 };

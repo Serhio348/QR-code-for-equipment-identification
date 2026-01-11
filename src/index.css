@@ -82,3 +82,45 @@ body, html {
   }
 }
 
+/* Стили для Toast уведомлений */
+.Toastify__toast-container {
+  z-index: 9999;
+}
+
+.Toastify__toast {
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  font-family: 'Manrope', sans-serif;
+}
+
+.Toastify__toast--success {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.Toastify__toast--error {
+  background: #ef4444;
+  color: white;
+}
+
+.Toastify__toast--info {
+  background: #3b82f6;
+  color: white;
+}
+
+.Toastify__toast--warning {
+  background: #f59e0b;
+  color: white;
+}
+
+.Toastify__progress-bar {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+@media (max-width: 768px) {
+  .Toastify__toast-container {
+    width: 90vw;
+    left: 5vw;
+    right: 5vw;
+  }
+}
