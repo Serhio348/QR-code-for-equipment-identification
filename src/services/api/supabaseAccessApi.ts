@@ -105,7 +105,7 @@ export async function getUserAccess(email: string): Promise<UserAppAccess | null
         const defaultAccess: UserAppAccess = {
           email: profile.email,
           userId: profile.id,
-          name: profile.name,
+          name: profile.name || undefined,
           equipment: false,
           water: false,
           updatedAt: new Date().toISOString(),
@@ -119,7 +119,7 @@ export async function getUserAccess(email: string): Promise<UserAppAccess | null
     return {
       email: profile.email,
       userId: profile.id,
-      name: profile.name,
+      name: profile.name || undefined,
       equipment: access.equipment || false,
       water: access.water || false,
       updatedAt: access.updated_at || new Date().toISOString(),
@@ -189,7 +189,7 @@ export async function updateUserAccess(data: UpdateUserAccessData): Promise<User
     return {
       email: profile.email,
       userId: profile.id,
-      name: profile.name,
+      name: profile.name || undefined,
       equipment: access.equipment || false,
       water: access.water || false,
       updatedAt: access.updated_at || new Date().toISOString(),
