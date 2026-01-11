@@ -394,7 +394,9 @@ const BeliotDevicesTest: React.FC = () => {
           break;
         case 'week':
           const weekNum = Math.ceil(readingDate.getDate() / 7);
-          dateLabel = `Н${weekNum}`;
+          // Добавляем месяц и год для избежания неоднозначности при многомесячных данных
+          const monthYear = readingDate.toLocaleDateString('ru-RU', { month: 'short', year: 'numeric' });
+          dateLabel = `Н${weekNum}, ${monthYear}`;
           break;
         case 'month':
           dateLabel = readingDate.toLocaleDateString('ru-RU', {
@@ -479,15 +481,153 @@ const BeliotDevicesTest: React.FC = () => {
                 }
               }
             }
-          } else {
-            // Для недель, месяцев, лет - упрощенная логика: разница с предыдущим периодом
-            if (index < archiveReadings.length - 1) {
-              const nextReading = archiveReadings[index + 1];
-              if (nextReading?.reading) {
-                const currentValue = Number(groupedReading.reading.reading_value);
-                const previousValue = Number(nextReading.reading.reading_value);
+          } else if (archiveGroupBy === 'week') {
+            // Для недель: используем ту же логику, что и в таблице
+            const weekKey = groupedReading.groupKey;
+            const [year, month, weekNum] = weekKey.split('-');
+            const monthNum = parseInt(month);
+            const weekStartDay = (parseInt(weekNum.replace('W', '')) - 1) * 7 + 1;
+            const weekEndDay = Math.min(weekStartDay + 6, new Date(parseInt(year), monthNum, 0).getDate());
+            
+            const weekReadings = archiveReadingsRaw
+              ?.filter(r => {
+                const rDate = new Date(r.reading_date);
+                return rDate.getFullYear() === parseInt(year) &&
+                       rDate.getMonth() + 1 === monthNum &&
+                       rDate.getDate() >= weekStartDay &&
+                       rDate.getDate() <= weekEndDay;
+              }) || [];
+            
+            if (weekReadings.length > 0) {
+              const sorted = [...weekReadings].sort((a, b) => 
+                new Date(a.reading_date).getTime() - new Date(b.reading_date).getTime()
+              );
+              
+              let previousHourValue: number | null = null;
+              if (archiveReadingsRaw) {
+                const weekStartDate = new Date(parseInt(year), monthNum - 1, weekStartDay);
+                weekStartDate.setDate(weekStartDate.getDate() - 1);
+                const prevDayKey = `${weekStartDate.getFullYear()}-${String(weekStartDate.getMonth() + 1).padStart(2, '0')}-${String(weekStartDate.getDate()).padStart(2, '0')}`;
+                
+                const prevDayReadings = archiveReadingsRaw.filter(r => {
+                  const rDate = new Date(r.reading_date);
+                  const rDayKey = `${rDate.getFullYear()}-${String(rDate.getMonth() + 1).padStart(2, '0')}-${String(rDate.getDate()).padStart(2, '0')}`;
+                  return rDayKey === prevDayKey;
+                });
+                
+                if (prevDayReadings.length > 0) {
+                  const sortedPrevDay = [...prevDayReadings].sort((a, b) => 
+                    new Date(b.reading_date).getTime() - new Date(a.reading_date).getTime()
+                  );
+                  previousHourValue = Number(sortedPrevDay[0].reading_value);
+                }
+              }
+              
+              for (let i = 0; i < sorted.length; i++) {
+                const currentValue = Number(sorted[i].reading_value);
+                const previousValue = i === 0 
+                  ? (previousHourValue !== null ? previousHourValue : Number(sorted[0].reading_value))
+                  : Number(sorted[i - 1].reading_value);
+                
                 if (!isNaN(currentValue) && !isNaN(previousValue)) {
-                  consumption = currentValue - previousValue;
+                  const hourConsumption = currentValue - previousValue;
+                  consumption += hourConsumption;
+                }
+              }
+            }
+          } else if (archiveGroupBy === 'month') {
+            // Для месяцев: используем ту же логику, что и в таблице
+            const monthKey = groupedReading.groupKey;
+            const [year, month] = monthKey.split('-');
+            
+            const monthReadings = archiveReadingsRaw
+              ?.filter(r => {
+                const rDate = new Date(r.reading_date);
+                return rDate.getFullYear() === parseInt(year) &&
+                       rDate.getMonth() + 1 === parseInt(month);
+              }) || [];
+            
+            if (monthReadings.length > 0) {
+              const sorted = [...monthReadings].sort((a, b) => 
+                new Date(a.reading_date).getTime() - new Date(b.reading_date).getTime()
+              );
+              
+              let previousHourValue: number | null = null;
+              if (archiveReadingsRaw) {
+                const monthStartDate = new Date(parseInt(year), parseInt(month) - 1, 1);
+                monthStartDate.setDate(monthStartDate.getDate() - 1);
+                const prevDayKey = `${monthStartDate.getFullYear()}-${String(monthStartDate.getMonth() + 1).padStart(2, '0')}-${String(monthStartDate.getDate()).padStart(2, '0')}`;
+                
+                const prevDayReadings = archiveReadingsRaw.filter(r => {
+                  const rDate = new Date(r.reading_date);
+                  const rDayKey = `${rDate.getFullYear()}-${String(rDate.getMonth() + 1).padStart(2, '0')}-${String(rDate.getDate()).padStart(2, '0')}`;
+                  return rDayKey === prevDayKey;
+                });
+                
+                if (prevDayReadings.length > 0) {
+                  const sortedPrevDay = [...prevDayReadings].sort((a, b) => 
+                    new Date(b.reading_date).getTime() - new Date(a.reading_date).getTime()
+                  );
+                  previousHourValue = Number(sortedPrevDay[0].reading_value);
+                }
+              }
+              
+              for (let i = 0; i < sorted.length; i++) {
+                const currentValue = Number(sorted[i].reading_value);
+                const previousValue = i === 0 
+                  ? (previousHourValue !== null ? previousHourValue : Number(sorted[0].reading_value))
+                  : Number(sorted[i - 1].reading_value);
+                
+                if (!isNaN(currentValue) && !isNaN(previousValue)) {
+                  const hourConsumption = currentValue - previousValue;
+                  consumption += hourConsumption;
+                }
+              }
+            }
+          } else if (archiveGroupBy === 'year') {
+            // Для лет: используем ту же логику, что и в таблице
+            const yearKey = groupedReading.groupKey;
+            
+            const yearReadings = archiveReadingsRaw
+              ?.filter(r => {
+                const rDate = new Date(r.reading_date);
+                return rDate.getFullYear() === parseInt(yearKey);
+              }) || [];
+            
+            if (yearReadings.length > 0) {
+              const sorted = [...yearReadings].sort((a, b) => 
+                new Date(a.reading_date).getTime() - new Date(b.reading_date).getTime()
+              );
+              
+              let previousHourValue: number | null = null;
+              if (archiveReadingsRaw) {
+                const yearStartDate = new Date(parseInt(yearKey), 0, 1);
+                yearStartDate.setDate(yearStartDate.getDate() - 1);
+                const prevDayKey = `${yearStartDate.getFullYear()}-${String(yearStartDate.getMonth() + 1).padStart(2, '0')}-${String(yearStartDate.getDate()).padStart(2, '0')}`;
+                
+                const prevDayReadings = archiveReadingsRaw.filter(r => {
+                  const rDate = new Date(r.reading_date);
+                  const rDayKey = `${rDate.getFullYear()}-${String(rDate.getMonth() + 1).padStart(2, '0')}-${String(rDate.getDate()).padStart(2, '0')}`;
+                  return rDayKey === prevDayKey;
+                });
+                
+                if (prevDayReadings.length > 0) {
+                  const sortedPrevDay = [...prevDayReadings].sort((a, b) => 
+                    new Date(b.reading_date).getTime() - new Date(a.reading_date).getTime()
+                  );
+                  previousHourValue = Number(sortedPrevDay[0].reading_value);
+                }
+              }
+              
+              for (let i = 0; i < sorted.length; i++) {
+                const currentValue = Number(sorted[i].reading_value);
+                const previousValue = i === 0 
+                  ? (previousHourValue !== null ? previousHourValue : Number(sorted[0].reading_value))
+                  : Number(sorted[i - 1].reading_value);
+                
+                if (!isNaN(currentValue) && !isNaN(previousValue)) {
+                  const hourConsumption = currentValue - previousValue;
+                  consumption += hourConsumption;
                 }
               }
             }
