@@ -734,13 +734,14 @@ async function collectReadings(): Promise<void> {
               error.message?.includes('unique') || 
               error.code === '23505' ||
               error.message?.includes('already exists')) {
-            // Дубликат - это нормально, но мы должны обновить запись через ON CONFLICT
+            // Дубликат - это не ошибка, данные уже есть в базе
             // Если получили ошибку дубликата, значит ON CONFLICT не сработал
-            // Это может быть проблемой с функцией или ограничением
+            // Это может быть проблемой с функцией или ограничением, но данные уже существуют
             console.warn(`   ⚠️ Дубликат для устройства ${deviceId} (показание за ${hourStart.toISOString()} уже есть)`);
             console.warn(`   ⚠️ ВНИМАНИЕ: ON CONFLICT должен был обновить запись, но получили ошибку дубликата!`);
+            console.warn(`   ℹ️ Данные уже существуют в базе, это не критическая ошибка`);
             duplicateCount++;
-            errorCount++; // Считаем это ошибкой, так как данные не были записаны
+            // НЕ увеличиваем errorCount, так как данные уже есть в базе
           } else {
             errorCount++;
             console.error(`   ❌ Критическая ошибка для устройства ${deviceId}`);
@@ -748,7 +749,6 @@ async function collectReadings(): Promise<void> {
         } else if (readingId) {
           // Функция insert_beliot_reading возвращает UUID нового или обновленного показания
           // Если readingId есть, значит показание было успешно вставлено или обновлено
-          successCount++;
           console.log(`   ✅ Показание сохранено/обновлено (ID: ${readingId}): ${readingValue.toFixed(3)} ${unit} на ${hourStart.toISOString()}`);
           
           // Проверяем, что запись действительно существует в базе
@@ -761,9 +761,15 @@ async function collectReadings(): Promise<void> {
             .single();
           
           if (verifyError || !verifyData) {
+            // Если проверка не удалась, данные фактически не были сохранены
+            // Корректируем счетчики: уменьшаем successCount и увеличиваем errorCount
             console.error(`   ⚠️ ПРОБЛЕМА: Запись не найдена после сохранения для ${deviceId}!`);
             console.error(`   Ошибка проверки:`, verifyError);
+            console.error(`   🔍 Данные НЕ были сохранены в базу, несмотря на успешный ответ RPC`);
+            errorCount++;
           } else {
+            // Только если проверка прошла успешно, считаем операцию успешной
+            successCount++;
             console.log(`   ✅ Проверка: запись подтверждена в базе (updated_at: ${verifyData.updated_at})`);
           }
         } else {
@@ -785,11 +791,25 @@ async function collectReadings(): Promise<void> {
     // 4. Выводим итоги
     console.log('\n📊 Итоги сбора:');
     console.log(`   ✅ Успешно: ${successCount}`);
-    console.log(`   ⚠️ Дубликаты: ${duplicateCount}`);
+    console.log(`   ⚠️ Дубликаты: ${duplicateCount} (данные уже есть в базе)`);
     console.log(`   ⚠️ Пропущено: ${skippedCount} (устройства без данных или с невалидными данными)`);
     console.log(`   ❌ Ошибок: ${errorCount}`);
     console.log(`   📋 Всего устройств получено из API: ${devices.length}`);
-    console.log(`   📈 Процент успеха: ${((successCount / devices.length) * 100).toFixed(1)}%`);
+    
+    // Проверяем согласованность счетчиков
+    const totalProcessed = successCount + duplicateCount + skippedCount + errorCount;
+    if (totalProcessed !== devices.length) {
+      console.warn(`   ⚠️ ВНИМАНИЕ: Несоответствие счетчиков!`);
+      console.warn(`   Обработано: ${totalProcessed}, получено из API: ${devices.length}`);
+    }
+    
+    // Процент успеха: успешные + дубликаты (данные уже есть) / всего устройств
+    const effectiveSuccess = successCount + duplicateCount;
+    const successRate = devices.length > 0 
+      ? ((effectiveSuccess / devices.length) * 100).toFixed(1)
+      : '0.0';
+    console.log(`   📈 Процент успеха: ${successRate}% (${effectiveSuccess}/${devices.length}, включая дубликаты)`);
+    console.log(`   📈 Процент успеха (только новые записи): ${((successCount / devices.length) * 100).toFixed(1)}%`);
     
     // Выводим список всех устройств для сравнения
     console.log(`\n📋 Список всех устройств из API (${devices.length}):`);
