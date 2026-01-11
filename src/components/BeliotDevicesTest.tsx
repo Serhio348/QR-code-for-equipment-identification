@@ -2440,7 +2440,10 @@ const BeliotDevicesTest: React.FC = () => {
               
               {!archiveDataLoaded ? (
                 <div className="empty-state" style={{ padding: '20px', fontSize: '14px', color: '#666' }}>
-                  <p>Выберите период и нажмите "Загрузить данные"</p>
+                  <p>Нажмите кнопку "Загрузить данные" для просмотра архива</p>
+                  <p style={{ fontSize: '12px', color: '#999', marginTop: '8px' }}>
+                    Период: {archiveStartDate} - {archiveEndDate} (с первого числа текущего месяца до сегодня)
+                  </p>
                 </div>
               ) : archiveLoading ? (
                 <div className="loading-state">
