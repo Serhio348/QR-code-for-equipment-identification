@@ -4,6 +4,15 @@
   padding: 20px;
 }
 
+/* Утилиты для показа/скрытия элементов */
+.desktop-only {
+  display: block;
+}
+
+.mobile-only {
+  display: none;
+}
+
 .access-settings-container {
   max-width: 800px;
   margin: 0 auto;
@@ -246,8 +255,227 @@
   font-size: 16px;
 }
 
+/* Десктопная версия - таблица */
+.access-settings-controls {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 20px;
+  align-items: center;
+}
+
+.search-box {
+  flex: 1;
+}
+
+.search-input {
+  width: 100%;
+  padding: 10px 15px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.refresh-button {
+  background: #667eea;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.refresh-button:hover:not(:disabled) {
+  background: #5568d3;
+}
+
+.refresh-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.access-settings-table-container {
+  overflow-x: auto;
+  margin-bottom: 20px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+}
+
+.access-settings-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 800px;
+}
+
+.access-settings-table thead {
+  background: #f0f0f0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.access-settings-table th {
+  padding: 15px;
+  text-align: left;
+  font-weight: 600;
+  color: #333;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.app-header {
+  text-align: center;
+  font-size: 12px;
+  color: #666;
+  font-weight: normal;
+}
+
+.app-header-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.app-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: #333;
+}
+
+.app-description {
+  font-size: 11px;
+  color: #666;
+}
+
+.access-settings-table td {
+  padding: 15px;
+  border-bottom: 1px solid #e0e0e0;
+  vertical-align: middle;
+}
+
+.user-info-container {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.user-label {
+  font-size: 11px;
+  color: #666;
+  text-transform: uppercase;
+  margin-right: 4px;
+}
+
+.user-value {
+  font-size: 14px;
+  color: #333;
+  font-weight: 500;
+}
+
+.access-cell {
+  text-align: center;
+}
+
+.no-data {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+}
+
+.updated-info {
+  font-size: 12px;
+  color: #666;
+}
+
+.updated-time {
+  font-size: 11px;
+  color: #999;
+  margin-top: 2px;
+}
+
+.updated-by {
+  font-size: 11px;
+  color: #999;
+  margin-top: 2px;
+}
+
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.pagination-button {
+  padding: 8px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: white;
+  color: #374151;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.pagination-button:hover:not(:disabled) {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.pagination-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pagination-info {
+  font-size: 14px;
+  color: #666;
+}
+
+.error-message {
+  background: #fee;
+  border: 1px solid #fcc;
+  color: #c33;
+  padding: 15px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.retry-button {
+  background: #c33;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.retry-button:hover {
+  background: #a22;
+}
+
 /* Адаптивность для мобильных */
 @media (max-width: 768px) {
+  .desktop-only {
+    display: none !important;
+  }
+
+  .mobile-only {
+    display: block !important;
+  }
+
   .access-settings-page {
     padding: 10px;
   }

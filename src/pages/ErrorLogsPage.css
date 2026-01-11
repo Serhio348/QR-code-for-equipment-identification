@@ -126,9 +126,10 @@
   color: #9ca3af;
 }
 
-/* Фильтры - упрощенная версия */
+/* Фильтры */
 .error-logs-filters {
   display: flex;
+  flex-wrap: wrap;
   gap: 16px;
   margin-bottom: 24px;
   padding: 20px;
@@ -140,7 +141,6 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  flex: 1;
   min-width: 200px;
 }
 
@@ -150,24 +150,38 @@
   color: #374151;
 }
 
-.filter-group select {
-  padding: 12px 16px;
+.filter-group select,
+.filter-group input {
+  padding: 8px 12px;
   border: 1px solid #d1d5db;
-  border-radius: 8px;
-  font-size: 16px;
+  border-radius: 6px;
+  font-size: 14px;
   background: white;
-  cursor: pointer;
-  transition: all 0.2s;
 }
 
-.filter-group select:hover {
+.filter-group input {
+  min-width: 250px;
+}
+
+.filter-group select:hover,
+.filter-group input:hover {
   border-color: #9ca3af;
 }
 
-.filter-group select:focus {
+.filter-group select:focus,
+.filter-group input:focus {
   outline: none;
   border-color: #667eea;
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+/* Утилиты для показа/скрытия элементов */
+.desktop-only {
+  display: block;
+}
+
+.mobile-only {
+  display: none;
 }
 
 /* Таблица */
@@ -369,6 +383,14 @@
 
 /* Адаптивность */
 @media (max-width: 768px) {
+  .desktop-only {
+    display: none !important;
+  }
+
+  .mobile-only {
+    display: block !important;
+  }
+
   .error-logs-page {
     padding: 10px;
   }
