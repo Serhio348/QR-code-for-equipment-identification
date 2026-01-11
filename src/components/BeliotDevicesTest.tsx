@@ -76,6 +76,8 @@ const BeliotDevicesTest: React.FC = () => {
   
   // Состояние для выпадающего меню действий на мобильных
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
+  // Состояние для показа поля поиска на мобильных
+  const [isMobileSearchVisible, setIsMobileSearchVisible] = useState<boolean>(false);
   
   // Функция для установки дат по умолчанию
   // Начальная дата всегда: первое число текущего месяца (независимо от группировки)
@@ -164,17 +166,6 @@ const BeliotDevicesTest: React.FC = () => {
     }
   }, [currentDeviceId, archiveStartDate, archiveEndDate, archiveGroupBy, loadByPeriod, refreshArchive]);
 
-  // Управление классом body для скрытия футера на мобильных при открытии архива
-  useEffect(() => {
-    if (isArchiveOpen) {
-      document.body.classList.add('archive-open');
-    } else {
-      document.body.classList.remove('archive-open');
-    }
-    return () => {
-      document.body.classList.remove('archive-open');
-    };
-  }, [isArchiveOpen]);
 
   // Функция группировки показаний и генерации всех периодов в диапазоне
   const groupReadings = useCallback((
@@ -410,20 +401,11 @@ const BeliotDevicesTest: React.FC = () => {
     if (!isArchiveOpen) {
       setArchiveDataLoaded(false);
       setArchiveCurrentPage(1);
-      // Разблокируем прокрутку основного контента
-      document.body.style.overflow = '';
     } else {
       // При открытии архива также сбрасываем флаг, чтобы показать кнопку загрузки
       setArchiveDataLoaded(false);
       setArchiveCurrentPage(1);
-      // Блокируем прокрутку основного контента при открытии модального окна
-      document.body.style.overflow = 'hidden';
     }
-    
-    // Очистка при размонтировании
-    return () => {
-      document.body.style.overflow = '';
-    };
   }, [isArchiveOpen]);
   
   // Группировка применяется автоматически через useMemo при изменении archiveGroupBy
@@ -468,9 +450,11 @@ const BeliotDevicesTest: React.FC = () => {
   const [isDraggingPassport, setIsDraggingPassport] = useState<boolean>(false);
   const [dragStartPassport, setDragStartPassport] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  // Блокировка прокрутки при открытии модального окна паспорта
+  // Блокировка прокрутки при открытии любого модального окна (архив или паспорт)
+  // Координирует оба состояния, чтобы избежать конфликтов
   useEffect(() => {
-    if (isPassportOpen) {
+    // Блокируем прокрутку, если открыто хотя бы одно модальное окно
+    if (isArchiveOpen || isPassportOpen) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
@@ -478,9 +462,12 @@ const BeliotDevicesTest: React.FC = () => {
     
     // Очистка при размонтировании
     return () => {
-      document.body.style.overflow = '';
+      // Восстанавливаем overflow только если оба модальных окна закрыты
+      if (!isArchiveOpen && !isPassportOpen) {
+        document.body.style.overflow = '';
+      }
     };
-  }, [isPassportOpen]);
+  }, [isArchiveOpen, isPassportOpen]);
 
   // Загрузка устройств и синхронизация при монтировании компонента
   useEffect(() => {
@@ -618,6 +605,7 @@ const BeliotDevicesTest: React.FC = () => {
   const handleClosePassport = useCallback(() => {
     setIsPassportOpen(false);
     setPassportDevice(null);
+    setIsMobileMenuOpen(false);
     setPassportData({
       name: '',
       serialNumber: '',
@@ -987,6 +975,14 @@ const BeliotDevicesTest: React.FC = () => {
   }, [isDraggingPassport, dragStartPassport]);
 
   // Форматирование даты для отображения
+  // Функция для экранирования HTML, предотвращает XSS атаки
+  const escapeHtml = useCallback((text: string | undefined | null): string => {
+    if (!text) return '—';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }, []);
+
   const formatDateForDisplay = useCallback((dateStr: string | undefined): string => {
     if (!dateStr) return '—';
     try {
@@ -1019,7 +1015,7 @@ const BeliotDevicesTest: React.FC = () => {
       <html>
         <head>
           <meta charset="UTF-8">
-          <title>Паспорт счетчика: ${deviceName}</title>
+          <title>Паспорт счетчика: ${escapeHtml(deviceName)}</title>
           <style>
             @media print {
               @page {
@@ -1097,15 +1093,15 @@ const BeliotDevicesTest: React.FC = () => {
             <h2>Основные данные</h2>
             <div class="passport-row">
               <span class="passport-label">Название счетчика:</span>
-              <span class="passport-value">${passportData.name || '—'}</span>
+              <span class="passport-value">${escapeHtml(passportData.name)}</span>
             </div>
             <div class="passport-row">
               <span class="passport-label">Серийный номер:</span>
-              <span class="passport-value">${passportData.serialNumber || '—'}</span>
+              <span class="passport-value">${escapeHtml(passportData.serialNumber)}</span>
             </div>
             <div class="passport-row">
               <span class="passport-label">Объект:</span>
-              <span class="passport-value">${passportData.object || '—'}</span>
+              <span class="passport-value">${escapeHtml(passportData.object)}</span>
             </div>
           </div>
           
@@ -1113,19 +1109,19 @@ const BeliotDevicesTest: React.FC = () => {
             <h2>Паспортные данные</h2>
             <div class="passport-row">
               <span class="passport-label">Дата выпуска:</span>
-              <span class="passport-value">${formatDateForDisplay(passportData.manufactureDate)}</span>
+              <span class="passport-value">${escapeHtml(formatDateForDisplay(passportData.manufactureDate))}</span>
             </div>
             <div class="passport-row">
               <span class="passport-label">Производитель:</span>
-              <span class="passport-value">${passportData.manufacturer || '—'}</span>
+              <span class="passport-value">${escapeHtml(passportData.manufacturer)}</span>
             </div>
             <div class="passport-row">
               <span class="passport-label">Дата поверки:</span>
-              <span class="passport-value">${formatDateForDisplay(passportData.verificationDate)}</span>
+              <span class="passport-value">${escapeHtml(formatDateForDisplay(passportData.verificationDate))}</span>
             </div>
             <div class="passport-row">
               <span class="passport-label">Дата следующей поверки:</span>
-              <span class="passport-value">${formatDateForDisplay(passportData.nextVerificationDate)}</span>
+              <span class="passport-value">${escapeHtml(formatDateForDisplay(passportData.nextVerificationDate))}</span>
             </div>
           </div>
           
@@ -1149,24 +1145,24 @@ const BeliotDevicesTest: React.FC = () => {
     setTimeout(() => {
       printWindow.print();
     }, 250);
-  }, [passportDevice, passportData, getDeviceName, formatDateForDisplay]);
+  }, [passportDevice, passportData, getDeviceName, formatDateForDisplay, escapeHtml]);
 
   // Сохранение паспорта в PDF
   const handleSavePassportAsPDF = useCallback(async () => {
     if (!passportDevice) return;
     
+    // Создаем скрытый контейнер для рендеринга
+    const printContainer = document.createElement('div');
+    printContainer.style.position = 'absolute';
+    printContainer.style.left = '-9999px';
+    printContainer.style.width = '210mm';
+    printContainer.style.padding = '20mm';
+    printContainer.style.backgroundColor = 'white';
+    printContainer.style.fontFamily = 'Arial, sans-serif';
+    printContainer.style.fontSize = '12pt';
+    printContainer.style.color = '#333';
+    
     try {
-      // Создаем скрытый контейнер для рендеринга
-      const printContainer = document.createElement('div');
-      printContainer.style.position = 'absolute';
-      printContainer.style.left = '-9999px';
-      printContainer.style.width = '210mm';
-      printContainer.style.padding = '20mm';
-      printContainer.style.backgroundColor = 'white';
-      printContainer.style.fontFamily = 'Arial, sans-serif';
-      printContainer.style.fontSize = '12pt';
-      printContainer.style.color = '#333';
-      
       const deviceName = getDeviceName(passportDevice);
       
       printContainer.innerHTML = `
@@ -1178,15 +1174,15 @@ const BeliotDevicesTest: React.FC = () => {
           <h2 style="font-size: 18pt; color: #667eea; border-bottom: 2px solid #e0e0e0; padding-bottom: 10px; margin-bottom: 20px;">Основные данные</h2>
           <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f0f0f0;">
             <span style="font-weight: bold; width: 40%; color: #666;">Название счетчика:</span>
-            <span style="width: 60%; text-align: right;">${passportData.name || '—'}</span>
+            <span style="width: 60%; text-align: right;">${escapeHtml(passportData.name)}</span>
           </div>
           <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f0f0f0;">
             <span style="font-weight: bold; width: 40%; color: #666;">Серийный номер:</span>
-            <span style="width: 60%; text-align: right;">${passportData.serialNumber || '—'}</span>
+            <span style="width: 60%; text-align: right;">${escapeHtml(passportData.serialNumber)}</span>
           </div>
           <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f0f0f0;">
             <span style="font-weight: bold; width: 40%; color: #666;">Объект:</span>
-            <span style="width: 60%; text-align: right;">${passportData.object || '—'}</span>
+            <span style="width: 60%; text-align: right;">${escapeHtml(passportData.object)}</span>
           </div>
         </div>
         
@@ -1194,19 +1190,19 @@ const BeliotDevicesTest: React.FC = () => {
           <h2 style="font-size: 18pt; color: #667eea; border-bottom: 2px solid #e0e0e0; padding-bottom: 10px; margin-bottom: 20px;">Паспортные данные</h2>
           <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f0f0f0;">
             <span style="font-weight: bold; width: 40%; color: #666;">Дата выпуска:</span>
-            <span style="width: 60%; text-align: right;">${formatDateForDisplay(passportData.manufactureDate)}</span>
+            <span style="width: 60%; text-align: right;">${escapeHtml(formatDateForDisplay(passportData.manufactureDate))}</span>
           </div>
           <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f0f0f0;">
             <span style="font-weight: bold; width: 40%; color: #666;">Производитель:</span>
-            <span style="width: 60%; text-align: right;">${passportData.manufacturer || '—'}</span>
+            <span style="width: 60%; text-align: right;">${escapeHtml(passportData.manufacturer)}</span>
           </div>
           <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f0f0f0;">
             <span style="font-weight: bold; width: 40%; color: #666;">Дата поверки:</span>
-            <span style="width: 60%; text-align: right;">${formatDateForDisplay(passportData.verificationDate)}</span>
+            <span style="width: 60%; text-align: right;">${escapeHtml(formatDateForDisplay(passportData.verificationDate))}</span>
           </div>
           <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f0f0f0;">
             <span style="font-weight: bold; width: 40%; color: #666;">Дата следующей поверки:</span>
-            <span style="width: 60%; text-align: right;">${formatDateForDisplay(passportData.nextVerificationDate)}</span>
+            <span style="width: 60%; text-align: right;">${escapeHtml(formatDateForDisplay(passportData.nextVerificationDate))}</span>
           </div>
         </div>
         
@@ -1230,8 +1226,10 @@ const BeliotDevicesTest: React.FC = () => {
         logging: false,
       });
       
-      // Удаляем временный контейнер
-      document.body.removeChild(printContainer);
+      // Удаляем временный контейнер сразу после успешной конвертации
+      if (printContainer.parentNode) {
+        document.body.removeChild(printContainer);
+      }
       
       // Создаем PDF
       const imgData = canvas.toDataURL('image/png');
@@ -1258,8 +1256,14 @@ const BeliotDevicesTest: React.FC = () => {
     } catch (error) {
       console.error('Ошибка при сохранении PDF:', error);
       alert('Ошибка при сохранении PDF. Пожалуйста, попробуйте снова.');
+    } finally {
+      // Гарантируем удаление временного контейнера в любом случае
+      // (даже если произошла ошибка до добавления в DOM или после)
+      if (printContainer.parentNode) {
+        document.body.removeChild(printContainer);
+      }
     }
-  }, [passportDevice, passportData, getDeviceName, formatDateForDisplay]);
+  }, [passportDevice, passportData, getDeviceName, formatDateForDisplay, escapeHtml]);
 
   const getLastReading = (device: BeliotDevice): string => {
     let value: number | undefined;
@@ -1919,6 +1923,9 @@ const BeliotDevicesTest: React.FC = () => {
                   setSelectedDevice(null);
                   setDeviceReadings(null);
                   setError(null);
+                  setIsMobileMenuOpen(false);
+                  setIsMobileSearchVisible(false);
+                  setSearchQuery('');
                 }}
               >
                 ←
@@ -1955,9 +1962,15 @@ const BeliotDevicesTest: React.FC = () => {
                   <button
                     className="mobile-menu-item"
                     onClick={() => {
-                      setSearchQuery('');
+                      setIsMobileSearchVisible(true);
                       setIsMobileMenuOpen(false);
-                      // Можно добавить поиск здесь
+                      // Фокусируемся на поле поиска после небольшой задержки
+                      setTimeout(() => {
+                        const searchInput = document.querySelector('.mobile-search-input') as HTMLInputElement;
+                        if (searchInput) {
+                          searchInput.focus();
+                        }
+                      }, 100);
                     }}
                   >
                     <span className="mobile-menu-icon">🔍</span>
@@ -1965,6 +1978,29 @@ const BeliotDevicesTest: React.FC = () => {
                   </button>
                 </div>
               </>
+            )}
+            {/* Поле поиска для мобильной версии */}
+            {isMobileSearchVisible && (
+              <div className="mobile-search-container">
+                <input
+                  type="text"
+                  placeholder="🔍 Поиск счетчиков..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="mobile-search-input"
+                  autoFocus
+                />
+                <button
+                  className="mobile-search-close"
+                  onClick={() => {
+                    setIsMobileSearchVisible(false);
+                    setSearchQuery('');
+                  }}
+                  title="Закрыть поиск"
+                >
+                  ×
+                </button>
+              </div>
             )}
             <div className="group-devices-table-container">
               <table className="group-devices-table">
@@ -1975,7 +2011,32 @@ const BeliotDevicesTest: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {selectedGroup.devices.map((device, index) => {
+                  {(() => {
+                    const filteredDevices = selectedGroup.devices.filter((device) => {
+                      // Фильтрация по поисковому запросу
+                      if (!searchQuery.trim()) return true;
+                      const query = searchQuery.toLowerCase();
+                      const deviceName = getDeviceName(device).toLowerCase();
+                      const deviceId = String(device.device_id || device.id || device._id).toLowerCase();
+                      const address = (device.address || '').toLowerCase();
+                      const serialNumber = (device.serialNumber || device.serial_number || '').toLowerCase();
+                      return deviceName.includes(query) || 
+                             deviceId.includes(query) || 
+                             address.includes(query) || 
+                             serialNumber.includes(query);
+                    });
+                    
+                    if (filteredDevices.length === 0 && searchQuery.trim()) {
+                      return (
+                        <tr key="no-results">
+                          <td colSpan={2} className="empty-state" style={{ textAlign: 'center', padding: '20px' }}>
+                            Счетчики не найдены по запросу "{searchQuery}"
+                          </td>
+                        </tr>
+                      );
+                    }
+                    
+                    return filteredDevices.map((device, index) => {
                     const deviceId = String(device.device_id || device.id || device._id);
                     const isSelected = selectedDevice === device;
                     const isEditingName = editingCell?.deviceId === deviceId && editingCell?.field === 'name';
@@ -2067,7 +2128,8 @@ const BeliotDevicesTest: React.FC = () => {
                         <td className="reading-cell">{getLastReading(device) || '-'}</td>
                       </tr>
                     );
-                  })}
+                  });
+                  })()}
                 </tbody>
               </table>
             </div>
@@ -2082,6 +2144,7 @@ const BeliotDevicesTest: React.FC = () => {
                   setSelectedDevice(null);
                   setDeviceReadings(null);
                   setError(null);
+                  setIsMobileMenuOpen(false);
                 }}
               >
                 ←
@@ -2377,7 +2440,10 @@ const BeliotDevicesTest: React.FC = () => {
               
               {!archiveDataLoaded ? (
                 <div className="empty-state" style={{ padding: '20px', fontSize: '14px', color: '#666' }}>
-                  <p>Выберите период и нажмите "Загрузить данные"</p>
+                  <p>Нажмите кнопку "Загрузить данные" для просмотра архива</p>
+                  <p style={{ fontSize: '12px', color: '#999', marginTop: '8px' }}>
+                    Период: {archiveStartDate} - {archiveEndDate} (с первого числа текущего месяца до сегодня)
+                  </p>
                 </div>
               ) : archiveLoading ? (
                 <div className="loading-state">
