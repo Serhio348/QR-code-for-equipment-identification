@@ -16,6 +16,9 @@ export const ROUTES = {
   /** Страница регистрации */
   REGISTER: '/register',
   
+  /** Страница восстановления пароля */
+  RESET_PASSWORD: '/reset-password',
+  
   /** Страница списка оборудования */
   EQUIPMENT: '/equipment',
   
