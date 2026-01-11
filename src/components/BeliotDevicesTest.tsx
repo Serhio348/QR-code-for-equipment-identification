@@ -76,6 +76,8 @@ const BeliotDevicesTest: React.FC = () => {
   
   // Состояние для выпадающего меню действий на мобильных
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
+  // Состояние для показа поля поиска на мобильных
+  const [isMobileSearchVisible, setIsMobileSearchVisible] = useState<boolean>(false);
   
   // Функция для установки дат по умолчанию
   // Начальная дата всегда: первое число текущего месяца (независимо от группировки)
@@ -1921,6 +1923,8 @@ const BeliotDevicesTest: React.FC = () => {
                   setDeviceReadings(null);
                   setError(null);
                   setIsMobileMenuOpen(false);
+                  setIsMobileSearchVisible(false);
+                  setSearchQuery('');
                 }}
               >
                 ←
@@ -1957,9 +1961,15 @@ const BeliotDevicesTest: React.FC = () => {
                   <button
                     className="mobile-menu-item"
                     onClick={() => {
-                      setSearchQuery('');
+                      setIsMobileSearchVisible(true);
                       setIsMobileMenuOpen(false);
-                      // Можно добавить поиск здесь
+                      // Фокусируемся на поле поиска после небольшой задержки
+                      setTimeout(() => {
+                        const searchInput = document.querySelector('.mobile-search-input') as HTMLInputElement;
+                        if (searchInput) {
+                          searchInput.focus();
+                        }
+                      }, 100);
                     }}
                   >
                     <span className="mobile-menu-icon">🔍</span>
@@ -1967,6 +1977,29 @@ const BeliotDevicesTest: React.FC = () => {
                   </button>
                 </div>
               </>
+            )}
+            {/* Поле поиска для мобильной версии */}
+            {isMobileSearchVisible && (
+              <div className="mobile-search-container">
+                <input
+                  type="text"
+                  placeholder="🔍 Поиск счетчиков..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="mobile-search-input"
+                  autoFocus
+                />
+                <button
+                  className="mobile-search-close"
+                  onClick={() => {
+                    setIsMobileSearchVisible(false);
+                    setSearchQuery('');
+                  }}
+                  title="Закрыть поиск"
+                >
+                  ×
+                </button>
+              </div>
             )}
             <div className="group-devices-table-container">
               <table className="group-devices-table">
@@ -1977,7 +2010,32 @@ const BeliotDevicesTest: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {selectedGroup.devices.map((device, index) => {
+                  {(() => {
+                    const filteredDevices = selectedGroup.devices.filter((device) => {
+                      // Фильтрация по поисковому запросу
+                      if (!searchQuery.trim()) return true;
+                      const query = searchQuery.toLowerCase();
+                      const deviceName = getDeviceName(device).toLowerCase();
+                      const deviceId = String(device.device_id || device.id || device._id).toLowerCase();
+                      const address = (device.address || '').toLowerCase();
+                      const serialNumber = (device.serialNumber || device.serial_number || '').toLowerCase();
+                      return deviceName.includes(query) || 
+                             deviceId.includes(query) || 
+                             address.includes(query) || 
+                             serialNumber.includes(query);
+                    });
+                    
+                    if (filteredDevices.length === 0 && searchQuery.trim()) {
+                      return (
+                        <tr key="no-results">
+                          <td colSpan={2} className="empty-state" style={{ textAlign: 'center', padding: '20px' }}>
+                            Счетчики не найдены по запросу "{searchQuery}"
+                          </td>
+                        </tr>
+                      );
+                    }
+                    
+                    return filteredDevices.map((device, index) => {
                     const deviceId = String(device.device_id || device.id || device._id);
                     const isSelected = selectedDevice === device;
                     const isEditingName = editingCell?.deviceId === deviceId && editingCell?.field === 'name';
@@ -2069,7 +2127,8 @@ const BeliotDevicesTest: React.FC = () => {
                         <td className="reading-cell">{getLastReading(device) || '-'}</td>
                       </tr>
                     );
-                  })}
+                  });
+                  })()}
                 </tbody>
               </table>
             </div>
