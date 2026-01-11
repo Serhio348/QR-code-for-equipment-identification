@@ -618,6 +618,7 @@ const BeliotDevicesTest: React.FC = () => {
   const handleClosePassport = useCallback(() => {
     setIsPassportOpen(false);
     setPassportDevice(null);
+    setIsMobileMenuOpen(false);
     setPassportData({
       name: '',
       serialNumber: '',
@@ -1919,6 +1920,7 @@ const BeliotDevicesTest: React.FC = () => {
                   setSelectedDevice(null);
                   setDeviceReadings(null);
                   setError(null);
+                  setIsMobileMenuOpen(false);
                 }}
               >
                 ←
@@ -2082,6 +2084,7 @@ const BeliotDevicesTest: React.FC = () => {
                   setSelectedDevice(null);
                   setDeviceReadings(null);
                   setError(null);
+                  setIsMobileMenuOpen(false);
                 }}
               >
                 ←
