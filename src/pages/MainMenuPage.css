@@ -3,7 +3,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #e8edf2;
   padding: 20px;
   overflow: hidden;
   margin: 0;
@@ -13,9 +13,10 @@
 .main-menu-container {
   width: 100%;
   max-width: 600px;
-  background: white;
+  background: var(--bg-primary, #ffffff);
   border-radius: 16px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--border-color-dark, #cbd5e1);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -38,16 +39,19 @@
 }
 
 .main-menu-header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  padding: 30px 20px;
+  background: var(--gradient-primary, linear-gradient(135deg, #5b6ee8 0%, #8b5cf6 100%));
+  color: var(--text-inverse, #ffffff);
+  padding: 32px 24px;
   text-align: center;
+  border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
 }
 
 .main-menu-title {
-  font-size: 32px;
-  font-weight: 700;
-  margin: 0 0 15px 0;
+  font-size: 28px;
+  font-weight: 600;
+  margin: 0 0 12px 0;
+  color: var(--text-inverse, #ffffff);
+  letter-spacing: -0.02em;
 }
 
 .main-menu-user-info {
@@ -69,13 +73,14 @@
 .main-menu-logout-link {
   margin-top: 12px;
   padding: 8px 16px;
-  background: rgba(255, 255, 255, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: 8px;
   color: white;
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
   font-family: inherit;
 }
 
@@ -95,10 +100,11 @@
 }
 
 .main-menu-content {
-  padding: 30px 20px;
+  padding: 32px 24px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
+  background: var(--bg-primary, #ffffff);
 }
 
 .main-menu-button {
@@ -106,29 +112,30 @@
   align-items: center;
   gap: 20px;
   padding: 24px;
-  border: 2px solid #e0e0e0;
+  border: 1px solid var(--border-color, #e2e8f0);
   border-radius: 12px;
-  background: white;
+  background: var(--bg-primary, #ffffff);
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
   text-align: left;
   width: 100%;
 }
 
 .main-menu-button:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  border-color: #667eea;
+  box-shadow: var(--shadow-md, 0 4px 6px rgba(0, 0, 0, 0.07));
+  border-color: var(--primary-color, #5b6ee8);
+  background: var(--bg-secondary, #f8fafc);
 }
 
 .main-menu-button-equipment:hover {
-  border-color: #667eea;
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+  border-color: var(--primary-color, #5b6ee8);
+  background: var(--hover-overlay, rgba(91, 110, 232, 0.08));
 }
 
 .main-menu-button-water:hover {
   border-color: #2196F3;
-  background: linear-gradient(135deg, rgba(33, 150, 243, 0.05) 0%, rgba(3, 169, 244, 0.05) 100%);
+  background: rgba(33, 150, 243, 0.08);
 }
 
 .main-menu-button-icon {
@@ -139,12 +146,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f5f5f5;
+  background: var(--bg-tertiary, #f1f5f9);
   border-radius: 12px;
+  border: 1px solid var(--border-color-light, #f1f5f9);
 }
 
 .main-menu-button-equipment:hover .main-menu-button-icon {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--gradient-primary, linear-gradient(135deg, #5b6ee8 0%, #8b5cf6 100%));
 }
 
 .main-menu-button-water:hover .main-menu-button-icon {
@@ -159,20 +167,21 @@
 }
 
 .main-menu-button-title {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary, #0f172a);
   display: block;
+  letter-spacing: -0.01em;
 }
 
 .main-menu-button-subtitle {
   font-size: 14px;
-  color: #666;
+  color: var(--text-secondary, #475569);
   display: block;
 }
 
 .main-menu-button:hover .main-menu-button-title {
-  color: #667eea;
+  color: var(--primary-color, #5b6ee8);
 }
 
 .main-menu-button-water:hover .main-menu-button-title {

@@ -1,6 +1,6 @@
 .app {
   height: 100vh;
-  background: #f5f5f5;
+  background: var(--bg-primary, #ffffff);
   display: flex;
   flex-direction: column;
   position: relative;
@@ -8,23 +8,74 @@
 }
 
 .app-header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  padding: 20px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  position: relative; /* Обычное позиционирование для вертикального потока */
+  background: var(--bg-secondary, #f1f5f9);
+  color: var(--text-primary, #0f172a);
+  padding: 0;
+  box-shadow: var(--shadow-md, 0 4px 6px rgba(0, 0, 0, 0.07));
+  border-bottom: 1px solid var(--border-color-dark, #cbd5e1);
+  position: relative;
   width: 100%;
   z-index: 1000;
   flex-shrink: 0;
-  order: 1; /* Первый элемент в вертикальном потоке */
+  order: 1;
 }
 
 .header-content {
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 32px;
   align-items: center;
+  padding: 16px 24px;
+  min-height: 72px;
+}
+
+/* Логотип и заголовок слева */
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.header-logo {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--gradient-primary, linear-gradient(135deg, #5b6ee8 0%, #8b5cf6 100%));
+  border-radius: 10px;
+  color: white;
+  font-size: 20px;
+  font-weight: 700;
+  box-shadow: var(--shadow-primary, 0 4px 12px rgba(91, 110, 232, 0.15));
+}
+
+.header-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 10px;
+}
+
+/* Навигация по центру (если нужно) */
+.header-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* Правая часть - пользователь и действия */
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  justify-content: flex-end;
+  min-width: 0;
 }
 
 /* Оптимизация для больших экранов */
@@ -56,26 +107,34 @@
 
 .header-title {
   text-decoration: none;
-  color: white;
+  color: var(--text-primary, #0f172a);
   text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .header-title:hover {
-  opacity: 0.9;
+  opacity: 0.8;
 }
 
 .header-title h1 {
-  font-size: 28px;
-  margin: 0 0 5px 0;
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
   word-wrap: break-word;
   overflow-wrap: break-word;
-  line-height: 1.2;
+  line-height: 1.3;
+  color: var(--text-primary, #0f172a);
+  letter-spacing: -0.01em;
 }
 
 .header-title p {
-  font-size: 16px;
-  opacity: 0.9;
+  font-size: 13px;
   margin: 0;
+  color: var(--text-secondary, #475569);
+  font-weight: 400;
 }
 
 .header-right {
@@ -86,22 +145,24 @@
 
 .header-nav {
   display: flex;
-  gap: 20px;
+  gap: 8px;
   align-items: center;
 }
 
 .nav-link {
-  color: white;
+  color: var(--text-secondary, #475569);
   text-decoration: none;
-  font-weight: 600;
-  font-size: 16px;
+  font-weight: 500;
+  font-size: 14px;
   padding: 8px 16px;
-  border-radius: 4px;
-  transition: background 0.3s;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  white-space: nowrap;
 }
 
 .nav-link:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--hover-overlay, rgba(91, 110, 232, 0.08));
+  color: var(--primary-color, #5b6ee8);
 }
 
 .user-info {
@@ -109,35 +170,51 @@
   align-items: center;
   gap: 12px;
   font-size: 14px;
+  padding: 8px 12px;
+  background: var(--bg-secondary, #f8fafc);
+  border-radius: 10px;
+  border: 1px solid var(--border-color-light, #f1f5f9);
 }
 
 .user-email {
-  color: white;
-  opacity: 0.9;
+  color: var(--text-primary, #0f172a);
+  font-weight: 500;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
 }
 
 .user-role {
-  background: rgba(255, 255, 255, 0.2);
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 12px;
+  background: var(--gradient-primary, linear-gradient(135deg, #5b6ee8 0%, #8b5cf6 100%));
+  color: white;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
   font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
 }
 
 .logout-button {
-  background: rgba(255, 255, 255, 0.2);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  padding: 6px 12px;
-  border-radius: 4px;
-  font-size: 14px;
+  background: transparent;
+  color: var(--text-secondary, #475569);
+  border: 1px solid var(--border-color, #e2e8f0);
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.3s;
+  transition: all 0.2s ease;
+  white-space: nowrap;
 }
 
 .logout-button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.3);
+  background: var(--hover-overlay-dark, rgba(0, 0, 0, 0.03));
+  border-color: var(--border-color-dark, #cbd5e1);
+  color: var(--text-primary, #0f172a);
 }
 
 .logout-button:disabled {
@@ -149,8 +226,8 @@
   display: inline-block;
   width: 12px;
   height: 12px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: white;
+  border: 2px solid var(--border-color, #e2e8f0);
+  border-top-color: var(--primary-color, #5b6ee8);
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
   margin-right: 6px;
@@ -165,12 +242,12 @@
 @media (max-width: 768px) {
   .app {
     display: flex !important;
-    flex-direction: column !important; /* Вертикальное расположение элементов */
-    align-items: stretch !important; /* Растягиваем элементы на всю ширину */
-    gap: 0 !important; /* Убираем промежутки между элементами */
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0 !important;
     height: 100vh !important;
     max-height: 100vh !important;
-    overflow: hidden !important; /* Полностью убираем скролл */
+    overflow: hidden !important;
     overflow-x: hidden !important;
     overflow-y: hidden !important;
     width: 100% !important;
@@ -179,67 +256,74 @@
   }
 
   .app-header {
-    padding: 15px;
-    order: 1; /* Хедер первый */
+    order: 1;
   }
 
   .app-content {
-    margin-top: 0; /* Убираем отступ, так как хедер не фиксированный */
-    order: 2; /* Контент второй */
-    flex: 1; /* Занимает оставшееся пространство */
+    margin-top: 0;
+    order: 2;
+    flex: 1;
   }
 
   .header-content {
-    flex-direction: column;
+    grid-template-columns: 1fr;
     gap: 12px;
-    align-items: flex-start;
+    padding: 12px 16px;
+    min-height: auto;
+  }
+
+  .header-left {
     width: 100%;
   }
 
-  .header-title h1 {
-    font-size: 20px;
-  }
-
-  .header-title p {
-    font-size: 14px;
+  .header-center {
+    width: 100%;
+    justify-content: flex-start;
   }
 
   .header-right {
     width: 100%;
     justify-content: space-between;
-    flex-wrap: wrap;
   }
 
-  .header-nav {
-    width: 100%;
-    justify-content: flex-start;
+  .header-title h1 {
+    font-size: 18px;
   }
 
-  .nav-link {
-    font-size: 14px;
-    padding: 6px 12px;
+  .header-title p {
+    font-size: 12px;
+  }
+
+  .header-logo {
+    width: 36px;
+    height: 36px;
+    font-size: 18px;
   }
 
   .user-info {
-    flex-wrap: wrap;
-    gap: 8px;
     width: 100%;
+    justify-content: space-between;
+    padding: 10px 12px;
   }
 
   .user-email {
     font-size: 12px;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
+    max-width: 150px;
   }
 
   .user-role {
-    font-size: 11px;
-    padding: 3px 6px;
+    font-size: 10px;
+    padding: 3px 8px;
   }
 
   .logout-button {
     font-size: 12px;
-    padding: 4px 8px;
+    padding: 6px 12px;
+  }
+
+  .nav-link {
+    font-size: 13px;
+    padding: 6px 12px;
   }
 }
 
@@ -307,6 +391,8 @@
   padding-bottom: 60px; /* Отступ для фиксированного футера */
   min-height: 0; /* Важно для flex-контейнера */
   order: 2; /* Второй элемент в вертикальном потоке */
+  background: var(--bg-primary, #ffffff);
+  border-top: 1px solid var(--border-color-light, #f1f5f9);
 }
 
 /* Убираем отступ сверху для главного меню, так как хедер не отображается */

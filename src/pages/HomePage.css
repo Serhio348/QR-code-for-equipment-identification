@@ -3,28 +3,28 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: #f5f5f5;
+  background: var(--gradient-background, linear-gradient(135deg, rgba(102, 126, 234, 0.30) 0%, rgba(118, 75, 162, 0.30) 100%));
 }
 
 .home-page-header {
-  max-width: 1200px;
-  margin: 0 auto;
+  width: 100%;
+  margin: 0;
   padding: 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: white;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  width: 100%;
+  background: var(--bg-primary, #ffffff);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  border-bottom: 1px solid var(--border-color, #e2e8f0);
   position: sticky;
   top: 0;
   z-index: 5;
+  box-sizing: border-box;
 }
 
 /* Оптимизация для больших экранов */
 @media (min-width: 1440px) {
   .home-page-header {
-    max-width: 1400px;
     padding: 25px 30px;
   }
   
@@ -35,7 +35,6 @@
 
 @media (min-width: 1920px) {
   .home-page-header {
-    max-width: 1600px;
     padding: 30px 40px;
   }
   
@@ -50,15 +49,18 @@
 }
 
 .home-page-header h1 {
-  color: #333;
+  color: var(--text-primary, #0f172a);
   margin: 0;
   font-size: 28px;
+  font-weight: 600;
 }
 
 .home-page-content {
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  background: var(--gradient-background, linear-gradient(135deg, rgba(102, 126, 234, 0.30) 0%, rgba(118, 75, 162, 0.30) 100%));
+  padding: 20px;
 }
 
 .add-button {
