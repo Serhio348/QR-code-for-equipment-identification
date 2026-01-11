@@ -401,20 +401,11 @@ const BeliotDevicesTest: React.FC = () => {
     if (!isArchiveOpen) {
       setArchiveDataLoaded(false);
       setArchiveCurrentPage(1);
-      // Разблокируем прокрутку основного контента
-      document.body.style.overflow = '';
     } else {
       // При открытии архива также сбрасываем флаг, чтобы показать кнопку загрузки
       setArchiveDataLoaded(false);
       setArchiveCurrentPage(1);
-      // Блокируем прокрутку основного контента при открытии модального окна
-      document.body.style.overflow = 'hidden';
     }
-    
-    // Очистка при размонтировании
-    return () => {
-      document.body.style.overflow = '';
-    };
   }, [isArchiveOpen]);
   
   // Группировка применяется автоматически через useMemo при изменении archiveGroupBy
@@ -459,9 +450,11 @@ const BeliotDevicesTest: React.FC = () => {
   const [isDraggingPassport, setIsDraggingPassport] = useState<boolean>(false);
   const [dragStartPassport, setDragStartPassport] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  // Блокировка прокрутки при открытии модального окна паспорта
+  // Блокировка прокрутки при открытии любого модального окна (архив или паспорт)
+  // Координирует оба состояния, чтобы избежать конфликтов
   useEffect(() => {
-    if (isPassportOpen) {
+    // Блокируем прокрутку, если открыто хотя бы одно модальное окно
+    if (isArchiveOpen || isPassportOpen) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
@@ -469,9 +462,12 @@ const BeliotDevicesTest: React.FC = () => {
     
     // Очистка при размонтировании
     return () => {
-      document.body.style.overflow = '';
+      // Восстанавливаем overflow только если оба модальных окна закрыты
+      if (!isArchiveOpen && !isPassportOpen) {
+        document.body.style.overflow = '';
+      }
     };
-  }, [isPassportOpen]);
+  }, [isArchiveOpen, isPassportOpen]);
 
   // Загрузка устройств и синхронизация при монтировании компонента
   useEffect(() => {
