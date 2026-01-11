@@ -1151,18 +1151,18 @@ const BeliotDevicesTest: React.FC = () => {
   const handleSavePassportAsPDF = useCallback(async () => {
     if (!passportDevice) return;
     
+    // Создаем скрытый контейнер для рендеринга
+    const printContainer = document.createElement('div');
+    printContainer.style.position = 'absolute';
+    printContainer.style.left = '-9999px';
+    printContainer.style.width = '210mm';
+    printContainer.style.padding = '20mm';
+    printContainer.style.backgroundColor = 'white';
+    printContainer.style.fontFamily = 'Arial, sans-serif';
+    printContainer.style.fontSize = '12pt';
+    printContainer.style.color = '#333';
+    
     try {
-      // Создаем скрытый контейнер для рендеринга
-      const printContainer = document.createElement('div');
-      printContainer.style.position = 'absolute';
-      printContainer.style.left = '-9999px';
-      printContainer.style.width = '210mm';
-      printContainer.style.padding = '20mm';
-      printContainer.style.backgroundColor = 'white';
-      printContainer.style.fontFamily = 'Arial, sans-serif';
-      printContainer.style.fontSize = '12pt';
-      printContainer.style.color = '#333';
-      
       const deviceName = getDeviceName(passportDevice);
       
       printContainer.innerHTML = `
@@ -1226,8 +1226,10 @@ const BeliotDevicesTest: React.FC = () => {
         logging: false,
       });
       
-      // Удаляем временный контейнер
-      document.body.removeChild(printContainer);
+      // Удаляем временный контейнер сразу после успешной конвертации
+      if (printContainer.parentNode) {
+        document.body.removeChild(printContainer);
+      }
       
       // Создаем PDF
       const imgData = canvas.toDataURL('image/png');
@@ -1254,6 +1256,12 @@ const BeliotDevicesTest: React.FC = () => {
     } catch (error) {
       console.error('Ошибка при сохранении PDF:', error);
       alert('Ошибка при сохранении PDF. Пожалуйста, попробуйте снова.');
+    } finally {
+      // Гарантируем удаление временного контейнера в любом случае
+      // (даже если произошла ошибка до добавления в DOM или после)
+      if (printContainer.parentNode) {
+        document.body.removeChild(printContainer);
+      }
     }
   }, [passportDevice, passportData, getDeviceName, formatDateForDisplay, escapeHtml]);
 
