@@ -1,0 +1,362 @@
+.error-logs-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.30) 0%, rgba(118, 75, 162, 0.30) 100%);
+  padding: 20px;
+}
+
+.error-logs-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  background: white;
+  border-radius: 12px;
+  padding: 30px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.error-logs-header {
+  margin-bottom: 30px;
+  border-bottom: 2px solid #e5e7eb;
+  padding-bottom: 20px;
+}
+
+.error-logs-header h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 8px;
+}
+
+.error-logs-header p {
+  color: #6b7280;
+  font-size: 14px;
+}
+
+/* Статистика */
+.error-logs-statistics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
+  margin-bottom: 30px;
+}
+
+.stat-card {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+
+.stat-card.critical {
+  border-color: #dc2626;
+  background: #fef2f2;
+}
+
+.stat-card.high {
+  border-color: #ea580c;
+  background: #fff7ed;
+}
+
+.stat-card.medium {
+  border-color: #f59e0b;
+  background: #fffbeb;
+}
+
+.stat-card.low {
+  border-color: #10b981;
+  background: #f0fdf4;
+}
+
+.stat-card.unresolved {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: #6b7280;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.stat-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 4px;
+}
+
+.stat-period {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+/* Фильтры */
+.error-logs-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 24px;
+  padding: 20px;
+  background: #f9fafb;
+  border-radius: 8px;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 200px;
+}
+
+.filter-group label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.filter-group select,
+.filter-group input {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+}
+
+.filter-group input {
+  min-width: 250px;
+}
+
+/* Таблица */
+.error-logs-table-container {
+  overflow-x: auto;
+  margin-bottom: 24px;
+}
+
+.error-logs-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+}
+
+.error-logs-table thead {
+  background: #f9fafb;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.error-logs-table th {
+  padding: 12px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+}
+
+.error-logs-table td {
+  padding: 12px;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 14px;
+  color: #1f2937;
+}
+
+.error-logs-table tbody tr:hover {
+  background: #f9fafb;
+}
+
+.error-logs-table tbody tr.resolved {
+  opacity: 0.6;
+}
+
+.error-logs-table tbody tr.expanded-row {
+  background: #f9fafb;
+}
+
+.error-message-cell {
+  max-width: 400px;
+}
+
+.error-message-main {
+  font-weight: 500;
+  margin-bottom: 4px;
+  word-break: break-word;
+}
+
+.error-code {
+  font-size: 11px;
+  color: #6b7280;
+  font-family: monospace;
+}
+
+.severity-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status-badge.resolved {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.status-badge.unresolved {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.log-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.action-button {
+  padding: 6px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: white;
+  color: #374151;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.action-button:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.action-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Детали лога */
+.log-details {
+  padding: 20px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.detail-section {
+  margin-bottom: 20px;
+}
+
+.detail-section:last-child {
+  margin-bottom: 0;
+}
+
+.detail-section h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 8px;
+}
+
+.detail-section pre {
+  background: #1f2937;
+  color: #f9fafb;
+  padding: 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  font-size: 12px;
+  font-family: 'Courier New', monospace;
+  line-height: 1.5;
+}
+
+.detail-section div {
+  font-size: 13px;
+  color: #6b7280;
+  word-break: break-all;
+}
+
+/* Пагинация */
+.error-logs-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+}
+
+.error-logs-pagination button {
+  padding: 8px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: white;
+  color: #374151;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.error-logs-pagination button:hover:not(:disabled) {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.error-logs-pagination button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.error-logs-pagination span {
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.no-logs {
+  text-align: center;
+  padding: 60px 20px;
+  color: #6b7280;
+  font-size: 16px;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+  .error-logs-page {
+    padding: 10px;
+  }
+
+  .error-logs-container {
+    padding: 20px;
+  }
+
+  .error-logs-statistics {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .error-logs-filters {
+    flex-direction: column;
+  }
+
+  .filter-group {
+    min-width: 100%;
+  }
+
+  .error-logs-table {
+    font-size: 12px;
+  }
+
+  .error-logs-table th,
+  .error-logs-table td {
+    padding: 8px;
+  }
+
+  .log-actions {
+    flex-direction: column;
+  }
+}

@@ -135,22 +135,41 @@ const MainMenuPage: React.FC = () => {
               </button>
             ))}
 
-            {/* Кнопка настроек доступа для администраторов */}
+            {/* Административные функции */}
             {isAdmin && (
-              <button
-                className="main-menu-button main-menu-button-settings"
-                onClick={() => navigate(ROUTES.ACCESS_SETTINGS)}
-                type="button"
-                aria-label="Настройки доступа"
-              >
-                <div className="main-menu-button-icon">
-                  ⚙️
-                </div>
-                <div className="main-menu-button-text">
-                  <span className="main-menu-button-title">Настройки доступа</span>
-                  <span className="main-menu-button-subtitle">Управление доступом пользователей</span>
-                </div>
-              </button>
+              <>
+                {/* Кнопка настроек доступа для администраторов */}
+                <button
+                  className="main-menu-button main-menu-button-settings"
+                  onClick={() => navigate(ROUTES.ACCESS_SETTINGS)}
+                  type="button"
+                  aria-label="Настройки доступа"
+                >
+                  <div className="main-menu-button-icon">
+                    ⚙️
+                  </div>
+                  <div className="main-menu-button-text">
+                    <span className="main-menu-button-title">Настройки доступа</span>
+                    <span className="main-menu-button-subtitle">Управление доступом пользователей</span>
+                  </div>
+                </button>
+
+                {/* Кнопка просмотра логов ошибок для администраторов */}
+                <button
+                  className="main-menu-button main-menu-button-logs"
+                  onClick={() => navigate(ROUTES.ERROR_LOGS)}
+                  type="button"
+                  aria-label="Логи ошибок"
+                >
+                  <div className="main-menu-button-icon">
+                    📊
+                  </div>
+                  <div className="main-menu-button-text">
+                    <span className="main-menu-button-title">Логи ошибок</span>
+                    <span className="main-menu-button-subtitle">Мониторинг и анализ ошибок</span>
+                  </div>
+                </button>
+              </>
             )}
           </div>
         )}

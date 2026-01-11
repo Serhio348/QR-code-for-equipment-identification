@@ -12,6 +12,7 @@ import EquipmentPage from './pages/EquipmentPage';
 import EquipmentFormPage from './pages/EquipmentFormPage';
 import BeliotDevicesTest from './components/BeliotDevicesTest';
 import AccessSettingsPage from './pages/AccessSettingsPage';
+import ErrorLogsPage from './pages/ErrorLogsPage';
 import NotFoundPage from './pages/NotFoundPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import AppAccessGuard from './components/AppAccessGuard';
@@ -205,6 +206,16 @@ const App: React.FC = () => {
             element={
               <ProtectedRoute requireAdmin>
                 <AccessSettingsPage />
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Страница логов ошибок - только для администраторов */}
+          <Route 
+            path={ROUTES.ERROR_LOGS} 
+            element={
+              <ProtectedRoute requireAdmin>
+                <ErrorLogsPage />
               </ProtectedRoute>
             } 
           />
