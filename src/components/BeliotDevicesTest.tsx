@@ -979,6 +979,14 @@ const BeliotDevicesTest: React.FC = () => {
   }, [isDraggingPassport, dragStartPassport]);
 
   // Форматирование даты для отображения
+  // Функция для экранирования HTML, предотвращает XSS атаки
+  const escapeHtml = useCallback((text: string | undefined | null): string => {
+    if (!text) return '—';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }, []);
+
   const formatDateForDisplay = useCallback((dateStr: string | undefined): string => {
     if (!dateStr) return '—';
     try {
@@ -1011,7 +1019,7 @@ const BeliotDevicesTest: React.FC = () => {
       <html>
         <head>
           <meta charset="UTF-8">
-          <title>Паспорт счетчика: ${deviceName}</title>
+          <title>Паспорт счетчика: ${escapeHtml(deviceName)}</title>
           <style>
             @media print {
               @page {
@@ -1089,15 +1097,15 @@ const BeliotDevicesTest: React.FC = () => {
             <h2>Основные данные</h2>
             <div class="passport-row">
               <span class="passport-label">Название счетчика:</span>
-              <span class="passport-value">${passportData.name || '—'}</span>
+              <span class="passport-value">${escapeHtml(passportData.name)}</span>
             </div>
             <div class="passport-row">
               <span class="passport-label">Серийный номер:</span>
-              <span class="passport-value">${passportData.serialNumber || '—'}</span>
+              <span class="passport-value">${escapeHtml(passportData.serialNumber)}</span>
             </div>
             <div class="passport-row">
               <span class="passport-label">Объект:</span>
-              <span class="passport-value">${passportData.object || '—'}</span>
+              <span class="passport-value">${escapeHtml(passportData.object)}</span>
             </div>
           </div>
           
@@ -1105,19 +1113,19 @@ const BeliotDevicesTest: React.FC = () => {
             <h2>Паспортные данные</h2>
             <div class="passport-row">
               <span class="passport-label">Дата выпуска:</span>
-              <span class="passport-value">${formatDateForDisplay(passportData.manufactureDate)}</span>
+              <span class="passport-value">${escapeHtml(formatDateForDisplay(passportData.manufactureDate))}</span>
             </div>
             <div class="passport-row">
               <span class="passport-label">Производитель:</span>
-              <span class="passport-value">${passportData.manufacturer || '—'}</span>
+              <span class="passport-value">${escapeHtml(passportData.manufacturer)}</span>
             </div>
             <div class="passport-row">
               <span class="passport-label">Дата поверки:</span>
-              <span class="passport-value">${formatDateForDisplay(passportData.verificationDate)}</span>
+              <span class="passport-value">${escapeHtml(formatDateForDisplay(passportData.verificationDate))}</span>
             </div>
             <div class="passport-row">
               <span class="passport-label">Дата следующей поверки:</span>
-              <span class="passport-value">${formatDateForDisplay(passportData.nextVerificationDate)}</span>
+              <span class="passport-value">${escapeHtml(formatDateForDisplay(passportData.nextVerificationDate))}</span>
             </div>
           </div>
           
@@ -1141,7 +1149,7 @@ const BeliotDevicesTest: React.FC = () => {
     setTimeout(() => {
       printWindow.print();
     }, 250);
-  }, [passportDevice, passportData, getDeviceName, formatDateForDisplay]);
+  }, [passportDevice, passportData, getDeviceName, formatDateForDisplay, escapeHtml]);
 
   // Сохранение паспорта в PDF
   const handleSavePassportAsPDF = useCallback(async () => {
@@ -1170,15 +1178,15 @@ const BeliotDevicesTest: React.FC = () => {
           <h2 style="font-size: 18pt; color: #667eea; border-bottom: 2px solid #e0e0e0; padding-bottom: 10px; margin-bottom: 20px;">Основные данные</h2>
           <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f0f0f0;">
             <span style="font-weight: bold; width: 40%; color: #666;">Название счетчика:</span>
-            <span style="width: 60%; text-align: right;">${passportData.name || '—'}</span>
+            <span style="width: 60%; text-align: right;">${escapeHtml(passportData.name)}</span>
           </div>
           <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f0f0f0;">
             <span style="font-weight: bold; width: 40%; color: #666;">Серийный номер:</span>
-            <span style="width: 60%; text-align: right;">${passportData.serialNumber || '—'}</span>
+            <span style="width: 60%; text-align: right;">${escapeHtml(passportData.serialNumber)}</span>
           </div>
           <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f0f0f0;">
             <span style="font-weight: bold; width: 40%; color: #666;">Объект:</span>
-            <span style="width: 60%; text-align: right;">${passportData.object || '—'}</span>
+            <span style="width: 60%; text-align: right;">${escapeHtml(passportData.object)}</span>
           </div>
         </div>
         
@@ -1186,19 +1194,19 @@ const BeliotDevicesTest: React.FC = () => {
           <h2 style="font-size: 18pt; color: #667eea; border-bottom: 2px solid #e0e0e0; padding-bottom: 10px; margin-bottom: 20px;">Паспортные данные</h2>
           <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f0f0f0;">
             <span style="font-weight: bold; width: 40%; color: #666;">Дата выпуска:</span>
-            <span style="width: 60%; text-align: right;">${formatDateForDisplay(passportData.manufactureDate)}</span>
+            <span style="width: 60%; text-align: right;">${escapeHtml(formatDateForDisplay(passportData.manufactureDate))}</span>
           </div>
           <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f0f0f0;">
             <span style="font-weight: bold; width: 40%; color: #666;">Производитель:</span>
-            <span style="width: 60%; text-align: right;">${passportData.manufacturer || '—'}</span>
+            <span style="width: 60%; text-align: right;">${escapeHtml(passportData.manufacturer)}</span>
           </div>
           <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f0f0f0;">
             <span style="font-weight: bold; width: 40%; color: #666;">Дата поверки:</span>
-            <span style="width: 60%; text-align: right;">${formatDateForDisplay(passportData.verificationDate)}</span>
+            <span style="width: 60%; text-align: right;">${escapeHtml(formatDateForDisplay(passportData.verificationDate))}</span>
           </div>
           <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f0f0f0;">
             <span style="font-weight: bold; width: 40%; color: #666;">Дата следующей поверки:</span>
-            <span style="width: 60%; text-align: right;">${formatDateForDisplay(passportData.nextVerificationDate)}</span>
+            <span style="width: 60%; text-align: right;">${escapeHtml(formatDateForDisplay(passportData.nextVerificationDate))}</span>
           </div>
         </div>
         
@@ -1251,7 +1259,7 @@ const BeliotDevicesTest: React.FC = () => {
       console.error('Ошибка при сохранении PDF:', error);
       alert('Ошибка при сохранении PDF. Пожалуйста, попробуйте снова.');
     }
-  }, [passportDevice, passportData, getDeviceName, formatDateForDisplay]);
+  }, [passportDevice, passportData, getDeviceName, formatDateForDisplay, escapeHtml]);
 
   const getLastReading = (device: BeliotDevice): string => {
     let value: number | undefined;
