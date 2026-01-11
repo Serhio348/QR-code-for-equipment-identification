@@ -6,7 +6,6 @@
  */
 
 import { supabase } from '../../config/supabase';
-import { ErrorCode } from '../../utils/errorHandler';
 
 export interface ErrorLog {
   id: string;
