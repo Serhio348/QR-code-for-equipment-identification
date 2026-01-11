@@ -102,6 +102,11 @@
   background: #eff6ff;
 }
 
+.stat-card.resolved {
+  border-color: #10b981;
+  background: #f0fdf4;
+}
+
 .stat-label {
   font-size: 12px;
   color: #6b7280;
@@ -121,10 +126,9 @@
   color: #9ca3af;
 }
 
-/* Фильтры */
+/* Фильтры - упрощенная версия */
 .error-logs-filters {
   display: flex;
-  flex-wrap: wrap;
   gap: 16px;
   margin-bottom: 24px;
   padding: 20px;
@@ -136,6 +140,7 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  flex: 1;
   min-width: 200px;
 }
 
@@ -145,17 +150,24 @@
   color: #374151;
 }
 
-.filter-group select,
-.filter-group input {
-  padding: 8px 12px;
+.filter-group select {
+  padding: 12px 16px;
   border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 14px;
+  border-radius: 8px;
+  font-size: 16px;
   background: white;
+  cursor: pointer;
+  transition: all 0.2s;
 }
 
-.filter-group input {
-  min-width: 250px;
+.filter-group select:hover {
+  border-color: #9ca3af;
+}
+
+.filter-group select:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
 /* Таблица */
@@ -362,31 +374,109 @@
   }
 
   .error-logs-container {
-    padding: 20px;
+    padding: 16px;
+  }
+
+  .error-logs-header h1 {
+    font-size: 22px;
   }
 
   .error-logs-statistics {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .stat-card {
+    padding: 12px;
+  }
+
+  .stat-value {
+    font-size: 24px;
   }
 
   .error-logs-filters {
     flex-direction: column;
+    padding: 16px;
   }
 
   .filter-group {
     min-width: 100%;
   }
 
+  .filter-group select {
+    font-size: 16px; /* Предотвращает зум на iOS */
+  }
+
+  .error-logs-table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
   .error-logs-table {
     font-size: 12px;
+    min-width: 600px;
   }
 
   .error-logs-table th,
   .error-logs-table td {
-    padding: 8px;
+    padding: 8px 4px;
+  }
+
+  .error-message-cell {
+    max-width: 200px;
   }
 
   .log-actions {
     flex-direction: column;
+    gap: 4px;
+  }
+
+  .action-button {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
+  .log-details {
+    padding: 12px;
+  }
+
+  .detail-section pre {
+    font-size: 10px;
+    padding: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .error-logs-container {
+    padding: 12px;
+  }
+
+  .error-logs-header h1 {
+    font-size: 20px;
+  }
+
+  .error-logs-statistics {
+    gap: 8px;
+  }
+
+  .stat-card {
+    padding: 10px;
+  }
+
+  .stat-value {
+    font-size: 20px;
+  }
+
+  .error-logs-filters {
+    padding: 12px;
+  }
+
+  .error-logs-table {
+    font-size: 11px;
+  }
+
+  .error-logs-table th,
+  .error-logs-table td {
+    padding: 6px 2px;
   }
 }
