@@ -37,6 +37,9 @@ export const ROUTES = {
   /** Страница настроек доступа к приложениям (только для администраторов) */
   ACCESS_SETTINGS: '/admin/access-settings',
   
+  /** Страница просмотра логов ошибок (только для администраторов) */
+  ERROR_LOGS: '/admin/error-logs',
+  
   /** Тестирование Beliot API (устаревший маршрут, используйте WATER) */
   BELIOT_TEST: '/beliot-test',
 } as const;

@@ -1,5 +1,7 @@
 import React, { useEffect } from 'react';
 import { Routes, Route, Link, useLocation, Navigate, useNavigate } from 'react-router-dom';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import { useAuth } from './contexts/AuthContext';
 import MainMenuPage from './pages/MainMenuPage';
 import HomePage from './pages/HomePage';
@@ -10,6 +12,7 @@ import EquipmentPage from './pages/EquipmentPage';
 import EquipmentFormPage from './pages/EquipmentFormPage';
 import BeliotDevicesTest from './components/BeliotDevicesTest';
 import AccessSettingsPage from './pages/AccessSettingsPage';
+import ErrorLogsPage from './pages/ErrorLogsPage';
 import NotFoundPage from './pages/NotFoundPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import AppAccessGuard from './components/AppAccessGuard';
@@ -207,6 +210,16 @@ const App: React.FC = () => {
             } 
           />
           
+          {/* Страница логов ошибок - только для администраторов */}
+          <Route 
+            path={ROUTES.ERROR_LOGS} 
+            element={
+              <ProtectedRoute requireAdmin>
+                <ErrorLogsPage />
+              </ProtectedRoute>
+            } 
+          />
+          
           {/* Тестирование Beliot API (устаревший маршрут, редирект на WATER) */}
           <Route 
             path={ROUTES.BELIOT_TEST} 
@@ -220,6 +233,20 @@ const App: React.FC = () => {
 
       {/* Футер приложения */}
       {!isAuthPage && !isMainMenuPage && <AppFooter />}
+
+      {/* Toast уведомления */}
+      <ToastContainer
+        position="top-right"
+        autoClose={5000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="light"
+      />
     </div>
   );
 };
