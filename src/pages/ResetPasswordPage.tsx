@@ -5,10 +5,19 @@
  */
 
 import { useState, FormEvent, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { updatePassword } from '../services/api/supabaseAuthApi';
 import { ROUTES } from '../utils/routes';
 import './ResetPasswordPage.css';
+
+/**
+ * Парсит hash параметры из URL (после #)
+ * Supabase передает токены в hash, а не в query параметрах
+ */
+function parseHashParams(): URLSearchParams {
+  const hash = window.location.hash.substring(1); // Убираем #
+  return new URLSearchParams(hash);
+}
 
 export default function ResetPasswordPage() {
   const [newPassword, setNewPassword] = useState('');
@@ -18,23 +27,32 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  // Проверяем наличие токена в URL
+  // Проверяем наличие токена в URL hash
   useEffect(() => {
-    // Supabase автоматически обрабатывает токен через URL параметры
-    // Проверяем, что пользователь действительно пришел по ссылке восстановления
-    const accessToken = searchParams.get('access_token');
-    const type = searchParams.get('type');
+    // Supabase передает токены в hash фрагменте URL (после #), а не в query параметрах
+    // Например: /reset-password#access_token=...&type=recovery
+    const hashParams = parseHashParams();
+    const accessToken = hashParams.get('access_token');
+    const type = hashParams.get('type');
     
-    if (!accessToken || type !== 'recovery') {
+    // Также проверяем query параметры на случай, если они есть
+    const urlParams = new URLSearchParams(window.location.search);
+    const queryAccessToken = urlParams.get('access_token');
+    const queryType = urlParams.get('type');
+    
+    // Используем токен из hash (приоритет) или из query параметров
+    const finalAccessToken = accessToken || queryAccessToken;
+    const finalType = type || queryType;
+    
+    if (!finalAccessToken || finalType !== 'recovery') {
       // Если нет токена или тип не recovery, перенаправляем на страницу входа
       setTimeout(() => {
         navigate(ROUTES.LOGIN);
       }, 3000);
     }
-  }, [searchParams, navigate]);
+  }, [navigate]);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
