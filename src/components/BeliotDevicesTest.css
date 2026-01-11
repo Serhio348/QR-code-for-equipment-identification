@@ -4,7 +4,7 @@
   height: 100%; /* Занимает всю доступную высоту родителя */
   max-height: 100%;
   overflow: hidden;
-  background: white;
+  background: var(--gradient-background, linear-gradient(135deg, rgba(102, 126, 234, 0.30) 0%, rgba(118, 75, 162, 0.30) 100%));
   margin: 0;
   padding: 0;
 }
@@ -16,9 +16,10 @@
   max-width: 400px;
   display: flex;
   flex-direction: column;
-  background: white;
-  border-right: 1px solid #e0e0e0;
+  background: var(--bg-primary, #ffffff);
+  border-right: 1px solid var(--border-color-dark, #cbd5e1);
   overflow: hidden;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.05);
 }
 
 .panel-header {
