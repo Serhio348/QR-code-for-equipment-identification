@@ -5,6 +5,7 @@ import MainMenuPage from './pages/MainMenuPage';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import EquipmentPage from './pages/EquipmentPage';
 import EquipmentFormPage from './pages/EquipmentFormPage';
 import BeliotDevicesTest from './components/BeliotDevicesTest';
@@ -24,7 +25,7 @@ const App: React.FC = () => {
   const isEquipmentPage = isEquipmentRoute(location.pathname);
   const isWaterPage = location.pathname === ROUTES.WATER || location.pathname === ROUTES.BELIOT_TEST;
   const isMainMenuPage = location.pathname === ROUTES.HOME;
-  const isAuthPage = location.pathname === ROUTES.LOGIN || location.pathname === ROUTES.REGISTER;
+  const isAuthPage = location.pathname === ROUTES.LOGIN || location.pathname === ROUTES.REGISTER || location.pathname === ROUTES.RESET_PASSWORD;
   const { isAuthenticated, user, logout, loading } = useAuth();
 
   // Восстанавливаем путь при загрузке приложения, если пользователь уже авторизован
@@ -113,6 +114,7 @@ const App: React.FC = () => {
           {/* Страницы аутентификации - доступны всем */}
           <Route path={ROUTES.LOGIN} element={<LoginPage />} />
           <Route path={ROUTES.REGISTER} element={<RegisterPage />} />
+          <Route path={ROUTES.RESET_PASSWORD} element={<ResetPasswordPage />} />
           
           {/* Главное меню - только для авторизованных */}
           <Route 
