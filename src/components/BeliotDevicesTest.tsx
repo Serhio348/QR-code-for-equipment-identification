@@ -756,11 +756,10 @@ const BeliotDevicesTest: React.FC = () => {
     }
     
     // Очистка при размонтировании
+    // ВАЖНО: Безусловно восстанавливаем overflow при размонтировании,
+    // чтобы избежать утечки состояния (stale closure)
     return () => {
-      // Восстанавливаем overflow только если оба модальных окна закрыты
-      if (!isArchiveOpen && !isPassportOpen) {
-        document.body.style.overflow = '';
-      }
+      document.body.style.overflow = '';
     };
   }, [isArchiveOpen, isPassportOpen]);
 
