@@ -649,10 +649,12 @@ async function collectReadings(): Promise<void> {
         const currentMinute = now.getMinutes();
         const currentHour = now.getHours();
         
-        // Приоритет 1: Используем время из API, если оно валидно и свежее (не старше 2 часов)
-        // Это наиболее точный способ определить, за какой час записывать данные
-        if (isApiDateValid && hoursDiff >= 0 && hoursDiff < 2) {
+        // Приоритет 1: Используем время из API, если оно валидно и свежее
+        // hoursDiff < 0 означает, что API вернул время в будущем (небольшое расхождение часовых поясов или синхронизация)
+        // hoursDiff >= 0 && hoursDiff < 2 означает, что время валидно и не старше 2 часов
+        if (isApiDateValid && hoursDiff >= -0.5 && hoursDiff < 2) {
           // Используем время из API, округляем до начала часа
+          // Допускаем небольшое расхождение в будущее (до 30 минут) для учета синхронизации времени
           hourStart = new Date(apiDate);
           hourStart.setMinutes(0, 0, 0);
           hourStart.setSeconds(0, 0);
@@ -672,16 +674,29 @@ async function collectReadings(): Promise<void> {
         } 
         // Приоритет 3: Если опрос в 0-44 минуты часа → запись за предыдущий час
         // Это может быть задержка GitHub Actions или опрос в начале часа
+        // ВАЖНО: Используем предыдущий час только если это задержка запуска,
+        // а не когда API невалидно или устарело (в этом случае используем текущий час)
         else {
-          // Используем предыдущий час
-          // Это правильно, так как если скрипт запустился в 16:21, значит он должен был запуститься в 15:50
-          // и записать данные за 15:00
-          hourStart = new Date(now);
-          hourStart.setHours(now.getHours() - 1);
-          hourStart.setMinutes(0, 0, 0);
-          hourStart.setSeconds(0, 0);
-          hourStart.setMilliseconds(0);
-          dateSource = 'предыдущий час (задержка запуска или опрос в начале часа)';
+          // Если API невалидно или устарело, используем текущий час (не предыдущий),
+          // чтобы не перезаписывать корректные данные за предыдущий час устаревшими значениями
+          if (!isApiDateValid || hoursDiff >= 2 || hoursDiff < -0.5) {
+            // API невалидно или устарело (>2 часов) или в далеком будущем (>30 минут)
+            // Используем текущий час, так как мы опрашиваем за текущий час
+            hourStart = new Date(now);
+            hourStart.setMinutes(0, 0, 0);
+            hourStart.setSeconds(0, 0);
+            hourStart.setMilliseconds(0);
+            dateSource = 'текущий час (API невалидно или устарело)';
+          } else {
+            // Это задержка запуска - скрипт должен был запуститься в предыдущем часе
+            // Записываем данные за предыдущий час
+            hourStart = new Date(now);
+            hourStart.setHours(now.getHours() - 1);
+            hourStart.setMinutes(0, 0, 0);
+            hourStart.setSeconds(0, 0);
+            hourStart.setMilliseconds(0);
+            dateSource = 'предыдущий час (задержка запуска)';
+          }
         }
 
         const apiDateStr = isApiDateValid
