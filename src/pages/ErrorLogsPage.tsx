@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   getErrorLogs,
   getErrorStatistics,
@@ -16,10 +17,12 @@ import {
   type ErrorLogFilters,
 } from '../services/api/errorLogsApi';
 import { showError, showSuccess } from '../utils/toast';
+import { ROUTES } from '../utils/routes';
 import LoadingSpinner from '../components/LoadingSpinner';
 import './ErrorLogsPage.css';
 
 export default function ErrorLogsPage() {
+  const navigate = useNavigate();
   const [logs, setLogs] = useState<ErrorLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [statistics, setStatistics] = useState<any>(null);
@@ -127,6 +130,16 @@ export default function ErrorLogsPage() {
     <div className="error-logs-page">
       <div className="error-logs-container">
         <div className="error-logs-header">
+          <div className="error-logs-header-top">
+            <button
+              onClick={() => navigate(ROUTES.HOME)}
+              className="back-button"
+              type="button"
+              aria-label="Вернуться в главное меню"
+            >
+              ← Назад к главному меню
+            </button>
+          </div>
           <h1>Логи ошибок</h1>
           <p>Мониторинг и анализ ошибок приложения</p>
         </div>
