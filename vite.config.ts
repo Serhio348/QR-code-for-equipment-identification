@@ -13,6 +13,9 @@ export default defineConfig(({ mode }) => ({
     },
     chunkSizeWarningLimit: 1000,
     minify: 'esbuild',
+    // Исключаем тестовые файлы из production сборки
+    // Vite автоматически исключает файлы, которые не импортируются в основной код,
+    // но для надежности можно явно указать через exclude в tsconfig.json
   },
   server: {
     port: 3000,
