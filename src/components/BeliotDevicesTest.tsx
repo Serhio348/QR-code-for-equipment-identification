@@ -166,17 +166,6 @@ const BeliotDevicesTest: React.FC = () => {
     }
   }, [currentDeviceId, archiveStartDate, archiveEndDate, archiveGroupBy, loadByPeriod, refreshArchive]);
 
-  // Управление классом body для скрытия футера на мобильных при открытии архива
-  useEffect(() => {
-    if (isArchiveOpen) {
-      document.body.classList.add('archive-open');
-    } else {
-      document.body.classList.remove('archive-open');
-    }
-    return () => {
-      document.body.classList.remove('archive-open');
-    };
-  }, [isArchiveOpen]);
 
   // Функция группировки показаний и генерации всех периодов в диапазоне
   const groupReadings = useCallback((
