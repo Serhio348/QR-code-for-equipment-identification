@@ -1002,11 +1002,16 @@ function doPost(e) {
         if (!data.id) {
           return createErrorResponse('ID участка не указан');
         }
-        deleteWorkshop(data.id);
-        return createJsonResponse({
-          success: true,
-          message: 'Участок удален успешно'
-        });
+        try {
+          const deleted = deleteWorkshop(data.id);
+          return createJsonResponse({
+            success: deleted !== false,
+            message: deleted !== false ? 'Участок удален успешно' : 'Участок не найден'
+          });
+        } catch (error) {
+          Logger.log('❌ Ошибка при удалении участка: ' + error.toString());
+          return createErrorResponse('Ошибка при удалении участка: ' + error.toString());
+        }
       
       default:
         // Если действие не распознано, возвращаем ошибку
