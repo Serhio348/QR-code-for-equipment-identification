@@ -63,162 +63,162 @@ const EquipmentPlate: React.FC<EquipmentPlateProps> = ({
       };
     }
   }, [isQRModalOpen]);
-  
+
   return (
-    <div className="equipment-plate" id="equipment-plate">
-      <div className="plate-header">
+    <div className="equipment-plate" id="equipment-plate" data-plate-element="container">
+      <div className="plate-header" data-plate-element="header">
         <h1 className="equipment-name">{displayName}</h1>
       </div>
       
       <div className="plate-content">
-        <div className="specs-table">
+        <div className="specs-table" data-plate-element="specs-table">
           <table>
             <tbody>
               {specs.inventoryNumber && (
-                <tr>
+                <tr data-plate-field="inventoryNumber">
                   <td className="spec-label">Инвентарный номер:</td>
                   <td className="spec-value">{specs.inventoryNumber}</td>
                 </tr>
               )}
               {specs.height && (
-                <tr>
+                <tr data-plate-field="height">
                   <td className="spec-label">Высота:</td>
                   <td className="spec-value">{specs.height}</td>
                 </tr>
               )}
               {specs.diameter && (
-                <tr>
+                <tr data-plate-field="diameter">
                   <td className="spec-label">Диаметр:</td>
                   <td className="spec-value">{specs.diameter}</td>
                 </tr>
               )}
               {specs.capacity && (
-                <tr>
+                <tr data-plate-field="capacity">
                   <td className="spec-label">Производительность:</td>
                   <td className="spec-value">{specs.capacity}</td>
                 </tr>
               )}
               {specs.filtrationArea && (
-                <tr>
+                <tr data-plate-field="filtrationArea">
                   <td className="spec-label">Площадь фильтрации:</td>
                   <td className="spec-value">{specs.filtrationArea}</td>
                 </tr>
               )}
               {specs.filtrationSpeed && (
-                <tr>
+                <tr data-plate-field="filtrationSpeed">
                   <td className="spec-label">Скорость фильтрации:</td>
                   <td className="spec-value">{specs.filtrationSpeed}</td>
                 </tr>
               )}
               {specs.fillingMaterial && (
-                <tr>
+                <tr data-plate-field="fillingMaterial">
                   <td className="spec-label">Засыпка:</td>
                   <td className="spec-value">{specs.fillingMaterial}</td>
                 </tr>
               )}
               {specs.fillingVolume && (
-                <tr>
+                <tr data-plate-field="fillingVolume">
                   <td className="spec-label">Объем засыпки:</td>
                   <td className="spec-value">{specs.fillingVolume}</td>
                 </tr>
               )}
               {specs.power && (
-                <tr>
+                <tr data-plate-field="power">
                   <td className="spec-label">Мощность:</td>
                   <td className="spec-value">{specs.power}</td>
                 </tr>
               )}
               {specs.voltage && (
-                <tr>
+                <tr data-plate-field="voltage">
                   <td className="spec-label">Напряжение:</td>
                   <td className="spec-value">{specs.voltage}</td>
                 </tr>
               )}
               {specs.current && (
-                <tr>
+                <tr data-plate-field="current">
                   <td className="spec-label">Ток:</td>
                   <td className="spec-value">{specs.current}</td>
                 </tr>
               )}
               {specs.equipmentType && (
-                <tr>
+                <tr data-plate-field="equipmentType">
                   <td className="spec-label">Тип оборудования:</td>
                   <td className="spec-value">{specs.equipmentType}</td>
                 </tr>
               )}
               {specs.protectionClass && (
-                <tr>
+                <tr data-plate-field="protectionClass">
                   <td className="spec-label">Класс защиты:</td>
                   <td className="spec-value">{specs.protectionClass}</td>
                 </tr>
               )}
               {specs.fanType && (
-                <tr>
+                <tr data-plate-field="fanType">
                   <td className="spec-label">Тип вентилятора:</td>
                   <td className="spec-value">{specs.fanType}</td>
                 </tr>
               )}
               {specs.pressure && (
-                <tr>
+                <tr data-plate-field="pressure">
                   <td className="spec-label">Напор:</td>
                   <td className="spec-value">{specs.pressure}</td>
                 </tr>
               )}
               {specs.material && (
-                <tr>
+                <tr data-plate-field="material">
                   <td className="spec-label">Материал:</td>
                   <td className="spec-value">{specs.material}</td>
                 </tr>
               )}
               {specs.workingPressure && (
-                <tr>
+                <tr data-plate-field="workingPressure">
                   <td className="spec-label">Рабочее давление:</td>
                   <td className="spec-value">{specs.workingPressure}</td>
                 </tr>
               )}
               {specs.temperature && (
-                <tr>
+                <tr data-plate-field="temperature">
                   <td className="spec-label">Температура:</td>
                   <td className="spec-value">{specs.temperature}</td>
                 </tr>
               )}
               {specs.head && (
-                <tr>
+                <tr data-plate-field="head">
                   <td className="spec-label">Напор:</td>
                   <td className="spec-value">{specs.head}</td>
                 </tr>
               )}
               {specs.volume && (
-                <tr>
+                <tr data-plate-field="volume">
                   <td className="spec-label">Объем:</td>
                   <td className="spec-value">{specs.volume}</td>
                 </tr>
               )}
               {specs.valveType && (
-                <tr>
+                <tr data-plate-field="valveType">
                   <td className="spec-label">Тип клапана:</td>
                   <td className="spec-value">{specs.valveType}</td>
                 </tr>
               )}
               {specs.serialNumber && (
-                <tr>
+                <tr data-plate-field="serialNumber">
                   <td className="spec-label">Заводской номер:</td>
                   <td className="spec-value">{specs.serialNumber}</td>
                 </tr>
               )}
               {specs.additionalNotes && (
-                <tr>
+                <tr data-plate-field="additionalNotes">
                   <td className="spec-label">Дополнительные характеристики:</td>
                   <td className="spec-value" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                     {specs.additionalNotes}
                   </td>
                 </tr>
               )}
-              <tr className="date-row">
+              <tr className="date-row" data-plate-field="commissioningDate">
                 <td className="spec-label">Дата ввода в эксплуатацию:</td>
                 <td className="spec-value">{formatDate(commissioningDate)}</td>
               </tr>
-              <tr className="date-row">
+              <tr className="date-row" data-plate-field="lastMaintenanceDate">
                 <td className="spec-label">Дата последнего обслуживания:</td>
                 <td className="spec-value">{formatDate(lastMaintenanceDate)}</td>
               </tr>
@@ -226,11 +226,11 @@ const EquipmentPlate: React.FC<EquipmentPlateProps> = ({
           </table>
         </div>
         
-        <div className="qr-section">
+        <div className="qr-section" data-plate-element="qr-section">
           <div className="qr-code-clickable" onClick={handleQRClick}>
             <QRCodeComponent url={urlForQR} />
           </div>
-          <p className="qr-label">Нажмите на QR-код для увеличения</p>
+          <p className="qr-label">Отсканируйте для получения дополнительной информации</p>
         </div>
       </div>
       

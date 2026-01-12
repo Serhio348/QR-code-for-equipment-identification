@@ -8,11 +8,13 @@ import { useParams, useNavigate } from 'react-router-dom';
 import EquipmentPlate from '../components/EquipmentPlate';
 import MaintenanceLogModal from '../components/MaintenanceLogModal';
 import DocumentationModal from '../components/DocumentationModal';
+import PlateExportSettingsModal from '../components/PlateExportSettingsModal';
 import EquipmentPageHeader from '../components/EquipmentPage/EquipmentPageHeader';
 import StatusMessages from '../components/EquipmentPage/StatusMessages';
 import { useAuth } from '../contexts/AuthContext';
 import { getEquipmentEditUrl } from '../utils/routes';
 import { filterSpecs, FilterSpecs } from '../types/equipment';
+import { PlateExportSettings } from '../types/plateExport';
 import { deleteEquipment } from '../services/equipmentApi';
 import { useEquipmentData, clearEquipmentCache } from '../hooks/useEquipmentData';
 import { useEquipmentDates } from '../hooks/useEquipmentDates';
@@ -43,6 +45,9 @@ const EquipmentPage: React.FC = () => {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isMaintenanceLogOpen, setMaintenanceLogOpen] = useState(false);
   const [isDocumentationOpen, setDocumentationOpen] = useState(false);
+  
+  // Состояния для настроек экспорта
+  const [isExportSettingsOpen, setIsExportSettingsOpen] = useState(false);
   
   // Объединяем ошибки загрузки и удаления
   const error = loadError || datesError || deleteError;
@@ -112,15 +117,28 @@ const EquipmentPage: React.FC = () => {
   };
 
   /**
-   * Экспорт таблички в PDF
+   * Открытие модального окна настроек экспорта
    */
-  const handleExportPDF = async () => {
-    try {
-      await exportToPDF('equipment-plate', `${currentEquipment?.name || 'Оборудование'}-табличка.pdf`);
-    } catch (error) {
-      alert('Ошибка при экспорте в PDF. Попробуйте еще раз.');
-      console.error(error);
-    }
+  const handleExportPDF = () => {
+    setIsExportSettingsOpen(true);
+  };
+
+  /**
+   * Экспорт таблички в PDF с настройками
+   */
+  const handleExportWithSettings = async (settings: PlateExportSettings) => {
+    setIsExportSettingsOpen(false);
+    
+    // Небольшая задержка для закрытия модального окна
+    setTimeout(async () => {
+      try {
+        const filename = `${currentEquipment?.name || 'Оборудование'}-табличка.pdf`;
+        await exportToPDF('equipment-plate', filename, settings);
+      } catch (error) {
+        alert('Ошибка при экспорте в PDF. Попробуйте еще раз.');
+        console.error(error);
+      }
+    }, 100);
   };
 
   return (
@@ -173,6 +191,16 @@ const EquipmentPage: React.FC = () => {
                 folderUrl={currentEquipment.googleDriveUrl}
                 equipmentName={currentEquipment.name}
                 onClose={() => setDocumentationOpen(false)}
+              />
+            )}
+
+            {currentEquipment && isExportSettingsOpen && (
+              <PlateExportSettingsModal
+                isOpen={isExportSettingsOpen}
+                onClose={() => setIsExportSettingsOpen(false)}
+                onExport={handleExportWithSettings}
+                equipmentName={currentEquipment.name}
+                specs={(currentEquipment.specs as FilterSpecs) || filterSpecs}
               />
             )}
           </>
