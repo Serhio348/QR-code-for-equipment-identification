@@ -2,11 +2,16 @@
  * Регистрация Service Worker для PWA
  */
 
+import { showInfo } from './toast';
+
 const isLocalhost = Boolean(
   window.location.hostname === 'localhost' ||
   window.location.hostname === '[::1]' ||
   window.location.hostname.match(/^127(?:\.(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}$/)
 );
+
+// Флаг для отслеживания, показывалось ли уже уведомление об обновлении
+let updateNotificationShown = false;
 
 export function registerServiceWorker(): void {
   if ('serviceWorker' in navigator) {
@@ -48,11 +53,61 @@ function registerValidSW(swUrl: string): void {
               // Новый Service Worker доступен, показываем уведомление
               console.log('[SW] New content available; please refresh.');
               
-              // Можно показать уведомление пользователю
-              if (window.confirm('Доступна новая версия приложения. Обновить?')) {
-                // Отправляем сообщение новому Service Worker для активации
-                installingWorker.postMessage({ type: 'SKIP_WAITING' });
-                window.location.reload();
+              // Показываем уведомление только один раз
+              if (!updateNotificationShown) {
+                updateNotificationShown = true;
+                
+                // Показываем Toast уведомление с кнопкой действия
+                showInfo('Доступна новая версия приложения', {
+                  autoClose: false, // Не закрывать автоматически
+                  closeOnClick: false, // Не закрывать при клике на само уведомление
+                  draggable: true,
+                  closeButton: true,
+                });
+                
+                // Добавляем кнопку "Обновить" к Toast уведомлению через DOM
+                setTimeout(() => {
+                  const toastElement = document.querySelector('.Toastify__toast--info:last-child');
+                  if (toastElement) {
+                    const toastBody = toastElement.querySelector('.Toastify__toast-body');
+                    if (toastBody && !toastBody.querySelector('.sw-update-button')) {
+                      // Создаем контейнер для текста и кнопки
+                      const container = document.createElement('div');
+                      container.style.display = 'flex';
+                      container.style.alignItems = 'center';
+                      container.style.justifyContent = 'space-between';
+                      container.style.gap = '12px';
+                      container.style.width = '100%';
+                      
+                      // Перемещаем текст в контейнер
+                      const textNode = toastBody.firstChild;
+                      if (textNode) {
+                        container.appendChild(textNode.cloneNode(true));
+                        toastBody.innerHTML = '';
+                      }
+                      
+                      // Создаем кнопку обновления
+                      const button = document.createElement('button');
+                      button.className = 'sw-update-button';
+                      button.textContent = 'Обновить';
+                      button.style.cssText = 'padding: 6px 16px; background: rgba(255, 255, 255, 0.3); color: white; border: 1px solid rgba(255, 255, 255, 0.5); border-radius: 4px; cursor: pointer; font-weight: 500; white-space: nowrap; transition: background 0.2s;';
+                      button.onmouseover = () => {
+                        button.style.background = 'rgba(255, 255, 255, 0.4)';
+                      };
+                      button.onmouseout = () => {
+                        button.style.background = 'rgba(255, 255, 255, 0.3)';
+                      };
+                      button.onclick = (e) => {
+                        e.stopPropagation();
+                        installingWorker.postMessage({ type: 'SKIP_WAITING' });
+                        window.location.reload();
+                      };
+                      
+                      container.appendChild(button);
+                      toastBody.appendChild(container);
+                    }
+                  }
+                }, 50);
               }
             } else {
               // Service Worker установлен впервые
