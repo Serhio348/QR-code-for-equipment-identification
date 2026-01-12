@@ -5,7 +5,8 @@
 }
 
 .error-logs-container {
-  max-width: 1400px;
+  width: 100%;
+  max-width: 100%;
   margin: 0 auto;
   background: white;
   border-radius: 12px;
@@ -144,10 +145,18 @@
   min-width: 200px;
 }
 
+.filter-group-inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  min-width: auto;
+}
+
 .filter-group label {
   font-size: 14px;
   font-weight: 500;
   color: #374151;
+  white-space: nowrap;
 }
 
 .filter-group select,
@@ -423,10 +432,28 @@
 
   .filter-group {
     min-width: 100%;
+    width: 100%;
+  }
+
+  .filter-group-inline {
+    flex-direction: column;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .filter-group-inline label {
+    width: 100%;
+  }
+
+  .filter-group-inline select {
+    width: 100%;
   }
 
   .filter-group select {
     font-size: 16px; /* Предотвращает зум на iOS */
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
   }
 
   .error-logs-table-container {

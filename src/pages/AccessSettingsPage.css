@@ -14,7 +14,8 @@
 }
 
 .access-settings-container {
-  max-width: 800px;
+  width: 100%;
+  max-width: 100%;
   margin: 0 auto;
   background: white;
   border-radius: 12px;
@@ -128,6 +129,9 @@
   font-weight: 600;
   color: #1f2937;
   margin-bottom: 8px;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
 }
 
 .user-name {
@@ -302,7 +306,7 @@
 }
 
 .access-settings-table-container {
-  overflow-x: auto;
+  width: 100%;
   margin-bottom: 20px;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
@@ -312,7 +316,7 @@
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  min-width: 800px;
+  table-layout: auto;
 }
 
 .access-settings-table thead {
@@ -498,10 +502,16 @@
 
   .user-access-info {
     padding: 20px;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
   }
 
   .user-access-header h2 {
     font-size: 18px;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    line-height: 1.4;
+    max-width: 100%;
   }
 
   .permission-item {
@@ -539,6 +549,8 @@
 
   .user-access-info {
     padding: 16px;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
   }
 
   .permission-item {
