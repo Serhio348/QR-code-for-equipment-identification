@@ -47,12 +47,18 @@ const applyExportSettings = (element: HTMLElement, settings: PlateExportSettings
       }
       
       // Скрываем/показываем конкретные поля характеристик
-      if (settings.selectedSpecFields && settings.selectedSpecFields.length > 0) {
+      // Если selectedSpecFields определен (даже если пустой массив), применяем фильтрацию
+      // undefined/null означает "показать все" (по умолчанию)
+      // [] означает "скрыть все" (пользователь снял все галочки)
+      // [field1, field2] означает "показать только выбранные"
+      const selectedFields = settings.selectedSpecFields;
+      if (selectedFields !== undefined && selectedFields !== null) {
         const allSpecRows = specsTable.querySelectorAll('[data-plate-field]');
         allSpecRows.forEach((row) => {
           const fieldKey = (row as HTMLElement).getAttribute('data-plate-field');
           if (fieldKey && fieldKey !== 'inventoryNumber' && fieldKey !== 'commissioningDate' && fieldKey !== 'lastMaintenanceDate') {
-            (row as HTMLElement).style.display = settings.selectedSpecFields!.includes(fieldKey) ? '' : 'none';
+            // Если массив пустой, скрываем все поля; иначе показываем только выбранные
+            (row as HTMLElement).style.display = selectedFields.includes(fieldKey) ? '' : 'none';
           }
         });
       }
