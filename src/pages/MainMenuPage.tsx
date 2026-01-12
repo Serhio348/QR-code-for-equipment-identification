@@ -11,6 +11,7 @@ import { getUserAccess } from '../services/api/supabaseAccessApi';
 import { AVAILABLE_APPS, type UserAppAccess } from '../types/access';
 import { ROUTES } from '../utils/routes';
 import { clearLastPath } from '../utils/pathStorage';
+import AdminModal from '../components/AdminModal';
 import './MainMenuPage.css';
 
 const MainMenuPage: React.FC = () => {
@@ -19,6 +20,7 @@ const MainMenuPage: React.FC = () => {
   const [userAccess, setUserAccess] = useState<UserAppAccess | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [loggingOut, setLoggingOut] = useState<boolean>(false);
+  const [showAdminModal, setShowAdminModal] = useState<boolean>(false);
 
   // Очищаем сохраненный путь при переходе в главное меню
   useEffect(() => {
@@ -137,43 +139,29 @@ const MainMenuPage: React.FC = () => {
 
             {/* Административные функции */}
             {isAdmin && (
-              <>
-                {/* Кнопка настроек доступа для администраторов */}
-                <button
-                  className="main-menu-button main-menu-button-settings"
-                  onClick={() => navigate(ROUTES.ACCESS_SETTINGS)}
-                  type="button"
-                  aria-label="Настройки доступа"
-                >
-                  <div className="main-menu-button-icon">
-                    ⚙️
-                  </div>
-                  <div className="main-menu-button-text">
-                    <span className="main-menu-button-title">Настройки доступа</span>
-                    <span className="main-menu-button-subtitle">Управление доступом пользователей</span>
-                  </div>
-                </button>
-
-                {/* Кнопка просмотра логов ошибок для администраторов */}
-                <button
-                  className="main-menu-button main-menu-button-logs"
-                  onClick={() => navigate(ROUTES.ERROR_LOGS)}
-                  type="button"
-                  aria-label="Логи ошибок"
-                >
-                  <div className="main-menu-button-icon">
-                    📊
-                  </div>
-                  <div className="main-menu-button-text">
-                    <span className="main-menu-button-title">Логи ошибок</span>
-                    <span className="main-menu-button-subtitle">Мониторинг и анализ ошибок</span>
-                  </div>
-                </button>
-              </>
+              <button
+                className="main-menu-button main-menu-button-admin"
+                onClick={() => setShowAdminModal(true)}
+                type="button"
+                aria-label="Администрирование"
+              >
+                <div className="main-menu-button-icon">
+                  🔧
+                </div>
+                <div className="main-menu-button-text">
+                  <span className="main-menu-button-title">Администрирование</span>
+                  <span className="main-menu-button-subtitle">Настройки доступа, логи ошибок, управление участками</span>
+                </div>
+              </button>
             )}
           </div>
         )}
       </div>
+
+      {/* Модальное окно администрирования */}
+      {showAdminModal && (
+        <AdminModal onClose={() => setShowAdminModal(false)} />
+      )}
     </div>
   );
 };

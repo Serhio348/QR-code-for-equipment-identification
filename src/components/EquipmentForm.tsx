@@ -8,6 +8,7 @@ import { Equipment, EquipmentType, EquipmentStatus } from '../types/equipment';
 import { useEquipmentForm } from '../hooks/useEquipmentForm';
 import { SpecFieldsRenderer } from './EquipmentForm/SpecFields/SpecFieldsRenderer';
 import { EQUIPMENT_TYPE_OPTIONS } from '../constants/equipmentTypes';
+import { useWorkshops } from '../hooks/useWorkshops';
 import './EquipmentForm.css';
 
 interface EquipmentFormProps {
@@ -40,6 +41,11 @@ const EquipmentForm: React.FC<EquipmentFormProps> = ({ equipmentId, onSave, onCa
     handleSubmit,
     handleCancel,
   } = useEquipmentForm({ equipmentId, onSave, onCancel });
+
+  const { workshops: workshopOptions = [] } = useWorkshops();
+
+  // Получаем текущее значение цеха из specs
+  const workshop = specs?.workshop || '';
 
   if (loading) {
     return (
@@ -95,6 +101,22 @@ const EquipmentForm: React.FC<EquipmentFormProps> = ({ equipmentId, onSave, onCa
             >
               <option value="active">Активен</option>
               <option value="inactive">Неактивен</option>
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label>Цех (расположение) *</label>
+            <select
+              value={workshop}
+              onChange={(e) => handleSpecChange('workshop', e.target.value)}
+              required
+            >
+              <option value="">Выберите цех</option>
+              {workshopOptions.map((workshopOption: string) => (
+                <option key={workshopOption} value={workshopOption}>
+                  {workshopOption}
+                </option>
+              ))}
             </select>
           </div>
 
