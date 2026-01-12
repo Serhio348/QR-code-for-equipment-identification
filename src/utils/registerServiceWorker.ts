@@ -111,14 +111,23 @@ function showUpdateNotification(registration: ServiceWorkerRegistration): void {
   };
   
   // Показываем Toast уведомление
-  // ВАЖНО: Не используем onClick здесь, так как добавляем кастомный обработчик через DOM
-  // Это предотвращает двойное выполнение performUpdate()
+  // Используем onClick в опциях для надежной обработки клика
   const toastId = showInfo('Доступна новая версия приложения. Нажмите для обновления', {
     autoClose: false, // Не закрывать автоматически
     closeOnClick: false, // Не закрывать при клике на само уведомление
     draggable: true,
     closeButton: true,
-    // onClick удален - используем кастомный обработчик через DOM (см. ниже)
+    onClick: (e) => {
+      // Предотвращаем закрытие toast при клике
+      e.stopPropagation();
+      e.preventDefault();
+      const target = e.target as HTMLElement;
+      // Если клик не на кнопку закрытия, выполняем обновление
+      if (!target.closest('.Toastify__close-button')) {
+        console.log('[SW] Toast clicked, performing update');
+        performUpdate();
+      }
+    },
   });
   
   // Добавляем кнопку "Обновить" к Toast уведомлению через DOM
@@ -229,14 +238,23 @@ function showUpdateNotification(registration: ServiceWorkerRegistration): void {
       toastBody.innerHTML = '';
       toastBody.appendChild(container);
       
-      // Также добавляем обработчик клика на весь toast элемент
+      // Также добавляем обработчик клика на весь toast элемент с capture для надежности
       const clickHandler = (e: Event) => {
         const target = e.target as HTMLElement;
-        if (!target.closest('.sw-update-button') && !target.closest('.Toastify__close-button')) {
-          performUpdate();
+        // Если клик на кнопку обновления, она уже обработает это
+        if (target.closest('.sw-update-button')) {
+          return;
         }
+        // Если клик на кнопку закрытия, не делаем ничего
+        if (target.closest('.Toastify__close-button')) {
+          return;
+        }
+        // Для всех остальных кликов - обновляем
+        e.stopPropagation();
+        performUpdate();
       };
-      toastElement.addEventListener('click', clickHandler);
+      // Используем capture phase для более раннего перехвата события
+      toastElement.addEventListener('click', clickHandler, { capture: true });
       
       console.log('[SW] Update button added to toast notification');
       return true; // Успешно добавили кнопку
@@ -247,44 +265,51 @@ function showUpdateNotification(registration: ServiceWorkerRegistration): void {
       return; // Успешно
     }
     
-    // Если не нашли, используем MutationObserver для отслеживания появления
-    const toastContainer = document.querySelector('.Toastify__toast-container');
-    if (!toastContainer) {
-      console.warn('[SW] Toast container not found, using fallback timeout');
-      // Fallback: используем таймаут как последний вариант
-      setTimeout(() => {
-        if (!findAndModifyToast()) {
-          console.warn('[SW] Failed to add update button after timeout');
-        }
-      }, 500);
-      return;
-    }
+    // Используем requestAnimationFrame для гарантии, что DOM готов
+    requestAnimationFrame(() => {
+      if (findAndModifyToast()) {
+        return; // Успешно
+      }
+      
+      // Если не нашли, используем MutationObserver для отслеживания появления
+      const toastContainer = document.querySelector('.Toastify__toast-container');
+      if (!toastContainer) {
+        console.warn('[SW] Toast container not found, using fallback timeout');
+        // Fallback: используем таймаут как последний вариант
+        setTimeout(() => {
+          if (!findAndModifyToast()) {
+            console.warn('[SW] Failed to add update button after timeout');
+          }
+        }, 500);
+        return;
+      }
     
-    // Используем MutationObserver для отслеживания добавления toast
-    const observer = new MutationObserver((mutations) => {
-      for (const mutation of mutations) {
-        if (mutation.addedNodes.length > 0) {
-          if (findAndModifyToast()) {
-            observer.disconnect(); // Успешно добавили, отключаем observer
-            return;
+      // Используем MutationObserver для отслеживания добавления toast
+      const observer = new MutationObserver((mutations) => {
+        for (const mutation of mutations) {
+          if (mutation.addedNodes.length > 0) {
+            if (findAndModifyToast()) {
+              observer.disconnect(); // Успешно добавили, отключаем observer
+              return;
+            }
           }
         }
-      }
+      });
+      
+      observer.observe(toastContainer, {
+        childList: true,
+        subtree: true
+      });
+      
+      // Отключаем observer через 5 секунд, чтобы не висеть вечно
+      setTimeout(() => {
+        observer.disconnect();
+        // Последняя попытка
+        if (!findAndModifyToast()) {
+          console.warn('[SW] Failed to add update button after MutationObserver timeout');
+        }
+      }, 5000);
     });
-    
-    observer.observe(toastContainer, {
-      childList: true,
-      subtree: true
-    });
-    
-    // Отключаем observer через 5 секунд, чтобы не висеть вечно
-    setTimeout(() => {
-      observer.disconnect();
-      // Последняя попытка
-      if (!findAndModifyToast()) {
-        console.warn('[SW] Failed to add update button after MutationObserver timeout');
-      }
-    }, 5000);
   };
   
   // Начинаем добавление кнопки
