@@ -53,13 +53,18 @@ const EquipmentPage: React.FC = () => {
   const error = loadError || datesError || deleteError;
 
   useEffect(() => {
-    if (!currentEquipment && isMaintenanceLogOpen) {
-      setMaintenanceLogOpen(false);
+    if (!currentEquipment) {
+      if (isMaintenanceLogOpen) {
+        setMaintenanceLogOpen(false);
+      }
+      if (isDocumentationOpen) {
+        setDocumentationOpen(false);
+      }
+      if (isExportSettingsOpen) {
+        setIsExportSettingsOpen(false);
+      }
     }
-    if (!currentEquipment && isDocumentationOpen) {
-      setDocumentationOpen(false);
-    }
-  }, [currentEquipment, isMaintenanceLogOpen, isDocumentationOpen]);
+  }, [currentEquipment, isMaintenanceLogOpen, isDocumentationOpen, isExportSettingsOpen]);
 
   // Отладочное логирование для диагностики проблемы с характеристиками
   useEffect(() => {

@@ -122,11 +122,14 @@ function showUpdateNotification(registration: ServiceWorkerRegistration): void {
       e.stopPropagation();
       e.preventDefault();
       const target = e.target as HTMLElement;
-      // Если клик не на кнопку закрытия, выполняем обновление
-      if (!target.closest('.Toastify__close-button')) {
-        console.log('[SW] Toast clicked, performing update');
-        performUpdate();
+      // Если клик на кнопку обновления или кнопку закрытия, не выполняем обновление
+      // (кнопка обновления уже имеет свой обработчик, который вызовет performUpdate)
+      if (target.closest('.sw-update-button') || target.closest('.Toastify__close-button')) {
+        return;
       }
+      // Для всех остальных кликов - выполняем обновление
+      console.log('[SW] Toast clicked, performing update');
+      performUpdate();
     },
   });
   
@@ -161,6 +164,9 @@ function showUpdateNotification(registration: ServiceWorkerRegistration): void {
       if (!toastElement) {
         return false; // Toast еще не появился
       }
+      
+      // Добавляем курсор pointer к toast элементу, чтобы показать, что на него можно кликнуть
+      (toastElement as HTMLElement).style.cursor = 'pointer';
       
       const toastBody = toastElement.querySelector('.Toastify__toast-body');
       if (!toastBody) {
