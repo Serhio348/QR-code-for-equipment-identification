@@ -1,9 +1,13 @@
 /**
  * Service Worker для PWA
  * Кэширует статические ресурсы для офлайн-работы
+ * 
+ * ВАЖНО: CACHE_VERSION будет автоматически заменен на timestamp при сборке
+ * Это обеспечивает автоматическое обновление кэша при каждом деплое
  */
 
-const CACHE_NAME = 'equipment-app-v1';
+const CACHE_VERSION = '__CACHE_VERSION__'; // Заменяется при сборке на timestamp
+const CACHE_NAME = `equipment-app-${CACHE_VERSION}`;
 const STATIC_CACHE_URLS = [
   '/',
   '/index.html',
@@ -39,14 +43,21 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
+          // Удаляем все старые кэши, которые начинаются с 'equipment-app-'
+          // но не соответствуют текущей версии
+          if (cacheName.startsWith('equipment-app-') && cacheName !== CACHE_NAME) {
             console.log('[SW] Deleting old cache:', cacheName);
+            return caches.delete(cacheName);
+          }
+          // Также удаляем любые другие старые кэши
+          if (!cacheName.startsWith('equipment-app-')) {
+            console.log('[SW] Deleting unrelated cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
       );
     }).then(() => {
-      console.log('[SW] Service Worker activated');
+      console.log('[SW] Service Worker activated with cache:', CACHE_NAME);
       return self.clients.claim(); // Взять контроль над всеми страницами
     })
   );
