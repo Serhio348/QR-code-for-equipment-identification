@@ -62,7 +62,15 @@ const PlateExportSettingsModal: React.FC<PlateExportSettingsModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       // Сбрасываем настройки при открытии
-      setSettings(DEFAULT_EXPORT_SETTINGS);
+      const defaultSettings = { ...DEFAULT_EXPORT_SETTINGS };
+      // Если selectedSpecFields не определен, инициализируем всеми видимыми полями
+      // Это позволяет различать undefined (показать все) и [] (скрыть все)
+      if (defaultSettings.selectedSpecFields === undefined) {
+        // При открытии модального окна инициализируем всеми видимыми полями
+        // чтобы пользователь видел все чекбоксы отмеченными по умолчанию
+        defaultSettings.selectedSpecFields = visibleSpecFields.map(f => f.key);
+      }
+      setSettings(defaultSettings);
     }
   }, [isOpen]);
 
@@ -93,7 +101,10 @@ const PlateExportSettingsModal: React.FC<PlateExportSettingsModalProps> = ({
   };
 
   const handleFieldToggle = (fieldKey: string) => {
-    const currentFields = settings.selectedSpecFields || [];
+    // Если selectedSpecFields undefined, инициализируем всеми видимыми полями
+    // Это происходит только если пользователь начал взаимодействовать с чекбоксами
+    // до того, как они были инициализированы в useEffect
+    const currentFields = settings.selectedSpecFields ?? visibleSpecFields.map(f => f.key);
     const newFields = currentFields.includes(fieldKey)
       ? currentFields.filter(f => f !== fieldKey)
       : [...currentFields, fieldKey];
