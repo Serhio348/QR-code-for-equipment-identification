@@ -19,7 +19,7 @@ const PlateExportSettingsModal: React.FC<PlateExportSettingsModalProps> = ({
   isOpen,
   onClose,
   onExport,
-  equipmentName,
+  equipmentName: _equipmentName,
   specs,
 }) => {
   const [settings, setSettings] = useState<PlateExportSettings>(DEFAULT_EXPORT_SETTINGS);
