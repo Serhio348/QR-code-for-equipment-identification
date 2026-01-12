@@ -181,7 +181,7 @@ export default function ErrorLogsPage() {
 
         {/* Фильтры - полная версия для десктопа, упрощенная для мобильных */}
         <div className="error-logs-filters">
-          <div className="filter-group">
+          <div className="filter-group filter-group-inline">
             <label>Показать:</label>
             <select
               value={filters.resolved === undefined ? 'all' : filters.resolved ? 'resolved' : 'unresolved'}
@@ -219,22 +219,6 @@ export default function ErrorLogsPage() {
               <option value="medium">Средние</option>
               <option value="low">Низкие</option>
             </select>
-          </div>
-
-          <div className="filter-group desktop-only">
-            <label>Поиск:</label>
-            <input
-              type="text"
-              placeholder="Поиск по сообщению, коду или email..."
-              value={filters.search || ''}
-              onChange={(e) => {
-                setFilters({
-                  ...filters,
-                  search: e.target.value || undefined,
-                });
-                setPage(0);
-              }}
-            />
           </div>
 
           <div className="filter-group desktop-only">

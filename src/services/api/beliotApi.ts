@@ -2,6 +2,9 @@
  * API клиент для работы с beliot.by API
  * 
  * Основан на Swagger документации: https://beliot.by:4443/api/documentation
+ * OpenAPI спецификация сохранена в: docs/beliot-api-openapi.json
+ * 
+ * API: NEKTA CORE API v2.0.8 Alpha
  * 
  * Примечание: API может быть доступен только из внутренней сети или через VPN
  */
@@ -42,6 +45,7 @@ export async function getSwaggerSpec(customUrl?: string): Promise<SwaggerSpec> {
   const baseUrl = BELIOT_API_BASE_URL.replace(/\/$/, '');
   
   // Список возможных endpoints для Swagger спецификации
+  // Полная OpenAPI 3.0 спецификация сохранена в docs/beliot-api-openapi.json
   const possibleEndpoints = customUrl 
     ? [customUrl]
     : [

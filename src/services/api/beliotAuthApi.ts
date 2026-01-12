@@ -2,6 +2,7 @@
  * API клиент для аутентификации в Beliot API
  * 
  * Основан на NEKTA CORE API: https://beliot.by:4443/api/documentation
+ * OpenAPI спецификация: docs/beliot-api-openapi.json
  * 
  * Используется для получения Bearer token для доступа к API устройств
  */
