@@ -45,7 +45,7 @@ const WorkshopSettingsPage: React.FC = () => {
 
     try {
       const created = await addWorkshop(newWorkshop);
-      setWorkshops([...workshops, created]);
+      setWorkshops(prev => [...prev, created]);
       setNewWorkshop({ name: '', description: '' });
       showSuccess('Участок добавлен');
     } catch (err: any) {
@@ -74,7 +74,7 @@ const WorkshopSettingsPage: React.FC = () => {
 
     try {
       const updated = await updateWorkshop(id, editingWorkshop);
-      setWorkshops(workshops.map(w => w.id === id ? updated : w));
+      setWorkshops(prev => prev.map(w => w.id === id ? updated : w));
       setEditingId(null);
       setEditingWorkshop({ name: '', description: '' });
       showSuccess('Участок обновлен');
@@ -90,7 +90,7 @@ const WorkshopSettingsPage: React.FC = () => {
 
     try {
       await deleteWorkshop(id);
-      setWorkshops(workshops.filter(w => w.id !== id));
+      setWorkshops(prev => prev.filter(w => w.id !== id));
       showSuccess('Участок удален');
     } catch (err: any) {
       showError(err.message || 'Ошибка при удалении участка');
