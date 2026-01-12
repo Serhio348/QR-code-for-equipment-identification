@@ -40,6 +40,9 @@ export const ROUTES = {
   /** Страница просмотра логов ошибок (только для администраторов) */
   ERROR_LOGS: '/admin/error-logs',
   
+  /** Страница управления участками (только для администраторов) */
+  WORKSHOP_SETTINGS: '/admin/workshop-settings',
+  
   /** Тестирование Beliot API (устаревший маршрут, используйте WATER) */
   BELIOT_TEST: '/beliot-test',
 } as const;

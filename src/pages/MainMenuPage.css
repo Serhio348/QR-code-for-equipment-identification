@@ -1,11 +1,11 @@
 .main-menu-page {
-  height: 100vh;
+  min-height: 100vh;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   background: #e8edf2;
-  padding: 20px;
-  overflow: hidden;
+  padding: 40px 20px;
+  overflow-y: auto;
   margin: 0;
   box-sizing: border-box;
 }
@@ -13,6 +13,7 @@
 .main-menu-container {
   width: 100%;
   max-width: 600px;
+  max-height: calc(100vh - 80px);
   background: var(--bg-primary, #ffffff);
   border-radius: 16px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
@@ -20,6 +21,7 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  margin: auto 0;
 }
 
 /* Оптимизация для больших экранов */
@@ -44,6 +46,7 @@
   padding: 32px 24px;
   text-align: center;
   border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+  flex-shrink: 0;
 }
 
 .main-menu-title {
@@ -105,6 +108,9 @@
   flex-direction: column;
   gap: 16px;
   background: var(--bg-primary, #ffffff);
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .main-menu-button {
@@ -201,6 +207,32 @@
   color: #6c757d;
 }
 
+.main-menu-button-workshops:hover {
+  border-color: #ff9800;
+  background: linear-gradient(135deg, rgba(255, 152, 0, 0.05) 0%, rgba(255, 152, 0, 0.05) 100%);
+}
+
+.main-menu-button-workshops:hover .main-menu-button-icon {
+  background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+}
+
+.main-menu-button-workshops:hover .main-menu-button-title {
+  color: #ff9800;
+}
+
+.main-menu-button-admin:hover {
+  border-color: #6c757d;
+  background: linear-gradient(135deg, rgba(108, 117, 125, 0.05) 0%, rgba(108, 117, 125, 0.05) 100%);
+}
+
+.main-menu-button-admin:hover .main-menu-button-icon {
+  background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
+}
+
+.main-menu-button-admin:hover .main-menu-button-title {
+  color: #6c757d;
+}
+
 .main-menu-button:hover .main-menu-button-subtitle {
   color: #555;
 }
@@ -219,7 +251,11 @@
 /* Адаптивность для мобильных устройств */
 @media (max-width: 768px) {
   .main-menu-page {
-    padding: 10px;
+    padding: 20px 10px;
+  }
+  
+  .main-menu-container {
+    max-height: calc(100vh - 40px);
   }
 
   .main-menu-container {

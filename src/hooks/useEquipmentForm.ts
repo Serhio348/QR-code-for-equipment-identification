@@ -96,8 +96,9 @@ export function useEquipmentForm({ equipmentId, onSave, onCancel }: UseEquipment
   // Обработка изменения типа оборудования
   const handleTypeChange = (newType: EquipmentType) => {
     setType(newType);
-    // Сбрасываем характеристики при смене типа
-    setSpecs({});
+    // Сбрасываем характеристики при смене типа, но сохраняем workshop
+    const currentWorkshop = specs?.workshop;
+    setSpecs(currentWorkshop ? { workshop: currentWorkshop } : {});
   };
 
   // Обработка изменения характеристик
@@ -113,6 +114,10 @@ export function useEquipmentForm({ equipmentId, onSave, onCancel }: UseEquipment
   const validateForm = (): boolean => {
     if (!name.trim()) {
       setError('Название оборудования обязательно');
+      return false;
+    }
+    if (!specs?.workshop || !specs.workshop.trim()) {
+      setError('Необходимо указать цех (расположение оборудования)');
       return false;
     }
     if (isEditMode && !googleDriveUrl.trim()) {

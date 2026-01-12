@@ -73,6 +73,9 @@
  * - UserManagement.gs использует Utils.gs (generateId)
  * - DriveOperations.gs использует свои внутренние функции
  * 
+ * ПРИМЕЧАНИЕ: Управление участками (workshops) перенесено в Supabase.
+ * См. docs/migrations/create-workshops-table.sql для миграции.
+ * 
  * Все модули работают с одной таблицей Google Sheets через SpreadsheetApp.getActiveSpreadsheet()
  * 
  * Инструкция по установке:
@@ -971,6 +974,38 @@ function doPost(e) {
         return createJsonResponse({
           success: deleted,
           message: deleted ? 'Изменения удалены успешно' : 'Изменения не найдены'
+        });
+      
+      // ========================================================================
+      // ДЕЙСТВИЯ ДЛЯ УПРАВЛЕНИЯ УЧАСТКАМИ (POST)
+      // ========================================================================
+      
+      case 'addWorkshop':
+        // Добавить новый участок
+        Logger.log('🏭 Обработка addWorkshop');
+        if (!data.name) {
+          return createErrorResponse('Название участка обязательно');
+        }
+        return createJsonResponse(addWorkshop(data));
+      
+      case 'updateWorkshop':
+        // Обновить участок
+        Logger.log('🏭 Обработка updateWorkshop');
+        if (!data.id) {
+          return createErrorResponse('ID участка не указан');
+        }
+        return createJsonResponse(updateWorkshop(data.id, data));
+      
+      case 'deleteWorkshop':
+        // Удалить участок
+        Logger.log('🏭 Обработка deleteWorkshop');
+        if (!data.id) {
+          return createErrorResponse('ID участка не указан');
+        }
+        deleteWorkshop(data.id);
+        return createJsonResponse({
+          success: true,
+          message: 'Участок удален успешно'
         });
       
       default:

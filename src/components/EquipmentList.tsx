@@ -8,6 +8,7 @@ import { Equipment } from '../types/equipment';
 import { formatDate } from '../utils/dateFormatting';
 import { EQUIPMENT_TYPE_OPTIONS } from '../constants/equipmentTypes';
 import { useEquipmentData } from '../hooks/useEquipmentData';
+import { useWorkshops } from '../hooks/useWorkshops';
 import { isDriveId } from '../utils/qrCodeParser';
 import StatusBadge from './StatusBadge';
 import QRScanner from './QRScanner/QRScanner';
@@ -20,6 +21,7 @@ interface EquipmentListProps {
 const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
   // Используем хук для загрузки данных (с кешированием)
   const { data: equipmentListData, loading, error, refetch } = useEquipmentData();
+  const { workshops: workshopOptions = [] } = useWorkshops();
   
   // Преобразуем данные в массив (если это список)
   const equipmentList = useMemo(() => {
@@ -39,6 +41,7 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
   
   const [filterType, setFilterType] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterWorkshop, setFilterWorkshop] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -111,6 +114,14 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
         return false;
       }
       
+      // Фильтр по участку
+      if (filterWorkshop !== 'all') {
+        const equipmentWorkshop = eq.specs?.workshop || eq.specs?.location || '';
+        if (equipmentWorkshop !== filterWorkshop) {
+          return false;
+        }
+      }
+      
       // Исключаем архивные из списка
       if (eq.status === 'archived') {
         return false;
@@ -123,7 +134,7 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
       
       return true;
     });
-  }, [equipmentList, filterType, filterStatus, searchQuery]);
+  }, [equipmentList, filterType, filterStatus, filterWorkshop, searchQuery]);
 
   // Пагинация
   const totalPages = Math.ceil(filteredEquipment.length / itemsPerPage);
@@ -190,7 +201,7 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
             />
           </div>
           
-          {/* Кнопка сканера QR-кода */}
+          {/* Кнопка сканера QR-кода - только на мобильных */}
           <button
             className="qr-scanner-button"
             onClick={() => setIsScannerOpen(true)}
@@ -199,6 +210,24 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
           >
             📱 Сканировать QR
           </button>
+          
+          {/* Фильтр по участку */}
+          <select
+            value={filterWorkshop}
+            onChange={(e) => setFilterWorkshop(e.target.value)}
+            className="filter-select"
+          >
+            <option value="all">Все участки</option>
+            {workshopOptions && workshopOptions.length > 0 ? (
+              workshopOptions.map((workshop: string) => (
+                <option key={workshop} value={workshop}>
+                  {workshop}
+                </option>
+              ))
+            ) : (
+              <option disabled>Загрузка участков...</option>
+            )}
+          </select>
           
           {/* Фильтр по типу */}
           <select
