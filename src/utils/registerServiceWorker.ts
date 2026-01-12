@@ -133,6 +133,41 @@ function showUpdateNotification(registration: ServiceWorkerRegistration): void {
     },
   });
   
+  // Устанавливаем курсор pointer сразу после создания toast
+  // Используем requestAnimationFrame для гарантии, что элемент появился в DOM
+  requestAnimationFrame(() => {
+    const setCursor = () => {
+      let toastElement: Element | null = null;
+      
+      if (toastId !== null && toastId !== undefined) {
+        const toastIdStr = String(toastId);
+        toastElement = document.querySelector(`[data-toast-id="${toastIdStr}"]`) ||
+                      document.querySelector(`#${toastIdStr}`) ||
+                      document.querySelector(`[id*="${toastIdStr}"]`);
+      }
+      
+      if (!toastElement) {
+        const allInfoToasts = document.querySelectorAll('.Toastify__toast--info');
+        for (const toast of Array.from(allInfoToasts)) {
+          const body = toast.querySelector('.Toastify__toast-body');
+          if (body && body.textContent?.includes('Доступна новая версия приложения')) {
+            toastElement = toast;
+            break;
+          }
+        }
+      }
+      
+      if (toastElement) {
+        (toastElement as HTMLElement).style.cursor = 'pointer';
+        (toastElement as HTMLElement).style.setProperty('cursor', 'pointer', 'important');
+      }
+    };
+    
+    setCursor();
+    // Повторяем попытку через небольшую задержку на случай, если toast еще не появился
+    setTimeout(setCursor, 100);
+  });
+  
   // Добавляем кнопку "Обновить" к Toast уведомлению через DOM
   // Используем MutationObserver для надежного отслеживания появления toast
   const addUpdateButton = () => {
