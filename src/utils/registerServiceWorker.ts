@@ -57,57 +57,117 @@ function registerValidSW(swUrl: string): void {
               if (!updateNotificationShown) {
                 updateNotificationShown = true;
                 
-                // Показываем Toast уведомление с кнопкой действия
-                showInfo('Доступна новая версия приложения', {
+                // Функция для обновления приложения
+                const performUpdate = () => {
+                  installingWorker.postMessage({ type: 'SKIP_WAITING' });
+                  window.location.reload();
+                };
+                
+                // Показываем Toast уведомление
+                const toastId = showInfo('Доступна новая версия приложения. Нажмите для обновления', {
                   autoClose: false, // Не закрывать автоматически
                   closeOnClick: false, // Не закрывать при клике на само уведомление
                   draggable: true,
                   closeButton: true,
+                  onClick: performUpdate, // При клике на уведомление обновляем
                 });
                 
                 // Добавляем кнопку "Обновить" к Toast уведомлению через DOM
-                setTimeout(() => {
-                  const toastElement = document.querySelector('.Toastify__toast--info:last-child');
-                  if (toastElement) {
-                    const toastBody = toastElement.querySelector('.Toastify__toast-body');
-                    if (toastBody && !toastBody.querySelector('.sw-update-button')) {
-                      // Создаем контейнер для текста и кнопки
-                      const container = document.createElement('div');
-                      container.style.display = 'flex';
-                      container.style.alignItems = 'center';
-                      container.style.justifyContent = 'space-between';
-                      container.style.gap = '12px';
-                      container.style.width = '100%';
-                      
-                      // Перемещаем текст в контейнер
-                      const textNode = toastBody.firstChild;
-                      if (textNode) {
-                        container.appendChild(textNode.cloneNode(true));
-                        toastBody.innerHTML = '';
+                // Используем несколько попыток с увеличивающейся задержкой
+                const addUpdateButton = (attempt = 0) => {
+                  const maxAttempts = 5;
+                  const delays = [100, 200, 300, 500, 1000];
+                  const delay = delays[attempt] ?? 1000;
+                  
+                  setTimeout(() => {
+                    // Ищем toast элемент по ID или по классу
+                    let toastElement: Element | null = null;
+                    
+                    // Пытаемся найти по toastId (если react-toastify поддерживает)
+                    if (toastId !== null && toastId !== undefined) {
+                      const toastIdStr = String(toastId);
+                      toastElement = document.querySelector(`[data-toast-id="${toastIdStr}"]`);
+                    }
+                    
+                    // Если не нашли по ID, ищем последний info toast
+                    if (!toastElement) {
+                      toastElement = document.querySelector('.Toastify__toast--info:last-child');
+                    }
+                    
+                    if (toastElement) {
+                      const toastBody = toastElement.querySelector('.Toastify__toast-body');
+                      if (toastBody) {
+                        // Проверяем, не добавлена ли уже кнопка
+                        if (!toastBody.querySelector('.sw-update-button')) {
+                          // Создаем контейнер для текста и кнопки
+                          const container = document.createElement('div');
+                          container.style.display = 'flex';
+                          container.style.alignItems = 'center';
+                          container.style.justifyContent = 'space-between';
+                          container.style.gap = '12px';
+                          container.style.width = '100%';
+                          container.style.flexWrap = 'wrap';
+                          
+                          // Добавляем текст
+                          const textSpan = document.createElement('span');
+                          textSpan.textContent = 'Доступна новая версия приложения';
+                          textSpan.style.flex = '1';
+                          textSpan.style.minWidth = '200px';
+                          container.appendChild(textSpan);
+                          
+                          // Создаем кнопку обновления
+                          const button = document.createElement('button');
+                          button.className = 'sw-update-button';
+                          button.textContent = 'Обновить';
+                          button.style.cssText = 'padding: 6px 16px; background: rgba(255, 255, 255, 0.3); color: white; border: 1px solid rgba(255, 255, 255, 0.5); border-radius: 4px; cursor: pointer; font-weight: 500; white-space: nowrap; transition: background 0.2s; flex-shrink: 0;';
+                          button.onmouseover = () => {
+                            button.style.background = 'rgba(255, 255, 255, 0.5)';
+                          };
+                          button.onmouseout = () => {
+                            button.style.background = 'rgba(255, 255, 255, 0.3)';
+                          };
+                          button.onclick = (e) => {
+                            e.stopPropagation();
+                            performUpdate();
+                          };
+                          
+                          container.appendChild(button);
+                          toastBody.innerHTML = '';
+                          toastBody.appendChild(container);
+                          
+                          // Также добавляем обработчик клика на весь toast элемент
+                          toastElement.addEventListener('click', (e) => {
+                            // Если клик не на кнопке и не на кнопке закрытия
+                            const target = e.target as HTMLElement;
+                            if (!target.closest('.sw-update-button') && !target.closest('.Toastify__close-button')) {
+                              performUpdate();
+                            }
+                          });
+                          
+                          console.log('[SW] Update button added to toast notification');
+                          return; // Успешно добавили кнопку
+                        }
                       }
                       
-                      // Создаем кнопку обновления
-                      const button = document.createElement('button');
-                      button.className = 'sw-update-button';
-                      button.textContent = 'Обновить';
-                      button.style.cssText = 'padding: 6px 16px; background: rgba(255, 255, 255, 0.3); color: white; border: 1px solid rgba(255, 255, 255, 0.5); border-radius: 4px; cursor: pointer; font-weight: 500; white-space: nowrap; transition: background 0.2s;';
-                      button.onmouseover = () => {
-                        button.style.background = 'rgba(255, 255, 255, 0.4)';
-                      };
-                      button.onmouseout = () => {
-                        button.style.background = 'rgba(255, 255, 255, 0.3)';
-                      };
-                      button.onclick = (e) => {
-                        e.stopPropagation();
-                        installingWorker.postMessage({ type: 'SKIP_WAITING' });
-                        window.location.reload();
-                      };
-                      
-                      container.appendChild(button);
-                      toastBody.appendChild(container);
+                      // Если не удалось добавить кнопку, пробуем еще раз
+                      if (attempt < maxAttempts - 1) {
+                        addUpdateButton(attempt + 1);
+                      } else {
+                        console.warn('[SW] Failed to add update button after', maxAttempts, 'attempts');
+                      }
+                    } else {
+                      // Toast еще не появился, пробуем еще раз
+                      if (attempt < maxAttempts - 1) {
+                        addUpdateButton(attempt + 1);
+                      } else {
+                        console.warn('[SW] Toast element not found after', maxAttempts, 'attempts');
+                      }
                     }
-                  }
-                }, 50);
+                  }, delay);
+                };
+                
+                // Начинаем попытки добавления кнопки
+                addUpdateButton(0);
               }
             } else {
               // Service Worker установлен впервые

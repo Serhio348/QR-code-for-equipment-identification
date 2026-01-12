@@ -45,9 +45,10 @@ export function showError(error: unknown, options?: ToastOptions): void {
 
 /**
  * Показывает информационное уведомление
+ * @returns ID toast уведомления (может быть использован для программного закрытия)
  */
-export function showInfo(message: string, options?: ToastOptions): void {
-  toastify.info(message, { ...defaultOptions, ...options });
+export function showInfo(message: string, options?: ToastOptions): string | number {
+  return toastify.info(message, { ...defaultOptions, ...options });
 }
 
 /**

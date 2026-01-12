@@ -3351,10 +3351,17 @@
 
 /* Стили для графиков архива */
 .archive-charts-container {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 20px;
   background: white;
   border-radius: 8px;
-  margin-bottom: 20px;
+  margin-bottom: 0;
+  min-height: 0;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Бегунок для изменения временного промежутка на графике */
@@ -3512,6 +3519,7 @@
 @media (max-width: 768px) {
   .archive-charts-container {
     padding: 12px;
+    min-height: 150px;
   }
   
   .archive-chart-wrapper {
