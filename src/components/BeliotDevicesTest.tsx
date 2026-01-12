@@ -71,6 +71,12 @@ const BeliotDevicesTest: React.FC = () => {
   const [archiveGroupBy, setArchiveGroupBy] = useState<'hour' | 'day' | 'week' | 'month' | 'year'>('hour');
   const [archiveDataLoaded, setArchiveDataLoaded] = useState<boolean>(false);
   const [archiveCurrentPage, setArchiveCurrentPage] = useState<number>(1);
+  
+  // Состояние для бегунков временного промежутка на графиках (отдельно для каждого)
+  const [lineChartTimeRange, setLineChartTimeRange] = useState<{ start: number; end: number } | null>(null);
+  const [barChartTimeRange, setBarChartTimeRange] = useState<{ start: number; end: number } | null>(null);
+  const [areaChartTimeRange, setAreaChartTimeRange] = useState<{ start: number; end: number } | null>(null);
+  
   const [archiveStartDate, setArchiveStartDate] = useState<string>(() => {
     // По умолчанию: первое число текущего месяца
     const today = new Date();
@@ -368,9 +374,10 @@ const BeliotDevicesTest: React.FC = () => {
   }, [archiveReadingsRaw, archiveGroupBy, archiveStartDate, archiveEndDate, currentDeviceId, groupReadings]);
   
   // Подготовка данных для графиков
-  const chartData = useMemo(() => {
+  // Полные данные для графика (без фильтрации)
+  const fullChartData = useMemo(() => {
     if (!archiveReadings || archiveReadings.length === 0 || !archiveReadingsRaw) return [];
-    
+
     return archiveReadings.map((groupedReading: any, index: number) => {
       const readingDate = groupedReading.groupDate;
       const hasReading = !!groupedReading.reading;
@@ -643,9 +650,56 @@ const BeliotDevicesTest: React.FC = () => {
         reading: readingValue,
         volume: volume,
         hasData: hasReading,
+        index: index, // Сохраняем индекс для фильтрации
       };
     }).reverse(); // Обращаем порядок для отображения от старых к новым
   }, [archiveReadings, archiveGroupBy, archiveViewType, archiveReadingsRaw]);
+
+  // Функция для фильтрации данных по временному диапазону
+  const filterChartData = useCallback((data: any[], timeRange: { start: number; end: number } | null) => {
+    if (!data || data.length === 0) return [];
+    
+    // Если бегунок не установлен, показываем все данные
+    if (!timeRange) {
+      return data;
+    }
+    
+    // Фильтруем данные по выбранному диапазону
+    const { start, end } = timeRange;
+    const totalItems = data.length;
+    const startIndex = Math.floor((start / 100) * totalItems);
+    const endIndex = Math.ceil((end / 100) * totalItems);
+    
+    return data.slice(startIndex, endIndex);
+  }, []);
+
+  // Фильтрованные данные для каждого графика отдельно
+  const lineChartData = useMemo(() => {
+    return filterChartData(fullChartData, lineChartTimeRange);
+  }, [fullChartData, lineChartTimeRange, filterChartData]);
+
+  const barChartData = useMemo(() => {
+    return filterChartData(fullChartData, barChartTimeRange);
+  }, [fullChartData, barChartTimeRange, filterChartData]);
+
+  const areaChartData = useMemo(() => {
+    return filterChartData(fullChartData, areaChartTimeRange);
+  }, [fullChartData, areaChartTimeRange, filterChartData]);
+
+  // Инициализация бегунков при загрузке данных
+  useEffect(() => {
+    if (fullChartData.length > 0) {
+      if (!lineChartTimeRange) {
+        setLineChartTimeRange({ start: 0, end: 100 });
+      }
+      if (!barChartTimeRange) {
+        setBarChartTimeRange({ start: 0, end: 100 });
+      }
+      if (!areaChartTimeRange) {
+        setAreaChartTimeRange({ start: 0, end: 100 });
+      }
+    }
+  }, [fullChartData.length, lineChartTimeRange, barChartTimeRange, areaChartTimeRange]);
   
   // Пагинация: вычисляем отображаемые записи (по 10 на страницу)
   const archivePageSizeDisplay = 10; // Фиксированный размер страницы для отображения
@@ -2780,14 +2834,14 @@ const BeliotDevicesTest: React.FC = () => {
                         <div className="archive-chart-wrapper">
                           <h4 style={{ marginBottom: '16px', color: '#333' }}>График показаний</h4>
                           <ResponsiveContainer width="100%" height={400}>
-                            <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 60 }}>
+                            <LineChart data={lineChartData} margin={{ top: 5, right: 30, left: 20, bottom: 60 }}>
                               <CartesianGrid strokeDasharray="3 3" />
                               <XAxis 
                                 dataKey="date" 
                                 angle={-45}
                                 textAnchor="end"
                                 height={80}
-                                interval={Math.floor(chartData.length / 20)}
+                                interval={Math.floor(lineChartData.length / 20)}
                               />
                               <YAxis 
                                 label={{ value: 'Показание (м³)', angle: -90, position: 'insideLeft' }}
@@ -2808,20 +2862,76 @@ const BeliotDevicesTest: React.FC = () => {
                               />
                             </LineChart>
                           </ResponsiveContainer>
+                          {/* Бегунок для линейного графика */}
+                          {fullChartData.length > 0 && (
+                            <div className="chart-time-range-slider">
+                              <label className="slider-label">
+                                Временной промежуток: {lineChartTimeRange ? `${Math.round(lineChartTimeRange.start)}% - ${Math.round(lineChartTimeRange.end)}%` : '0% - 100%'}
+                              </label>
+                              <div 
+                                className="range-slider-container"
+                                style={{
+                                  '--range-start': `${lineChartTimeRange?.start || 0}%`,
+                                  '--range-end': `${lineChartTimeRange?.end || 100}%`,
+                                } as React.CSSProperties}
+                              >
+                                <input
+                                  type="range"
+                                  min="0"
+                                  max="100"
+                                  step="0.1"
+                                  value={lineChartTimeRange?.start || 0}
+                                  onChange={(e) => {
+                                    const newStart = Number(e.target.value);
+                                    const currentEnd = lineChartTimeRange?.end || 100;
+                                    if (newStart < currentEnd) {
+                                      setLineChartTimeRange({ start: newStart, end: currentEnd });
+                                    }
+                                  }}
+                                  className="range-slider range-slider-start"
+                                />
+                                <input
+                                  type="range"
+                                  min="0"
+                                  max="100"
+                                  step="0.1"
+                                  value={lineChartTimeRange?.end || 100}
+                                  onChange={(e) => {
+                                    const newEnd = Number(e.target.value);
+                                    const currentStart = lineChartTimeRange?.start || 0;
+                                    if (newEnd > currentStart) {
+                                      setLineChartTimeRange({ start: currentStart, end: newEnd });
+                                    }
+                                  }}
+                                  className="range-slider range-slider-end"
+                                />
+                              </div>
+                              <div className="slider-info">
+                                <span>Показано: {lineChartData.length} из {fullChartData.length} точек</span>
+                                <button
+                                  className="reset-range-btn"
+                                  onClick={() => setLineChartTimeRange({ start: 0, end: 100 })}
+                                  title="Сбросить диапазон"
+                                >
+                                  Сбросить
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ) : (
                         /* Барчарт объемов */
                         <div className="archive-chart-wrapper">
                           <h4 style={{ marginBottom: '16px', color: '#333' }}>График объемов потребления</h4>
                           <ResponsiveContainer width="100%" height={400}>
-                            <BarChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 60 }}>
+                            <BarChart data={barChartData} margin={{ top: 5, right: 30, left: 20, bottom: 60 }}>
                               <CartesianGrid strokeDasharray="3 3" />
                               <XAxis 
                                 dataKey="date" 
                                 angle={-45}
                                 textAnchor="end"
                                 height={80}
-                                interval={Math.floor(chartData.length / 20)}
+                                interval={Math.floor(barChartData.length / 20)}
                               />
                               <YAxis 
                                 label={{ value: 'Объем (м³)', angle: -90, position: 'insideLeft' }}
@@ -2838,6 +2948,62 @@ const BeliotDevicesTest: React.FC = () => {
                               />
                             </BarChart>
                           </ResponsiveContainer>
+                          {/* Бегунок для барчарта */}
+                          {fullChartData.length > 0 && (
+                            <div className="chart-time-range-slider">
+                              <label className="slider-label">
+                                Временной промежуток: {barChartTimeRange ? `${Math.round(barChartTimeRange.start)}% - ${Math.round(barChartTimeRange.end)}%` : '0% - 100%'}
+                              </label>
+                              <div 
+                                className="range-slider-container"
+                                style={{
+                                  '--range-start': `${barChartTimeRange?.start || 0}%`,
+                                  '--range-end': `${barChartTimeRange?.end || 100}%`,
+                                } as React.CSSProperties}
+                              >
+                                <input
+                                  type="range"
+                                  min="0"
+                                  max="100"
+                                  step="0.1"
+                                  value={barChartTimeRange?.start || 0}
+                                  onChange={(e) => {
+                                    const newStart = Number(e.target.value);
+                                    const currentEnd = barChartTimeRange?.end || 100;
+                                    if (newStart < currentEnd) {
+                                      setBarChartTimeRange({ start: newStart, end: currentEnd });
+                                    }
+                                  }}
+                                  className="range-slider range-slider-start"
+                                />
+                                <input
+                                  type="range"
+                                  min="0"
+                                  max="100"
+                                  step="0.1"
+                                  value={barChartTimeRange?.end || 100}
+                                  onChange={(e) => {
+                                    const newEnd = Number(e.target.value);
+                                    const currentStart = barChartTimeRange?.start || 0;
+                                    if (newEnd > currentStart) {
+                                      setBarChartTimeRange({ start: currentStart, end: newEnd });
+                                    }
+                                  }}
+                                  className="range-slider range-slider-end"
+                                />
+                              </div>
+                              <div className="slider-info">
+                                <span>Показано: {barChartData.length} из {fullChartData.length} точек</span>
+                                <button
+                                  className="reset-range-btn"
+                                  onClick={() => setBarChartTimeRange({ start: 0, end: 100 })}
+                                  title="Сбросить диапазон"
+                                >
+                                  Сбросить
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                       
@@ -2847,7 +3013,7 @@ const BeliotDevicesTest: React.FC = () => {
                           {archiveViewType === 'readings' ? 'Динамика показаний' : 'Динамика объемов'}
                         </h4>
                         <ResponsiveContainer width="100%" height={300}>
-                          <AreaChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 60 }}>
+                          <AreaChart data={areaChartData} margin={{ top: 5, right: 30, left: 20, bottom: 60 }}>
                             <defs>
                               <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
                                 <stop offset="5%" stopColor="#667eea" stopOpacity={0.8}/>
@@ -2860,7 +3026,7 @@ const BeliotDevicesTest: React.FC = () => {
                               angle={-45}
                               textAnchor="end"
                               height={80}
-                              interval={Math.floor(chartData.length / 15)}
+                              interval={Math.floor(areaChartData.length / 15)}
                             />
                             <YAxis 
                               label={{ 
@@ -2887,6 +3053,62 @@ const BeliotDevicesTest: React.FC = () => {
                             />
                           </AreaChart>
                         </ResponsiveContainer>
+                        {/* Бегунок для Area Chart */}
+                        {fullChartData.length > 0 && (
+                          <div className="chart-time-range-slider">
+                            <label className="slider-label">
+                              Временной промежуток: {areaChartTimeRange ? `${Math.round(areaChartTimeRange.start)}% - ${Math.round(areaChartTimeRange.end)}%` : '0% - 100%'}
+                            </label>
+                            <div 
+                              className="range-slider-container"
+                              style={{
+                                '--range-start': `${areaChartTimeRange?.start || 0}%`,
+                                '--range-end': `${areaChartTimeRange?.end || 100}%`,
+                              } as React.CSSProperties}
+                            >
+                              <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                step="0.1"
+                                value={areaChartTimeRange?.start || 0}
+                                onChange={(e) => {
+                                  const newStart = Number(e.target.value);
+                                  const currentEnd = areaChartTimeRange?.end || 100;
+                                  if (newStart < currentEnd) {
+                                    setAreaChartTimeRange({ start: newStart, end: currentEnd });
+                                  }
+                                }}
+                                className="range-slider range-slider-start"
+                              />
+                              <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                step="0.1"
+                                value={areaChartTimeRange?.end || 100}
+                                onChange={(e) => {
+                                  const newEnd = Number(e.target.value);
+                                  const currentStart = areaChartTimeRange?.start || 0;
+                                  if (newEnd > currentStart) {
+                                    setAreaChartTimeRange({ start: currentStart, end: newEnd });
+                                  }
+                                }}
+                                className="range-slider range-slider-end"
+                              />
+                            </div>
+                            <div className="slider-info">
+                              <span>Показано: {areaChartData.length} из {fullChartData.length} точек</span>
+                              <button
+                                className="reset-range-btn"
+                                onClick={() => setAreaChartTimeRange({ start: 0, end: 100 })}
+                                title="Сбросить диапазон"
+                              >
+                                Сбросить
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ) : (
