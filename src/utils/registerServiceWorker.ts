@@ -162,6 +162,9 @@ function showUpdateNotification(registration: ServiceWorkerRegistration): void {
         return false; // Toast еще не появился
       }
       
+      // Добавляем курсор pointer к toast элементу, чтобы показать, что на него можно кликнуть
+      (toastElement as HTMLElement).style.cursor = 'pointer';
+      
       const toastBody = toastElement.querySelector('.Toastify__toast-body');
       if (!toastBody) {
         return false; // Структура toast неполная
