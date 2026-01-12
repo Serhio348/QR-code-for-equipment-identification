@@ -1,49 +1,15 @@
 # Миграции базы данных
 
-Эта папка содержит SQL миграции для базы данных Supabase.
+## Описание
 
-## Основной файл схемы
+Этот каталог содержит SQL миграции для управления структурой базы данных Supabase.
 
-**ВАЖНО:** Полная схема базы данных находится в `../supabase-schema.sql`
+## Доступные миграции
 
-Этот файл включает:
-- ✅ Все таблицы (profiles, user_app_access, login_history, beliot_device_overrides, beliot_device_readings)
-- ✅ Все функции (включая `insert_beliot_reading` с точностью до 0.001 м³)
-- ✅ Все RLS политики, триггеры, индексы
-- ✅ Полная документация
+В данный момент нет активных миграций. Все необходимые таблицы и функции созданы в основной схеме (`docs/supabase-schema.sql`).
 
-**Используйте `supabase-schema.sql` для создания всей базы данных.**
+## Дополнительная информация
 
-## Отдельная миграция
-
-**create-beliot-readings-table.sql** - Создание только таблицы показаний Beliot:
-- ✅ Создание таблицы `beliot_device_readings`
-- ✅ Точность `reading_value`: `NUMERIC(12, 3)` (до 0.001 м³)
-- ✅ Улучшенная функция `insert_beliot_reading` (всегда обновляет `updated_at`)
-- ✅ Все индексы, RLS политики, триггеры
-- ✅ Проверки создания и точности данных
-
-**Используйте этот файл только если нужно создать только таблицу показаний без остальной схемы.**
-
-## Проверка после применения
-
-```sql
--- Проверка типа данных
-SELECT 
-  column_name,
-  data_type,
-  numeric_precision,
-  numeric_scale
-FROM information_schema.columns
-WHERE table_schema = 'public'
-  AND table_name = 'beliot_device_readings'
-  AND column_name = 'reading_value';
--- Должно быть: NUMERIC(12, 3)
-
--- Проверка функции
-SELECT 
-  proname,
-  prosrc
-FROM pg_proc
-WHERE proname = 'insert_beliot_reading';
-```
+Подробное описание стратегии управления хранилищем и расчеты объема данных см. в:
+- `DATABASE_STORAGE_MANAGEMENT.md` - общая стратегия управления хранилищем
+- `STORAGE_CALCULATION_20_DEVICES.md` - детальный расчет для 20 устройств
