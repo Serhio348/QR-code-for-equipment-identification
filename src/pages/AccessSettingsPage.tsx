@@ -243,9 +243,6 @@ const AccessSettingsPage: React.FC = () => {
               className="search-input"
             />
           </div>
-          <button onClick={loadUserAccess} className="refresh-button" disabled={loading}>
-            🔄 Обновить
-          </button>
         </div>
 
         <div className="desktop-only access-settings-table-container">

@@ -1,9 +1,16 @@
 /**
- * Скрипт автоматического сбора показаний счетчиков Beliot
+ * Скрипт автоматической синхронизации показаний счетчиков Beliot с Supabase
  * 
- * Запускается через Railway cron job каждый час
+ * Запускается через GitHub Actions каждый час (cron: '50 * * * *')
  * 
- * Переменные окружения (Railway):
+ * НОВАЯ ЛОГИКА:
+ * - Получает показания за последние 24 часа (сутки) от текущего момента
+ * - Фильтрует показания на начало каждого часа
+ * - Сохраняет все показания в Supabase
+ * - Работает независимо от задержек GitHub Actions (даже если задержка > 2 часов)
+ * - Не перегружает запросы: запрашивает только последние сутки
+ * 
+ * Переменные окружения (GitHub Actions / Railway):
  * - SUPABASE_URL - URL проекта Supabase
  * - SUPABASE_SERVICE_ROLE_KEY - Service Role key из Supabase
  * - BELIOT_LOGIN - Email для входа в Beliot API
@@ -327,7 +334,126 @@ async function getCompanyDevices(token: string): Promise<BeliotDevice[]> {
 }
 
 /**
- * Получить показания устройства
+ * Получить показания устройства за период из Beliot API
+ * 
+ * Использует endpoint: POST /api/device/messages
+ * 
+ * @param deviceId - ID устройства
+ * @param startDate - Начало периода (unix timestamp в секундах)
+ * @param stopDate - Конец периода (unix timestamp в секундах)
+ * @param token - Bearer token
+ * @param msgType - Тип сообщений (1=тариф, по умолчанию)
+ * @returns Promise с массивом показаний
+ */
+async function getDeviceMessagesFromApi(
+  deviceId: string | number,
+  startDate: number,
+  stopDate: number,
+  token: string,
+  msgType: number = 1
+): Promise<any[]> {
+  try {
+    const response = await fetch(`${beliotApiBaseUrl}/device/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        device_id: Number(deviceId),
+        msgType: msgType,
+        msgGroup: 0, // все группы
+        startDate: startDate,
+        stopDate: stopDate,
+        per_page: 10000, // Максимальное количество записей
+        paginate: true,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Ошибка получения показаний: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+
+    // Извлекаем сообщения из ответа
+    // Структура: { data: { messages: { data: [...] } } }
+    let messages: any[] = [];
+    
+    if (data?.data?.messages?.data && Array.isArray(data.data.messages.data)) {
+      messages = data.data.messages.data;
+    } else if (data?.data?.messages && Array.isArray(data.data.messages)) {
+      messages = data.data.messages;
+    } else if (data?.messages?.data && Array.isArray(data.messages.data)) {
+      messages = data.messages.data;
+    } else if (Array.isArray(data?.data)) {
+      messages = data.data;
+    } else if (Array.isArray(data)) {
+      messages = data;
+    }
+
+    return messages;
+  } catch (error: any) {
+    console.error(`Ошибка получения показаний для устройства ${deviceId}:`, error.message);
+    throw error;
+  }
+}
+
+/**
+ * Фильтровать показания - выбрать первое показание в каждом часе (ближайшее к началу часа)
+ * 
+ * @param messages - Массив показаний из API
+ * @returns Отфильтрованный массив (по одному показанию на час) с timestamp
+ */
+function filterByHourStart(messages: any[]): Array<any & { timestamp: number }> {
+  const hourMap = new Map<string, any & { timestamp: number; minutesFromHourStart: number }>();
+  
+  for (const msg of messages) {
+    // Извлекаем timestamp
+    let timestamp: number | null = null;
+    
+    if (msg.realdatetime) {
+      timestamp = typeof msg.realdatetime === 'number' ? msg.realdatetime : parseInt(String(msg.realdatetime), 10);
+    } else if (msg.datetime) {
+      timestamp = typeof msg.datetime === 'number' ? msg.datetime : parseInt(String(msg.datetime), 10);
+    }
+    
+    if (timestamp) {
+      const date = new Date(timestamp * 1000);
+      const year = date.getFullYear();
+      const month = date.getMonth();
+      const day = date.getDate();
+      const hour = date.getHours();
+      const minutes = date.getMinutes();
+      const seconds = date.getSeconds();
+      
+      // Ключ: год-месяц-день-час (для уникальности часа)
+      const hourKey = `${year}-${month}-${day}-${hour}`;
+      
+      // Вычисляем количество минут от начала часа
+      const minutesFromHourStart = minutes + seconds / 60;
+      
+      // Если для этого часа еще нет показания или это показание ближе к началу часа
+      if (!hourMap.has(hourKey)) {
+        hourMap.set(hourKey, { ...msg, timestamp, minutesFromHourStart });
+      } else {
+        const existing = hourMap.get(hourKey)!;
+        // Выбираем показание, которое ближе к началу часа (00:00)
+        if (minutesFromHourStart < existing.minutesFromHourStart) {
+          hourMap.set(hourKey, { ...msg, timestamp, minutesFromHourStart });
+        }
+      }
+    }
+  }
+  
+  // Преобразуем Map в массив и сортируем по времени
+  return Array.from(hourMap.values())
+    .map(({ minutesFromHourStart, ...msg }) => msg) // Удаляем временное поле
+    .sort((a, b) => a.timestamp - b.timestamp);
+}
+
+/**
+ * Получить показания устройства (старый метод, оставлен для совместимости)
  * 
  * Использует endpoint: POST /api/device/attributes
  * Или fallback: GET /api/device/metering_device/{id} для получения last_message_type
@@ -554,11 +680,96 @@ async function getDeviceReadings(deviceId: string, token: string): Promise<Devic
 }
 
 /**
+ * Синхронизировать показания устройства за период
+ * 
+ * Получает показания из Beliot API и сохраняет их в Supabase
+ */
+async function syncDeviceReadingsForPeriod(
+  deviceId: string | number,
+  startDate: Date,
+  endDate: Date,
+  token: string
+): Promise<{ success: number; errors: number; skipped: number; total: number }> {
+  const startTimestamp = Math.floor(startDate.getTime() / 1000);
+  const endTimestamp = Math.floor(endDate.getTime() / 1000);
+  
+  console.log(`   📅 Период: ${startDate.toISOString()} - ${endDate.toISOString()}`);
+  
+  try {
+    // Получаем показания из API
+    const messages = await getDeviceMessagesFromApi(deviceId, startTimestamp, endTimestamp, token, 1);
+    
+    console.log(`   📊 Получено ${messages.length} показаний из API`);
+    
+    if (messages.length === 0) {
+      return { success: 0, errors: 0, skipped: 0, total: 0 };
+    }
+    
+    // Фильтруем по часам
+    const readingsToSave = filterByHourStart(messages);
+    
+    console.log(`   📊 После фильтрации: ${readingsToSave.length} показаний для сохранения`);
+    
+    let success = 0;
+    let errors = 0;
+    let skipped = 0;
+    
+    // Сохраняем каждое показание
+    for (const reading of readingsToSave) {
+      try {
+        const timestamp = reading.timestamp || reading.realdatetime || reading.datetime || 0;
+        const value = reading.in1 || 0;
+        
+        if (!timestamp || value === 0) {
+          skipped++;
+          continue;
+        }
+        
+        // Создаем дату на начало часа
+        const readingDate = new Date(timestamp * 1000);
+        readingDate.setMinutes(0, 0, 0);
+        readingDate.setSeconds(0, 0);
+        readingDate.setMilliseconds(0);
+        
+        // Сохраняем в Supabase
+        const { data: readingId, error } = await supabase.rpc('insert_beliot_reading', {
+          p_device_id: String(deviceId),
+          p_reading_date: readingDate.toISOString(),
+          p_reading_value: Number(value),
+          p_unit: 'м³',
+          p_reading_type: 'hourly',
+          p_source: 'api',
+          p_period: 'current',
+        });
+        
+        if (error) {
+          errors++;
+          console.error(`   ❌ Ошибка сохранения показания за ${readingDate.toISOString()}:`, error.message);
+        } else {
+          success++;
+        }
+      } catch (error: any) {
+        errors++;
+        console.error(`   ❌ Ошибка обработки показания:`, error.message);
+      }
+    }
+    
+    return { success, errors, skipped, total: readingsToSave.length };
+  } catch (error: any) {
+    console.error(`   ❌ Ошибка синхронизации:`, error.message);
+    return { success: 0, errors: 1, skipped: 0, total: 0 };
+  }
+}
+
+/**
  * Собрать показания для всех устройств
+ * 
+ * НОВАЯ ЛОГИКА: Синхронизирует показания за период (за последние 24 часа или за текущий день)
+ * вместо получения только текущего показания. Это позволяет заполнить пропуски даже при задержках.
  */
 async function collectReadings(): Promise<void> {
-  console.log('🔄 Начало автоматического сбора показаний...');
-  console.log(`⏰ Время: ${new Date().toISOString()}`);
+  console.log('🔄 Начало автоматической синхронизации показаний...');
+  console.log(`⏰ Время запуска: ${new Date().toISOString()}`);
 
   try {
     // 1. Получаем токен Beliot API
@@ -572,280 +783,80 @@ async function collectReadings(): Promise<void> {
       return;
     }
 
-    let successCount = 0;
-    let errorCount = 0;
-    let duplicateCount = 0;
-    let skippedCount = 0;
+    // 3. Определяем период синхронизации
+    // Синхронизируем за последние 24 часа (сутки) от текущего момента
+    // Это позволяет заполнить пропуски даже при задержках, но не перегружает запросы
+    const now = new Date();
+    const endDate = new Date(now);
+    endDate.setSeconds(59, 999); // До текущего момента (включительно)
+    
+    // Начало: ровно 24 часа назад от текущего момента
+    const startDate = new Date(now);
+    startDate.setTime(now.getTime() - 24 * 60 * 60 * 1000); // Минус 24 часа в миллисекундах
+    startDate.setSeconds(0, 0);
+    startDate.setMilliseconds(0);
+    
+    console.log(`📅 Период синхронизации: последние 24 часа (сутки)`);
+    console.log(`   Начало: ${startDate.toISOString()}`);
+    console.log(`   Конец: ${endDate.toISOString()}`);
+    console.log(`   Длительность: ${((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60)).toFixed(1)} часов`);
+    console.log(`📋 Всего устройств: ${devices.length}`);
 
-    // 3. Для каждого устройства собираем показания
+    let totalSuccess = 0;
+    let totalErrors = 0;
+    let totalSkipped = 0;
+    let devicesProcessed = 0;
+
+    // 4. Для каждого устройства синхронизируем показания за период
     for (const device of devices) {
       const deviceId = device.device_id || device.id || device._id;
       
       if (!deviceId) {
         console.warn(`⚠️ Пропущено устройство без ID: ${JSON.stringify(device)}`);
-        skippedCount++;
+        totalSkipped++;
         continue;
       }
 
       try {
-        console.log(`\n📊 Обработка устройства: ${deviceId} (${device.name || 'Без названия'})`);
-
-        // Получаем текущее показание из Beliot API
-        const readings = await getDeviceReadings(deviceId, token);
-
-        if (!readings.current) {
-          console.log(`⚠️ Текущее показание не найдено для устройства ${deviceId} (${device.name || 'Без названия'})`);
-          console.log(`   🔍 Проверка: readings.current = ${readings.current}, readings.previous = ${readings.previous ? 'есть' : 'нет'}`);
-          console.log(`   🔍 Полный объект readings:`, JSON.stringify(readings, null, 2));
-          console.log(`   ⚠️ Устройство пропущено - данные не будут сохранены за сегодня`);
-          console.log(`   💡 Возможные причины:`);
-          console.log(`      - API не вернул данные для этого устройства`);
-          console.log(`      - Устройство не передает показания`);
-          console.log(`      - Проблема с парсингом данных из API`);
-          skippedCount++;
-          continue;
-        }
-
-        const currentReading = readings.current;
-        const readingValue = Number(currentReading.value);
-        const unit = currentReading.unit || 'м³';
-
-        // Проверяем, что значение валидно
-        if (isNaN(readingValue) || readingValue < 0) {
-          console.log(`⚠️ Некорректное значение показания для устройства ${deviceId} (${device.name || 'Без названия'}): ${readingValue}`);
-          console.log(`   🔍 Проверка: readingValue = ${readingValue}, isNaN = ${isNaN(readingValue)}, < 0 = ${readingValue < 0}`);
-          console.log(`   🔍 Исходное значение из API:`, currentReading.value);
-          console.log(`   🔍 Тип значения:`, typeof currentReading.value);
-          console.log(`   ⚠️ Устройство пропущено - данные не будут сохранены за сегодня`);
-          skippedCount++;
-          continue;
-        }
-
-        // ВАЖНО: Используем время из API для показаний, но с проверкой валидности
-        // Если время из API невалидно или слишком старое, используем предыдущий час от текущего времени
-        const now = new Date();
+        console.log(`\n📊 Синхронизация устройства: ${deviceId} (${device.name || 'Без названия'})`);
         
-        // Получаем время из API
-        const apiDate = currentReading.date instanceof Date 
-          ? currentReading.date 
-          : new Date(currentReading.date);
+        // Синхронизируем показания за период
+        const result = await syncDeviceReadingsForPeriod(deviceId, startDate, endDate, token);
         
-        // Проверяем валидность даты из API
-        const isApiDateValid = !isNaN(apiDate.getTime()) && apiDate.getFullYear() > 2000;
+        totalSuccess += result.success;
+        totalErrors += result.errors;
+        totalSkipped += result.skipped;
+        devicesProcessed++;
         
-        // Вычисляем разницу в часах между текущим временем и временем из API
-        const hoursDiff = isApiDateValid 
-          ? (now.getTime() - apiDate.getTime()) / (1000 * 60 * 60)
-          : Infinity;
-        
-        // Определяем, какое время использовать для reading_date
-        // ВАЖНО: Опрос запланирован на 50 минут каждого часа (00:50, 01:50, 02:50, ...)
-        // Но GitHub Actions может запускаться с задержкой (до 30 минут)
-        // Данные записываются за час, который был запланирован для опроса
-        // Например: запланирован опрос в 15:50 → запись за 15:00, даже если запуск в 16:21
-        let hourStart: Date;
-        let dateSource: string;
-        
-        const currentMinute = now.getMinutes();
-        const currentHour = now.getHours();
-        
-        // Приоритет 1: Используем время из API, если оно валидно и свежее
-        // hoursDiff < 0 означает, что API вернул время в будущем (небольшое расхождение часовых поясов или синхронизация)
-        // hoursDiff >= 0 && hoursDiff < 2 означает, что время валидно и не старше 2 часов
-        if (isApiDateValid && hoursDiff >= -0.5 && hoursDiff < 2) {
-          // Используем время из API, округляем до начала часа
-          // Допускаем небольшое расхождение в будущее (до 30 минут) для учета синхронизации времени
-          hourStart = new Date(apiDate);
-          hourStart.setMinutes(0, 0, 0);
-          hourStart.setSeconds(0, 0);
-          hourStart.setMilliseconds(0);
-          dateSource = 'API (округлено до начала часа)';
-        } 
-        // Приоритет 2: Если опрос в 45-59 минут часа → запись за текущий час
-        // Это нормальный случай, когда скрипт запускается вовремя
-        else if (currentMinute >= 45) {
-          // Опрос за 15-10 минут до окончания часа
-          // Записываем данные за текущий час
-          hourStart = new Date(now);
-          hourStart.setMinutes(0, 0, 0);
-          hourStart.setSeconds(0, 0);
-          hourStart.setMilliseconds(0);
-          dateSource = 'текущий час (опрос за 15-10 минут до окончания часа)';
-        } 
-        // Приоритет 3: Если опрос в 0-44 минуты часа → запись за предыдущий час
-        // Это может быть задержка GitHub Actions или опрос в начале часа
-        // ВАЖНО: Используем предыдущий час только если это задержка запуска,
-        // а не когда API невалидно или устарело (в этом случае используем текущий час)
-        else {
-          // Мы в начале часа (0-44 минуты) и первое условие не выполнилось
-          // Если API валидно и время в допустимом диапазоне, это задержка запуска → используем предыдущий час
-          // Если API невалидно или устарело, используем текущий час
-          if (isApiDateValid && hoursDiff >= -0.5 && hoursDiff < 2) {
-            // API валидно и время в допустимом диапазоне (-0.5 до 2 часов)
-            // Но мы в начале часа (0-44 минуты), значит это задержка запуска
-            // Записываем данные за предыдущий час
-            hourStart = new Date(now);
-            hourStart.setHours(now.getHours() - 1);
-            hourStart.setMinutes(0, 0, 0);
-            hourStart.setSeconds(0, 0);
-            hourStart.setMilliseconds(0);
-            dateSource = 'предыдущий час (задержка запуска)';
-          } else {
-            // API невалидно или устарело (>2 часов) или в далеком будущем (< -0.5 часов)
-            // Используем текущий час, чтобы не перезаписывать корректные данные за предыдущий час устаревшими значениями
-            hourStart = new Date(now);
-            hourStart.setMinutes(0, 0, 0);
-            hourStart.setSeconds(0, 0);
-            hourStart.setMilliseconds(0);
-            dateSource = 'текущий час (API невалидно или устарело)';
-          }
-        }
-
-        const apiDateStr = isApiDateValid
-          ? apiDate.toISOString()
-          : 'неизвестна';
-
-        console.log(`   📅 Дата показания из API: ${apiDateStr}`);
-        console.log(`   📅 Используемая дата: ${hourStart.toISOString()} (источник: ${dateSource})`);
-        console.log(`   📊 Значение: ${readingValue} ${unit} (точность: ${readingValue.toFixed(3)})`);
-
-        // Вставляем показание через RPC функцию (предотвращает дубликаты через ON CONFLICT DO UPDATE)
-        // Функция возвращает UUID нового или обновленного показания
-        // ВАЖНО: Значение передается как число с точностью до 0.001 (3 знака после запятой)
-        // ВАЖНО: Данные должны записываться КАЖДЫЙ ЧАС, даже если значение не изменилось
-        console.log(`   💾 Сохранение показания для ${deviceId}:`);
-        console.log(`      Дата: ${hourStart.toISOString()}`);
-        console.log(`      Значение: ${readingValue.toFixed(3)} ${unit}`);
-        
-        const { data: readingId, error } = await supabase.rpc('insert_beliot_reading', {
-          p_device_id: deviceId,
-          p_reading_date: hourStart.toISOString(),
-          p_reading_value: readingValue, // Передаем как число, PostgreSQL сохранит с точностью NUMERIC(12, 3)
-          p_unit: unit,
-          p_reading_type: 'hourly',
-          p_source: 'api',
-          p_period: 'current',
-        });
-
-        // Логируем результат RPC для отладки
-        console.log(`   🔍 RPC результат для ${deviceId}:`, {
-          hasError: !!error,
-          hasData: !!readingId,
-          readingId: readingId,
-          errorMessage: error?.message,
-          errorCode: error?.code,
-        });
-
-        if (error) {
-          // Детальное логирование ошибки
-          console.error(`   ❌ Ошибка RPC для устройства ${deviceId}:`, {
-            message: error.message,
-            code: error.code,
-            details: error.details,
-            hint: error.hint,
-            fullError: JSON.stringify(error, null, 2),
-          });
-          
-          // Проверяем, это дубликат или реальная ошибка
-          if (error.message?.includes('duplicate') || 
-              error.message?.includes('unique') || 
-              error.code === '23505' ||
-              error.message?.includes('already exists')) {
-            // Дубликат - это не ошибка, данные уже есть в базе
-            // Если получили ошибку дубликата, значит ON CONFLICT не сработал
-            // Это может быть проблемой с функцией или ограничением, но данные уже существуют
-            console.warn(`   ⚠️ Дубликат для устройства ${deviceId} (показание за ${hourStart.toISOString()} уже есть)`);
-            console.warn(`   ⚠️ ВНИМАНИЕ: ON CONFLICT должен был обновить запись, но получили ошибку дубликата!`);
-            console.warn(`   ℹ️ Данные уже существуют в базе, это не критическая ошибка`);
-            duplicateCount++;
-            // НЕ увеличиваем errorCount, так как данные уже есть в базе
-          } else {
-            errorCount++;
-            console.error(`   ❌ Критическая ошибка для устройства ${deviceId}`);
-          }
-        } else if (readingId) {
-          // Функция insert_beliot_reading возвращает UUID нового или обновленного показания
-          // Если readingId есть, значит показание было успешно вставлено или обновлено
-          console.log(`   ✅ Показание сохранено/обновлено (ID: ${readingId}): ${readingValue.toFixed(3)} ${unit} на ${hourStart.toISOString()}`);
-          
-          // Проверяем, что запись действительно существует в базе
-          const { data: verifyData, error: verifyError } = await supabase
-            .from('beliot_device_readings')
-            .select('id, reading_date, reading_value, updated_at')
-            .eq('device_id', deviceId)
-            .eq('reading_date', hourStart.toISOString())
-            .eq('reading_type', 'hourly')
-            .single();
-          
-          if (verifyError || !verifyData) {
-            // Если проверка не удалась, данные фактически не были сохранены
-            // Корректируем счетчики: уменьшаем successCount и увеличиваем errorCount
-            console.error(`   ⚠️ ПРОБЛЕМА: Запись не найдена после сохранения для ${deviceId}!`);
-            console.error(`   Ошибка проверки:`, verifyError);
-            console.error(`   🔍 Данные НЕ были сохранены в базу, несмотря на успешный ответ RPC`);
-            errorCount++;
-          } else {
-            // Только если проверка прошла успешно, считаем операцию успешной
-            successCount++;
-            console.log(`   ✅ Проверка: запись подтверждена в базе (updated_at: ${verifyData.updated_at})`);
-          }
-        } else {
-          // Если readingId нет, но ошибки тоже нет - это проблема
-          console.error(`   ❌ КРИТИЧЕСКАЯ ПРОБЛЕМА: Функция вернула NULL для устройства ${deviceId}`);
-          console.error(`   🔍 Это означает, что данные НЕ были сохранены!`);
-          console.error(`   🔍 Проверьте функцию insert_beliot_reading в Supabase - она должна ВСЕГДА возвращать UUID`);
-          errorCount++;
-        }
+        console.log(`   ✅ Успешно: ${result.success}, ошибок: ${result.errors}, пропущено: ${result.skipped}`);
 
         // Небольшая задержка между запросами, чтобы не перегружать API
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 200));
       } catch (error: any) {
-        errorCount++;
+        totalErrors++;
         console.error(`❌ Ошибка для устройства ${deviceId}:`, error.message);
       }
     }
 
-    // 4. Выводим итоги
-    console.log('\n📊 Итоги сбора:');
-    console.log(`   ✅ Успешно: ${successCount}`);
-    console.log(`   ⚠️ Дубликаты: ${duplicateCount} (данные уже есть в базе)`);
-    console.log(`   ⚠️ Пропущено: ${skippedCount} (устройства без данных или с невалидными данными)`);
-    console.log(`   ❌ Ошибок: ${errorCount}`);
-    console.log(`   📋 Всего устройств получено из API: ${devices.length}`);
+    // 5. Выводим итоги
+    console.log('\n📊 Итоги синхронизации:');
+    console.log(`   ✅ Успешно сохранено показаний: ${totalSuccess}`);
+    console.log(`   ❌ Ошибок: ${totalErrors}`);
+    console.log(`   ⚠️ Пропущено устройств: ${totalSkipped}`);
+    console.log(`   📋 Обработано устройств: ${devicesProcessed}/${devices.length}`);
     
-    // Проверяем согласованность счетчиков
-    const totalProcessed = successCount + duplicateCount + skippedCount + errorCount;
-    if (totalProcessed !== devices.length) {
-      console.warn(`   ⚠️ ВНИМАНИЕ: Несоответствие счетчиков!`);
-      console.warn(`   Обработано: ${totalProcessed}, получено из API: ${devices.length}`);
-    }
-    
-    // Процент успеха: успешные + дубликаты (данные уже есть) / всего устройств
-    const effectiveSuccess = successCount + duplicateCount;
+    // Процент успеха
     const successRate = devices.length > 0 
-      ? ((effectiveSuccess / devices.length) * 100).toFixed(1)
+      ? ((devicesProcessed / devices.length) * 100).toFixed(1)
       : '0.0';
-    console.log(`   📈 Процент успеха: ${successRate}% (${effectiveSuccess}/${devices.length}, включая дубликаты)`);
-    console.log(`   📈 Процент успеха (только новые записи): ${((successCount / devices.length) * 100).toFixed(1)}%`);
+    console.log(`   📈 Процент успеха: ${successRate}% (${devicesProcessed}/${devices.length} устройств обработано)`);
     
-    // Выводим список всех устройств для сравнения
-    console.log(`\n📋 Список всех устройств из API (${devices.length}):`);
-    devices.forEach((device, index) => {
-      const deviceId = device.device_id || device.id || device._id;
-      console.log(`   ${index + 1}. ${deviceId} - ${device.name || 'Без названия'}`);
-    });
-    
-    // Предупреждение, если много пропущенных устройств
-    if (skippedCount > 0) {
-      console.log(`\n⚠️ ВНИМАНИЕ: ${skippedCount} устройств пропущено!`);
-      console.log(`   Возможные причины:`);
-      console.log(`   - API не возвращает данные для этих устройств`);
-      console.log(`   - Показания не найдены в структуре ответа API`);
-      console.log(`   - Значения показаний невалидны (NaN или < 0)`);
-      console.log(`   Проверьте логи выше для каждого пропущенного устройства.`);
+    if (totalErrors > 0) {
+      console.log(`\n⚠️ ВНИМАНИЕ: ${totalErrors} ошибок при синхронизации!`);
+      console.log(`   Проверьте логи выше для деталей.`);
     }
 
-    console.log('\n✅ Сбор показаний завершен');
+    console.log('\n✅ Синхронизация завершена');
   } catch (error: any) {
     console.error('\n❌ Критическая ошибка при сборе показаний:', error.message);
     console.error(error);
