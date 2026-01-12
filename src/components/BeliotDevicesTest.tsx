@@ -1970,7 +1970,7 @@ const BeliotDevicesTest: React.FC = () => {
               {/* Показания выбранного счетчика */}
               {selectedDevice && (
                 <div className="device-state-section">
-                  <div className="section-header-with-actions">
+                  <div className="section-header">
                     <h4>Показания счетчика: {selectedDevice.name || selectedDevice.device_id || selectedDevice.id}</h4>
                   </div>
                   {loadingState ? (

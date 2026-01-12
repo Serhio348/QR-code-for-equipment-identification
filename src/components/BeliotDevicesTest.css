@@ -797,7 +797,7 @@
 }
 
 /* Секция с действиями */
-.section-header-with-actions {
+.section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
