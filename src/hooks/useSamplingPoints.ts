@@ -11,7 +11,7 @@ import {
   createSamplingPoint,
   updateSamplingPoint,
   deleteSamplingPoint,
-} from '../services/api/supabaseWaterQualityApi';
+} from '../services/api/waterQuality/samplingPoints';
 import type { SamplingPoint, SamplingPointInput } from '../types/waterQuality';
 
 interface UseSamplingPointsResult {
