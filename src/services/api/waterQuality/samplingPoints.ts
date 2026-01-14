@@ -20,7 +20,7 @@ import {
   isCacheStale,
   deduplicateRequest,
 } from './cache';
-import { validateLimit } from './validators';
+import { validateLimit, validateId } from './validators';
 import { mapSamplingPointFromDb } from './mappers';
 
 /**
@@ -119,6 +119,77 @@ export async function getAllSamplingPoints(
     return await fetchPromise;
   } catch (error: any) {
     console.error('[samplingPointsApi] Исключение в getAllSamplingPoints:', error);
+    throw error;
+  }
+}
+
+/**
+ * Получить пункт отбора проб по ID
+ * 
+ * @param id - Уникальный идентификатор пункта отбора проб
+ * @returns Пункт отбора проб
+ * 
+ * Логика работы:
+ * 1. Валидируем ID (не пустой, не undefined)
+ * 2. Делаем запрос к БД с фильтром по ID
+ * 3. Используем .single() для получения одной записи
+ * 4. Преобразуем данные через mapper
+ * 
+ * Примечание: Эта функция не использует кэш, так как:
+ * - Получение по ID обычно редкая операция
+ * - Данные могут часто меняться
+ * - Кэш для списка уже покрывает большинство случаев
+ */
+export async function getSamplingPointById(id: string): Promise<SamplingPoint> {
+  try {
+    // Шаг 1: Валидация ID
+    // Используем функцию из validators.ts для единообразия
+    validateId(id, 'ID пункта отбора проб');
+
+    // Шаг 2: Запрос к Supabase
+    // .single() гарантирует, что вернется одна запись или ошибка
+    const { data, error } = await supabase
+      .from('sampling_points')
+      .select('*')
+      .eq('id', id.trim())  // Обрезаем пробелы на всякий случай
+      .single();
+
+    // Шаг 3: Обработка ошибок
+    if (error) {
+      console.error('[samplingPointsApi] Ошибка getSamplingPointById:', {
+        error: {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+        },
+        id: id.trim(),
+      });
+      throw new Error(error.message || 'Ошибка при получении пункта отбора проб');
+    }
+
+    // Шаг 4: Проверка наличия данных
+    // .single() может вернуть null, если запись не найдена
+    if (!data) {
+      throw new Error('Пункт отбора проб не найден');
+    }
+
+    // Шаг 5: Преобразование данных и возврат
+    return mapSamplingPointFromDb(data);
+  } catch (error: any) {
+    // Если ошибка уже обработана выше (валидация, не найдено), просто пробрасываем
+    if (error.message && (
+      error.message.includes('обязателен') ||
+      error.message.includes('не найден')
+    )) {
+      throw error;
+    }
+    
+    console.error('[samplingPointsApi] Исключение в getSamplingPointById:', {
+      error: error.message || error,
+      stack: error.stack,
+      id,
+    });
     throw error;
   }
 }
