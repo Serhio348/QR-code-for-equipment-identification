@@ -315,3 +315,229 @@ export async function createSamplingPoint(input: SamplingPointInput): Promise<Sa
     throw error;
   }
 }
+
+/**
+ * Обновить пункт отбора проб
+ * 
+ * @param id - ID пункта отбора проб для обновления
+ * @param input - Частичные данные для обновления (только изменяемые поля)
+ * @returns Обновленный пункт отбора проб
+ * 
+ * Логика работы:
+ * 1. Валидация ID
+ * 2. Валидация полей, которые нужно обновить (если указаны)
+ * 3. Получение текущего пользователя для updated_by
+ * 4. Формирование объекта обновления (только указанные поля)
+ * 5. Проверка, что есть хотя бы одно поле для обновления
+ * 6. Обновление в БД
+ * 7. Обработка ошибок (включая дубликат кода)
+ * 8. Очистка кэша (список и конкретный пункт)
+ * 9. Преобразование и возврат результата
+ */
+export async function updateSamplingPoint(
+  id: string,
+  input: Partial<SamplingPointInput>
+): Promise<SamplingPoint> {
+  try {
+    // Шаг 1: Валидация ID
+    validateId(id, 'ID пункта отбора проб');
+
+    // Шаг 2: Валидация полей, которые нужно обновить
+    // Проверяем только те поля, которые указаны (не undefined)
+    if (input.code !== undefined) {
+      const trimmedCode = input.code.trim();
+      if (!trimmedCode) {
+        throw new Error('Код не может быть пустым');
+      }
+      if (trimmedCode.length < 2) {
+        throw new Error('Код должен содержать минимум 2 символа');
+      }
+      if (trimmedCode.length > 50) {
+        throw new Error('Код не должен превышать 50 символов');
+      }
+    }
+
+    if (input.name !== undefined) {
+      const trimmedName = input.name.trim();
+      if (!trimmedName) {
+        throw new Error('Название не может быть пустым');
+      }
+      if (trimmedName.length < 2) {
+        throw new Error('Название должно содержать минимум 2 символа');
+      }
+      if (trimmedName.length > 200) {
+        throw new Error('Название не должно превышать 200 символов');
+      }
+    }
+
+    // Шаг 3: Получение текущего пользователя для аудита
+    const { data: { user } } = await supabase.auth.getUser();
+
+    // Шаг 4: Формирование объекта обновления
+    const updateData: any = {
+      updated_at: new Date().toISOString(), // Явно обновляем updated_at
+    };
+
+    // Добавляем updated_by, если пользователь авторизован
+    if (user?.email) {
+      updateData.updated_by = user.email;
+    }
+
+    // Добавляем только те поля, которые указаны (не undefined)
+    if (input.code !== undefined) updateData.code = input.code.trim();
+    if (input.name !== undefined) updateData.name = input.name.trim();
+    if (input.description !== undefined) updateData.description = input.description?.trim() || null;
+    if (input.equipmentId !== undefined) updateData.equipment_id = input.equipmentId || null;
+    if (input.location !== undefined) updateData.location = input.location?.trim() || null;
+    if (input.samplingFrequency !== undefined) updateData.sampling_frequency = input.samplingFrequency || null;
+    if (input.samplingSchedule !== undefined) updateData.sampling_schedule = input.samplingSchedule || null;
+    if (input.responsiblePerson !== undefined) updateData.responsible_person = input.responsiblePerson?.trim() || null;
+    if (input.isActive !== undefined) updateData.is_active = input.isActive;
+
+    // Шаг 5: Проверка, что есть хотя бы одно поле для обновления (кроме служебных)
+    const userFields = Object.keys(updateData).filter(key => key !== 'updated_at' && key !== 'updated_by');
+    if (userFields.length === 0) {
+      throw new Error('Не указаны поля для обновления');
+    }
+
+    // Шаг 6: Обновление в БД
+    const { data, error } = await supabase
+      .from('sampling_points')
+      .update(updateData)
+      .eq('id', id.trim())
+      .select('*')
+      .single();
+
+    // Шаг 7: Обработка ошибок
+    if (error) {
+      console.error('[samplingPointsApi] Ошибка updateSamplingPoint:', {
+        error: {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+        },
+        id: id.trim(),
+        updateFields: Object.keys(updateData),
+        input: {
+          hasCode: input.code !== undefined,
+          hasName: input.name !== undefined,
+          hasDescription: input.description !== undefined,
+          hasEquipmentId: input.equipmentId !== undefined,
+          hasLocation: input.location !== undefined,
+          samplingFrequency: input.samplingFrequency,
+          isActive: input.isActive,
+        },
+      });
+      
+      // Специальная обработка ошибки дубликата
+      if (error.code === '23505') {
+        throw new Error('Пункт отбора проб с таким кодом уже существует');
+      }
+      
+      throw new Error(error.message || 'Ошибка при обновлении пункта отбора проб');
+    }
+
+    // Шаг 8: Проверка результата
+    if (!data) {
+      throw new Error('Пункт отбора проб не найден');
+    }
+
+    // Шаг 9: Очистка кэша
+    // Очищаем кэш списка и конкретного пункта
+    clearWaterQualityCache('sampling_points');
+    clearWaterQualityCache(`sampling_point_${id.trim()}`);
+
+    // Шаг 10: Преобразование и возврат
+    return mapSamplingPointFromDb(data);
+  } catch (error: any) {
+    // Если ошибка уже обработана выше, просто пробрасываем
+    if (error.message && (
+      error.message.includes('обязателен') ||
+      error.message.includes('не может быть пустым') ||
+      error.message.includes('должен содержать') ||
+      error.message.includes('не должен превышать') ||
+      error.message.includes('уже существует') ||
+      error.message.includes('не найден') ||
+      error.message.includes('поля для обновления')
+    )) {
+      throw error;
+    }
+    
+    console.error('[samplingPointsApi] Исключение в updateSamplingPoint:', {
+      error: error.message || error,
+      stack: error.stack,
+      id,
+    });
+    throw error;
+  }
+}
+
+/**
+ * Удалить пункт отбора проб
+ * 
+ * @param id - ID пункта отбора проб для удаления
+ * @returns void
+ * 
+ * Логика работы:
+ * 1. Валидация ID
+ * 2. Удаление из БД
+ * 3. Обработка ошибок (включая foreign key constraint - если пункт используется)
+ * 4. Очистка кэша (список и конкретный пункт)
+ * 
+ * Примечание: Если пункт используется в анализах, удаление будет заблокировано БД
+ * (foreign key constraint violation - error code 23503)
+ */
+export async function deleteSamplingPoint(id: string): Promise<void> {
+  try {
+    // Шаг 1: Валидация ID
+    validateId(id, 'ID пункта отбора проб');
+
+    // Шаг 2: Удаление из БД
+    const { error } = await supabase
+      .from('sampling_points')
+      .delete()
+      .eq('id', id.trim());
+
+    // Шаг 3: Обработка ошибок
+    if (error) {
+      console.error('[samplingPointsApi] Ошибка deleteSamplingPoint:', {
+        error: {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+        },
+        id: id.trim(),
+      });
+      
+      // Специальная обработка ошибки foreign key constraint
+      // Это означает, что пункт используется в других таблицах (например, в анализах)
+      if (error.code === '23503') {
+        throw new Error('Невозможно удалить пункт отбора проб: он используется в анализах');
+      }
+      
+      throw new Error(error.message || 'Ошибка при удалении пункта отбора проб');
+    }
+
+    // Шаг 4: Очистка кэша
+    // Очищаем кэш списка и конкретного пункта
+    clearWaterQualityCache('sampling_points');
+    clearWaterQualityCache(`sampling_point_${id.trim()}`);
+  } catch (error: any) {
+    // Если ошибка уже обработана выше, просто пробрасываем
+    if (error.message && (
+      error.message.includes('обязателен') ||
+      error.message.includes('используется')
+    )) {
+      throw error;
+    }
+    
+    console.error('[samplingPointsApi] Исключение в deleteSamplingPoint:', {
+      error: error.message || error,
+      stack: error.stack,
+      id,
+    });
+    throw error;
+  }
+}
