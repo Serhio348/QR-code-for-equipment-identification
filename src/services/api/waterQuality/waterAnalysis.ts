@@ -181,10 +181,15 @@ export async function getWaterAnalysisById(id: string): Promise<WaterAnalysisWit
     // Шаг 1: Валидация ID
     validateId(id, 'ID анализа');
 
-    // Шаг 2: Получение анализа из БД
-    const { data: analysis, error: analysisError } = await supabase
+    // Шаг 2: Получение анализа из БД с JOIN к пункту отбора проб
+    // Используем JOIN для получения пункта отбора проб за один запрос
+    // Supabase автоматически делает JOIN по foreign key (sampling_point_id -> sampling_points.id)
+    const { data: analysisData, error: analysisError } = await supabase
       .from('water_analysis')
-      .select('*')
+      .select(`
+        *,
+        sampling_points (*)
+      `)
       .eq('id', id.trim())
       .single();
 
@@ -201,9 +206,47 @@ export async function getWaterAnalysisById(id: string): Promise<WaterAnalysisWit
       throw new Error(analysisError.message || 'Ошибка при получении анализа');
     }
 
-    if (!analysis) {
+    if (!analysisData) {
       throw new Error('Анализ не найден');
     }
+
+    // Извлекаем данные анализа и пункта отбора проб
+    // Supabase возвращает связанные данные в формате объекта с ключом имени таблицы
+    let samplingPoint = undefined;
+    
+    // Извлекаем пункт отбора проб из результата JOIN
+    // Supabase возвращает связанные данные в формате: { sampling_points: {...} }
+    // Это может быть объект или массив (если связь один-ко-многим, но у нас один-к-одному)
+    if (analysisData.sampling_points) {
+      // Если это массив (один элемент), берем первый
+      const pointData = Array.isArray(analysisData.sampling_points) 
+        ? analysisData.sampling_points[0] 
+        : analysisData.sampling_points;
+      
+      if (pointData && pointData.id) {
+        samplingPoint = mapSamplingPointFromDb(pointData);
+      }
+    }
+    
+    // Fallback: если JOIN не вернул данные, делаем отдельный запрос
+    // Это может произойти, если foreign key relationship не настроен в Supabase
+    if (!samplingPoint && analysisData.sampling_point_id) {
+      const { data: pointData, error: pointError } = await supabase
+        .from('sampling_points')
+        .select('*')
+        .eq('id', analysisData.sampling_point_id)
+        .single();
+
+      if (!pointError && pointData) {
+        samplingPoint = mapSamplingPointFromDb(pointData);
+      } else {
+        console.debug('[waterAnalysisApi] Пункт отбора проб не найден (fallback):', pointError);
+      }
+    }
+    
+    // Удаляем связанные данные из объекта анализа перед маппингом
+    // чтобы mapper не пытался обработать их
+    const { sampling_points, ...analysis } = analysisData;
 
     // Шаг 3: Получение результатов анализа
     // Используем модуль analysisResults для получения всех результатов
@@ -217,22 +260,6 @@ export async function getWaterAnalysisById(id: string): Promise<WaterAnalysisWit
         error: resultsError.message || resultsError,
         analysisId: id.trim(),
       });
-    }
-
-    // Шаг 4: Получение пункта отбора проб (если существует)
-    let samplingPoint = undefined;
-    if (analysis.sampling_point_id) {
-      const { data: pointData, error: pointError } = await supabase
-        .from('sampling_points')
-        .select('*')
-        .eq('id', analysis.sampling_point_id)
-        .single();
-
-      if (!pointError && pointData) {
-        samplingPoint = mapSamplingPointFromDb(pointData);
-      } else {
-        console.debug('[waterAnalysisApi] Пункт отбора проб не найден:', pointError);
-      }
     }
 
     // Шаг 5: Объединение данных и возврат
