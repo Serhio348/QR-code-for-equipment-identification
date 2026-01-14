@@ -8,7 +8,13 @@
 import { supabase } from '../../../config/supabase';
 import { clearWaterQualityCache } from './cache';
 import { validateId } from './validators';
-import type { ComplianceDetails, ComplianceStatus, WaterQualityNorm } from '../../../types/waterQuality';
+import type {
+  ComplianceDetails,
+  ComplianceStatus,
+  ResultEvaluation,
+  WaterQualityNorm,
+  WaterQualityParameter,
+} from '../../../types/waterQuality';
 import { mapWaterQualityNormFromDb } from './mappers';
 
 function validateNonEmptyString(value: string, fieldName: string): void {
@@ -248,6 +254,69 @@ export async function getApplicableNorm(
       parameterName,
       samplingPointId,
       equipmentId,
+    });
+    throw error;
+  }
+}
+
+/**
+ * Оценить результат измерения по нормативу (RPC)
+ *
+ * Используется для UI: показать подробное объяснение, попадает ли значение в норму,
+ * какие диапазоны применены, какой процент отклонения и т.п.
+ */
+export async function evaluateResultAgainstNorm(resultId: string): Promise<ResultEvaluation> {
+  try {
+    validateId(resultId, 'ID результата измерения');
+
+    const { data, error } = await supabase.rpc('evaluate_result_against_norm', {
+      p_result_id: resultId.trim(),
+    });
+
+    if (error) {
+      console.error('[complianceApi] Ошибка evaluateResultAgainstNorm:', {
+        error: {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+        },
+        resultId: resultId.trim(),
+      });
+      throw new Error(error.message || 'Ошибка при оценке результата по нормативу');
+    }
+
+    // Если RPC ничего не вернул (например, resultId не найден) — возвращаем “безопасный” ответ
+    if (!data) {
+      return {
+        success: false,
+        hasNorm: false,
+        status: 'unknown',
+        message: 'Не удалось оценить результат',
+        result: {
+          id: resultId.trim(),
+          value: 0,
+          unit: '',
+          // Нужен WaterQualityParameter — используем дефолтный, как и в монолите
+          parameterName: 'iron' as WaterQualityParameter,
+        },
+        isExceeded: false,
+        isWarning: false,
+        isOptimal: false,
+        isNormal: false,
+        error: 'Результат не найден',
+      };
+    }
+
+    return data as ResultEvaluation;
+  } catch (error: any) {
+    if (error?.message && error.message.includes('обязателен')) {
+      throw error;
+    }
+    console.error('[complianceApi] Исключение в evaluateResultAgainstNorm:', {
+      error: error?.message || error,
+      stack: error?.stack,
+      resultId,
     });
     throw error;
   }
