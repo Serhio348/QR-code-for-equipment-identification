@@ -6,7 +6,7 @@
  */
 
 import { supabase } from '../../../config/supabase';
-import type { SamplingPoint, CacheOptions } from '../../../types/waterQuality';
+import type { SamplingPoint, SamplingPointInput, CacheOptions } from '../../../types/waterQuality';
 
 // Импортируем функции из модулей
 import {
@@ -19,6 +19,7 @@ import {
   isCacheValid,
   isCacheStale,
   deduplicateRequest,
+  clearWaterQualityCache,
 } from './cache';
 import { validateLimit, validateId } from './validators';
 import { mapSamplingPointFromDb } from './mappers';
@@ -189,6 +190,127 @@ export async function getSamplingPointById(id: string): Promise<SamplingPoint> {
       error: error.message || error,
       stack: error.stack,
       id,
+    });
+    throw error;
+  }
+}
+
+/**
+ * Создать новый пункт отбора проб
+ * 
+ * @param input - Данные для создания пункта отбора проб
+ * @returns Созданный пункт отбора проб
+ * 
+ * Логика работы:
+ * 1. Валидация обязательных полей (code, name)
+ * 2. Валидация длины полей (code: 2-50, name: 2-200)
+ * 3. Получение текущего пользователя для created_by
+ * 4. Вставка данных в БД
+ * 5. Обработка ошибок (включая дубликат кода)
+ * 6. Очистка кэша списка (чтобы новые данные появились при следующем запросе)
+ * 7. Преобразование и возврат результата
+ */
+export async function createSamplingPoint(input: SamplingPointInput): Promise<SamplingPoint> {
+  try {
+    // Шаг 1: Валидация обязательных полей
+    if (!input.code || !input.name) {
+      throw new Error('Код и название обязательны для заполнения');
+    }
+
+    // Шаг 2: Обрезка пробелов и валидация длины
+    const trimmedCode = input.code.trim();
+    const trimmedName = input.name.trim();
+
+    // Валидация кода: минимум 2, максимум 50 символов
+    if (trimmedCode.length < 2) {
+      throw new Error('Код должен содержать минимум 2 символа');
+    }
+    if (trimmedCode.length > 50) {
+      throw new Error('Код не должен превышать 50 символов');
+    }
+
+    // Валидация названия: минимум 2, максимум 200 символов
+    if (trimmedName.length < 2) {
+      throw new Error('Название должно содержать минимум 2 символа');
+    }
+    if (trimmedName.length > 200) {
+      throw new Error('Название не должно превышать 200 символов');
+    }
+
+    // Шаг 3: Получение текущего пользователя для аудита
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    // Шаг 4: Вставка данных в БД
+    const { data, error } = await supabase
+      .from('sampling_points')
+      .insert({
+        code: trimmedCode,
+        name: trimmedName,
+        description: input.description?.trim() || null,
+        equipment_id: input.equipmentId || null,
+        location: input.location?.trim() || null,
+        sampling_frequency: input.samplingFrequency || null,
+        sampling_schedule: input.samplingSchedule || null,
+        responsible_person: input.responsiblePerson?.trim() || null,
+        is_active: input.isActive !== undefined ? input.isActive : true,
+        created_by: user?.email || null,  // Сохраняем email создателя
+      })
+      .select('*')
+      .single();
+
+    // Шаг 5: Обработка ошибок
+    if (error) {
+      console.error('[samplingPointsApi] Ошибка createSamplingPoint:', {
+        error: {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+        },
+        input: {
+          code: trimmedCode,
+          name: trimmedName,
+          hasDescription: !!input.description,
+          hasEquipmentId: !!input.equipmentId,
+          hasLocation: !!input.location,
+          samplingFrequency: input.samplingFrequency,
+          isActive: input.isActive,
+        },
+      });
+      
+      // Специальная обработка ошибки дубликата (unique constraint violation)
+      if (error.code === '23505') {
+        throw new Error('Пункт отбора проб с таким кодом уже существует');
+      }
+      
+      throw new Error(error.message || 'Ошибка при создании пункта отбора проб');
+    }
+
+    // Шаг 6: Проверка результата
+    if (!data) {
+      throw new Error('Не удалось создать пункт отбора проб');
+    }
+
+    // Шаг 7: Очистка кэша списка
+    // После создания нового пункта кэш списка становится неактуальным
+    clearWaterQualityCache('sampling_points');
+
+    // Шаг 8: Преобразование и возврат
+    return mapSamplingPointFromDb(data);
+  } catch (error: any) {
+    // Если ошибка уже обработана выше (валидация, дубликат), просто пробрасываем
+    if (error.message && (
+      error.message.includes('обязательны') ||
+      error.message.includes('должен содержать') ||
+      error.message.includes('не должен превышать') ||
+      error.message.includes('уже существует')
+    )) {
+      throw error;
+    }
+    
+    console.error('[samplingPointsApi] Исключение в createSamplingPoint:', {
+      error: error.message || error,
+      stack: error.stack,
     });
     throw error;
   }
