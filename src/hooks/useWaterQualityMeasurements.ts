@@ -11,14 +11,12 @@ import {
   createWaterAnalysis,
   updateWaterAnalysis,
   deleteWaterAnalysis,
-} from '../services/api/waterQuality/waterAnalysis';
-import {
   getAnalysisResults,
   createAnalysisResult,
   createAnalysisResults,
   updateAnalysisResult,
   deleteAnalysisResult,
-} from '../services/api/waterQuality/analysisResults';
+} from '../services/api/waterQuality';
 import type {
   WaterAnalysis,
   WaterAnalysisInput,
