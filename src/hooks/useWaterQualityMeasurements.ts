@@ -11,18 +11,21 @@ import {
   createWaterAnalysis,
   updateWaterAnalysis,
   deleteWaterAnalysis,
+} from '../services/api/waterQuality/waterAnalysis';
+import {
   getAnalysisResults,
   createAnalysisResult,
   createAnalysisResults,
   updateAnalysisResult,
   deleteAnalysisResult,
-} from '../services/api/supabaseWaterQualityApi';
+} from '../services/api/waterQuality/analysisResults';
 import type {
   WaterAnalysis,
   WaterAnalysisInput,
   WaterAnalysisWithResults,
   AnalysisResult,
   AnalysisResultInput,
+  WaterQualityParameter,
 } from '../types/waterQuality';
 
 interface UseWaterAnalysesResult {
@@ -191,7 +194,11 @@ export function useWaterAnalysisManagement() {
  */
 export function useAnalysisResults(
   analysisId: string | null,
-  options?: { limit?: number; offset?: number; filter?: { parameterName?: string; minValue?: number; maxValue?: number } }
+  options?: {
+    limit?: number;
+    offset?: number;
+    filter?: { parameterName?: WaterQualityParameter; minValue?: number; maxValue?: number };
+  }
 ) {
   const [results, setResults] = useState<AnalysisResult[]>([]);
   const [loading, setLoading] = useState<boolean>(true);

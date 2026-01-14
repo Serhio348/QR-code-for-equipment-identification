@@ -11,7 +11,7 @@ import {
   createWaterQualityNorm,
   updateWaterQualityNorm,
   deleteWaterQualityNorm,
-} from '../services/api/supabaseWaterQualityApi';
+} from '../services/api/waterQuality/waterQualityNorms';
 import type { WaterQualityNorm, WaterQualityNormInput } from '../types/waterQuality';
 
 interface UseWaterQualityNormsResult {
