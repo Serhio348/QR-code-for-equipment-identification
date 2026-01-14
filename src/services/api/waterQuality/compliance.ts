@@ -1,17 +1,15 @@
 /**
  * API для проверки соответствия нормативам (compliance)
  *
- * Пока выносим сюда только то, что используется из модуля нормативов:
- * - перепроверка результатов для конкретного параметра (RPC в БД)
- *
- * Остальные функции (checkResultCompliance, checkAnalysisCompliance, etc.)
- * вынесем следующим шагом, чтобы рефакторинг был короткими фрагментами.
+ * Этот модуль содержит функции, которые завязаны на RPC-функции БД
+ * для подбора/проверки применимых нормативов.
  */
 
 import { supabase } from '../../../config/supabase';
 import { clearWaterQualityCache } from './cache';
 import { validateId } from './validators';
-import type { ComplianceDetails, ComplianceStatus } from '../../../types/waterQuality';
+import type { ComplianceDetails, ComplianceStatus, WaterQualityNorm } from '../../../types/waterQuality';
+import { mapWaterQualityNormFromDb } from './mappers';
 
 function validateNonEmptyString(value: string, fieldName: string): void {
   if (!value || typeof value !== 'string' || !value.trim()) {
@@ -163,6 +161,93 @@ export async function checkResultCompliance(resultId: string): Promise<Complianc
       error: error?.message || error,
       stack: error?.stack,
       resultId,
+    });
+    throw error;
+  }
+}
+
+/**
+ * Получить применимый норматив для проверки результата
+ *
+ * В БД логика выбора норматива делается через RPC `get_applicable_norm`:
+ * - учитывается parameterName
+ * - приоритетнее нормативы, привязанные к samplingPointId или equipmentId (если заданы)
+ *
+ * Чтобы на фронте не зависеть от формата ответа RPC, мы:
+ * 1) вызываем RPC и берём `id` норматива
+ * 2) подтягиваем полный норматив из `water_quality_norms` по id и маппим его
+ */
+export async function getApplicableNorm(
+  parameterName: string,
+  samplingPointId?: string,
+  equipmentId?: string
+): Promise<WaterQualityNorm | null> {
+  try {
+    validateNonEmptyString(parameterName, 'Название параметра');
+
+    const trimmedSamplingPointId = samplingPointId?.trim() || null;
+    const trimmedEquipmentId = equipmentId?.trim() || null;
+
+    const { data, error } = await supabase.rpc('get_applicable_norm', {
+      p_sampling_point_id: trimmedSamplingPointId,
+      p_equipment_id: trimmedEquipmentId,
+      p_parameter_name: parameterName.trim(),
+    });
+
+    if (error) {
+      console.error('[complianceApi] Ошибка getApplicableNorm:', {
+        error: {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+        },
+        parameterName,
+        samplingPointId: trimmedSamplingPointId,
+        equipmentId: trimmedEquipmentId,
+      });
+      throw new Error(error.message || 'Ошибка при получении норматива');
+    }
+
+    if (!data || data.length === 0) return null;
+
+    const normId: string | undefined = data?.[0]?.id;
+    if (!normId) return null;
+
+    // Тянем полный норматив по id, чтобы вернуть корректный WaterQualityNorm
+    const { data: normRow, error: normError } = await supabase
+      .from('water_quality_norms')
+      .select('*')
+      .eq('id', normId)
+      .single();
+
+    if (normError) {
+      console.error('[complianceApi] Ошибка чтения норматива по id:', {
+        error: {
+          code: normError.code,
+          message: normError.message,
+          details: normError.details,
+          hint: normError.hint,
+        },
+        normId,
+      });
+      throw new Error(normError.message || 'Ошибка при получении норматива');
+    }
+
+    if (!normRow) return null;
+
+    return mapWaterQualityNormFromDb(normRow);
+  } catch (error: any) {
+    if (error?.message && (error.message.includes('обязательно') || error.message.includes('Ошибка при получении'))) {
+      throw error;
+    }
+
+    console.error('[complianceApi] Исключение в getApplicableNorm:', {
+      error: error?.message || error,
+      stack: error?.stack,
+      parameterName,
+      samplingPointId,
+      equipmentId,
     });
     throw error;
   }
