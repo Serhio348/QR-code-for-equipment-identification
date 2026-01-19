@@ -14,6 +14,7 @@ import BeliotDevicesTest from './components/BeliotDevicesTest';
 import AccessSettingsPage from './pages/AccessSettingsPage';
 import ErrorLogsPage from './pages/ErrorLogsPage';
 import WorkshopSettingsPage from './pages/WorkshopSettingsPage';
+import WaterAnalysisFormPage from './pages/WaterAnalysisFormPage';
 import NotFoundPage from './pages/NotFoundPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import AppAccessGuard from './components/AppAccessGuard';
@@ -227,6 +228,16 @@ const App: React.FC = () => {
             element={
               <ProtectedRoute requireAdmin>
                 <WorkshopSettingsPage />
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Форма анализа качества воды */}
+          <Route 
+            path="/water-quality/analysis/:id" 
+            element={
+              <ProtectedRoute>
+                <WaterAnalysisFormPage />
               </ProtectedRoute>
             } 
           />

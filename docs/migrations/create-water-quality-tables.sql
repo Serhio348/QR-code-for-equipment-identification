@@ -176,8 +176,9 @@ CREATE TABLE IF NOT EXISTS public.water_quality_norms (
   
   -- Приоритет: более специфичные нормативы имеют приоритет
   CONSTRAINT unique_sampling_point_param UNIQUE(sampling_point_id, parameter_name),
-  CONSTRAINT unique_equipment_param UNIQUE(equipment_id, parameter_name) 
-    DEFERRABLE INITIALLY DEFERRED
+  -- Важно: constraint НЕ должен быть DEFERRABLE, иначе INSERT ... ON CONFLICT DO NOTHING
+  -- не сможет использовать его как arbiter и миграция упадёт (ошибка 55000).
+  CONSTRAINT unique_equipment_param UNIQUE(equipment_id, parameter_name)
 );
 
 -- Индексы для water_quality_norms
@@ -238,16 +239,20 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Триггеры для автоматического обновления updated_at
+-- Используем DROP IF EXISTS для идемпотентности миграции
+DROP TRIGGER IF EXISTS update_sampling_points_updated_at ON public.sampling_points;
 CREATE TRIGGER update_sampling_points_updated_at
   BEFORE UPDATE ON public.sampling_points
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_water_analysis_updated_at ON public.water_analysis;
 CREATE TRIGGER update_water_analysis_updated_at
   BEFORE UPDATE ON public.water_analysis
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_water_quality_norms_updated_at ON public.water_quality_norms;
 CREATE TRIGGER update_water_quality_norms_updated_at
   BEFORE UPDATE ON public.water_quality_norms
   FOR EACH ROW
@@ -279,6 +284,8 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Триггер для логирования изменений
+-- Используем DROP IF EXISTS для идемпотентности миграции
+DROP TRIGGER IF EXISTS log_water_analysis_changes_trigger ON public.water_analysis;
 CREATE TRIGGER log_water_analysis_changes_trigger
   BEFORE UPDATE ON public.water_analysis
   FOR EACH ROW
@@ -296,15 +303,20 @@ ALTER TABLE public.analysis_results ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.water_quality_norms ENABLE ROW LEVEL SECURITY;
 
 -- Политика: Все авторизованные пользователи могут читать
+-- Используем DROP IF EXISTS для идемпотентности миграции
+DROP POLICY IF EXISTS "Users can read sampling_points" ON public.sampling_points;
 CREATE POLICY "Users can read sampling_points" ON public.sampling_points
   FOR SELECT USING (auth.role() = 'authenticated');
 
+DROP POLICY IF EXISTS "Users can read water_analysis" ON public.water_analysis;
 CREATE POLICY "Users can read water_analysis" ON public.water_analysis
   FOR SELECT USING (auth.role() = 'authenticated');
 
+DROP POLICY IF EXISTS "Users can read analysis_results" ON public.analysis_results;
 CREATE POLICY "Users can read analysis_results" ON public.analysis_results
   FOR SELECT USING (auth.role() = 'authenticated');
 
+DROP POLICY IF EXISTS "Users can read water_quality_norms" ON public.water_quality_norms;
 CREATE POLICY "Users can read water_quality_norms" ON public.water_quality_norms
   FOR SELECT USING (auth.role() = 'authenticated');
 
