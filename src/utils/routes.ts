@@ -34,6 +34,15 @@ export const ROUTES = {
   /** Страница счётчиков воды */
   WATER: '/water',
   
+  /** Страница журнала анализов качества воды */
+  WATER_QUALITY_JOURNAL: '/water-quality/journal',
+  
+  /** Создание нового анализа качества воды */
+  WATER_QUALITY_ANALYSIS_NEW: '/water-quality/analysis/new',
+  
+  /** Редактирование анализа качества воды по ID */
+  WATER_QUALITY_ANALYSIS_EDIT: (id: string) => `/water-quality/analysis/${id}/edit`,
+  
   /** Страница настроек доступа к приложениям (только для администраторов) */
   ACCESS_SETTINGS: '/admin/access-settings',
   
