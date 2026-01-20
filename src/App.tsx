@@ -10,7 +10,7 @@ import RegisterPage from './pages/RegisterPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import EquipmentPage from './pages/EquipmentPage';
 import EquipmentFormPage from './pages/EquipmentFormPage';
-import BeliotDevicesTest from './components/BeliotDevicesTest';
+import WaterPage from './pages/WaterPage';
 import AccessSettingsPage from './pages/AccessSettingsPage';
 import ErrorLogsPage from './pages/ErrorLogsPage';
 import WorkshopSettingsPage from './pages/WorkshopSettingsPage';
@@ -190,13 +190,25 @@ const App: React.FC = () => {
             } 
           />
           
-          {/* Страница счётчиков воды - для всех авторизованных с доступом */}
+          {/* Страница приложения "Вода" - для всех авторизованных с доступом */}
           <Route 
             path={ROUTES.WATER} 
             element={
               <ProtectedRoute>
                 <AppAccessGuard appId="water">
-                <BeliotDevicesTest />
+                  <WaterPage />
+                </AppAccessGuard>
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Страница журнала анализов качества воды */}
+          <Route 
+            path={ROUTES.WATER_QUALITY_JOURNAL} 
+            element={
+              <ProtectedRoute>
+                <AppAccessGuard appId="water">
+                  <WaterPage />
                 </AppAccessGuard>
               </ProtectedRoute>
             } 
