@@ -34,6 +34,45 @@ export const ROUTES = {
   /** Страница счётчиков воды */
   WATER: '/water',
   
+  /** Страница журнала анализов качества воды */
+  WATER_QUALITY_JOURNAL: '/water-quality/journal',
+  
+  /** Страница оповещений о превышении нормативов */
+  WATER_QUALITY_ALERTS: '/water-quality/alerts',
+  
+  /** Страница управления нормативами качества воды */
+  WATER_QUALITY_NORMS: '/water-quality/norms',
+  
+  /** Создание нового норматива качества воды */
+  WATER_QUALITY_NORM_NEW: '/water-quality/norm/new',
+  
+  /** Просмотр норматива качества воды по ID */
+  WATER_QUALITY_NORM_VIEW: (id: string) => `/water-quality/norm/${id}`,
+  
+  /** Редактирование норматива качества воды по ID */
+  WATER_QUALITY_NORM_EDIT: (id: string) => `/water-quality/norm/${id}/edit`,
+  
+  /** Создание нового анализа качества воды */
+  WATER_QUALITY_ANALYSIS_NEW: '/water-quality/analysis/new',
+  
+  /** Просмотр анализа качества воды по ID */
+  WATER_QUALITY_ANALYSIS_VIEW: (id: string) => `/water-quality/analysis/${id}`,
+  
+  /** Редактирование анализа качества воды по ID */
+  WATER_QUALITY_ANALYSIS_EDIT: (id: string) => `/water-quality/analysis/${id}/edit`,
+  
+  /** Страница управления точками отбора проб */
+  WATER_QUALITY_SAMPLING_POINTS: '/water-quality/sampling-points',
+  
+  /** Создание новой точки отбора проб */
+  WATER_QUALITY_SAMPLING_POINT_NEW: '/water-quality/sampling-point/new',
+  
+  /** Просмотр точки отбора проб по ID */
+  WATER_QUALITY_SAMPLING_POINT_VIEW: (id: string) => `/water-quality/sampling-point/${id}`,
+  
+  /** Редактирование точки отбора проб по ID */
+  WATER_QUALITY_SAMPLING_POINT_EDIT: (id: string) => `/water-quality/sampling-point/${id}/edit`,
+  
   /** Страница настроек доступа к приложениям (только для администраторов) */
   ACCESS_SETTINGS: '/admin/access-settings',
   

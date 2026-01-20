@@ -10,10 +10,19 @@ import RegisterPage from './pages/RegisterPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import EquipmentPage from './pages/EquipmentPage';
 import EquipmentFormPage from './pages/EquipmentFormPage';
-import BeliotDevicesTest from './components/BeliotDevicesTest';
+import WaterPage from './pages/WaterPage';
 import AccessSettingsPage from './pages/AccessSettingsPage';
 import ErrorLogsPage from './pages/ErrorLogsPage';
 import WorkshopSettingsPage from './pages/WorkshopSettingsPage';
+import WaterAnalysisFormPage from './pages/WaterAnalysisFormPage';
+import WaterAnalysisViewPage from './pages/WaterAnalysisViewPage';
+import WaterQualityAlertsPage from './pages/WaterQualityAlertsPage';
+import WaterQualityNormsPage from './pages/WaterQualityNormsPage';
+import WaterQualityNormFormPage from './pages/WaterQualityNormFormPage';
+import WaterQualityNormViewPage from './pages/WaterQualityNormViewPage';
+import SamplingPointsPage from './pages/SamplingPointsPage';
+import SamplingPointFormPage from './pages/SamplingPointFormPage';
+import SamplingPointViewPage from './pages/SamplingPointViewPage';
 import NotFoundPage from './pages/NotFoundPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import AppAccessGuard from './components/AppAccessGuard';
@@ -189,13 +198,133 @@ const App: React.FC = () => {
             } 
           />
           
-          {/* Страница счётчиков воды - для всех авторизованных с доступом */}
+          {/* Страница приложения "Вода" - для всех авторизованных с доступом */}
           <Route 
             path={ROUTES.WATER} 
             element={
               <ProtectedRoute>
                 <AppAccessGuard appId="water">
-                <BeliotDevicesTest />
+                  <WaterPage />
+                </AppAccessGuard>
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Страница журнала анализов качества воды */}
+          <Route 
+            path={ROUTES.WATER_QUALITY_JOURNAL} 
+            element={
+              <ProtectedRoute>
+                <AppAccessGuard appId="water">
+                  <WaterPage />
+                </AppAccessGuard>
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Страница оповещений о превышении нормативов */}
+          <Route 
+            path={ROUTES.WATER_QUALITY_ALERTS} 
+            element={
+              <ProtectedRoute>
+                <AppAccessGuard appId="water">
+                  <WaterQualityAlertsPage />
+                </AppAccessGuard>
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Страница управления нормативами качества воды */}
+          <Route 
+            path={ROUTES.WATER_QUALITY_NORMS} 
+            element={
+              <ProtectedRoute>
+                <AppAccessGuard appId="water">
+                  <WaterQualityNormsPage />
+                </AppAccessGuard>
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Просмотр норматива качества воды */}
+          <Route 
+            path="/water-quality/norm/:id" 
+            element={
+              <ProtectedRoute>
+                <AppAccessGuard appId="water">
+                  <WaterQualityNormViewPage />
+                </AppAccessGuard>
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Создание нового норматива качества воды */}
+          <Route 
+            path="/water-quality/norm/new" 
+            element={
+              <ProtectedRoute>
+                <AppAccessGuard appId="water">
+                  <WaterQualityNormFormPage />
+                </AppAccessGuard>
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Редактирование норматива качества воды */}
+          <Route 
+            path="/water-quality/norm/:id/edit" 
+            element={
+              <ProtectedRoute>
+                <AppAccessGuard appId="water">
+                  <WaterQualityNormFormPage />
+                </AppAccessGuard>
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Страница управления точками отбора проб */}
+          <Route 
+            path={ROUTES.WATER_QUALITY_SAMPLING_POINTS} 
+            element={
+              <ProtectedRoute>
+                <AppAccessGuard appId="water">
+                  <SamplingPointsPage />
+                </AppAccessGuard>
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Просмотр точки отбора проб */}
+          <Route 
+            path="/water-quality/sampling-point/:id" 
+            element={
+              <ProtectedRoute>
+                <AppAccessGuard appId="water">
+                  <SamplingPointViewPage />
+                </AppAccessGuard>
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Создание новой точки отбора проб */}
+          <Route 
+            path="/water-quality/sampling-point/new" 
+            element={
+              <ProtectedRoute>
+                <AppAccessGuard appId="water">
+                  <SamplingPointFormPage />
+                </AppAccessGuard>
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Редактирование точки отбора проб */}
+          <Route 
+            path="/water-quality/sampling-point/:id/edit" 
+            element={
+              <ProtectedRoute>
+                <AppAccessGuard appId="water">
+                  <SamplingPointFormPage />
                 </AppAccessGuard>
               </ProtectedRoute>
             } 
@@ -227,6 +356,36 @@ const App: React.FC = () => {
             element={
               <ProtectedRoute requireAdmin>
                 <WorkshopSettingsPage />
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Создание нового анализа качества воды */}
+          <Route 
+            path="/water-quality/analysis/new" 
+            element={
+              <ProtectedRoute>
+                <WaterAnalysisFormPage />
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Просмотр анализа качества воды */}
+          <Route 
+            path="/water-quality/analysis/:id" 
+            element={
+              <ProtectedRoute>
+                <WaterAnalysisViewPage />
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Форма редактирования анализа качества воды */}
+          <Route 
+            path="/water-quality/analysis/:id/edit" 
+            element={
+              <ProtectedRoute>
+                <WaterAnalysisFormPage />
               </ProtectedRoute>
             } 
           />
