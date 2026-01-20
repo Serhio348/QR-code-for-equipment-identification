@@ -116,7 +116,7 @@
   font-weight: 600;
 }
 
-.delete-button {
+.maintenance-log .delete-button {
   background: #dc3545;
   color: white;
   border: none;
@@ -129,7 +129,7 @@
   transition: background 0.3s;
 }
 
-.delete-button:hover {
+.maintenance-log .delete-button:hover {
   background: #c82333;
 }
 
@@ -195,7 +195,7 @@
   cursor: not-allowed;
 }
 
-.delete-button:disabled {
+.maintenance-log .delete-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
