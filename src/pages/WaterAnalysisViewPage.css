@@ -219,9 +219,14 @@
   text-transform: uppercase;
 }
 
-.compliance-compliant {
+.compliance-optimal {
   background: #d4edda;
   color: #155724;
+}
+
+.compliance-normal {
+  background: #d1ecf1;
+  color: #0c5460;
 }
 
 .compliance-exceeded {

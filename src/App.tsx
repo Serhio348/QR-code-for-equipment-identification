@@ -16,6 +16,7 @@ import ErrorLogsPage from './pages/ErrorLogsPage';
 import WorkshopSettingsPage from './pages/WorkshopSettingsPage';
 import WaterAnalysisFormPage from './pages/WaterAnalysisFormPage';
 import WaterAnalysisViewPage from './pages/WaterAnalysisViewPage';
+import WaterQualityAlertsPage from './pages/WaterQualityAlertsPage';
 import NotFoundPage from './pages/NotFoundPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import AppAccessGuard from './components/AppAccessGuard';

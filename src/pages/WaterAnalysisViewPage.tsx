@@ -8,7 +8,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useWaterAnalysis } from '../hooks/useWaterQualityMeasurements';
 import { useSamplingPoints } from '../hooks/useSamplingPoints';
 import { ROUTES } from '../utils/routes';
-import type { AnalysisStatus, SampleCondition } from '../types/waterQuality';
+import type { AnalysisStatus, SampleCondition, ComplianceStatus } from '../types/waterQuality';
 import { PARAMETER_METADATA } from '../types/waterQuality';
 import './WaterAnalysisViewPage.css';
 
@@ -60,9 +60,10 @@ const WaterAnalysisViewPage: React.FC = () => {
 
   const getComplianceStatusLabel = (status?: ComplianceStatus): string => {
     const labels: Record<ComplianceStatus, string> = {
-      compliant: 'Соответствует',
-      exceeded: 'Превышение',
+      optimal: 'Оптимально',
+      normal: 'Норма',
       warning: 'Предупреждение',
+      exceeded: 'Превышение',
       unknown: 'Не проверено',
     };
     return status ? labels[status] : 'Не проверено';
