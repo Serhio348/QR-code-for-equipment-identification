@@ -16,7 +16,9 @@ import type {
 import { PARAMETER_METADATA, getAllParameters } from '../types/waterQuality';
 import { useWaterAnalysisManagement } from '../hooks/useWaterQualityMeasurements';
 import { useSamplingPoints } from '../hooks/useSamplingPoints';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 import { createAnalysisResults } from '../services/api/waterQuality';
+import { uploadAnalysisPDF } from '../services/api/waterQualityStorage';
 import './WaterAnalysisForm.css';
 
 interface WaterAnalysisFormProps {
@@ -30,6 +32,7 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
   const isEditMode = !!analysisId;
   const { create, update, error } = useWaterAnalysisManagement();
   const { samplingPoints, loading: loadingPoints } = useSamplingPoints();
+  const currentUser = useCurrentUser();
 
   // Основные поля анализа
   const [samplingPointId, setSamplingPointId] = useState<string>('');
@@ -37,15 +40,13 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
   const [sampleDate, setSampleDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [analysisDate, setAnalysisDate] = useState<string>('');
   const [receivedDate, setReceivedDate] = useState<string>('');
-  const [sampledBy, setSampledBy] = useState<string>('');
-  const [analyzedBy, setAnalyzedBy] = useState<string>('');
-  const [responsiblePerson, setResponsiblePerson] = useState<string>('');
   const [status, setStatus] = useState<AnalysisStatus>('in_progress');
   const [notes, setNotes] = useState<string>('');
   const [sampleCondition, setSampleCondition] = useState<SampleCondition>('normal');
   const [externalLab, setExternalLab] = useState<boolean>(false);
   const [externalLabName, setExternalLabName] = useState<string>('');
-  const [certificateNumber, setCertificateNumber] = useState<string>('');
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [uploadingPdf, setUploadingPdf] = useState<boolean>(false);
 
   // Результаты измерений
   const [results, setResults] = useState<Record<WaterQualityParameter, { value: string; method?: string }>>({
@@ -94,21 +95,21 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
 
     try {
       // Подготовка данных анализа
+      // Автоматически заполняем поля пользователя из аутентификации
       const analysisInput: WaterAnalysisInput = {
         samplingPointId: samplingPointId.trim(),
         equipmentId: equipmentId.trim() || undefined,
         sampleDate: `${sampleDate}T00:00:00Z`,
         analysisDate: analysisDate ? `${analysisDate}T00:00:00Z` : undefined,
         receivedDate: receivedDate ? `${receivedDate}T00:00:00Z` : undefined,
-        sampledBy: sampledBy.trim() || undefined,
-        analyzedBy: analyzedBy.trim() || undefined,
-        responsiblePerson: responsiblePerson.trim() || undefined,
+        sampledBy: currentUser,
+        analyzedBy: currentUser,
+        responsiblePerson: currentUser,
         status,
         notes: notes.trim() || undefined,
         sampleCondition,
         externalLab,
         externalLabName: externalLabName.trim() || undefined,
-        certificateNumber: certificateNumber.trim() || undefined,
       };
 
       // Создание или обновление анализа
@@ -148,6 +149,26 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
       // Сохранение результатов измерений
       if (resultsInput.length > 0) {
         await createAnalysisResults(resultsInput);
+      }
+
+      // Загрузка PDF файла, если он был выбран
+      const attachmentUrls: string[] = [];
+      if (pdfFile && externalLab) {
+        try {
+          setUploadingPdf(true);
+          const pdfUrl = await uploadAnalysisPDF(pdfFile, createdAnalysis.id);
+          attachmentUrls.push(pdfUrl);
+          
+          // Обновляем анализ с URL файла
+          await update(createdAnalysis.id, {
+            attachmentUrls,
+          });
+        } catch (err: any) {
+          console.error('[WaterAnalysisForm] Ошибка загрузки PDF:', err);
+          toast.warning('Анализ сохранен, но не удалось загрузить PDF файл: ' + (err.message || 'Неизвестная ошибка'));
+        } finally {
+          setUploadingPdf(false);
+        }
       }
 
       toast.success(`Анализ успешно ${isEditMode ? 'обновлен' : 'создан'}!`);
@@ -265,38 +286,6 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
 
           <div className="form-row">
             <div className="form-group">
-              <label>Отобрал пробу</label>
-              <input
-                type="text"
-                value={sampledBy}
-                onChange={(e) => setSampledBy(e.target.value)}
-                placeholder="ФИО или должность"
-              />
-            </div>
-
-            <div className="form-group">
-              <label>Провел анализ</label>
-              <input
-                type="text"
-                value={analyzedBy}
-                onChange={(e) => setAnalyzedBy(e.target.value)}
-                placeholder="ФИО или должность"
-              />
-            </div>
-
-            <div className="form-group">
-              <label>Ответственное лицо</label>
-              <input
-                type="text"
-                value={responsiblePerson}
-                onChange={(e) => setResponsiblePerson(e.target.value)}
-                placeholder="ФИО или должность"
-              />
-            </div>
-          </div>
-
-          <div className="form-row">
-            <div className="form-group">
               <label>Статус *</label>
               <select value={status} onChange={(e) => setStatus(e.target.value as AnalysisStatus)} required>
                 <option value="in_progress">В работе</option>
@@ -349,13 +338,38 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
               </div>
 
               <div className="form-group">
-                <label>Номер сертификата</label>
+                <label>PDF файл анализа</label>
                 <input
-                  type="text"
-                  value={certificateNumber}
-                  onChange={(e) => setCertificateNumber(e.target.value)}
-                  placeholder="Номер сертификата или протокола"
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      if (file.type !== 'application/pdf') {
+                        toast.error('Пожалуйста, выберите PDF файл');
+                        e.target.value = '';
+                        return;
+                      }
+                      if (file.size > 10 * 1024 * 1024) {
+                        toast.error('Размер файла не должен превышать 10 МБ');
+                        e.target.value = '';
+                        return;
+                      }
+                      setPdfFile(file);
+                    } else {
+                      setPdfFile(null);
+                    }
+                  }}
+                  disabled={uploadingPdf || saving}
                 />
+                {pdfFile && (
+                  <small className="file-info">
+                    Выбран файл: {pdfFile.name} ({(pdfFile.size / 1024).toFixed(2)} КБ)
+                  </small>
+                )}
+                {uploadingPdf && (
+                  <small className="uploading-info">Загрузка PDF файла...</small>
+                )}
               </div>
             </>
           )}
@@ -445,9 +459,11 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
           <button
             type="submit"
             className="submit-button"
-            disabled={saving}
+            disabled={saving || uploadingPdf}
           >
-            {saving ? 'Сохранение...' : (isEditMode ? 'Сохранить изменения' : 'Создать анализ')}
+            {saving || uploadingPdf
+              ? (uploadingPdf ? 'Загрузка файла...' : 'Сохранение...')
+              : (isEditMode ? 'Сохранить изменения' : 'Создать анализ')}
           </button>
         </div>
       </form>
