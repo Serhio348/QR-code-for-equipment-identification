@@ -14,11 +14,12 @@ import type {
   SampleCondition,
 } from '../types/waterQuality';
 import { PARAMETER_METADATA, getAllParameters } from '../types/waterQuality';
-import { useWaterAnalysisManagement } from '../hooks/useWaterQualityMeasurements';
+import { useWaterAnalysisManagement, useWaterAnalysis } from '../hooks/useWaterQualityMeasurements';
 import { useSamplingPoints } from '../hooks/useSamplingPoints';
 import { useCurrentUser } from '../hooks/useCurrentUser';
-import { createAnalysisResults } from '../services/api/waterQuality';
+import { createAnalysisResults, updateAnalysisResult } from '../services/api/waterQuality';
 import { uploadAnalysisPDF } from '../services/api/waterQualityStorage';
+import { ROUTES } from '../utils/routes';
 import './WaterAnalysisForm.css';
 
 interface WaterAnalysisFormProps {
@@ -59,14 +60,59 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
   });
 
   const [saving, setSaving] = useState<boolean>(false);
+  const [loadingAnalysis, setLoadingAnalysis] = useState<boolean>(false);
 
   // Загрузка данных для редактирования
+  const { analysis: existingAnalysis, loading: loadingExistingAnalysis } = useWaterAnalysis(
+    isEditMode ? analysisId || null : null
+  );
+
   useEffect(() => {
-    if (isEditMode && analysisId) {
-      // TODO: Загрузить данные анализа для редактирования
-      // Пока оставляем пустым, добавим позже
+    if (isEditMode && existingAnalysis) {
+      setLoadingAnalysis(true);
+      try {
+        // Заполняем основные поля
+        setSamplingPointId(existingAnalysis.samplingPointId);
+        setEquipmentId(existingAnalysis.equipmentId || '');
+        setSampleDate(existingAnalysis.sampleDate.split('T')[0]);
+        setAnalysisDate(existingAnalysis.analysisDate ? existingAnalysis.analysisDate.split('T')[0] : '');
+        setReceivedDate(existingAnalysis.receivedDate ? existingAnalysis.receivedDate.split('T')[0] : '');
+        setStatus(existingAnalysis.status);
+        setNotes(existingAnalysis.notes || '');
+        setSampleCondition(existingAnalysis.sampleCondition || 'normal');
+        setExternalLab(existingAnalysis.externalLab || false);
+        setExternalLabName(existingAnalysis.externalLabName || '');
+
+        // Заполняем результаты измерений
+        const loadedResults: Record<WaterQualityParameter, { value: string; method?: string }> = {
+          iron: { value: '' },
+          alkalinity: { value: '' },
+          hardness: { value: '' },
+          oxidizability: { value: '' },
+          ph: { value: '' },
+          temperature: { value: '' },
+        };
+
+        if (existingAnalysis.results && existingAnalysis.results.length > 0) {
+          existingAnalysis.results.forEach((result) => {
+            if (loadedResults[result.parameterName]) {
+              loadedResults[result.parameterName] = {
+                value: result.value.toString(),
+                method: result.method || '',
+              };
+            }
+          });
+        }
+
+        setResults(loadedResults);
+      } catch (err: any) {
+        console.error('[WaterAnalysisForm] Ошибка загрузки данных:', err);
+        toast.error('Не удалось загрузить данные анализа');
+      } finally {
+        setLoadingAnalysis(false);
+      }
     }
-  }, [isEditMode, analysisId]);
+  }, [isEditMode, existingAnalysis]);
 
   const handleResultChange = (parameter: WaterQualityParameter, field: 'value' | 'method', value: string) => {
     setResults((prev) => ({
@@ -124,44 +170,64 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
         throw new Error('Не удалось сохранить анализ');
       }
 
-      // Подготовка результатов измерений
-      const resultsInput: AnalysisResultInput[] = [];
+      // Подготовка и сохранение результатов измерений
       const allParams = getAllParameters();
+      const existingResultsMap = new Map<string, AnalysisResult>();
+      
+      if (isEditMode && existingAnalysis?.results) {
+        // Создаем карту существующих результатов для быстрого поиска
+        existingAnalysis.results.forEach((result) => {
+          existingResultsMap.set(result.parameterName, result);
+        });
+      }
 
+      // Обрабатываем каждый параметр
       for (const param of allParams) {
         const resultValue = results[param].value.trim();
         if (resultValue) {
           const numValue = parseFloat(resultValue);
           if (!isNaN(numValue)) {
             const metadata = PARAMETER_METADATA[param];
-            resultsInput.push({
-              analysisId: createdAnalysis.id,
-              parameterName: param,
-              parameterLabel: metadata.label,
-              value: numValue,
-              unit: metadata.unit,
-              method: results[param].method?.trim() || undefined,
-            });
+            const existingResult = existingResultsMap.get(param);
+
+            if (isEditMode && existingResult) {
+              // Обновляем существующий результат
+              await updateAnalysisResult(existingResult.id, {
+                parameterLabel: metadata.label,
+                value: numValue,
+                unit: metadata.unit,
+                method: results[param].method?.trim() || undefined,
+              });
+            } else {
+              // Создаем новый результат
+              const newResult: AnalysisResultInput = {
+                analysisId: createdAnalysis.id,
+                parameterName: param,
+                parameterLabel: metadata.label,
+                value: numValue,
+                unit: metadata.unit,
+                method: results[param].method?.trim() || undefined,
+              };
+              await createAnalysisResults([newResult]);
+            }
           }
         }
       }
 
-      // Сохранение результатов измерений
-      if (resultsInput.length > 0) {
-        await createAnalysisResults(resultsInput);
-      }
-
       // Загрузка PDF файла, если он был выбран
-      const attachmentUrls: string[] = [];
       if (pdfFile && externalLab) {
         try {
           setUploadingPdf(true);
           const pdfUrl = await uploadAnalysisPDF(pdfFile, createdAnalysis.id);
-          attachmentUrls.push(pdfUrl);
           
           // Обновляем анализ с URL файла
+          // Сохраняем существующие URL, если они есть
+          const existingUrls = isEditMode && existingAnalysis?.attachmentUrls 
+            ? existingAnalysis.attachmentUrls 
+            : [];
+          
           await update(createdAnalysis.id, {
-            attachmentUrls,
+            attachmentUrls: [...existingUrls, pdfUrl],
           });
         } catch (err: any) {
           console.error('[WaterAnalysisForm] Ошибка загрузки PDF:', err);
@@ -197,10 +263,14 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
   // Получаем выбранный пункт отбора проб для отображения equipment_id
   const selectedPoint = samplingPoints.find((p) => p.id === samplingPointId);
 
-  if (loadingPoints) {
+  if (loadingPoints || loadingExistingAnalysis || loadingAnalysis) {
     return (
       <div className="water-analysis-form">
-        <div className="loading-message">Загрузка пунктов отбора проб...</div>
+        <div className="loading-message">
+          {loadingExistingAnalysis || loadingAnalysis 
+            ? 'Загрузка данных анализа...' 
+            : 'Загрузка пунктов отбора проб...'}
+        </div>
       </div>
     );
   }
