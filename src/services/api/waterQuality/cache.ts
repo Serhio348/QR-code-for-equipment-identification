@@ -105,8 +105,15 @@ export function clearWaterQualityCache(pattern?: string): void {
         cache.delete(key);
       }
     }
+    // Также очищаем активные запросы с таким паттерном
+    for (const key of activeRequests.keys()) {
+      if (key.startsWith(pattern)) {
+        activeRequests.delete(key);
+      }
+    }
   } else {
     cache.clear();
+    activeRequests.clear();
   }
 }
 

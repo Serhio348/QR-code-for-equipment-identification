@@ -85,6 +85,13 @@ const WaterQualityJournalPage: React.FC = () => {
               🔔 Оповещения
             </button>
             <button
+              className="norms-button"
+              onClick={() => navigate(ROUTES.WATER_QUALITY_NORMS)}
+              type="button"
+            >
+              📋 Нормативы
+            </button>
+            <button
               className="create-analysis-button"
               onClick={handleCreateNew}
               type="button"
