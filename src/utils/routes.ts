@@ -40,6 +40,9 @@ export const ROUTES = {
   /** Создание нового анализа качества воды */
   WATER_QUALITY_ANALYSIS_NEW: '/water-quality/analysis/new',
   
+  /** Просмотр анализа качества воды по ID */
+  WATER_QUALITY_ANALYSIS_VIEW: (id: string) => `/water-quality/analysis/${id}`,
+  
   /** Редактирование анализа качества воды по ID */
   WATER_QUALITY_ANALYSIS_EDIT: (id: string) => `/water-quality/analysis/${id}/edit`,
   

@@ -41,7 +41,7 @@ const WaterQualityJournalPage: React.FC = () => {
   };
 
   const handleViewAnalysis = (id: string) => {
-    navigate(ROUTES.WATER_QUALITY_ANALYSIS_EDIT(id));
+    navigate(ROUTES.WATER_QUALITY_ANALYSIS_VIEW(id));
   };
 
   const formatDate = (dateString: string) => {
