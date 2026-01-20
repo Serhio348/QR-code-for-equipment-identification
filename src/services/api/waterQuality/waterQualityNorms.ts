@@ -83,8 +83,14 @@ export async function getAllWaterQualityNorms(
         .eq('is_active', true)
         .order('parameter_name', { ascending: true });
 
-      if (filters?.samplingPointId) {
-        query = query.eq('sampling_point_id', filters.samplingPointId);
+      if (filters?.samplingPointId !== undefined) {
+        if (filters.samplingPointId === '' || filters.samplingPointId === null) {
+          // Фильтр для общих нормативов (sampling_point_id IS NULL)
+          query = query.is('sampling_point_id', null);
+        } else {
+          // Фильтр для конкретной точки отбора проб
+          query = query.eq('sampling_point_id', filters.samplingPointId);
+        }
       }
       if (filters?.equipmentId) {
         query = query.eq('equipment_id', filters.equipmentId);

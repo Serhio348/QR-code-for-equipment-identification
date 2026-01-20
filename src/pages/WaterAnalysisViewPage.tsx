@@ -3,9 +3,10 @@
  * Отображает полную информацию об анализе, результаты измерений и прикрепленные файлы
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useWaterAnalysis } from '../hooks/useWaterQualityMeasurements';
+import { toast } from 'react-toastify';
+import { useWaterAnalysis, useWaterAnalysisManagement } from '../hooks/useWaterQualityMeasurements';
 import { useSamplingPoints } from '../hooks/useSamplingPoints';
 import { ROUTES } from '../utils/routes';
 import type { AnalysisStatus, SampleCondition, ComplianceStatus } from '../types/waterQuality';
@@ -17,6 +18,8 @@ const WaterAnalysisViewPage: React.FC = () => {
   const navigate = useNavigate();
   const { analysis, loading, error } = useWaterAnalysis(id || null);
   const { samplingPoints } = useSamplingPoints();
+  const { remove, loading: deleting } = useWaterAnalysisManagement();
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return '-';
@@ -88,6 +91,40 @@ const WaterAnalysisViewPage: React.FC = () => {
     window.open(url, '_blank');
   };
 
+  const handleDelete = async () => {
+    if (!id) {
+      return;
+    }
+
+    const samplingPointName = samplingPoints.find((p) => p.id === analysis?.samplingPointId)?.name || 'анализа';
+    const sampleDate = analysis?.sampleDate 
+      ? new Date(analysis.sampleDate).toLocaleDateString('ru-RU')
+      : '';
+
+    const confirmMessage = `Вы уверены, что хотите удалить анализ${sampleDate ? ` от ${sampleDate}` : ''}${samplingPointName ? ` для точки "${samplingPointName}"` : ''}?\n\nЭто действие нельзя отменить.`;
+
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    try {
+      setIsDeleting(true);
+      const success = await remove(id);
+      
+      if (success) {
+        toast.success('Анализ успешно удален');
+        navigate(ROUTES.WATER_QUALITY_JOURNAL);
+      } else {
+        toast.error('Не удалось удалить анализ');
+      }
+    } catch (err: any) {
+      console.error('[WaterAnalysisViewPage] Ошибка удаления:', err);
+      toast.error(err.message || 'Не удалось удалить анализ');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="water-analysis-view">
@@ -122,6 +159,14 @@ const WaterAnalysisViewPage: React.FC = () => {
           <button className="edit-button" onClick={handleEdit} type="button">
             Редактировать
           </button>
+          <button 
+            className="delete-button" 
+            onClick={handleDelete} 
+            type="button"
+            disabled={isDeleting || deleting}
+          >
+            {isDeleting || deleting ? 'Удаление...' : 'Удалить'}
+          </button>
         </div>
       </div>
 
@@ -141,14 +186,6 @@ const WaterAnalysisViewPage: React.FC = () => {
             <div className="info-item">
               <label>Дата отбора пробы:</label>
               <span>{formatDate(analysis.sampleDate)}</span>
-            </div>
-            <div className="info-item">
-              <label>Дата анализа:</label>
-              <span>{formatDate(analysis.analysisDate)}</span>
-            </div>
-            <div className="info-item">
-              <label>Дата получения:</label>
-              <span>{formatDate(analysis.receivedDate)}</span>
             </div>
             <div className="info-item">
               <label>Статус:</label>

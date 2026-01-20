@@ -264,6 +264,36 @@ form {
   font-size: 16px;
 }
 
+/* Контейнер для селекта с кнопкой */
+.form-group-with-action {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.form-group-with-action select {
+  flex: 1;
+}
+
+.create-sampling-point-button {
+  padding: 8px 16px;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.create-sampling-point-button:hover {
+  background: #5568d3;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+}
+
 /* Адаптивность */
 @media (max-width: 768px) {
   .water-quality-norm-form {

@@ -3,7 +3,7 @@
  * Поддерживает режимы создания и редактирования
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import type {
@@ -41,8 +41,6 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
   const [samplingPointId, setSamplingPointId] = useState<string>('');
   const [equipmentId, setEquipmentId] = useState<string>('');
   const [sampleDate, setSampleDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [analysisDate, setAnalysisDate] = useState<string>('');
-  const [receivedDate, setReceivedDate] = useState<string>('');
   const [status, setStatus] = useState<AnalysisStatus>('in_progress');
   const [notes, setNotes] = useState<string>('');
   const [sampleCondition, setSampleCondition] = useState<SampleCondition>('normal');
@@ -79,8 +77,6 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
         setSamplingPointId(existingAnalysis.samplingPointId);
         setEquipmentId(existingAnalysis.equipmentId || '');
         setSampleDate(existingAnalysis.sampleDate.split('T')[0]);
-        setAnalysisDate(existingAnalysis.analysisDate ? existingAnalysis.analysisDate.split('T')[0] : '');
-        setReceivedDate(existingAnalysis.receivedDate ? existingAnalysis.receivedDate.split('T')[0] : '');
         setStatus(existingAnalysis.status);
         setNotes(existingAnalysis.notes || '');
         setSampleCondition(existingAnalysis.sampleCondition || 'normal');
@@ -152,6 +148,11 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Защита от множественных отправок
+    if (saving || uploadingPdf) {
+      return;
+    }
+
     if (!samplingPointId.trim()) {
       toast.error('Выберите пункт отбора проб');
       return;
@@ -171,8 +172,6 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
         samplingPointId: samplingPointId.trim(),
         equipmentId: equipmentId.trim() || undefined,
         sampleDate: `${sampleDate}T00:00:00Z`,
-        analysisDate: analysisDate ? `${analysisDate}T00:00:00Z` : undefined,
-        receivedDate: receivedDate ? `${receivedDate}T00:00:00Z` : undefined,
         sampledBy: currentUser,
         analyzedBy: currentUser,
         responsiblePerson: currentUser,
@@ -310,6 +309,7 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
       toast.error(err.message || 'Не удалось сохранить анализ');
     } finally {
       setSaving(false);
+      isSubmittingRef.current = false;
     }
   };
 
@@ -385,34 +385,14 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
             )}
           </div>
 
-          <div className="form-row">
-            <div className="form-group">
-              <label>Дата отбора пробы *</label>
-              <input
-                type="date"
-                value={sampleDate}
-                onChange={(e) => setSampleDate(e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="form-group">
-              <label>Дата анализа</label>
-              <input
-                type="date"
-                value={analysisDate}
-                onChange={(e) => setAnalysisDate(e.target.value)}
-              />
-            </div>
-
-            <div className="form-group">
-              <label>Дата получения</label>
-              <input
-                type="date"
-                value={receivedDate}
-                onChange={(e) => setReceivedDate(e.target.value)}
-              />
-            </div>
+          <div className="form-group">
+            <label>Дата отбора пробы *</label>
+            <input
+              type="date"
+              value={sampleDate}
+              onChange={(e) => setSampleDate(e.target.value)}
+              required
+            />
           </div>
 
           <div className="form-row">
