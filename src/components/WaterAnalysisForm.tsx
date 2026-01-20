@@ -3,7 +3,7 @@
  * Поддерживает режимы создания и редактирования
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import type {
@@ -309,7 +309,6 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
       toast.error(err.message || 'Не удалось сохранить анализ');
     } finally {
       setSaving(false);
-      isSubmittingRef.current = false;
     }
   };
 
