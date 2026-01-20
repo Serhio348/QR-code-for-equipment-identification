@@ -337,15 +337,12 @@ export async function updateWaterQualityNorm(id: string, input: WaterQualityNorm
       throw new Error('Порог предупреждения: min не может быть больше max');
     }
 
-    const { data: authData } = await supabase.auth.getUser();
+    const updateData: any = {};
 
-    const updateData: any = {
-      updated_at: new Date().toISOString(),
-    };
-
-    if (authData?.user?.email) {
-      updateData.updated_by = authData.user.email;
-    }
+    // Примечание: 
+    // - updated_at обновляется автоматически триггером update_water_quality_norms_updated_at
+    // - колонка updated_by отсутствует в таблице water_quality_norms
+    // - используется только created_by для отслеживания создателя
 
     if (input.samplingPointId !== undefined) updateData.sampling_point_id = normalizeOptionalId(input.samplingPointId);
     if (input.equipmentId !== undefined) updateData.equipment_id = normalizeOptionalId(input.equipmentId);
@@ -372,8 +369,8 @@ export async function updateWaterQualityNorm(id: string, input: WaterQualityNorm
     }
     if (input.isActive !== undefined) updateData.is_active = input.isActive;
 
-    const userFields = Object.keys(updateData).filter(k => k !== 'updated_at' && k !== 'updated_by');
-    if (userFields.length === 0) {
+    // Проверяем, что есть хотя бы одно поле для обновления
+    if (Object.keys(updateData).length === 0) {
       throw new Error('Не указаны поля для обновления');
     }
 
@@ -382,7 +379,7 @@ export async function updateWaterQualityNorm(id: string, input: WaterQualityNorm
       .update(updateData)
       .eq('id', id.trim())
       .select('*')
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.error('[waterQualityNormsApi] Ошибка updateWaterQualityNorm:', {
@@ -393,7 +390,7 @@ export async function updateWaterQualityNorm(id: string, input: WaterQualityNorm
           hint: error.hint,
         },
         id: id.trim(),
-        updateFields: userFields,
+        updateFields: Object.keys(updateData),
       });
 
       if (error.code === '23505') {
@@ -403,7 +400,9 @@ export async function updateWaterQualityNorm(id: string, input: WaterQualityNorm
       throw new Error(error.message || 'Ошибка при обновлении норматива');
     }
 
-    if (!data) throw new Error('Норматив не найден');
+    if (!data) {
+      throw new Error('Норматив не найден или нет прав для просмотра');
+    }
 
     clearWaterQualityCache('water_quality_norms');
     clearWaterQualityCache(`water_quality_norm_${id.trim()}`);
@@ -445,7 +444,11 @@ export async function deleteWaterQualityNorm(id: string): Promise<void> {
   try {
     validateId(id, 'ID норматива');
 
-    const { error } = await supabase.from('water_quality_norms').delete().eq('id', id.trim());
+    const { data, error } = await supabase
+      .from('water_quality_norms')
+      .delete()
+      .eq('id', id.trim())
+      .select();
 
     if (error) {
       console.error('[waterQualityNormsApi] Ошибка deleteWaterQualityNorm:', {
@@ -457,9 +460,22 @@ export async function deleteWaterQualityNorm(id: string): Promise<void> {
         },
         id: id.trim(),
       });
+      
+      // Специальная обработка ошибки RLS (Row Level Security)
+      if (error.code === '42501' || error.message?.includes('permission') || error.message?.includes('policy')) {
+        throw new Error('Недостаточно прав для удаления норматива');
+      }
+      
       throw new Error(error.message || 'Ошибка при удалении норматива');
     }
 
+    // Проверяем, что запись действительно была удалена
+    if (!data || data.length === 0) {
+      console.warn('[waterQualityNormsApi] Норматив не найден или уже удален:', id.trim());
+      // Не считаем это ошибкой - возможно, норматив уже был удален
+    }
+
+    // Очищаем весь кэш нормативов (включая все варианты с фильтрами)
     clearWaterQualityCache('water_quality_norms');
     clearWaterQualityCache(`water_quality_norm_${id.trim()}`);
   } catch (error: any) {

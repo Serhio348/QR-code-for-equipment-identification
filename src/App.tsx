@@ -17,6 +17,9 @@ import WorkshopSettingsPage from './pages/WorkshopSettingsPage';
 import WaterAnalysisFormPage from './pages/WaterAnalysisFormPage';
 import WaterAnalysisViewPage from './pages/WaterAnalysisViewPage';
 import WaterQualityAlertsPage from './pages/WaterQualityAlertsPage';
+import WaterQualityNormsPage from './pages/WaterQualityNormsPage';
+import WaterQualityNormFormPage from './pages/WaterQualityNormFormPage';
+import WaterQualityNormViewPage from './pages/WaterQualityNormViewPage';
 import NotFoundPage from './pages/NotFoundPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import AppAccessGuard from './components/AppAccessGuard';
@@ -223,6 +226,54 @@ const App: React.FC = () => {
               <ProtectedRoute>
                 <AppAccessGuard appId="water">
                   <WaterQualityAlertsPage />
+                </AppAccessGuard>
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Страница управления нормативами качества воды */}
+          <Route 
+            path={ROUTES.WATER_QUALITY_NORMS} 
+            element={
+              <ProtectedRoute>
+                <AppAccessGuard appId="water">
+                  <WaterQualityNormsPage />
+                </AppAccessGuard>
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Просмотр норматива качества воды */}
+          <Route 
+            path="/water-quality/norm/:id" 
+            element={
+              <ProtectedRoute>
+                <AppAccessGuard appId="water">
+                  <WaterQualityNormViewPage />
+                </AppAccessGuard>
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Создание нового норматива качества воды */}
+          <Route 
+            path="/water-quality/norm/new" 
+            element={
+              <ProtectedRoute>
+                <AppAccessGuard appId="water">
+                  <WaterQualityNormFormPage />
+                </AppAccessGuard>
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Редактирование норматива качества воды */}
+          <Route 
+            path="/water-quality/norm/:id/edit" 
+            element={
+              <ProtectedRoute>
+                <AppAccessGuard appId="water">
+                  <WaterQualityNormFormPage />
                 </AppAccessGuard>
               </ProtectedRoute>
             } 

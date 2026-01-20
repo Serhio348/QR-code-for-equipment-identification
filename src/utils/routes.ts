@@ -40,6 +40,18 @@ export const ROUTES = {
   /** Страница оповещений о превышении нормативов */
   WATER_QUALITY_ALERTS: '/water-quality/alerts',
   
+  /** Страница управления нормативами качества воды */
+  WATER_QUALITY_NORMS: '/water-quality/norms',
+  
+  /** Создание нового норматива качества воды */
+  WATER_QUALITY_NORM_NEW: '/water-quality/norm/new',
+  
+  /** Просмотр норматива качества воды по ID */
+  WATER_QUALITY_NORM_VIEW: (id: string) => `/water-quality/norm/${id}`,
+  
+  /** Редактирование норматива качества воды по ID */
+  WATER_QUALITY_NORM_EDIT: (id: string) => `/water-quality/norm/${id}/edit`,
+  
   /** Создание нового анализа качества воды */
   WATER_QUALITY_ANALYSIS_NEW: '/water-quality/analysis/new',
   

@@ -50,6 +50,24 @@
   box-shadow: 0 4px 8px rgba(255, 152, 0, 0.3);
 }
 
+.norms-button {
+  padding: 12px 24px;
+  background: #28a745;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.norms-button:hover {
+  background: #218838;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(40, 167, 69, 0.3);
+}
+
 .create-analysis-button {
   padding: 12px 24px;
   background: #667eea;
@@ -279,6 +297,7 @@
   }
 
   .alerts-button,
+  .norms-button,
   .create-analysis-button {
     width: 100%;
   }
