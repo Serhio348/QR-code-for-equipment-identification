@@ -153,10 +153,19 @@ const WaterQualityAlertsPage: React.FC = () => {
     setCurrentPage(0);
   };
 
+  const handleBack = () => {
+    navigate(ROUTES.WATER_QUALITY_JOURNAL);
+  };
+
   return (
     <div className="water-quality-alerts">
       <div className="alerts-header">
-        <h2 className="alerts-title">Оповещения о превышении нормативов</h2>
+        <div className="alerts-header-top">
+          <button className="back-button" onClick={handleBack} type="button">
+            ← Назад к журналу
+          </button>
+          <h2 className="alerts-title">Оповещения о превышении нормативов</h2>
+        </div>
         <div className="alerts-stats">
           Всего: {total} | Активных: {alerts.filter((a) => a.status === 'active').length}
         </div>
@@ -300,10 +309,10 @@ const WaterQualityAlertsPage: React.FC = () => {
                           </span>
                         </td>
                         <td className="value-cell">
-                          {alert.actualValue} {alert.unit}
+                          {alert.value} {alert.unit}
                         </td>
                         <td className="norm-cell">
-                          {alert.normValue ? `${alert.normValue} ${alert.unit}` : '-'}
+                          {alert.thresholdValue ? `${alert.thresholdValue} ${alert.unit}` : '-'}
                         </td>
                         <td className="deviation-cell">
                           {alert.deviationPercent !== null && alert.deviationPercent !== undefined

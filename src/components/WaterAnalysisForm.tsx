@@ -19,6 +19,7 @@ import { useWaterAnalysisManagement, useWaterAnalysis } from '../hooks/useWaterQ
 import { useSamplingPoints } from '../hooks/useSamplingPoints';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { createAnalysisResults, updateAnalysisResult } from '../services/api/waterQuality';
+import { checkResultCompliance } from '../services/api/waterQuality';
 import { uploadAnalysisPDF } from '../services/api/waterQualityStorage';
 import { ROUTES } from '../utils/routes';
 import './WaterAnalysisForm.css';
@@ -182,7 +183,8 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
         });
       }
 
-      // Обрабатываем каждый параметр
+      // Обрабатываем каждый параметр и проверяем соответствие нормам
+      const savedResultIds: string[] = [];
       for (const param of allParams) {
         const resultValue = results[param].value.trim();
         if (resultValue) {
@@ -191,14 +193,16 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
             const metadata = PARAMETER_METADATA[param];
             const existingResult = existingResultsMap.get(param);
 
+            let savedResultId: string;
             if (isEditMode && existingResult) {
               // Обновляем существующий результат
-              await updateAnalysisResult(existingResult.id, {
+              const updatedResult = await updateAnalysisResult(existingResult.id, {
                 parameterLabel: metadata.label,
                 value: numValue,
                 unit: metadata.unit,
                 method: results[param].method?.trim() || undefined,
               });
+              savedResultId = updatedResult.id;
             } else {
               // Создаем новый результат
               const newResult: AnalysisResultInput = {
@@ -209,7 +213,29 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
                 unit: metadata.unit,
                 method: results[param].method?.trim() || undefined,
               };
-              await createAnalysisResults([newResult]);
+              const createdResults = await createAnalysisResults([newResult]);
+              savedResultId = createdResults[0]?.id;
+            }
+
+            if (savedResultId) {
+              savedResultIds.push(savedResultId);
+              
+              // Проверяем соответствие нормам (триггеры БД тоже это делают, но для немедленной обратной связи)
+              try {
+                const compliance = await checkResultCompliance(savedResultId);
+                if (compliance.status === 'exceeded') {
+                  toast.warning(
+                    `Превышение норматива: ${metadata.label} (${numValue} ${metadata.unit})`
+                  );
+                } else if (compliance.status === 'warning') {
+                  toast.info(
+                    `Предупреждение: ${metadata.label} близко к пределу нормы`
+                  );
+                }
+              } catch (complianceError: any) {
+                // Не критично, если проверка не удалась - триггеры БД все равно проверят
+                console.warn('[WaterAnalysisForm] Предупреждение при проверке соответствия:', complianceError);
+              }
             }
           }
         }
