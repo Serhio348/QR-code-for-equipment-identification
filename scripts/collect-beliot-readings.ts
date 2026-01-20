@@ -724,7 +724,7 @@ async function syncDeviceReadingsForPeriod(
           skipped++;
           continue;
         }
-        
+
         // Создаем дату на начало часа
         const readingDate = new Date(timestamp * 1000);
         readingDate.setMinutes(0, 0, 0);
@@ -745,7 +745,7 @@ async function syncDeviceReadingsForPeriod(
         if (error) {
           errors++;
           console.error(`   ❌ Ошибка сохранения показания за ${readingDate.toISOString()}:`, error.message);
-        } else {
+          } else {
           success++;
         }
       } catch (error: any) {
