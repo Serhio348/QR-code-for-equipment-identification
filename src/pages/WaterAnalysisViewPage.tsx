@@ -58,6 +58,21 @@ const WaterAnalysisViewPage: React.FC = () => {
     return condition ? labels[condition] : '-';
   };
 
+  const getComplianceStatusLabel = (status?: ComplianceStatus): string => {
+    const labels: Record<ComplianceStatus, string> = {
+      compliant: 'Соответствует',
+      exceeded: 'Превышение',
+      warning: 'Предупреждение',
+      unknown: 'Не проверено',
+    };
+    return status ? labels[status] : 'Не проверено';
+  };
+
+  const getComplianceStatusClass = (status?: ComplianceStatus): string => {
+    if (!status) return 'compliance-unknown';
+    return `compliance-${status}`;
+  };
+
   const handleEdit = () => {
     if (id) {
       navigate(ROUTES.WATER_QUALITY_ANALYSIS_EDIT(id));
@@ -199,13 +214,15 @@ const WaterAnalysisViewPage: React.FC = () => {
                     <th>Значение</th>
                     <th>Единица измерения</th>
                     <th>Метод</th>
+                    <th>Соответствие норме</th>
                   </tr>
                 </thead>
                 <tbody>
                   {analysis.results.map((result) => {
                     const metadata = PARAMETER_METADATA[result.parameterName];
+                    const complianceStatus = result.complianceStatus || 'unknown';
                     return (
-                      <tr key={result.id}>
+                      <tr key={result.id} className={complianceStatus === 'exceeded' ? 'result-exceeded' : ''}>
                         <td>
                           <strong>{result.parameterLabel || metadata?.label || result.parameterName}</strong>
                           {metadata?.description && (
@@ -215,6 +232,17 @@ const WaterAnalysisViewPage: React.FC = () => {
                         <td className="value-cell">{result.value}</td>
                         <td>{result.unit}</td>
                         <td>{result.method || '-'}</td>
+                        <td>
+                          <span className={`compliance-badge ${getComplianceStatusClass(complianceStatus)}`}>
+                            {getComplianceStatusLabel(complianceStatus)}
+                          </span>
+                          {result.deviationPercent !== undefined && result.deviationPercent !== null && (
+                            <div className="deviation-info">
+                              {result.deviationPercent > 0 ? '+' : ''}
+                              {result.deviationPercent.toFixed(1)}%
+                            </div>
+                          )}
+                        </td>
                       </tr>
                     );
                   })}

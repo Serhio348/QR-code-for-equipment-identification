@@ -26,6 +26,30 @@
   font-weight: 600;
 }
 
+.journal-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.alerts-button {
+  padding: 12px 24px;
+  background: #ff9800;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.alerts-button:hover {
+  background: #f57c00;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(255, 152, 0, 0.3);
+}
+
 .create-analysis-button {
   padding: 12px 24px;
   background: #667eea;
@@ -249,6 +273,12 @@
     align-items: stretch;
   }
 
+  .journal-actions {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .alerts-button,
   .create-analysis-button {
     width: 100%;
   }

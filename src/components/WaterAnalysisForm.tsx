@@ -9,6 +9,7 @@ import { toast } from 'react-toastify';
 import type {
   WaterAnalysisInput,
   AnalysisResultInput,
+  AnalysisResult,
   WaterQualityParameter,
   AnalysisStatus,
   SampleCondition,
@@ -242,7 +243,8 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
       if (onSave) {
         onSave();
       } else {
-        navigate(-1); // Возврат назад
+        // Переходим на страницу просмотра созданного/обновленного анализа
+        navigate(ROUTES.WATER_QUALITY_ANALYSIS_VIEW(createdAnalysis.id));
       }
     } catch (err: any) {
       console.error('[WaterAnalysisForm] Ошибка сохранения:', err);

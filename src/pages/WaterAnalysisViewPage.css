@@ -209,6 +209,51 @@
   font-style: italic;
 }
 
+/* Статусы соответствия нормативам */
+.compliance-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.compliance-compliant {
+  background: #d4edda;
+  color: #155724;
+}
+
+.compliance-exceeded {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.compliance-warning {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.compliance-unknown {
+  background: #e2e3e5;
+  color: #383d41;
+}
+
+.deviation-info {
+  font-size: 11px;
+  color: #666;
+  margin-top: 4px;
+  font-weight: normal;
+}
+
+.result-exceeded {
+  background-color: #fff5f5 !important;
+}
+
+.result-exceeded:hover {
+  background-color: #ffe0e0 !important;
+}
+
 .empty-results {
   text-align: center;
   padding: 40px;

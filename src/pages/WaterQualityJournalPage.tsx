@@ -76,13 +76,22 @@ const WaterQualityJournalPage: React.FC = () => {
       <div className="journal-header">
         <div className="journal-header-top">
           <h2 className="journal-title">Журнал анализов качества воды</h2>
-          <button
-            className="create-analysis-button"
-            onClick={handleCreateNew}
-            type="button"
-          >
-            + Создать анализ
-          </button>
+          <div className="journal-actions">
+            <button
+              className="alerts-button"
+              onClick={() => navigate(ROUTES.WATER_QUALITY_ALERTS)}
+              type="button"
+            >
+              🔔 Оповещения
+            </button>
+            <button
+              className="create-analysis-button"
+              onClick={handleCreateNew}
+              type="button"
+            >
+              + Создать анализ
+            </button>
+          </div>
         </div>
 
         {/* Фильтры */}
