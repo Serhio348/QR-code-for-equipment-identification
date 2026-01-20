@@ -86,6 +86,24 @@
   box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
 }
 
+.sampling-points-button {
+  padding: 12px 24px;
+  background: #c250d6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.sampling-points-button:hover {
+  background: #7b1fa2;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(156, 39, 176, 0.3);
+}
+
 /* Фильтры */
 .journal-filters {
   display: grid;
@@ -298,6 +316,7 @@
 
   .alerts-button,
   .norms-button,
+  .sampling-points-button,
   .create-analysis-button {
     width: 100%;
   }

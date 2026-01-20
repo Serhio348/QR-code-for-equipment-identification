@@ -92,6 +92,13 @@ const WaterQualityJournalPage: React.FC = () => {
               📋 Нормативы
             </button>
             <button
+              className="sampling-points-button"
+              onClick={() => navigate(ROUTES.WATER_QUALITY_SAMPLING_POINTS)}
+              type="button"
+            >
+              📍 Точки отбора
+            </button>
+            <button
               className="create-analysis-button"
               onClick={handleCreateNew}
               type="button"

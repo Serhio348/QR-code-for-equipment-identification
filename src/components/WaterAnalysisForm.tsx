@@ -18,9 +18,9 @@ import { PARAMETER_METADATA, getAllParameters } from '../types/waterQuality';
 import { useWaterAnalysisManagement, useWaterAnalysis } from '../hooks/useWaterQualityMeasurements';
 import { useSamplingPoints } from '../hooks/useSamplingPoints';
 import { useCurrentUser } from '../hooks/useCurrentUser';
-import { createAnalysisResults, updateAnalysisResult } from '../services/api/waterQuality';
+import { createAnalysisResults, updateAnalysisResult, deleteAnalysisResult } from '../services/api/waterQuality';
 import { checkResultCompliance } from '../services/api/waterQuality';
-import { uploadAnalysisPDF } from '../services/api/waterQualityStorage';
+import { uploadAnalysisPDF, deleteAnalysisPDF } from '../services/api/waterQualityStorage';
 import { ROUTES } from '../utils/routes';
 import './WaterAnalysisForm.css';
 
@@ -50,6 +50,8 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
   const [externalLabName, setExternalLabName] = useState<string>('');
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [uploadingPdf, setUploadingPdf] = useState<boolean>(false);
+  const [attachmentUrls, setAttachmentUrls] = useState<string[]>([]);
+  const [removingAttachmentUrl, setRemovingAttachmentUrl] = useState<string | null>(null);
 
   // Результаты измерений
   const [results, setResults] = useState<Record<WaterQualityParameter, { value: string; method?: string }>>({
@@ -84,6 +86,7 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
         setSampleCondition(existingAnalysis.sampleCondition || 'normal');
         setExternalLab(existingAnalysis.externalLab || false);
         setExternalLabName(existingAnalysis.externalLabName || '');
+        setAttachmentUrls(existingAnalysis.attachmentUrls || []);
 
         // Заполняем результаты измерений
         const loadedResults: Record<WaterQualityParameter, { value: string; method?: string }> = {
@@ -124,6 +127,26 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
         [field]: value,
       },
     }));
+  };
+
+  const handleRemoveAttachment = async (fileUrl: string) => {
+    if (!isEditMode || !analysisId) {
+      return;
+    }
+
+    try {
+      setRemovingAttachmentUrl(fileUrl);
+      await deleteAnalysisPDF(fileUrl);
+      const updatedUrls = attachmentUrls.filter((url) => url !== fileUrl);
+      await update(analysisId, { attachmentUrls: updatedUrls });
+      setAttachmentUrls(updatedUrls);
+      toast.success('Файл удален');
+    } catch (err: any) {
+      console.error('[WaterAnalysisForm] Ошибка удаления файла:', err);
+      toast.error(err.message || 'Не удалось удалить файл');
+    } finally {
+      setRemovingAttachmentUrl(null);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -187,56 +210,68 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
       const savedResultIds: string[] = [];
       for (const param of allParams) {
         const resultValue = results[param].value.trim();
-        if (resultValue) {
-          const numValue = parseFloat(resultValue);
-          if (!isNaN(numValue)) {
-            const metadata = PARAMETER_METADATA[param];
-            const existingResult = existingResultsMap.get(param);
+        const existingResult = existingResultsMap.get(param);
 
-            let savedResultId: string;
-            if (isEditMode && existingResult) {
-              // Обновляем существующий результат
-              const updatedResult = await updateAnalysisResult(existingResult.id, {
-                parameterLabel: metadata.label,
-                value: numValue,
-                unit: metadata.unit,
-                method: results[param].method?.trim() || undefined,
-              });
-              savedResultId = updatedResult.id;
-            } else {
-              // Создаем новый результат
-              const newResult: AnalysisResultInput = {
-                analysisId: createdAnalysis.id,
-                parameterName: param,
-                parameterLabel: metadata.label,
-                value: numValue,
-                unit: metadata.unit,
-                method: results[param].method?.trim() || undefined,
-              };
-              const createdResults = await createAnalysisResults([newResult]);
-              savedResultId = createdResults[0]?.id;
+        // Если в режиме редактирования значение очищено — удаляем результат
+        if (!resultValue) {
+          if (isEditMode && existingResult) {
+            try {
+              await deleteAnalysisResult(existingResult.id);
+            } catch (deleteError: any) {
+              console.warn('[WaterAnalysisForm] Не удалось удалить результат:', deleteError);
             }
+          }
+          continue;
+        }
 
-            if (savedResultId) {
-              savedResultIds.push(savedResultId);
-              
-              // Проверяем соответствие нормам (триггеры БД тоже это делают, но для немедленной обратной связи)
-              try {
-                const compliance = await checkResultCompliance(savedResultId);
-                if (compliance.status === 'exceeded') {
-                  toast.warning(
-                    `Превышение норматива: ${metadata.label} (${numValue} ${metadata.unit})`
-                  );
-                } else if (compliance.status === 'warning') {
-                  toast.info(
-                    `Предупреждение: ${metadata.label} близко к пределу нормы`
-                  );
-                }
-              } catch (complianceError: any) {
-                // Не критично, если проверка не удалась - триггеры БД все равно проверят
-                console.warn('[WaterAnalysisForm] Предупреждение при проверке соответствия:', complianceError);
-              }
+        const numValue = parseFloat(resultValue);
+        if (isNaN(numValue)) {
+          continue;
+        }
+
+        const metadata = PARAMETER_METADATA[param];
+        let savedResultId: string;
+        if (isEditMode && existingResult) {
+          // Обновляем существующий результат
+          const updatedResult = await updateAnalysisResult(existingResult.id, {
+            parameterLabel: metadata.label,
+            value: numValue,
+            unit: metadata.unit,
+            method: results[param].method?.trim() || undefined,
+          });
+          savedResultId = updatedResult.id;
+        } else {
+          // Создаем новый результат
+          const newResult: AnalysisResultInput = {
+            analysisId: createdAnalysis.id,
+            parameterName: param,
+            parameterLabel: metadata.label,
+            value: numValue,
+            unit: metadata.unit,
+            method: results[param].method?.trim() || undefined,
+          };
+          const createdResults = await createAnalysisResults([newResult]);
+          savedResultId = createdResults[0]?.id;
+        }
+
+        if (savedResultId) {
+          savedResultIds.push(savedResultId);
+
+          // Проверяем соответствие нормам (триггеры БД тоже это делают, но для немедленной обратной связи)
+          try {
+            const compliance = await checkResultCompliance(savedResultId);
+            if (compliance.status === 'exceeded') {
+              toast.warning(
+                `Превышение норматива: ${metadata.label} (${numValue} ${metadata.unit})`
+              );
+            } else if (compliance.status === 'warning') {
+              toast.info(
+                `Предупреждение: ${metadata.label} близко к пределу нормы`
+              );
             }
+          } catch (complianceError: any) {
+            // Не критично, если проверка не удалась - триггеры БД все равно проверят
+            console.warn('[WaterAnalysisForm] Предупреждение при проверке соответствия:', complianceError);
           }
         }
       }
@@ -248,14 +283,12 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
           const pdfUrl = await uploadAnalysisPDF(pdfFile, createdAnalysis.id);
           
           // Обновляем анализ с URL файла
-          // Сохраняем существующие URL, если они есть
-          const existingUrls = isEditMode && existingAnalysis?.attachmentUrls 
-            ? existingAnalysis.attachmentUrls 
-            : [];
-          
+          const existingUrls = isEditMode ? attachmentUrls : [];
+
           await update(createdAnalysis.id, {
             attachmentUrls: [...existingUrls, pdfUrl],
           });
+          setAttachmentUrls([...existingUrls, pdfUrl]);
         } catch (err: any) {
           console.error('[WaterAnalysisForm] Ошибка загрузки PDF:', err);
           toast.warning('Анализ сохранен, но не удалось загрузить PDF файл: ' + (err.message || 'Неизвестная ошибка'));
@@ -469,6 +502,29 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
                   <small className="uploading-info">Загрузка PDF файла...</small>
                 )}
               </div>
+
+              {attachmentUrls.length > 0 && (
+                <div className="form-group">
+                  <label>Прикрепленные файлы</label>
+                  <div className="attachments-list">
+                    {attachmentUrls.map((url) => (
+                      <div key={url} className="attachment-item">
+                        <a href={url} target="_blank" rel="noreferrer">
+                          Открыть PDF
+                        </a>
+                        <button
+                          type="button"
+                          className="delete-attachment-button"
+                          onClick={() => handleRemoveAttachment(url)}
+                          disabled={saving || uploadingPdf || removingAttachmentUrl === url}
+                        >
+                          {removingAttachmentUrl === url ? 'Удаление...' : 'Удалить'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>

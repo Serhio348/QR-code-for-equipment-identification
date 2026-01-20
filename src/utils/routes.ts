@@ -61,6 +61,18 @@ export const ROUTES = {
   /** Редактирование анализа качества воды по ID */
   WATER_QUALITY_ANALYSIS_EDIT: (id: string) => `/water-quality/analysis/${id}/edit`,
   
+  /** Страница управления точками отбора проб */
+  WATER_QUALITY_SAMPLING_POINTS: '/water-quality/sampling-points',
+  
+  /** Создание новой точки отбора проб */
+  WATER_QUALITY_SAMPLING_POINT_NEW: '/water-quality/sampling-point/new',
+  
+  /** Просмотр точки отбора проб по ID */
+  WATER_QUALITY_SAMPLING_POINT_VIEW: (id: string) => `/water-quality/sampling-point/${id}`,
+  
+  /** Редактирование точки отбора проб по ID */
+  WATER_QUALITY_SAMPLING_POINT_EDIT: (id: string) => `/water-quality/sampling-point/${id}/edit`,
+  
   /** Страница настроек доступа к приложениям (только для администраторов) */
   ACCESS_SETTINGS: '/admin/access-settings',
   

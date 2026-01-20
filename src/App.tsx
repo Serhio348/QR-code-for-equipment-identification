@@ -20,6 +20,9 @@ import WaterQualityAlertsPage from './pages/WaterQualityAlertsPage';
 import WaterQualityNormsPage from './pages/WaterQualityNormsPage';
 import WaterQualityNormFormPage from './pages/WaterQualityNormFormPage';
 import WaterQualityNormViewPage from './pages/WaterQualityNormViewPage';
+import SamplingPointsPage from './pages/SamplingPointsPage';
+import SamplingPointFormPage from './pages/SamplingPointFormPage';
+import SamplingPointViewPage from './pages/SamplingPointViewPage';
 import NotFoundPage from './pages/NotFoundPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import AppAccessGuard from './components/AppAccessGuard';
@@ -274,6 +277,54 @@ const App: React.FC = () => {
               <ProtectedRoute>
                 <AppAccessGuard appId="water">
                   <WaterQualityNormFormPage />
+                </AppAccessGuard>
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Страница управления точками отбора проб */}
+          <Route 
+            path={ROUTES.WATER_QUALITY_SAMPLING_POINTS} 
+            element={
+              <ProtectedRoute>
+                <AppAccessGuard appId="water">
+                  <SamplingPointsPage />
+                </AppAccessGuard>
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Просмотр точки отбора проб */}
+          <Route 
+            path="/water-quality/sampling-point/:id" 
+            element={
+              <ProtectedRoute>
+                <AppAccessGuard appId="water">
+                  <SamplingPointViewPage />
+                </AppAccessGuard>
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Создание новой точки отбора проб */}
+          <Route 
+            path="/water-quality/sampling-point/new" 
+            element={
+              <ProtectedRoute>
+                <AppAccessGuard appId="water">
+                  <SamplingPointFormPage />
+                </AppAccessGuard>
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Редактирование точки отбора проб */}
+          <Route 
+            path="/water-quality/sampling-point/:id/edit" 
+            element={
+              <ProtectedRoute>
+                <AppAccessGuard appId="water">
+                  <SamplingPointFormPage />
                 </AppAccessGuard>
               </ProtectedRoute>
             } 
