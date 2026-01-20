@@ -15,6 +15,7 @@ import AccessSettingsPage from './pages/AccessSettingsPage';
 import ErrorLogsPage from './pages/ErrorLogsPage';
 import WorkshopSettingsPage from './pages/WorkshopSettingsPage';
 import WaterAnalysisFormPage from './pages/WaterAnalysisFormPage';
+import WaterAnalysisViewPage from './pages/WaterAnalysisViewPage';
 import NotFoundPage from './pages/NotFoundPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import AppAccessGuard from './components/AppAccessGuard';
@@ -244,9 +245,29 @@ const App: React.FC = () => {
             } 
           />
           
-          {/* Форма анализа качества воды */}
+          {/* Создание нового анализа качества воды */}
+          <Route 
+            path="/water-quality/analysis/new" 
+            element={
+              <ProtectedRoute>
+                <WaterAnalysisFormPage />
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Просмотр анализа качества воды */}
           <Route 
             path="/water-quality/analysis/:id" 
+            element={
+              <ProtectedRoute>
+                <WaterAnalysisViewPage />
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Форма редактирования анализа качества воды */}
+          <Route 
+            path="/water-quality/analysis/:id/edit" 
             element={
               <ProtectedRoute>
                 <WaterAnalysisFormPage />
