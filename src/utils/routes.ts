@@ -37,6 +37,9 @@ export const ROUTES = {
   /** Страница журнала анализов качества воды */
   WATER_QUALITY_JOURNAL: '/water-quality/journal',
   
+  /** Страница оповещений о превышении нормативов */
+  WATER_QUALITY_ALERTS: '/water-quality/alerts',
+  
   /** Создание нового анализа качества воды */
   WATER_QUALITY_ANALYSIS_NEW: '/water-quality/analysis/new',
   

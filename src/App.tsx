@@ -215,6 +215,18 @@ const App: React.FC = () => {
             } 
           />
           
+          {/* Страница оповещений о превышении нормативов */}
+          <Route 
+            path={ROUTES.WATER_QUALITY_ALERTS} 
+            element={
+              <ProtectedRoute>
+                <AppAccessGuard appId="water">
+                  <WaterQualityAlertsPage />
+                </AppAccessGuard>
+              </ProtectedRoute>
+            } 
+          />
+          
           {/* Страница настроек доступа - только для администраторов */}
           <Route 
             path={ROUTES.ACCESS_SETTINGS} 
