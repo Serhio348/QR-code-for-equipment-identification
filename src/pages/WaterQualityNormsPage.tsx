@@ -21,9 +21,11 @@ const WaterQualityNormsPage: React.FC = () => {
 
   // Фильтры
   const [parameterFilter, setParameterFilter] = useState<WaterQualityParameter | 'all'>('all');
+  const [samplingPointFilter, setSamplingPointFilter] = useState<string>('all');
 
   const filters = {
     ...(parameterFilter !== 'all' && { parameterName: parameterFilter }),
+    ...(samplingPointFilter !== 'all' && { samplingPointId: samplingPointFilter === '' ? '' : samplingPointFilter }),
   };
 
   const { norms, loading, error, refetch } = useWaterQualityNorms(
@@ -95,6 +97,24 @@ const WaterQualityNormsPage: React.FC = () => {
         {/* Фильтры */}
         <div className="norms-filters">
           <div className="filter-group">
+            <label>Пункт отбора проб:</label>
+            <select
+              value={samplingPointFilter}
+              onChange={(e) => setSamplingPointFilter(e.target.value)}
+            >
+              <option value="all">Все пункты</option>
+              <option value="">Только общие нормативы</option>
+              {samplingPoints
+                .filter((p) => p.isActive)
+                .map((point) => (
+                  <option key={point.id} value={point.id}>
+                    {point.code} - {point.name}
+                  </option>
+                ))}
+            </select>
+          </div>
+
+          <div className="filter-group">
             <label>Параметр:</label>
             <select
               value={parameterFilter}
@@ -109,15 +129,16 @@ const WaterQualityNormsPage: React.FC = () => {
             </select>
           </div>
 
-          {parameterFilter !== 'all' && (
+          {(parameterFilter !== 'all' || samplingPointFilter !== 'all') && (
             <button
               className="clear-filters-button"
               onClick={() => {
                 setParameterFilter('all');
+                setSamplingPointFilter('all');
               }}
               type="button"
             >
-              Сбросить фильтр
+              Сбросить фильтры
             </button>
           )}
         </div>
@@ -151,7 +172,6 @@ const WaterQualityNormsPage: React.FC = () => {
                 <tr>
                   <th>Параметр</th>
                   <th>Пункт отбора</th>
-                  <th>Оптимальный диапазон</th>
                   <th>Допустимый диапазон</th>
                   <th>Предупреждение</th>
                   <th>Единица</th>
@@ -172,7 +192,6 @@ const WaterQualityNormsPage: React.FC = () => {
                       <td>
                         {samplingPoint ? `${samplingPoint.code} - ${samplingPoint.name}` : 'Общий'}
                       </td>
-                      <td>{formatRange(norm.optimalMin, norm.optimalMax)}</td>
                       <td>{formatRange(norm.minAllowed, norm.maxAllowed)}</td>
                       <td>{formatRange(norm.warningMin, norm.warningMax)}</td>
                       <td>{norm.unit}</td>
