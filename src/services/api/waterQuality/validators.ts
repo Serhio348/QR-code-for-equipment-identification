@@ -10,7 +10,7 @@ export function validateISODate(dateString: string, fieldName: string): void {
     throw new Error(`${fieldName} должна быть строкой`);
   }
 
-  const isoDatePattern = '^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}:\\d{2}(\\.\\d{3})?(Z|[+-]\\d{2}:\\d{2}))?)?$';
+  const isoDatePattern = '^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}:\\d{2}(\\.\\d{3})?(Z|[+-]\\d{2}:\\d{2})?)?$';
   const isoDateRegex = new RegExp(isoDatePattern);
   
   if (!isoDateRegex.test(dateString.trim())) {

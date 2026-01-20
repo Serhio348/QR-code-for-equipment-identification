@@ -18,7 +18,8 @@
 }
 
 .back-button,
-.edit-button {
+.edit-button,
+.delete-button {
   padding: 10px 20px;
   border: none;
   border-radius: 6px;
@@ -42,12 +43,29 @@
 .edit-button {
   background: #667eea;
   color: white;
+  margin-right: 10px;
 }
 
 .edit-button:hover {
   background: #5568d3;
   transform: translateY(-1px);
   box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+}
+
+.delete-button {
+  background: #dc3545;
+  color: white;
+}
+
+.delete-button:hover:not(:disabled) {
+  background: #c82333;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3);
+}
+
+.delete-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .view-content {

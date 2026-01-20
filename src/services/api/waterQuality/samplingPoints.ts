@@ -370,18 +370,10 @@ export async function updateSamplingPoint(
       }
     }
 
-    // Шаг 3: Получение текущего пользователя для аудита
-    const { data: { user } } = await supabase.auth.getUser();
-
-    // Шаг 4: Формирование объекта обновления
+    // Шаг 3: Формирование объекта обновления
     const updateData: any = {
       updated_at: new Date().toISOString(), // Явно обновляем updated_at
     };
-
-    // Добавляем updated_by, если пользователь авторизован
-    if (user?.email) {
-      updateData.updated_by = user.email;
-    }
 
     // Добавляем только те поля, которые указаны (не undefined)
     if (input.code !== undefined) updateData.code = input.code.trim();
@@ -395,7 +387,7 @@ export async function updateSamplingPoint(
     if (input.isActive !== undefined) updateData.is_active = input.isActive;
 
     // Шаг 5: Проверка, что есть хотя бы одно поле для обновления (кроме служебных)
-    const userFields = Object.keys(updateData).filter(key => key !== 'updated_at' && key !== 'updated_by');
+    const userFields = Object.keys(updateData).filter(key => key !== 'updated_at');
     if (userFields.length === 0) {
       throw new Error('Не указаны поля для обновления');
     }
@@ -408,7 +400,7 @@ export async function updateSamplingPoint(
       .select('*')
       .single();
 
-    // Шаг 7: Обработка ошибок
+    // Шаг 6: Обработка ошибок
     if (error) {
       console.error('[samplingPointsApi] Ошибка updateSamplingPoint:', {
         error: {
@@ -438,17 +430,17 @@ export async function updateSamplingPoint(
       throw new Error(error.message || 'Ошибка при обновлении пункта отбора проб');
     }
 
-    // Шаг 8: Проверка результата
+    // Шаг 7: Проверка результата
     if (!data) {
       throw new Error('Пункт отбора проб не найден');
     }
 
-    // Шаг 9: Очистка кэша
+    // Шаг 8: Очистка кэша
     // Очищаем кэш списка и конкретного пункта
     clearWaterQualityCache('sampling_points');
     clearWaterQualityCache(`sampling_point_${id.trim()}`);
 
-    // Шаг 10: Преобразование и возврат
+    // Шаг 9: Преобразование и возврат
     return mapSamplingPointFromDb(data);
   } catch (error: any) {
     // Если ошибка уже обработана выше, просто пробрасываем

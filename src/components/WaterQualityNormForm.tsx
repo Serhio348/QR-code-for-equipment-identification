@@ -38,8 +38,6 @@ const WaterQualityNormForm: React.FC<WaterQualityNormFormProps> = ({ normId, onS
   const [enableNotifications, setEnableNotifications] = useState<boolean>(true);
 
   // Диапазоны значений
-  const [optimalMin, setOptimalMin] = useState<string>('');
-  const [optimalMax, setOptimalMax] = useState<string>('');
   const [minAllowed, setMinAllowed] = useState<string>('');
   const [maxAllowed, setMaxAllowed] = useState<string>('');
   const [warningMin, setWarningMin] = useState<string>('');
@@ -59,15 +57,6 @@ const WaterQualityNormForm: React.FC<WaterQualityNormFormProps> = ({ normId, onS
   // Валидация диапазонов
   const validateRanges = (): boolean => {
     const errors: Record<string, string> = {};
-
-    // Проверка оптимального диапазона
-    if (optimalMin && optimalMax) {
-      const min = parseFloat(optimalMin);
-      const max = parseFloat(optimalMax);
-      if (!isNaN(min) && !isNaN(max) && min > max) {
-        errors.optimalRange = 'Минимальное значение не может быть больше максимального';
-      }
-    }
 
     // Проверка допустимого диапазона
     if (minAllowed && maxAllowed) {
@@ -124,8 +113,6 @@ const WaterQualityNormForm: React.FC<WaterQualityNormFormProps> = ({ normId, onS
       setUnit(existingNorm.unit);
       setIsActive(existingNorm.isActive);
       setEnableNotifications(existingNorm.enableNotifications);
-      setOptimalMin(existingNorm.optimalMin?.toString() || '');
-      setOptimalMax(existingNorm.optimalMax?.toString() || '');
       setMinAllowed(existingNorm.minAllowed?.toString() || '');
       setMaxAllowed(existingNorm.maxAllowed?.toString() || '');
       setWarningMin(existingNorm.warningMin?.toString() || '');
@@ -153,11 +140,11 @@ const WaterQualityNormForm: React.FC<WaterQualityNormFormProps> = ({ normId, onS
 
   // Валидация при изменении значений
   useEffect(() => {
-    if (optimalMin || optimalMax || minAllowed || maxAllowed || warningMin || warningMax || 
+    if (minAllowed || maxAllowed || warningMin || warningMax || 
         warningThresholdPercent || alarmThresholdPercent) {
       validateRanges();
     }
-  }, [optimalMin, optimalMax, minAllowed, maxAllowed, warningMin, warningMax, 
+  }, [minAllowed, maxAllowed, warningMin, warningMax, 
       warningThresholdPercent, alarmThresholdPercent]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -181,8 +168,6 @@ const WaterQualityNormForm: React.FC<WaterQualityNormFormProps> = ({ normId, onS
         equipmentId: equipmentId.trim() || undefined,
         parameterName,
         unit: unit.trim(),
-        optimalMin: optimalMin ? parseFloat(optimalMin) : undefined,
-        optimalMax: optimalMax ? parseFloat(optimalMax) : undefined,
         minAllowed: minAllowed ? parseFloat(minAllowed) : undefined,
         maxAllowed: maxAllowed ? parseFloat(maxAllowed) : undefined,
         warningMin: warningMin ? parseFloat(warningMin) : undefined,
@@ -253,6 +238,42 @@ const WaterQualityNormForm: React.FC<WaterQualityNormFormProps> = ({ normId, onS
           <h3>Основная информация</h3>
 
           <div className="form-group">
+            <label>Пункт отбора проб</label>
+            <div className="form-group-with-action">
+              <select
+                value={samplingPointId}
+                onChange={(e) => setSamplingPointId(e.target.value)}
+              >
+                <option value="">Общий норматив (для всех пунктов)</option>
+                {samplingPoints.length === 0 ? (
+                  <option value="" disabled>Нет доступных пунктов отбора проб</option>
+                ) : (
+                  samplingPoints
+                    .filter((p) => p.isActive)
+                    .map((point) => (
+                      <option key={point.id} value={point.id}>
+                        {point.code} - {point.name}
+                      </option>
+                    ))
+                )}
+              </select>
+              {samplingPoints.length === 0 && (
+                <button
+                  type="button"
+                  onClick={() => navigate(ROUTES.WATER_QUALITY_SAMPLING_POINT_NEW)}
+                  className="create-sampling-point-button"
+                >
+                  Создать точку
+                </button>
+              )}
+            </div>
+            <small className="field-description">
+              <strong>Рекомендуется:</strong> Выберите конкретную точку отбора проб, так как для разных точек могут быть разные нормативы. 
+              Если не указана, норматив будет применяться ко всем пунктам (глобальный норматив).
+            </small>
+          </div>
+
+          <div className="form-group">
             <label>Параметр *</label>
             <select
               value={parameterName}
@@ -282,26 +303,6 @@ const WaterQualityNormForm: React.FC<WaterQualityNormFormProps> = ({ normId, onS
           </div>
 
           <div className="form-group">
-            <label>Пункт отбора проб</label>
-            <select
-              value={samplingPointId}
-              onChange={(e) => setSamplingPointId(e.target.value)}
-            >
-              <option value="">Общий норматив (для всех пунктов)</option>
-              {samplingPoints
-                .filter((p) => p.isActive)
-                .map((point) => (
-                  <option key={point.id} value={point.id}>
-                    {point.code} - {point.name}
-                  </option>
-                ))}
-            </select>
-            <small className="field-description">
-              Если не указан, норматив будет применяться ко всем пунктам отбора проб
-            </small>
-          </div>
-
-          <div className="form-group">
             <label>ID оборудования</label>
             <input
               type="text"
@@ -309,6 +310,9 @@ const WaterQualityNormForm: React.FC<WaterQualityNormFormProps> = ({ normId, onS
               onChange={(e) => setEquipmentId(e.target.value)}
               placeholder="Опционально"
             />
+            <small className="field-description">
+              Дополнительная привязка к оборудованию (опционально)
+            </small>
           </div>
         </div>
 
@@ -318,36 +322,9 @@ const WaterQualityNormForm: React.FC<WaterQualityNormFormProps> = ({ normId, onS
           <div className="section-description">
             <p>Укажите границы для разных уровней соответствия норме. Можно указать только минимум или только максимум, или оба значения.</p>
             <ul>
-              <li><strong>Оптимальный диапазон:</strong> Идеальные значения параметра</li>
-              <li><strong>Допустимый диапазон:</strong> Значения, которые не требуют действий</li>
-              <li><strong>Диапазон предупреждения:</strong> Значения, при которых генерируется предупреждение</li>
+              <li><strong>Допустимый диапазон:</strong> Значения, которые не требуют действий (границы нормы)</li>
+              <li><strong>Диапазон предупреждения:</strong> Значения, при которых генерируется предупреждение (близко к границе)</li>
             </ul>
-          </div>
-
-          <div className="range-group">
-            <h4>Оптимальный диапазон</h4>
-            <div className="range-inputs">
-              <div className="form-group">
-                <label>Минимум</label>
-                <input
-                  type="number"
-                  step="0.0001"
-                  value={optimalMin}
-                  onChange={(e) => setOptimalMin(e.target.value)}
-                  placeholder="Опционально"
-                />
-              </div>
-              <div className="form-group">
-                <label>Максимум</label>
-                <input
-                  type="number"
-                  step="0.0001"
-                  value={optimalMax}
-                  onChange={(e) => setOptimalMax(e.target.value)}
-                  placeholder="Опционально"
-                />
-              </div>
-            </div>
           </div>
 
           <div className="range-group">
