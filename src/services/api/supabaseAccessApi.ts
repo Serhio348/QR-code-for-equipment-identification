@@ -87,7 +87,7 @@ export async function getUserAccess(email: string): Promise<UserAppAccess | null
       .single();
 
     if (profileError || !profile) {
-      console.log('[supabaseAccessApi] Пользователь не найден:', email);
+      console.debug('[supabaseAccessApi] Пользователь не найден:', email);
       return null;
     }
 
@@ -101,7 +101,7 @@ export async function getUserAccess(email: string): Promise<UserAppAccess | null
     if (accessError) {
       // Если записи нет, создаем запись по умолчанию
       if (accessError.code === 'PGRST116') {
-        console.log('[supabaseAccessApi] Запись доступа не найдена, создаем по умолчанию для:', email);
+        console.debug('[supabaseAccessApi] Запись доступа не найдена, создаем по умолчанию для:', email);
         const defaultAccess: UserAppAccess = {
           email: profile.email,
           userId: profile.id,

@@ -28,14 +28,14 @@ const DriveFilesList: React.FC<DriveFilesListProps> = ({ folderUrl, equipmentNam
     setError(null);
     
     try {
-      console.log('📁 Загрузка файлов из папки:', folderUrl);
+      console.debug('📁 Загрузка файлов из папки:', folderUrl);
       const filesList = await getFolderFiles(folderUrl);
-      console.log('📁 Получено файлов:', filesList.length, filesList);
+      console.debug('📁 Получено файлов:', filesList.length, filesList);
       setFiles(filesList);
       
       // Если доступ получен и ранее была ошибка, останавливаем проверку и открываем папку
       if (checkAccess && isCheckingAccessRef.current && !accessGrantedRef.current) {
-        console.log('✅ Доступ к папке получен!');
+        console.debug('✅ Доступ к папке получен!');
         accessGrantedRef.current = true;
         setIsCheckingAccess(false);
         isCheckingAccessRef.current = false;
@@ -54,7 +54,7 @@ const DriveFilesList: React.FC<DriveFilesListProps> = ({ folderUrl, equipmentNam
       }
       
       if (filesList.length === 0) {
-        console.log('⚠️ Папка пуста или файлы не найдены');
+        console.debug('⚠️ Папка пуста или файлы не найдены');
       }
     } catch (err: any) {
       console.error('❌ Ошибка загрузки файлов:', err);
@@ -95,7 +95,7 @@ const DriveFilesList: React.FC<DriveFilesListProps> = ({ folderUrl, equipmentNam
           } catch (checkErr: any) {
             // Если все еще ошибка доступа, продолжаем проверку
             if (attempts >= maxAttempts) {
-              console.log('⏱️ Превышено время ожидания доступа');
+              console.debug('⏱️ Превышено время ожидания доступа');
               setIsCheckingAccess(false);
               isCheckingAccessRef.current = false;
               if (checkIntervalRef.current) {

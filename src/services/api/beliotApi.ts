@@ -62,7 +62,7 @@ export async function getSwaggerSpec(customUrl?: string): Promise<SwaggerSpec> {
 
   for (const endpoint of possibleEndpoints) {
     try {
-      console.log(`🔄 Попытка загрузить Swagger из: ${endpoint}`);
+      console.debug(`🔄 Попытка загрузить Swagger из: ${endpoint}`);
       
       const response = await fetch(endpoint, {
         method: 'GET',
@@ -88,10 +88,10 @@ export async function getSwaggerSpec(customUrl?: string): Promise<SwaggerSpec> {
         
         // Проверяем, является ли это Swagger/OpenAPI спецификацией
         if (data.openapi || data.swagger) {
-          console.log(`✅ Swagger спецификация успешно загружена из: ${endpoint}`);
-          console.log(`📌 Версия: ${data.openapi || data.swagger}`);
+          console.debug(`✅ Swagger спецификация успешно загружена из: ${endpoint}`);
+          console.debug(`📌 Версия: ${data.openapi || data.swagger}`);
           if (data.info) {
-            console.log(`📝 API: ${data.info.title || 'Unknown'} v${data.info.version || 'N/A'}`);
+            console.debug(`📝 API: ${data.info.title || 'Unknown'} v${data.info.version || 'N/A'}`);
           }
           return data;
         }
@@ -99,7 +99,7 @@ export async function getSwaggerSpec(customUrl?: string): Promise<SwaggerSpec> {
       
       // Если это HTML (Swagger UI), пробуем следующий endpoint
       if (contentType.includes('text/html')) {
-        console.log(`ℹ️ ${endpoint} вернул HTML (Swagger UI), пробуем следующий endpoint...`);
+        console.debug(`ℹ️ ${endpoint} вернул HTML (Swagger UI), пробуем следующий endpoint...`);
         errors.push(`${endpoint}: Вернул HTML вместо JSON`);
         continue;
       }
@@ -109,7 +109,7 @@ export async function getSwaggerSpec(customUrl?: string): Promise<SwaggerSpec> {
         const text = await response.text();
         const data = JSON.parse(text);
         if (data.openapi || data.swagger) {
-          console.log(`✅ Swagger спецификация успешно загружена из: ${endpoint}`);
+          console.debug(`✅ Swagger спецификация успешно загружена из: ${endpoint}`);
           return data;
         }
       } catch {
@@ -240,7 +240,7 @@ export async function beliotApiRequest(
   const fullUrl = `${baseUrl}/${cleanEndpoint}`;
   const url = new URL(fullUrl);
   
-  console.log('🔍 Формирование URL:', {
+  console.debug('🔍 Формирование URL:', {
     originalEndpoint: endpoint,
     cleanEndpoint,
     baseUrl,
@@ -275,7 +275,7 @@ export async function beliotApiRequest(
   if (requestHeaders['Authorization']) {
     const tokenPreview = requestHeaders['Authorization'].substring(0, 20) + '...';
     if (!isLoginRequest) {
-      console.log('🔑 Используется токен:', tokenPreview);
+      console.debug('🔑 Используется токен:', tokenPreview);
     }
   } else if (!isLoginRequest) {
     // Предупреждение только для запросов, которые требуют токен
@@ -295,7 +295,7 @@ export async function beliotApiRequest(
   }
 
   try {
-    console.log('📤 Beliot API запрос:', {
+    console.debug('📤 Beliot API запрос:', {
       url: url.toString(),
       method,
       hasBody: !!body,
@@ -317,11 +317,11 @@ export async function beliotApiRequest(
     
     if (contentType?.includes('application/json')) {
       const data = await response.json();
-      console.log('✅ Beliot API ответ:', data);
+      console.debug('✅ Beliot API ответ:', data);
       return data;
     } else {
       const text = await response.text();
-      console.log('✅ Beliot API ответ (текст):', text);
+      console.debug('✅ Beliot API ответ (текст):', text);
       return text;
     }
   } catch (error: any) {
