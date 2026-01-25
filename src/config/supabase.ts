@@ -19,7 +19,9 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const supabaseServiceKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+// ВАЖНО: Service Role key НЕ должен быть в клиентском коде!
+// Он используется только на сервере (GitHub Actions, Railway cron jobs)
+// const supabaseServiceKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY; // УДАЛЕНО из клиентского кода
 
 // Проверка наличия переменных окружения
 if (!supabaseUrl || !supabaseAnonKey) {
@@ -46,9 +48,63 @@ export const supabase: SupabaseClient = createClient(
       // ВАЖНО: Также нужно настроить в Supabase Dashboard:
       // Authentication → Settings → JWT expiry: увеличить до нужного значения (например, 28800 секунд = 8 часов)
       // Authentication → Settings → Session timeout: установить в 0 (без ограничения) или большое значение
+      // Обработка ошибок refresh token
+      flowType: 'pkce', // Используем PKCE flow для лучшей безопасности
+    },
+    global: {
+      // Обработка ошибок на глобальном уровне
+      headers: {
+        'X-Client-Info': 'equipment-management-web',
+      },
     },
   }
 );
+
+// Очистка невалидных токенов при инициализации (если есть старые токены)
+// Выполняется после создания клиента
+if (typeof window !== 'undefined') {
+  // Проверяем наличие старых токенов и очищаем их при старте
+  const checkAndCleanTokens = async () => {
+    try {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      // Очищаем старые токены от других проектов Supabase
+      // Ищем все ключи, начинающиеся с 'sb-' и заканчивающиеся на '-auth-token'
+      // кроме текущего проекта (sb-auth-token)
+      const allKeys = Object.keys(localStorage);
+      const oldSupabaseKeys = allKeys.filter(key => 
+        key.startsWith('sb-') && 
+        key.endsWith('-auth-token') && 
+        key !== 'sb-auth-token'
+      );
+      
+      if (oldSupabaseKeys.length > 0) {
+        console.debug('🧹 Очищаем старые токены от других проектов Supabase:', oldSupabaseKeys);
+        oldSupabaseKeys.forEach(key => localStorage.removeItem(key));
+      }
+      
+      // Если есть ошибка или сессии нет, но токены есть в localStorage - очищаем их
+      if (error || !session) {
+        const hasTokens = localStorage.getItem('sb-auth-token') || 
+                         localStorage.getItem('sb-auth-token.0') || 
+                         localStorage.getItem('sb-auth-token.1');
+        if (hasTokens) {
+          console.debug('🔐 Обнаружены невалидные токены, очищаем...');
+          localStorage.removeItem('sb-auth-token');
+          localStorage.removeItem('sb-auth-token.0');
+          localStorage.removeItem('sb-auth-token.1');
+          localStorage.removeItem('user_session');
+        }
+      }
+    } catch (error) {
+      // Игнорируем ошибки при проверке
+      console.debug('⚠️ Ошибка проверки токенов (не критично):', error);
+    }
+  };
+  
+  // Запускаем проверку после небольшой задержки, чтобы supabase успел инициализироваться
+  setTimeout(checkAndCleanTokens, 500);
+}
 
 // Логируем успешную инициализацию, если переменные настроены
 if (supabaseUrl && supabaseAnonKey) {
@@ -58,33 +114,24 @@ if (supabaseUrl && supabaseAnonKey) {
 /**
  * Service Role клиент для админских операций
  * 
- * ВАЖНО: Этот клиент обходит RLS (Row Level Security) политики и имеет полный доступ к базе данных.
- * Используйте ТОЛЬКО для:
- * - Админских операций, требующих обхода RLS
- * - Операций, которые должны выполняться от имени системы, а не пользователя
+ * ВАЖНО: Этот клиент УДАЛЕН из клиентского кода по соображениям безопасности!
  * 
- * НИКОГДА не используйте в клиентском коде, доступном обычным пользователям!
- * Service Role key должен храниться в секретах и использоваться только на сервере.
+ * Service Role key НЕ должен быть в клиентском коде, так как:
+ * - Он обходит все RLS политики
+ * - Имеет полный доступ к базе данных
+ * - Может быть раскрыт в браузерном коде
  * 
- * В клиентском коде используйте только для внутренних админских функций с проверкой прав.
+ * Если нужны админские операции:
+ * 1. Используйте Supabase Edge Functions (рекомендуется)
+ * 2. Или создайте собственный backend API с проверкой прав
+ * 3. Или используйте RLS политики с проверкой роли через is_admin()
+ * 
+ * Service Role key должен использоваться ТОЛЬКО:
+ * - На сервере (GitHub Actions, Railway cron jobs)
+ * - В Supabase Edge Functions
+ * - В защищенном backend API
  */
-export const supabaseAdmin: SupabaseClient = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseServiceKey || 'placeholder-service-key',
-  {
-    auth: {
-      autoRefreshToken: false, // Не обновляем токены для админского клиента
-      persistSession: false, // Не сохраняем сессию для админского клиента
-    },
-  }
-);
-
-// Предупреждение если Service Role key используется в клиентском коде
-if (supabaseServiceKey && typeof window !== 'undefined') {
-  console.warn('⚠️ ВНИМАНИЕ: Service Role key обнаружен в клиентском коде!');
-  console.warn('   Это небезопасно! Service Role key должен использоваться только на сервере.');
-  console.warn('   Рассмотрите использование Supabase Edge Functions для админских операций.');
-}
+// export const supabaseAdmin - УДАЛЕНО из клиентского кода
 
 /**
  * Проверка подключения к Supabase
@@ -129,75 +176,100 @@ export interface Profile {
 }
 
 /**
+ * Кеш профиля пользователя
+ * Инвалидируется при изменении пользователя или через TTL
+ */
+let profileCache: {
+  profile: Profile | null;
+  userId: string | null;
+  timestamp: number;
+} | null = null;
+
+const PROFILE_CACHE_TTL = 60000; // 1 минута
+
+/**
+ * Инвалидировать кеш профиля
+ * Вызывается при выходе пользователя или изменении сессии
+ */
+export function invalidateProfileCache(): void {
+  profileCache = null;
+}
+
+/**
  * Получить профиль текущего пользователя
+ * 
+ * Оптимизированная версия с кешированием:
+ * - Использует getSession() вместо getUser() для быстрой проверки сессии
+ * - Кеширует результат на время сессии (TTL: 1 минута)
+ * - Убраны лишние таймауты, которые срабатывали даже при успешных запросах
  * 
  * @returns Профиль пользователя или null если не авторизован
  */
 export async function getCurrentProfile(): Promise<Profile | null> {
   try {
-    // Добавляем таймаут для предотвращения зависания
-    const timeoutPromise = new Promise<null>((resolve) => {
+    // Используем getSession() вместо getUser() - быстрее, не делает запрос к серверу
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session?.user) {
+      // Если сессии нет, очищаем кеш
+      profileCache = null;
+      return null;
+    }
+
+    const userId = session.user.id;
+
+    // Проверяем кеш перед запросом
+    if (profileCache) {
+      // Если кеш для того же пользователя и не истек
+      if (profileCache.userId === userId && 
+          Date.now() - profileCache.timestamp < PROFILE_CACHE_TTL) {
+        return profileCache.profile;
+      }
+      // Если пользователь изменился, очищаем кеш
+      if (profileCache.userId !== userId) {
+        profileCache = null;
+      }
+    }
+
+    // Получаем профиль из базы данных с таймаутом, чтобы не зависнуть
+    const profilePromise = supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
+
+    const timeoutPromise = new Promise<{ data: null; error: { message: string } }>((resolve) => {
       setTimeout(() => {
-        // Используем debug вместо warn, чтобы не засорять консоль
-        console.debug('⚠️ Таймаут получения профиля (5 секунд)');
-        resolve(null);
-      }, 5000);
+        resolve({ data: null, error: { message: 'Таймаут запроса профиля (3 секунды)' } });
+      }, 3000);
     });
 
-    const profilePromise = (async () => {
-      try {
-        // Получаем пользователя с таймаутом
-        const getUserPromise = supabase.auth.getUser();
-        const getUserTimeout = new Promise<{ data: { user: null }, error: null }>((resolve) => {
-          setTimeout(() => {
-            // Используем debug вместо warn, чтобы не засорять консоль
-            console.debug('⚠️ Таймаут getUser() (3 секунды)');
-            resolve({ data: { user: null }, error: null });
-          }, 3000);
-        });
+    const { data: profile, error: profileError } = await Promise.race([
+      profilePromise,
+      timeoutPromise
+    ]);
 
-        const getUserResult = await Promise.race([getUserPromise, getUserTimeout]);
-        
-        if (!getUserResult?.data?.user) {
-          return null;
-        }
+    if (profileError) {
+      console.error('Ошибка получения профиля:', profileError);
+      // НЕ кешируем null при ошибке, чтобы можно было повторить попытку
+      // Особенно важно при SIGNED_IN, когда профиль может создаваться с задержкой
+      return null;
+    }
 
-        const { data: { user } } = getUserResult;
-        
-        // Получаем профиль с таймаутом
-        const profileQueryPromise = supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single();
+    if (!profile) {
+      // НЕ кешируем null, чтобы можно было повторить попытку
+      // Особенно важно при SIGNED_IN, когда профиль может создаваться с задержкой
+      return null;
+    }
 
-        const profileQueryTimeout = new Promise<{ data: null, error: { message: string } }>((resolve) => {
-          setTimeout(() => {
-            // Используем debug вместо warn, чтобы не засорять консоль
-            console.debug('⚠️ Таймаут запроса профиля (3 секунды)');
-            resolve({ data: null, error: { message: 'Таймаут запроса' } });
-          }, 3000);
-        });
+    // Сохраняем в кеш
+    profileCache = {
+      profile: profile as Profile,
+      userId,
+      timestamp: Date.now(),
+    };
 
-        const profileResult = await Promise.race([profileQueryPromise, profileQueryTimeout]);
-        
-        if (profileResult.error) {
-          console.error('Ошибка получения профиля:', profileResult.error);
-          return null;
-        }
-
-        if (!profileResult.data) {
-          return null;
-        }
-
-        return profileResult.data as Profile;
-      } catch (error: any) {
-        console.error('Ошибка при получении профиля:', error.message);
-        return null;
-      }
-    })();
-
-    return await Promise.race([profilePromise, timeoutPromise]);
+    return profile as Profile;
   } catch (error: any) {
     console.error('Ошибка при получении профиля:', error.message);
     return null;
@@ -343,6 +415,9 @@ export async function updateCurrentProfile(updates: {
       throw error;
     }
 
+    // Инвалидируем кеш после обновления профиля
+    invalidateProfileCache();
+
     return profile as Profile;
   } catch (error: any) {
     console.error('Ошибка обновления профиля:', error);
@@ -385,18 +460,21 @@ export async function updateUserRole(
       throw error;
     }
 
-    // Инвалидируем кэш прав администратора для обновленного пользователя
-    // Используем динамический импорт, чтобы избежать циклических зависимостей
-    // (supabaseAuthApi импортирует из config/supabase, поэтому прямой импорт создаст цикл)
-    try {
-      const { invalidateAdminCache } = await import('../services/api/supabaseAuthApi');
-      invalidateAdminCache(userId);
-    } catch (cacheError) {
-      // Игнорируем ошибки инвалидации кэша, чтобы не блокировать обновление роли
-      console.debug('⚠️ Не удалось инвалидировать кэш прав администратора:', cacheError);
-    }
+      // Инвалидируем кэш прав администратора для обновленного пользователя
+      // Используем динамический импорт, чтобы избежать циклических зависимостей
+      // (supabaseAuthApi импортирует из config/supabase, поэтому прямой импорт создаст цикл)
+      try {
+        const { invalidateAdminCache } = await import('../services/api/supabaseAuthApi');
+        invalidateAdminCache(userId);
+      } catch (cacheError) {
+        // Игнорируем ошибки инвалидации кэша, чтобы не блокировать обновление роли
+        console.debug('⚠️ Не удалось инвалидировать кэш прав администратора:', cacheError);
+      }
 
-    return profile as Profile;
+      // Инвалидируем кеш профиля после обновления роли
+      invalidateProfileCache();
+
+      return profile as Profile;
   } catch (error: any) {
     console.error('Ошибка обновления роли:', error);
     throw new Error(error.message || 'Ошибка при обновлении роли');

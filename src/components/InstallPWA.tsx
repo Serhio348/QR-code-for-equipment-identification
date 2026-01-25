@@ -17,21 +17,12 @@ const InstallPWA: React.FC = () => {
   const [isInstalled, setIsInstalled] = useState(false);
 
   useEffect(() => {
-    console.log('[PWA] InstallPWA компонент инициализирован');
-    
     // Проверяем, установлено ли приложение
     const checkIfInstalled = (): boolean => {
       // Проверка для standalone режима (iOS и Android)
       const isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
         (window.navigator as any).standalone === true ||
         document.referrer.includes('android-app://');
-      
-      console.log('[PWA] Проверка установки:', {
-        standalone: window.matchMedia('(display-mode: standalone)').matches,
-        navigatorStandalone: (window.navigator as any).standalone,
-        referrer: document.referrer,
-        isInstalled: isStandalone
-      });
       
       setIsInstalled(isStandalone);
       return isStandalone;
@@ -41,16 +32,9 @@ const InstallPWA: React.FC = () => {
     
     // Проверяем, мобильное ли это устройство
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    
-    console.log('[PWA] Проверка показа баннера:', {
-      installed,
-      isMobile,
-      shouldShow: !installed && isMobile
-    });
 
     // Обработчик события beforeinstallprompt (для Android/Chrome)
     const handleBeforeInstallPrompt = (e: Event) => {
-      console.log('[PWA] beforeinstallprompt event fired', e);
       e.preventDefault();
       const promptEvent = e as BeforeInstallPromptEvent;
       setDeferredPrompt(promptEvent);
@@ -58,32 +42,19 @@ const InstallPWA: React.FC = () => {
       // Показываем баннер всегда, если приложение не установлено
       if (!installed) {
         setShowInstallButton(true);
-        console.log('[PWA] Кнопка установки показана (beforeinstallprompt)');
       }
     };
 
     // Обработчик успешной установки
     const handleAppInstalled = () => {
-      console.log('[PWA] App installed event fired');
       setIsInstalled(true);
       setShowInstallButton(false);
       setDeferredPrompt(null);
     };
-
-    // Проверяем поддержку PWA
-    console.log('[PWA] Проверка поддержки:', {
-      serviceWorker: 'serviceWorker' in navigator,
-      userAgent: navigator.userAgent,
-      isIOS: /iPad|iPhone|iPod/.test(navigator.userAgent),
-      isAndroid: /Android/.test(navigator.userAgent),
-      isHTTPS: window.location.protocol === 'https:' || window.location.hostname === 'localhost',
-      hasManifest: document.querySelector('link[rel="manifest"]') !== null
-    });
     
     // Проверяем, зарегистрирован ли Service Worker
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(registrations => {
-        console.log('[PWA] Зарегистрированные Service Workers:', registrations.length);
         if (registrations.length === 0) {
           console.warn('[PWA] Service Worker не зарегистрирован! Это может препятствовать установке PWA.');
         }
@@ -100,7 +71,6 @@ const InstallPWA: React.FC = () => {
       showBannerTimeout = setTimeout(() => {
         const stillNotInstalled = !checkIfInstalled();
         if (stillNotInstalled) {
-          console.log('[PWA] Показываем баннер для мобильного устройства');
           setShowInstallButton(true);
         }
       }, 2000); // Задержка 2 секунды
@@ -116,8 +86,6 @@ const InstallPWA: React.FC = () => {
   }, []);
 
   const handleInstallClick = async () => {
-    console.log('[PWA] handleInstallClick вызван', { hasDeferredPrompt: !!deferredPrompt });
-    
     // Проверяем, iOS ли это
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
@@ -135,20 +103,11 @@ const InstallPWA: React.FC = () => {
     // Если есть deferredPrompt, используем его
     if (deferredPrompt) {
       try {
-        console.log('[PWA] Показываем нативный prompt установки');
         // Показываем prompt установки
         await deferredPrompt.prompt();
 
         // Ждем выбора пользователя
-        const { outcome } = await deferredPrompt.userChoice;
-
-        console.log('[PWA] Результат выбора пользователя:', outcome);
-
-        if (outcome === 'accepted') {
-          console.log('[PWA] Пользователь принял установку');
-        } else {
-          console.log('[PWA] Пользователь отклонил установку');
-        }
+        await deferredPrompt.userChoice;
       } catch (error) {
         console.error('[PWA] Ошибка при показе prompt:', error);
         // Если произошла ошибка, показываем инструкции
@@ -159,7 +118,6 @@ const InstallPWA: React.FC = () => {
       }
     } else {
       // Если нет deferredPrompt, показываем инструкции по ручной установке
-      console.log('[PWA] deferredPrompt недоступен, показываем инструкции');
       showManualInstallInstructions(isAndroid, isChrome);
     }
   };
@@ -179,9 +137,6 @@ const InstallPWA: React.FC = () => {
     setShowInstallButton(false);
     // Не сохраняем в localStorage - баннер будет показываться снова при следующем посещении
   };
-
-  // Логируем состояние для отладки
-  console.log('[PWA] Render состояние:', { isInstalled, showInstallButton, hasDeferredPrompt: !!deferredPrompt });
 
   // Не показываем кнопку, если приложение уже установлено
   if (isInstalled || !showInstallButton) {

@@ -159,8 +159,12 @@ export function useEquipmentData(id?: string): UseEquipmentDataResult {
   // Используем ref для предотвращения обновления состояния после размонтирования
   const isMountedRef = useRef(true);
   
-  // Ключ кеша
-  const cacheKey = id || 'all';
+  // Используем ref для хранения актуального id
+  const idRef = useRef(id);
+  idRef.current = id;
+  
+  // Используем ref для хранения функции загрузки
+  const loadDataRef = useRef<((forceRefresh: boolean) => Promise<void>) | null>(null);
   
   /**
    * Загрузка данных
@@ -168,6 +172,9 @@ export function useEquipmentData(id?: string): UseEquipmentDataResult {
    * @param forceRefresh - Принудительная перезагрузка (игнорирует кеш)
    */
   const loadData = useCallback(async (forceRefresh: boolean = false) => {
+    const currentId = idRef.current;
+    const cacheKey = currentId || 'all';
+    
     // Проверяем кеш, если не принудительная перезагрузка
     if (!forceRefresh) {
       const cached = cache.get(cacheKey);
@@ -188,22 +195,22 @@ export function useEquipmentData(id?: string): UseEquipmentDataResult {
     }
     
     try {
-      console.log('[useEquipmentData] Начало загрузки данных, id:', id, 'forceRefresh:', forceRefresh);
+      console.debug('[useEquipmentData] Начало загрузки данных, id:', currentId, 'forceRefresh:', forceRefresh);
       let result: Equipment | Equipment[];
       
-      if (id) {
+      if (currentId) {
         // Загрузка одного оборудования
-        console.log('[useEquipmentData] Загрузка одного оборудования:', id);
-        const equipment = await getEquipmentById(id);
+        console.debug('[useEquipmentData] Загрузка одного оборудования:', currentId);
+        const equipment = await getEquipmentById(currentId);
         if (!equipment) {
           throw new Error('Оборудование не найдено');
         }
         result = normalizeEquipmentDates(equipment);
       } else {
         // Загрузка списка оборудования
-        console.log('[useEquipmentData] Загрузка списка оборудования');
+        console.debug('[useEquipmentData] Загрузка списка оборудования');
         const allEquipment = await getAllEquipment();
-        console.log('[useEquipmentData] Получено оборудования:', allEquipment.length);
+        console.debug('[useEquipmentData] Получено оборудования:', allEquipment.length);
         result = allEquipment.map(normalizeEquipmentDates);
       }
       
@@ -228,35 +235,47 @@ export function useEquipmentData(id?: string): UseEquipmentDataResult {
         setData(null);
       }
     }
-  }, [id, cacheKey]);
+  }, []);
+  
+  // Сохраняем функцию в ref для доступа из useEffect
+  loadDataRef.current = loadData;
   
   /**
    * Функция перезагрузки данных (игнорирует кеш)
    */
   const refetch = useCallback(async () => {
-    await loadData(true);
-  }, [loadData]);
+    if (loadDataRef.current) {
+      await loadDataRef.current(true);
+    }
+  }, []);
   
   // Загрузка данных при монтировании или изменении ID
   useEffect(() => {
-    console.log('[useEquipmentData] Монтирование/обновление, cacheKey:', cacheKey);
+    const cacheKey = id || 'all';
+    console.debug('[useEquipmentData] Монтирование/обновление, cacheKey:', cacheKey);
     isMountedRef.current = true;
-    loadData(false);
+    
+    // Используем функцию из ref
+    if (loadDataRef.current) {
+      loadDataRef.current(false);
+    }
     
     // Подписываемся на изменения кеша
     const unsubscribe = subscribeToCache(cacheKey, () => {
-      console.log('[useEquipmentData] Изменение кеша, перезагрузка данных');
+      console.debug('[useEquipmentData] Изменение кеша, перезагрузка данных');
       // При изменении кеша перезагружаем данные
-      loadData(false);
+      if (loadDataRef.current) {
+        loadDataRef.current(false);
+      }
     });
     
     // Очистка при размонтировании
     return () => {
-      console.log('[useEquipmentData] Размонтирование');
+      console.debug('[useEquipmentData] Размонтирование');
       isMountedRef.current = false;
       unsubscribe();
     };
-  }, [loadData, cacheKey]);
+  }, [id]);
   
   return {
     data,

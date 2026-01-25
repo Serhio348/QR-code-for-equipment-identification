@@ -69,7 +69,7 @@ const EquipmentPage: React.FC = () => {
   // Отладочное логирование для диагностики проблемы с характеристиками
   useEffect(() => {
     if (currentEquipment) {
-      console.log('🔍 Отладочная информация об оборудовании:', {
+      console.debug('🔍 Отладочная информация об оборудовании:', {
         id: currentEquipment.id,
         name: currentEquipment.name,
         type: currentEquipment.type,

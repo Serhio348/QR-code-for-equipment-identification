@@ -54,7 +54,7 @@ export function useEquipmentForm({ equipmentId, onSave, onCancel }: UseEquipment
     try {
       const equipment = await getEquipmentById(equipmentId!);
       if (equipment) {
-        console.log('📦 Загружено оборудование для редактирования:', {
+        console.debug('📦 Загружено оборудование для редактирования:', {
           id: equipment.id,
           name: equipment.name,
           type: equipment.type,
@@ -80,7 +80,7 @@ export function useEquipmentForm({ equipmentId, onSave, onCancel }: UseEquipment
           }
         }
         
-        console.log('📋 Устанавливаем specs:', specsToSet);
+        console.debug('📋 Устанавливаем specs:', specsToSet);
         setSpecs(specsToSet);
       } else {
         setError('Оборудование не найдено');
@@ -161,7 +161,7 @@ export function useEquipmentForm({ equipmentId, onSave, onCancel }: UseEquipment
       // input type="date" уже возвращает YYYY-MM-DD
       const normalizedCommissioningDate = commissioningDate ? commissioningDate.split('T')[0].trim() : undefined;
       
-      console.log('💾 Сохранение оборудования:', {
+      console.debug('💾 Сохранение оборудования:', {
         режим: isEditMode ? 'редактирование' : 'добавление',
         исходная_дата: commissioningDate,
         нормализованная_дата: normalizedCommissioningDate
