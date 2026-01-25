@@ -1647,6 +1647,7 @@ const BeliotDevicesTest: React.FC = () => {
     setLoadingState(true);
     setDeviceReadings(null);
     setArchiveData(null);
+    setIsArchiveOpen(false); // Закрываем архив при выборе нового устройства
     setError(null);
 
     const deviceId = device.device_id || device.id || device._id;
@@ -1978,6 +1979,7 @@ const BeliotDevicesTest: React.FC = () => {
                         <th>Серийный номер</th>
                         <th>Показание</th>
                         <th>Документация</th>
+                        <th>Архив</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1989,13 +1991,6 @@ const BeliotDevicesTest: React.FC = () => {
                           <tr
                             key={deviceId || index}
                             className={isSelected ? 'selected' : ''}
-                            onClick={(e) => {
-                              // Не вызываем handleDeviceClick если кликнули на кнопку паспорта
-                              if ((e.target as HTMLElement).tagName !== 'BUTTON') {
-                                handleDeviceClick(device);
-                              }
-                            }}
-                            style={{ cursor: 'pointer' }}
                           >
                             <td>{getDeviceObject(device)}</td>
                             <td>{getDeviceName(device)}</td>
@@ -2013,6 +2008,20 @@ const BeliotDevicesTest: React.FC = () => {
                                 📄 Паспорт
                               </button>
                             </td>
+                            <td className="actions-cell">
+                              <button
+                                className="archive-btn"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedDevice(device);
+                                  setIsArchiveOpen(true);
+                                }}
+                                title="Открыть архив"
+                              >
+                                <span className="archive-icon">☰</span>
+                                <span className="archive-text">Архив</span>
+                              </button>
+                            </td>
                           </tr>
                         );
                       })}
@@ -2020,169 +2029,6 @@ const BeliotDevicesTest: React.FC = () => {
                   </table>
                 </div>
               </div>
-
-              {/* Показания выбранного счетчика */}
-              {selectedDevice && (
-                <div className="device-state-section">
-                  <div className="section-header">
-                    <h4>Показания счетчика: {selectedDevice.name || selectedDevice.device_id || selectedDevice.id}</h4>
-                  </div>
-                  {loadingState ? (
-                    <div className="loading-state">
-                      <div className="spinner"></div>
-                      <p>Загрузка показаний...</p>
-                    </div>
-                  ) : error ? (
-                    <div className="error-state">
-                      <strong>❌ Ошибка:</strong> {error}
-                    </div>
-                  ) : deviceReadings ? (() => {
-                    // Вычисляем разницу значений и период между датами
-                    const calculateVolume = (): number | null => {
-                      if (deviceReadings.current?.value !== undefined && deviceReadings.previous?.value !== undefined) {
-                        const current = Number(deviceReadings.current.value);
-                        const previous = Number(deviceReadings.previous.value);
-                        if (!isNaN(current) && !isNaN(previous)) {
-                          return current - previous;
-                        }
-                      }
-                      return null;
-                    };
-
-                    const volume = calculateVolume();
-
-                    return (
-                      <div className="readings-container">
-                        <table className="readings-table">
-                          <thead>
-                            <tr>
-                              <th>Период</th>
-                              <th>Дата</th>
-                              <th>Значение</th>
-                              <th>Единица измерения</th>
-                              <th>Архив</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {deviceReadings.previous && (
-                              <tr className="reading-row previous">
-                                <td className="period-badge previous">Предыдущий</td>
-                                <td>
-                                  {deviceReadings.previous.date ? (() => {
-                                    let dateValue: string | number = deviceReadings.previous.date;
-                                    // Если дата в секундах (Unix timestamp), конвертируем в миллисекунды
-                                    if (typeof dateValue === 'number' && dateValue < 10000000000) {
-                                      dateValue = dateValue * 1000;
-                                    }
-                                    const date = new Date(dateValue);
-                                    if (isNaN(date.getTime())) return '-';
-                                    return date.toLocaleString('ru-RU');
-                                  })() : '-'}
-                                </td>
-                                <td className="reading-value">{deviceReadings.previous.value !== undefined ? deviceReadings.previous.value : '-'}</td>
-                                <td>{deviceReadings.previous.unit || 'м³'}</td>
-                                <td rowSpan={(deviceReadings.current ? 1 : 0) + (volume !== null ? 1 : 0) + 1}>
-                                  <button
-                                    className={`archive-btn ${isArchiveOpen ? 'active' : ''}`}
-                                    onClick={() => setIsArchiveOpen(!isArchiveOpen)}
-                                    title="Показать архив"
-                                  >
-                                    <span className="archive-icon">☰</span>
-                                    <span className="archive-text">Архив</span>
-                                  </button>
-                                </td>
-                              </tr>
-                            )}
-                            {deviceReadings.current && (
-                              <tr className="reading-row current">
-                                <td className="period-badge current">Текущий</td>
-                                <td>
-                                  {deviceReadings.current.date ? (() => {
-                                    let dateValue: string | number = deviceReadings.current.date;
-                                    // Если дата в секундах (Unix timestamp), конвертируем в миллисекунды
-                                    if (typeof dateValue === 'number' && dateValue < 10000000000) {
-                                      dateValue = dateValue * 1000;
-                                    }
-                                    const date = new Date(dateValue);
-                                    if (isNaN(date.getTime())) return '-';
-                                    return date.toLocaleString('ru-RU');
-                                  })() : '-'}
-                                </td>
-                                <td className="reading-value">{deviceReadings.current.value !== undefined ? deviceReadings.current.value : '-'}</td>
-                                <td>{deviceReadings.current.unit || 'м³'}</td>
-                                {!deviceReadings.previous && (
-                                  <td rowSpan={(volume !== null ? 1 : 0) + 1}>
-                                    <button
-                                      className={`archive-btn ${isArchiveOpen ? 'active' : ''}`}
-                                      onClick={() => setIsArchiveOpen(!isArchiveOpen)}
-                                      title="Показать архив"
-                                    >
-                                      <span className="archive-icon">☰</span>
-                                      <span className="archive-text">Архив</span>
-                                    </button>
-                                  </td>
-                                )}
-                              </tr>
-                            )}
-                            {volume !== null && (
-                              <tr className="reading-row difference">
-                                <td className="period-badge difference">Разница</td>
-                                <td>-</td>
-                                <td className="reading-value difference-value">{volume.toFixed(2)}</td>
-                                <td>м³</td>
-                                {!deviceReadings.previous && !deviceReadings.current && (
-                                  <td>
-                                    <button
-                                      className={`archive-btn ${isArchiveOpen ? 'active' : ''}`}
-                                      onClick={() => setIsArchiveOpen(!isArchiveOpen)}
-                                      title="Показать архив"
-                                    >
-                                      <span className="archive-icon">☰</span>
-                                      <span className="archive-text">Архив</span>
-                                    </button>
-                                  </td>
-                                )}
-                              </tr>
-                            )}
-                            {!deviceReadings.current && !deviceReadings.previous && (
-                              <tr>
-                                <td colSpan={4} className="no-readings">
-                                  Показания не найдены
-                                </td>
-                                <td>
-                                  <button
-                                    className={`archive-btn ${isArchiveOpen ? 'active' : ''}`}
-                                    onClick={() => setIsArchiveOpen(!isArchiveOpen)}
-                                    title="Показать архив"
-                                  >
-                                    <span className="archive-icon">☰</span>
-                                    <span className="archive-text">Архив</span>
-                                  </button>
-                                </td>
-                              </tr>
-                            )}
-                          </tbody>
-                        </table>
-                        
-                      </div>
-                    );
-                  })() : (
-                    <div className="empty-state">
-                      Нажмите на счетчик в таблице для просмотра показаний
-                    </div>
-                  )}
-                  
-                  {/* Архивные данные (будут загружаться из локального архива) */}
-                  {archiveData && (
-                    <div className="archive-data-section">
-                      <h5>Архивные данные за период</h5>
-                      <p style={{ color: '#666', fontStyle: 'italic' }}>
-                        Функционал локального архива будет реализован позже
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           </>
         ) : (
