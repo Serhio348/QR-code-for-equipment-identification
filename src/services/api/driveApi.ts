@@ -107,13 +107,13 @@ export async function getFolderFiles(folderUrl: string): Promise<DriveFile[]> {
     url.searchParams.append('action', 'getFolderFiles');
     url.searchParams.append('folderUrl', folderUrl.trim());
 
-    console.log('📤 Запрос списка файлов:', url.toString());
+    console.debug('📤 Запрос списка файлов:', url.toString());
 
     const response = await fetch(url.toString(), {
       signal: AbortSignal.timeout(API_CONFIG.TIMEOUT),
     });
 
-    console.log('📥 Ответ получен:', {
+    console.debug('📥 Ответ получен:', {
       status: response.status,
       ok: response.ok,
       statusText: response.statusText
@@ -136,7 +136,7 @@ export async function getFolderFiles(folderUrl: string): Promise<DriveFile[]> {
 
     const data = await response.json();
     
-    console.log('📋 Данные ответа:', {
+    console.debug('📋 Данные ответа:', {
       success: data.success,
       dataLength: data.data ? data.data.length : 0,
       data: data.data

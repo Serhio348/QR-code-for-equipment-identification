@@ -28,16 +28,6 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
     if (!equipmentListData) return [];
     return Array.isArray(equipmentListData) ? equipmentListData : [];
   }, [equipmentListData]);
-
-  // Отладочное логирование
-  React.useEffect(() => {
-    console.log('[EquipmentList] Состояние:', { 
-      loading, 
-      error, 
-      dataLength: equipmentList.length,
-      hasData: !!equipmentListData 
-    });
-  }, [loading, error, equipmentList.length, equipmentListData]);
   
   const [filterType, setFilterType] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -72,13 +62,13 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
    * Обработка успешного сканирования QR-кода
    */
   const handleScanSuccess = (scannedId: string) => {
-    console.log('[EquipmentList] Отсканирован ID:', scannedId);
+    console.debug('[EquipmentList] Отсканирован ID:', scannedId);
     
     // Ищем оборудование в списке
     const equipment = findEquipmentById(scannedId);
     
     if (equipment) {
-      console.log('[EquipmentList] Оборудование найдено:', equipment.name);
+      console.debug('[EquipmentList] Оборудование найдено:', equipment.name);
       
       // Закрываем сканер
       setIsScannerOpen(false);

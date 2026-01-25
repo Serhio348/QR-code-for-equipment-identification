@@ -161,7 +161,7 @@ function clearOldSessionIfNeeded(): void {
         // Если expiresAt истек более чем на 1 час, очищаем сессию
         // Это помогает избавиться от старых сессий с коротким expiresAt
         if (now.getTime() - expiresAt.getTime() > 3600000) {
-          console.log('🧹 Очищаем старую сессию с истекшим expiresAt');
+          console.debug('🧹 Очищаем старую сессию с истекшим expiresAt');
           localStorage.removeItem('user_session');
         }
       }
@@ -177,7 +177,7 @@ export async function register(data: RegisterData): Promise<AuthResponse> {
     // Очищаем старую сессию перед регистрацией
     clearOldSessionIfNeeded();
     
-    console.log('📤 Регистрация пользователя:', { email: data.email });
+    console.debug('📤 Регистрация пользователя:', { email: data.email });
 
     // 1. Создаем пользователя в Supabase Auth (обязательная операция, должна быть первой)
     const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -236,7 +236,7 @@ export async function register(data: RegisterData): Promise<AuthResponse> {
       createdAt: profileData?.created_at || authData.user.created_at || new Date().toISOString(),
     };
 
-    console.log('✅ Регистрация успешна:', user.email);
+    console.debug('✅ Регистрация успешна:', user.email);
 
     return {
       user,
@@ -266,7 +266,7 @@ export async function login(data: LoginData): Promise<AuthResponse> {
     // Очищаем старую сессию перед входом
     clearOldSessionIfNeeded();
     
-    console.log('📤 Вход пользователя:', { email: data.email });
+    console.debug('📤 Вход пользователя:', { email: data.email });
 
     // 1. Входим через Supabase Auth
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
@@ -363,7 +363,7 @@ export async function login(data: LoginData): Promise<AuthResponse> {
       lastLoginAt: profile?.last_login_at || undefined,
     };
 
-    console.log('✅ Вход выполнен успешно:', user.email);
+    console.debug('✅ Вход выполнен успешно:', user.email);
 
     return {
       user,
@@ -389,7 +389,7 @@ export async function login(data: LoginData): Promise<AuthResponse> {
  */
 export async function logout(): Promise<void> {
   try {
-    console.log('📤 Выход пользователя');
+    console.debug('📤 Выход пользователя');
     
     // Инвалидируем кэш сессии перед выходом
     invalidateSessionCache();
@@ -399,7 +399,7 @@ export async function logout(): Promise<void> {
       console.error('❌ Ошибка выхода:', error);
       throw error;
     }
-    console.log('✅ Выход выполнен успешно');
+    console.debug('✅ Выход выполнен успешно');
   } catch (error) {
     console.error('❌ Ошибка выхода:', error);
     // Пробрасываем ошибку, но не блокируем выход
@@ -707,7 +707,7 @@ export async function getLoginHistory(limit: number = 100): Promise<LoginHistory
  */
 export async function resetPassword(email: string): Promise<void> {
   try {
-    console.log('📤 Отправка ссылки для восстановления пароля:', { email });
+    console.debug('📤 Отправка ссылки для восстановления пароля:', { email });
     
     // Валидация email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -725,7 +725,7 @@ export async function resetPassword(email: string): Promise<void> {
       throw new Error(error.message || 'Ошибка при отправке ссылки для восстановления пароля');
     }
 
-    console.log('✅ Ссылка для восстановления пароля отправлена на:', email);
+    console.debug('✅ Ссылка для восстановления пароля отправлена на:', email);
   } catch (error: any) {
     console.error('❌ Ошибка восстановления пароля:', error);
     if (error instanceof Error) {
@@ -743,7 +743,7 @@ export async function resetPassword(email: string): Promise<void> {
  */
 export async function updatePassword(newPassword: string): Promise<void> {
   try {
-    console.log('📤 Обновление пароля');
+    console.debug('📤 Обновление пароля');
     
     // Валидация пароля
     if (!newPassword || newPassword.length < 6) {
@@ -760,7 +760,7 @@ export async function updatePassword(newPassword: string): Promise<void> {
       throw new Error(error.message || 'Ошибка при обновлении пароля');
     }
 
-    console.log('✅ Пароль успешно обновлен');
+    console.debug('✅ Пароль успешно обновлен');
   } catch (error: any) {
     console.error('❌ Ошибка обновления пароля:', error);
     if (error instanceof Error) {

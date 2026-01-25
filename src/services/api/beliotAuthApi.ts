@@ -80,7 +80,7 @@ export async function beliotLogin(
 ): Promise<string> {
   // Проверяем кэш, если не требуется принудительное обновление
   if (!forceRefresh && isTokenValid() && cachedToken) {
-    console.log('✅ Используется кэшированный токен Beliot API');
+    console.debug('✅ Используется кэшированный токен Beliot API');
     return cachedToken;
   }
 
@@ -95,7 +95,7 @@ export async function beliotLogin(
   }
 
   try {
-    console.log('🔐 Аутентификация в Beliot API...');
+    console.debug('🔐 Аутентификация в Beliot API...');
     
     // Для логина используем полный путь без /api, так как baseUrl уже содержит /api
     const response = await beliotApiRequest(
@@ -141,7 +141,7 @@ export async function beliotLogin(
     cachedToken = token;
     tokenExpiresAt = Date.now() + TOKEN_CACHE_DURATION;
 
-    console.log('✅ Аутентификация успешна, токен получен');
+    console.debug('✅ Аутентификация успешна, токен получен');
     return token;
   } catch (error: any) {
     console.error('❌ Ошибка аутентификации в Beliot API:', error);
@@ -198,7 +198,7 @@ export async function beliotLogout(token?: string): Promise<void> {
     // Очищаем кэш после выхода
     clearBeliotTokenCache();
     
-    console.log('✅ Выход из Beliot API выполнен');
+    console.debug('✅ Выход из Beliot API выполнен');
   } catch (error: any) {
     console.error('❌ Ошибка выхода из Beliot API:', error);
     // Очищаем кэш даже при ошибке

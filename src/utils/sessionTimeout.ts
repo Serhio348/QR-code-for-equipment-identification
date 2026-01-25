@@ -95,7 +95,7 @@ export function checkSessionTimeout(): boolean {
   // Проверяем только таймаут бездействия (8 часов)
   // Не проверяем isSessionExpired(), так как Supabase сам управляет токенами
   if (isSessionTimeout()) {
-    console.log('🔐 Таймаут бездействия истек (8 часов), очищаем сессию');
+    console.debug('🔐 Таймаут бездействия истек (8 часов), очищаем сессию');
     clearSession();
     window.dispatchEvent(new CustomEvent('session-timeout'));
     return false;

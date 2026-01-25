@@ -53,7 +53,7 @@ function formatWorkshopName(name: string): string {
  */
 export async function getAllWorkshops(): Promise<Workshop[]> {
   try {
-    console.log('[supabaseWorkshopApi] Начало getAllWorkshops');
+    console.debug('[supabaseWorkshopApi] Начало getAllWorkshops');
     
     // Проверяем, что пользователь авторизован
     const { data: { session } } = await supabase.auth.getSession();
@@ -63,7 +63,7 @@ export async function getAllWorkshops(): Promise<Workshop[]> {
       return [];
     }
     
-    console.log('[supabaseWorkshopApi] Пользователь авторизован, выполняем запрос');
+    console.debug('[supabaseWorkshopApi] Пользователь авторизован, выполняем запрос');
     
     const { data, error } = await supabase
       .from('workshops')
@@ -88,11 +88,11 @@ export async function getAllWorkshops(): Promise<Workshop[]> {
       throw new Error(error.message || 'Ошибка при получении участков');
     }
 
-    console.log('[supabaseWorkshopApi] Получено участков:', data?.length || 0);
-    console.log('[supabaseWorkshopApi] Сырые данные:', data);
+    console.debug('[supabaseWorkshopApi] Получено участков:', data?.length || 0);
+    console.debug('[supabaseWorkshopApi] Сырые данные:', data);
 
     if (!data || data.length === 0) {
-      console.log('[supabaseWorkshopApi] Данные отсутствуют или пустой массив');
+      console.debug('[supabaseWorkshopApi] Данные отсутствуют или пустой массив');
       return [];
     }
 
@@ -106,11 +106,11 @@ export async function getAllWorkshops(): Promise<Workshop[]> {
         createdAt: item.created_at || new Date().toISOString(),
         updatedAt: item.updated_at || new Date().toISOString(),
       };
-      console.log('[supabaseWorkshopApi] Обработан участок:', workshop);
+      console.debug('[supabaseWorkshopApi] Обработан участок:', workshop);
       return workshop;
     });
     
-    console.log('[supabaseWorkshopApi] Успешно возвращено участков:', workshops.length);
+    console.debug('[supabaseWorkshopApi] Успешно возвращено участков:', workshops.length);
     return workshops;
   } catch (error: any) {
     console.error('[supabaseWorkshopApi] Исключение в getAllWorkshops:', error);
