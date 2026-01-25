@@ -5,18 +5,11 @@
 
 .water-page-header {
   background: white;
-  padding: 20px;
+  padding: 12px 20px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   position: sticky;
   top: 0;
   z-index: 100;
-}
-
-.water-page-title {
-  margin: 0 0 20px 0;
-  color: #333;
-  font-size: 28px;
-  font-weight: 600;
 }
 
 .water-page-tabs {
@@ -28,13 +21,13 @@
 .water-tab {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 24px;
+  gap: 6px;
+  padding: 8px 16px;
   background: transparent;
   border: none;
   border-bottom: 3px solid transparent;
   cursor: pointer;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 500;
   color: #666;
   transition: all 0.3s ease;
@@ -54,7 +47,7 @@
 }
 
 .water-tab-icon {
-  font-size: 20px;
+  font-size: 16px;
 }
 
 .water-tab-text {
@@ -88,12 +81,7 @@
 /* Адаптивность */
 @media (max-width: 768px) {
   .water-page-header {
-    padding: 15px;
-  }
-
-  .water-page-title {
-    font-size: 24px;
-    margin-bottom: 15px;
+    padding: 10px 15px;
   }
 
   .water-page-tabs {
@@ -103,13 +91,13 @@
   }
 
   .water-tab {
-    padding: 10px 16px;
-    font-size: 14px;
+    padding: 8px 12px;
+    font-size: 13px;
     flex-shrink: 0;
   }
 
   .water-tab-icon {
-    font-size: 18px;
+    font-size: 14px;
   }
 
   .water-page-content {

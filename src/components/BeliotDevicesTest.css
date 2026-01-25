@@ -309,6 +309,7 @@
 /* Таблица счетчиков группы */
 .group-devices-section {
   margin-bottom: 2rem;
+  padding-bottom: 20px; /* Дополнительный отступ снизу, чтобы не прилипало к футеру */
 }
 
 .group-devices-section h4 {
@@ -424,7 +425,9 @@
 
 .device-state-section {
   margin-top: 32px;
+  margin-bottom: 40px; /* Увеличенный отступ, чтобы не прилипало к футеру */
   padding-top: 24px;
+  padding-bottom: 20px; /* Дополнительный отступ снизу */
   border-top: 2px solid #e0e0e0;
 }
 
@@ -503,17 +506,25 @@
   overflow-y: auto;
   overflow-x: hidden;
   padding: 24px;
-  padding-bottom: 100px; /* Отступ для фиксированного футера (увеличен для надежности) */
+  padding-bottom: 80px; /* Отступ для фиксированного футера (высота футера ~60px + запас) */
   min-height: 0;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Секции информации */
 .device-info-section,
 .state-section {
   margin-bottom: 32px;
+}
+
+/* Секция с показаниями устройства */
+/* Секция с показаниями устройства */
+.device-state-section {
+  margin-bottom: 40px; /* Увеличенный отступ, чтобы не прилипало к футеру */
+  padding-bottom: 20px; /* Дополнительный отступ снизу */
 }
 
 .device-info-section h4,
@@ -690,6 +701,7 @@
 /* Таблица показаний */
 .readings-container {
   margin-top: 16px;
+  margin-bottom: 20px; /* Отступ снизу, чтобы не прилипало к футеру */
 }
 
 .readings-table {
@@ -2145,9 +2157,11 @@
     overflow-y: auto;
     overflow-x: hidden;
     padding: 12px;
+    padding-bottom: 80px; /* Отступ для фиксированного футера */
     -webkit-overflow-scrolling: touch;
     min-height: 0;
     max-height: 100%;
+    box-sizing: border-box;
   }
 
   .mobile-readings-cards {
@@ -2716,7 +2730,8 @@
   transform: translate(-50%, -50%);
   width: 90%;
   max-width: 1200px;
-  max-height: 90vh;
+  max-height: calc(100vh - 100px); /* Учитываем отступы сверху и снизу */
+  height: auto;
   background: white;
   border-radius: 12px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
@@ -2730,7 +2745,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 24px;
+  padding: 16px 24px;
   border-bottom: 2px solid #e0e0e0;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
@@ -2768,17 +2783,22 @@
 .archive-modal-content {
   flex: 1;
   overflow: hidden;
-  padding: 24px;
+  padding: 20px 24px;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  max-height: 100%;
 }
 
 .archive-modal-content .archive-controls {
-  margin-bottom: 20px;
-  padding-bottom: 20px;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
   border-bottom: 1px solid #e0e0e0;
   flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
 }
 
 .archive-table-container {
@@ -2789,6 +2809,7 @@
   min-height: 0;
   max-height: 100%;
   position: relative;
+  -webkit-overflow-scrolling: touch;
 }
   
 @media (max-width: 768px) {
@@ -2812,6 +2833,23 @@
   bottom: 0;
   z-index: 10;
   box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Адаптивность для планшетов */
+@media (max-width: 1024px) and (min-width: 769px) {
+  .archive-modal {
+    width: 95%;
+    max-width: 95%;
+    max-height: calc(100vh - 60px);
+  }
+  
+  .archive-modal-content {
+    padding: 16px 20px;
+  }
+  
+  .archive-modal-header {
+    padding: 16px 20px;
+  }
 }
 
 /* Адаптивность для мобильных устройств */
@@ -3354,7 +3392,7 @@
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 20px;
+  padding: 16px 20px;
   background: white;
   border-radius: 8px;
   margin-bottom: 0;
@@ -3362,6 +3400,7 @@
   max-height: 100%;
   display: flex;
   flex-direction: column;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Бегунок для изменения временного промежутка на графике */
@@ -3495,17 +3534,17 @@
 }
 
 .archive-chart-wrapper {
-  margin-bottom: 32px;
-  padding: 16px;
+  margin-bottom: 20px;
+  padding: 12px 16px;
   background: #f8f9fa;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .archive-chart-wrapper h4 {
-  margin: 0 0 16px 0;
+  margin: 0 0 12px 0;
   color: #333;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
 }
 

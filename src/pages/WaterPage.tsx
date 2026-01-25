@@ -40,7 +40,6 @@ const WaterPage: React.FC = () => {
   return (
     <div className="water-page">
       <div className="water-page-header">
-        <h1 className="water-page-title">Вода</h1>
         <div className="water-page-tabs">
           <button
             className={`water-tab ${activeTab === 'counters' ? 'active' : ''}`}
