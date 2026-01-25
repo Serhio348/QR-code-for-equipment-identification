@@ -61,7 +61,8 @@ const BeliotDevicesTest: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   
   // Состояние для архивных данных (для будущего локального архива)
-  const [archiveData, setArchiveData] = useState<any>(null);
+  // archiveData не используется, но setArchiveData нужен для сброса состояния
+  const [, setArchiveData] = useState<any>(null);
   
   // Состояние для управления архивом текущих показаний
   const [isArchiveOpen, setIsArchiveOpen] = useState<boolean>(false);
