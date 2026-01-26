@@ -11,9 +11,9 @@ import {
   addEquipment,
   updateEquipment,
   deleteEquipment
-} from '../features/equipment/services/equipmentApi';
-import { Equipment } from '../features/equipment/types/equipment';
-import { API_CONFIG } from '../config/api';
+} from '../../equipment/services/equipmentApi';
+import { Equipment } from '../../equipment/types/equipment';
+import { API_CONFIG } from '../../../config/api';
 import './ApiTest.css';
 
 const ApiTest: React.FC = () => {

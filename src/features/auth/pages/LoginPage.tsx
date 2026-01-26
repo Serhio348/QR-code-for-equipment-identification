@@ -7,7 +7,7 @@
 import { useState, FormEvent, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import LoadingSpinner from '../../../components/LoadingSpinner';
+import LoadingSpinner from '../../common/components/LoadingSpinner';
 import { loadRedirectPath, clearRedirectPath, clearLastPath } from '../../../utils/pathStorage';
 import { ROUTES } from '../../../utils/routes';
 import { resetPassword } from '../services/supabaseAuthApi';

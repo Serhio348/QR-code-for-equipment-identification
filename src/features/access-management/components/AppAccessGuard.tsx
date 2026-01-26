@@ -9,7 +9,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../auth/contexts/AuthContext';
 import { checkUserAccess } from '../services/supabaseAccessApi';
 import { ROUTES } from '../../../utils/routes';
-import LoadingSpinner from '../../../components/LoadingSpinner';
+import LoadingSpinner from '../../common/components/LoadingSpinner';
 
 interface AppAccessGuardProps {
   children: React.ReactNode;

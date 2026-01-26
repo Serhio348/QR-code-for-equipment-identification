@@ -7,7 +7,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import EquipmentPlate from '../components/EquipmentPlate';
 import MaintenanceLogModal from '../components/MaintenanceLogModal';
-import DocumentationModal from '../../../components/DocumentationModal';
+import DocumentationModal from '../../common/components/DocumentationModal';
 import PlateExportSettingsModal from '../components/PlateExportSettingsModal';
 import EquipmentPageHeader from '../components/EquipmentPage/EquipmentPageHeader';
 import StatusMessages from '../components/EquipmentPage/StatusMessages';
