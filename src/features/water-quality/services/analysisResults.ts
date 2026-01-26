@@ -12,7 +12,7 @@ import type {
   PaginationOptions,
   PaginatedResponse,
   AnalysisResultsFilter,
-} from '../../../types/waterQuality';
+} from '../../types/waterQuality';
 
 // Импортируем функции из модулей
 import { clearWaterQualityCache } from './cache';

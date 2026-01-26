@@ -13,7 +13,7 @@ import type {
 import { PARAMETER_METADATA, getAllParameters } from '../types/waterQuality';
 import { useWaterQualityNormManagement, useWaterQualityNorm } from '../hooks/useWaterQualityNorms';
 import { useSamplingPoints } from '../hooks/useSamplingPoints';
-import { ROUTES } from '../utils/routes';
+import { ROUTES } from '../../../utils/routes';
 import './WaterQualityNormForm.css';
 
 interface WaterQualityNormFormProps {

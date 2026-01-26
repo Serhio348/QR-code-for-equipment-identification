@@ -11,7 +11,7 @@ import {
   createWaterQualityNorm,
   updateWaterQualityNorm,
   deleteWaterQualityNorm,
-} from '../services/api/waterQuality';
+} from '../services';
 import type { WaterQualityNorm, WaterQualityNormInput } from '../types/waterQuality';
 
 interface UseWaterQualityNormsResult {

@@ -11,7 +11,7 @@ import type {
   WaterQualityNorm,
   WaterQualityNormInput,
   WaterQualityNormUpdate,
-} from '../../../types/waterQuality';
+} from '../../types/waterQuality';
 
 import {
   deduplicateRequest,

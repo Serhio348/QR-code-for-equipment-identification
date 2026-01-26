@@ -8,7 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { useWaterQualityNorms } from '../hooks/useWaterQualityNorms';
 import { useSamplingPoints } from '../hooks/useSamplingPoints';
 import { useWaterQualityNormManagement } from '../hooks/useWaterQualityNorms';
-import { ROUTES } from '../utils/routes';
+import { ROUTES } from '../../../utils/routes';
 import type { WaterQualityParameter } from '../types/waterQuality';
 import { PARAMETER_METADATA, getAllParameters } from '../types/waterQuality';
 import { toast } from 'react-toastify';

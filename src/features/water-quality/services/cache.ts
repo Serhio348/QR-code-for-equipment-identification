@@ -2,7 +2,7 @@
  * Модуль кэширования для API качества воды
  */
 
-import type { CacheOptions } from '../../../types/waterQuality';
+import type { CacheOptions } from '../../types/waterQuality';
 
 /**
  * Структура записи в кэше

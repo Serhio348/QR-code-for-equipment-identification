@@ -16,7 +16,7 @@ import {
   createAnalysisResults,
   updateAnalysisResult,
   deleteAnalysisResult,
-} from '../services/api/waterQuality';
+} from '../services';
 import type {
   WaterAnalysis,
   WaterAnalysisInput,

@@ -14,7 +14,7 @@ import type {
   PaginatedResponse,
   WaterQualityAlert,
   WaterQualityParameter,
-} from '../../../types/waterQuality';
+} from '../../types/waterQuality';
 
 import { MAX_HISTORICAL_LIMIT, clearWaterQualityCache } from './cache';
 import { validateId, validateLimit } from './validators';

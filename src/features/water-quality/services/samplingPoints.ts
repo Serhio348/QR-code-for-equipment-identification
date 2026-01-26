@@ -6,7 +6,7 @@
  */
 
 import { supabase } from '../../../config/supabase';
-import type { SamplingPoint, SamplingPointInput, CacheOptions } from '../../../types/waterQuality';
+import type { SamplingPoint, SamplingPointInput, CacheOptions } from '../../types/waterQuality';
 
 // Импортируем функции из модулей
 import {

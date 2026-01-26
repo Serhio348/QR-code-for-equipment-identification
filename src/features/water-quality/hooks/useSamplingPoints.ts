@@ -11,7 +11,7 @@ import {
   createSamplingPoint,
   updateSamplingPoint,
   deleteSamplingPoint,
-} from '../services/api/waterQuality';
+} from '../services';
 import type { SamplingPoint, SamplingPointInput } from '../types/waterQuality';
 
 interface UseSamplingPointsResult {
