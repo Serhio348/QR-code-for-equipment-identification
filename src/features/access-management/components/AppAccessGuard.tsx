@@ -6,10 +6,10 @@
 
 import { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../features/auth/contexts/AuthContext';
-import { checkUserAccess } from '../services/api/supabaseAccessApi';
-import { ROUTES } from '../utils/routes';
-import LoadingSpinner from './LoadingSpinner';
+import { useAuth } from '../../auth/contexts/AuthContext';
+import { checkUserAccess } from '../services/supabaseAccessApi';
+import { ROUTES } from '../../../utils/routes';
+import LoadingSpinner from '../../../components/LoadingSpinner';
 
 interface AppAccessGuardProps {
   children: React.ReactNode;
@@ -72,4 +72,3 @@ export default function AppAccessGuard({ children, appId }: AppAccessGuardProps)
 
   return <>{children}</>;
 }
-

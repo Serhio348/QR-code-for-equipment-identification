@@ -7,12 +7,12 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../features/auth/contexts/AuthContext';
-import { getAllUserAccess, updateUserAccess } from '../services/api/supabaseAccessApi';
+import { useAuth } from '../../auth/contexts/AuthContext';
+import { getAllUserAccess, updateUserAccess } from '../services/supabaseAccessApi';
 import { AVAILABLE_APPS, type UserAppAccess, type AppId } from '../types/access';
-import { ROUTES } from '../utils/routes';
-import { showError, showSuccess } from '../utils/toast';
-import LoadingSpinner from '../components/LoadingSpinner';
+import { ROUTES } from '../../../utils/routes';
+import { showError, showSuccess } from '../../../utils/toast';
+import LoadingSpinner from '../../../components/LoadingSpinner';
 import './AccessSettingsPage.css';
 
 const AccessSettingsPage: React.FC = () => {
