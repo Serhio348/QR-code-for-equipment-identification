@@ -14,7 +14,7 @@ import {
   getDeviceOverride,
   hasDeviceOverride,
   DeviceOverrides,
-} from '../utils/beliotStorage';
+} from '../services/beliotStorage';
 
 export interface UseBeliotDevicesStorageReturn {
   overrides: DeviceOverrides;

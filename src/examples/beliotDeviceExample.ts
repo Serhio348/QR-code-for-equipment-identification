@@ -12,7 +12,7 @@ import {
   getAbonentMainData,
   getCompanyDevicesFromAbonent,
   GetCompanyDevicesParams,
-} from '../services/api/beliotDeviceApi';
+} from '../features/water-monitoring/services/beliotDeviceApi';
 
 /**
  * Пример 1: Получить все устройства компании
