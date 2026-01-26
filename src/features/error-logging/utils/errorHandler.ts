@@ -266,7 +266,7 @@ export function logError(error: unknown, context?: Record<string, any>): void {
   }
 
   // Импортируем динамически, чтобы избежать циклических зависимостей
-  import('../services/api/errorLogsApi')
+  import('../services/errorLogsApi')
     .then(({ logErrorToDatabase }) => {
       logErrorToDatabase(error, context, severity).catch((logErr) => {
         // Игнорируем ошибки логирования, чтобы не создавать бесконечный цикл

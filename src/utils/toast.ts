@@ -6,7 +6,7 @@
  */
 
 import { toast as toastify, ToastOptions } from 'react-toastify';
-import { handleError, logError } from './errorHandler';
+import { handleError, logError } from '../features/error-logging/utils/errorHandler';
 
 /**
  * Типы уведомлений
