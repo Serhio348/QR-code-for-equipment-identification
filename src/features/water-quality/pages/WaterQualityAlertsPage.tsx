@@ -7,7 +7,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { getAllAlerts, updateAlertStatus } from '../services';
-import { ROUTES } from '../../../shared/utils/routes';
+import { ROUTES } from '@/shared/utils/routes';
 import type {
   WaterQualityAlert,
   AlertStatus,

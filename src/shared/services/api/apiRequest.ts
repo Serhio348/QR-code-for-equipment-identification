@@ -5,7 +5,7 @@
  * Обрабатывает CORS ошибки и логирование
  */
 
-import { API_CONFIG } from '../../shared/config/api';
+import { API_CONFIG } from '@/shared/config/api';
 import { ApiResponse } from './types';
 
 /**

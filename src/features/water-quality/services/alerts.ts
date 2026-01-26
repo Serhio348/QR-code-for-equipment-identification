@@ -5,7 +5,7 @@
  * (обычно через RPC в БД).
  */
 
-import { supabase } from '../../../shared/config/supabase';
+import { supabase } from '@/shared/config/supabase';
 import type {
   AlertPriority,
   AlertStatus,

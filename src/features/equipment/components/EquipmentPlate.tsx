@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FilterSpecs } from '../types/equipment';
 import QRCodeComponent from '../../common/components/QRCode';
-import { formatDate } from '../../../shared/utils/dateFormatting';
+import { formatDate } from '@/shared/utils/dateFormatting';
 import './EquipmentPlate.css';
 
 interface EquipmentPlateProps {

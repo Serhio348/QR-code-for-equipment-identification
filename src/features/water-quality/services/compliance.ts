@@ -5,7 +5,7 @@
  * для подбора/проверки применимых нормативов.
  */
 
-import { supabase } from '../../../shared/config/supabase';
+import { supabase } from '@/shared/config/supabase';
 import { clearWaterQualityCache } from './cache';
 import { validateId } from './validators';
 import type {

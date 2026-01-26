@@ -9,8 +9,8 @@
  * @deprecated Используйте src/services/api/supabaseBeliotOverridesApi.ts
  */
 
-import { apiRequest } from '../../../services/api/apiRequest';
-import { API_CONFIG } from '../../../shared/config/api';
+import { apiRequest } from '@/shared/services/api/apiRequest';
+import { API_CONFIG } from '@/shared/config/api';
 
 export interface BeliotDeviceOverride {
   name?: string;

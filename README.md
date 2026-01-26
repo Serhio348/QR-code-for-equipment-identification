@@ -331,99 +331,201 @@ docker run -p 8080:80 equipment-management
 2. Создайте проект Google Apps Script
 3. Скопируйте код из `backend/equipment-db/Code.gs`
 4. Разверните как веб-приложение
-5. Скопируйте URL в `src/config/api.ts` или `.env.local`
+5. Скопируйте URL в `.env.local` (переменная `VITE_EQUIPMENT_API_URL`)
 
-### GitHub Actions (автоматический сбор данных)
+### Railway Cron Jobs (автоматический сбор данных)
 
-Настройка автоматического сбора данных со счетчиков воды:
+Настройка автоматического сбора данных со счетчиков воды через Railway:
 
-1. Перейдите в Settings → Secrets and variables → Actions
-2. Добавьте следующие секреты:
+1. Настройте переменные окружения в Railway Dashboard:
    - `SUPABASE_URL` - URL вашего проекта Supabase
    - `SUPABASE_SERVICE_ROLE_KEY` - Service Role Key из Supabase Dashboard
    - `BELIOT_LOGIN` - логин для Beliot API
    - `BELIOT_PASSWORD` - пароль для Beliot API
-   - `BELIOT_API_BASE_URL` - базовый URL Beliot API
+   - `BELIOT_API_BASE_URL` - базовый URL Beliot API (опционально)
 
-3. Workflow автоматически запускается каждый час в 50 минут (например, 00:50, 01:50, 02:50...)
+2. Cron job настроен в `railway.json` и запускается каждый час автоматически
 
-Подробнее см. [docs/GITHUB_ACTIONS_DELAYS.md](docs/GITHUB_ACTIONS_DELAYS.md)
+**Примечание:** GitHub Actions также может использоваться как альтернатива (см. `.github/workflows/collect-readings.yml`)
 
 ## 📁 Структура проекта
+
+Проект использует **feature-based архитектуру** для лучшей организации кода:
 
 ```
 QR-code-for-equipment-identification/
 ├── src/                          # Frontend (React приложение)
-│   ├── components/              # React компоненты
-│   │   ├── EquipmentList.tsx    # Список оборудования
-│   │   ├── EquipmentForm.tsx    # Форма добавления/редактирования
-│   │   ├── EquipmentPlate.tsx   # Табличка оборудования
-│   │   ├── DriveFilesList.tsx   # Список файлов из Google Drive
-│   │   ├── BeliotDevicesTest.tsx # Компонент мониторинга счетчиков
-│   │   ├── MaintenanceLog.tsx    # Журнал обслуживания
-│   │   └── ...                   # Другие компоненты
-│   ├── pages/                   # Страницы приложения
-│   │   ├── HomePage.tsx         # Главная страница (список оборудования)
-│   │   ├── MainMenuPage.tsx     # Главное меню
-│   │   ├── EquipmentPage.tsx    # Страница просмотра оборудования
-│   │   ├── EquipmentFormPage.tsx # Страница формы оборудования
-│   │   ├── LoginPage.tsx        # Страница входа
-│   │   ├── RegisterPage.tsx     # Страница регистрации
-│   │   ├── ResetPasswordPage.tsx # Страница восстановления пароля
-│   │   ├── WaterPage.tsx        # Страница мониторинга счетчиков
-│   │   ├── WaterQualityJournalPage.tsx # Журнал анализов качества воды
-│   │   ├── WaterAnalysisFormPage.tsx   # Форма создания/редактирования анализа
-│   │   ├── WaterAnalysisViewPage.tsx   # Просмотр анализа
-│   │   ├── WaterQualityNormsPage.tsx  # Список нормативов
-│   │   ├── WaterQualityNormFormPage.tsx # Форма норматива
-│   │   ├── WaterQualityNormViewPage.tsx # Просмотр норматива
-│   │   ├── WaterQualityAlertsPage.tsx  # Оповещения о превышении
-│   │   ├── SamplingPointsPage.tsx      # Список точек отбора проб
-│   │   ├── SamplingPointFormPage.tsx   # Форма точки отбора проб
-│   │   ├── SamplingPointViewPage.tsx   # Просмотр точки отбора проб
-│   │   ├── AccessSettingsPage.tsx      # Настройки доступа (админ)
-│   │   ├── ErrorLogsPage.tsx           # Логи ошибок (админ)
-│   │   ├── WorkshopSettingsPage.tsx    # Управление участками (админ)
-│   │   └── NotFoundPage.tsx            # Страница 404
-│   ├── services/                # API клиенты
-│   │   ├── api/                 # API функции
-│   │   │   ├── supabaseAuthApi.ts      # Аутентификация
-│   │   │   ├── supabaseAccessApi.ts    # Управление доступом
-│   │   │   ├── beliotReadingsApi.ts    # Показания счетчиков
-│   │   │   ├── errorLogsApi.ts         # Логирование ошибок
-│   │   │   ├── waterQuality/           # API качества воды
-│   │   │   │   ├── samplingPoints.ts  # Пункты отбора проб
-│   │   │   │   ├── waterAnalysis.ts    # Анализы
-│   │   │   │   ├── analysisResults.ts # Результаты измерений
-│   │   │   │   ├── waterQualityNorms.ts # Нормативы
-│   │   │   │   ├── compliance.ts       # Проверка соответствия
-│   │   │   │   ├── alerts.ts           # Оповещения
-│   │   │   │   └── incidents.ts        # Инциденты
-│   │   │   ├── waterQualityStorage.ts  # Хранилище файлов
-│   │   │   └── ...                     # Другие API
-│   │   └── equipmentApi.ts      # Клиент для работы с оборудованием
-│   ├── hooks/                   # Кастомные React хуки
-│   │   ├── useBeliotDeviceReadings.ts  # Хук для работы с показаниями
-│   │   ├── useEquipmentData.ts        # Хук для данных оборудования
-│   │   └── ...                        # Другие хуки
-│   ├── contexts/                # React контексты
-│   │   └── AuthContext.tsx      # Контекст аутентификации
-│   ├── types/                   # TypeScript типы
-│   │   ├── equipment.ts         # Типы данных оборудования
-│   │   ├── auth.ts              # Типы аутентификации
-│   │   └── ...                  # Другие типы
-│   ├── utils/                   # Утилиты
-│   │   ├── routes.ts            # Управление маршрутами
-│   │   ├── pdfExport.ts         # Экспорт в PDF
-│   │   ├── errorHandler.ts      # Централизованная обработка ошибок
-│   │   ├── toast.ts             # Уведомления (toast)
-│   │   └── ...                  # Другие утилиты
-│   ├── config/                  # Конфигурация
-│   │   ├── api.ts               # URL API endpoints
-│   │   └── supabase.ts          # Конфигурация Supabase
-│   ├── styles/                  # Стили
-│   │   └── colors.css           # CSS переменные для тем
-│   └── App.tsx                  # Главный компонент приложения
+│   ├── features/                 # Feature-based модули
+│   │   ├── equipment/            # Управление оборудованием
+│   │   │   ├── components/       # Компоненты оборудования
+│   │   │   │   ├── EquipmentList.tsx
+│   │   │   │   ├── EquipmentForm.tsx
+│   │   │   │   ├── EquipmentPlate.tsx
+│   │   │   │   ├── DriveFilesList.tsx
+│   │   │   │   ├── MaintenanceLog.tsx
+│   │   │   │   └── ...
+│   │   │   ├── pages/            # Страницы оборудования
+│   │   │   │   ├── EquipmentListPage.tsx
+│   │   │   │   ├── EquipmentPage.tsx
+│   │   │   │   └── EquipmentFormPage.tsx
+│   │   │   ├── services/         # API для оборудования
+│   │   │   │   ├── equipmentApi.ts
+│   │   │   │   ├── equipmentQueries.ts
+│   │   │   │   ├── equipmentMutations.ts
+│   │   │   │   ├── driveApi.ts
+│   │   │   │   └── maintenanceApi.ts
+│   │   │   ├── hooks/            # Хуки оборудования
+│   │   │   │   ├── useEquipmentData.ts
+│   │   │   │   ├── useEquipmentForm.ts
+│   │   │   │   └── useEquipmentDates.ts
+│   │   │   ├── types/            # Типы оборудования
+│   │   │   │   └── equipment.ts
+│   │   │   └── constants/        # Константы
+│   │   │       └── equipmentTypes.ts
+│   │   │
+│   │   ├── water-monitoring/     # Мониторинг счетчиков воды (Beliot)
+│   │   │   ├── components/
+│   │   │   │   └── BeliotDevicesTest.tsx
+│   │   │   ├── pages/
+│   │   │   │   └── WaterPage.tsx
+│   │   │   ├── hooks/
+│   │   │   │   ├── useBeliotDeviceReadings.ts
+│   │   │   │   └── useBeliotDevicesStorage.ts
+│   │   │   └── services/
+│   │   │       ├── beliotApi.ts
+│   │   │       ├── beliotAuthApi.ts
+│   │   │       ├── beliotDeviceApi.ts
+│   │   │       ├── beliotDevicesStorageApi.ts
+│   │   │       ├── beliotObjectsApi.ts
+│   │   │       └── supabaseBeliotReadingsApi.ts
+│   │   │
+│   │   ├── water-quality/        # Анализ качества воды
+│   │   │   ├── components/
+│   │   │   │   ├── WaterAnalysisForm.tsx
+│   │   │   │   ├── WaterQualityNormForm.tsx
+│   │   │   │   └── SamplingPointForm.tsx
+│   │   │   ├── pages/
+│   │   │   │   ├── WaterQualityJournalPage.tsx
+│   │   │   │   ├── WaterAnalysisFormPage.tsx
+│   │   │   │   ├── WaterAnalysisViewPage.tsx
+│   │   │   │   ├── WaterQualityAlertsPage.tsx
+│   │   │   │   ├── WaterQualityNormsPage.tsx
+│   │   │   │   ├── SamplingPointsPage.tsx
+│   │   │   │   └── ...
+│   │   │   ├── services/
+│   │   │   │   ├── waterAnalysis.ts
+│   │   │   │   ├── analysisResults.ts
+│   │   │   │   ├── samplingPoints.ts
+│   │   │   │   ├── waterQualityNorms.ts
+│   │   │   │   ├── compliance.ts
+│   │   │   │   ├── alerts.ts
+│   │   │   │   ├── incidents.ts
+│   │   │   │   └── waterQualityStorage.ts
+│   │   │   ├── hooks/
+│   │   │   │   ├── useWaterQualityMeasurements.ts
+│   │   │   │   ├── useWaterQualityNorms.ts
+│   │   │   │   └── useSamplingPoints.ts
+│   │   │   └── types/
+│   │   │       └── waterQuality.ts
+│   │   │
+│   │   ├── auth/                 # Аутентификация
+│   │   │   ├── pages/
+│   │   │   │   ├── LoginPage.tsx
+│   │   │   │   ├── RegisterPage.tsx
+│   │   │   │   └── ResetPasswordPage.tsx
+│   │   │   ├── services/
+│   │   │   │   ├── supabaseAuthApi.ts
+│   │   │   │   └── authApi.ts
+│   │   │   ├── hooks/
+│   │   │   │   └── useCurrentUser.ts
+│   │   │   ├── contexts/
+│   │   │   │   └── AuthContext.tsx
+│   │   │   └── types/
+│   │   │       ├── auth.ts
+│   │   │       └── user.ts
+│   │   │
+│   │   ├── access-management/    # Управление доступом
+│   │   │   ├── pages/
+│   │   │   │   └── AccessSettingsPage.tsx
+│   │   │   ├── services/
+│   │   │   │   └── supabaseAccessApi.ts
+│   │   │   ├── components/
+│   │   │   │   └── AppAccessGuard.tsx
+│   │   │   └── types/
+│   │   │       └── access.ts
+│   │   │
+│   │   ├── error-logging/        # Логирование ошибок
+│   │   │   ├── pages/
+│   │   │   │   └── ErrorLogsPage.tsx
+│   │   │   ├── services/
+│   │   │   │   └── errorLogsApi.ts
+│   │   │   └── utils/
+│   │   │       ├── errorHandler.ts
+│   │   │       └── logger.ts
+│   │   │
+│   │   ├── workshops/            # Управление участками
+│   │   │   ├── pages/
+│   │   │   │   └── WorkshopSettingsPage.tsx
+│   │   │   ├── services/
+│   │   │   │   └── supabaseWorkshopApi.ts
+│   │   │   ├── hooks/
+│   │   │   │   └── useWorkshops.ts
+│   │   │   └── constants/
+│   │   │       └── workshops.ts
+│   │   │
+│   │   └── common/              # Общие компоненты и страницы
+│   │       ├── pages/
+│   │       │   ├── MainMenuPage.tsx
+│   │       │   ├── LandingPage.tsx
+│   │       │   └── NotFoundPage.tsx
+│   │       └── components/
+│   │           ├── LoadingSpinner.tsx
+│   │           ├── StatusBadge.tsx
+│   │           ├── QRCode.tsx
+│   │           ├── QRScanner/
+│   │           ├── InstallPWA.tsx
+│   │           ├── AppFooter.tsx
+│   │           ├── AppWatermark.tsx
+│   │           ├── AdminModal.tsx
+│   │           ├── DocumentationModal.tsx
+│   │           ├── ProtectedRoute.tsx
+│   │           └── ...
+│   │
+│   ├── shared/                   # Общие утилиты и типы
+│   │   ├── utils/                # Утилиты
+│   │   │   ├── routes.ts
+│   │   │   ├── pathStorage.ts
+│   │   │   ├── pdfExport.ts
+│   │   │   ├── qrCodeParser.ts
+│   │   │   ├── dateFormatting.ts
+│   │   │   ├── deviceDetection.ts
+│   │   │   ├── sessionStorage.ts
+│   │   │   ├── toast.ts
+│   │   │   └── ...
+│   │   ├── services/              # Общие API сервисы
+│   │   │   └── api/
+│   │   │       ├── apiRequest.ts
+│   │   │       ├── corsFallback.ts
+│   │   │       ├── supabaseBeliotOverridesApi.ts
+│   │   │       └── types.ts
+│   │   ├── types/                # Общие типы
+│   │   │   └── plateExport.ts
+│   │   ├── config/               # Конфигурация
+│   │   │   ├── api.ts
+│   │   │   └── supabase.ts
+│   │   └── hooks/                # Общие хуки
+│   │       └── useDeviceDetection.ts
+│   │
+│   ├── test/                     # Тестовое окружение
+│   │   ├── setup.ts              # Настройка тестов
+│   │   └── mocks/
+│   │       └── supabase.ts       # Моки для Supabase
+│   │
+│   ├── styles/                   # Глобальные стили
+│   │   └── colors.css            # CSS переменные для тем
+│   │
+│   ├── App.tsx                   # Главный компонент приложения
+│   └── main.tsx                  # Точка входа
 │
 ├── backend/                      # Backend (Google Apps Script)
 │   └── equipment-db/            # API для базы данных оборудования
@@ -432,20 +534,23 @@ QR-code-for-equipment-identification/
 │       └── ...                  # Другие модули
 │
 ├── scripts/                      # Скрипты
-│   └── collect-beliot-readings.ts # Скрипт сбора данных со счетчиков
+│   ├── collect-beliot-readings.ts # Скрипт сбора данных со счетчиков
+│   └── generate-icons.js         # Генерация иконок PWA
 │
 ├── docs/                        # Документация
 │   ├── APPLICATION_OVERVIEW.md  # Полный обзор приложения
 │   ├── MIGRATION_PLAN.md        # План миграции с Supabase на собственный сервер
 │   ├── supabase-schema.sql      # SQL схема для Supabase
 │   ├── TESTING.md               # Документация по тестированию
-│   ├── GITHUB_ACTIONS_DELAYS.md # Документация по GitHub Actions
-│   ├── DESIGN_REDESIGN_GUIDE.md # Руководство по редизайну
-│   ├── LOGO_USAGE.md            # Инструкции по добавлению логотипа
-│   ├── ERROR_HANDLING.md        # Документация по обработке ошибок
-│   ├── ERROR_LOGS_SETUP.md      # Настройка системы логирования ошибок
+│   ├── FIX_AUTH_ERRORS.md       # Исправление ошибок аутентификации
+│   ├── PWA_UPDATE_MECHANISM.md  # Механизм обновления PWA
 │   ├── WATER_QUALITY_ANALYSIS.md # Документация по модулю качества воды
 │   ├── WATER_QUALITY_DEVELOPMENT_ROADMAP.md # План развития модуля
+│   ├── WATER_QUALITY_MEASUREMENTS_PLAN_V2.md # План реализации (V2)
+│   ├── BELIOT_API_SPEC.md       # Спецификация Beliot API
+│   ├── beliot-api-openapi.json  # OpenAPI спецификация Beliot API
+│   ├── DATABASE_STORAGE_MANAGEMENT.md # Управление хранилищем БД
+│   ├── STORAGE_CALCULATION_20_DEVICES.md # Расчет объема данных
 │   ├── migrations/              # SQL миграции
 │   │   ├── create-beliot-readings-table.sql
 │   │   ├── create-water-quality-tables.sql
@@ -458,7 +563,10 @@ QR-code-for-equipment-identification/
 │   │   ├── create-workshops-table.sql
 │   │   ├── create-error-logs-table.sql
 │   │   └── README.md
-│   └── ...                      # Другая документация
+│   └── queries/                 # SQL запросы для отладки
+│       ├── check-hourly-readings.sql
+│       ├── check-device-by-id-template.sql
+│       └── ...
 │
 ├── Dockerfile                   # Docker конфигурация для production
 ├── docker-entrypoint.sh         # Скрипт запуска контейнера
@@ -500,16 +608,16 @@ QR-code-for-equipment-identification/
 - Проверьте учетные данные в `.env.local`
 - Проверьте логи в консоли браузера
 
-### GitHub Actions не запускается
-- Проверьте, что все секреты настроены в Settings → Secrets
-- Проверьте логи workflow в Actions → Collect Beliot Readings
-- Убедитесь, что workflow включен
-
 ### Railway cron jobs не работают
 - Проверьте, что `railway.json` содержит правильную конфигурацию cron
 - Проверьте переменные окружения в Railway Dashboard
 - Проверьте логи в Railway Dashboard → Deployments → Logs
 - Убедитесь, что скрипт `collect-readings` доступен в контейнере
+
+### GitHub Actions не запускается (альтернативный метод)
+- Проверьте, что все секреты настроены в Settings → Secrets
+- Проверьте логи workflow в Actions → Collect Beliot Readings
+- Убедитесь, что workflow включен
 
 ### Проблемы с модулем качества воды
 - Проверьте, что все миграции выполнены в правильном порядке
@@ -545,8 +653,11 @@ QR-code-for-equipment-identification/
 - [MIGRATION_PLAN.md](docs/MIGRATION_PLAN.md) - План миграции с Supabase на собственный сервер
 - [WATER_QUALITY_ANALYSIS.md](docs/WATER_QUALITY_ANALYSIS.md) - Документация по модулю качества воды
 - [WATER_QUALITY_DEVELOPMENT_ROADMAP.md](docs/WATER_QUALITY_DEVELOPMENT_ROADMAP.md) - План развития модуля качества воды
+- [WATER_QUALITY_MEASUREMENTS_PLAN_V2.md](docs/WATER_QUALITY_MEASUREMENTS_PLAN_V2.md) - Детальный план реализации модуля качества воды
 - [TESTING.md](docs/TESTING.md) - Документация по тестированию
-- [ERROR_HANDLING.md](docs/ERROR_HANDLING.md) - Обработка ошибок
+- [FIX_AUTH_ERRORS.md](docs/FIX_AUTH_ERRORS.md) - Исправление ошибок аутентификации
+- [PWA_UPDATE_MECHANISM.md](docs/PWA_UPDATE_MECHANISM.md) - Механизм обновления PWA
+- [BELIOT_API_SPEC.md](docs/BELIOT_API_SPEC.md) - Спецификация Beliot API
 
 ## 🚀 Развертывание
 
@@ -579,4 +690,5 @@ QR-code-for-equipment-identification/
 ---
 
 **Версия:** 2.0.0  
-**Последнее обновление:** 2024
+**Последнее обновление:** 2026  
+**Архитектура:** Feature-based структура

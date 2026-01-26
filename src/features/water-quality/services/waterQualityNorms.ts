@@ -5,7 +5,7 @@
  * и (опционально) для конкретной точки отбора проб или оборудования.
  */
 
-import { supabase } from '../../../shared/config/supabase';
+import { supabase } from '@/shared/config/supabase';
 import type {
   CacheOptions,
   WaterQualityNorm,

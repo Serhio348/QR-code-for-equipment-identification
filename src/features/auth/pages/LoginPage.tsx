@@ -8,10 +8,10 @@ import { useState, FormEvent, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import LoadingSpinner from '../../common/components/LoadingSpinner';
-import { loadRedirectPath, clearRedirectPath, clearLastPath } from '../../../shared/utils/pathStorage';
-import { ROUTES } from '../../../shared/utils/routes';
+import { loadRedirectPath, clearRedirectPath, clearLastPath } from '@/shared/utils/pathStorage';
+import { ROUTES } from '@/shared/utils/routes';
 import { resetPassword } from '../services/supabaseAuthApi';
-import { showError, showSuccess } from '../../../shared/utils/toast';
+import { showError, showSuccess } from '@/shared/utils/toast';
 import './LoginPage.css';
 
 export default function LoginPage() {

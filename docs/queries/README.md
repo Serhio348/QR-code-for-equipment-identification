@@ -6,6 +6,11 @@
 
 - **query-past-hour.sql** - Запросы для получения данных за последний час
 - **check-hourly-readings.sql** - Проверка сохранения данных за каждый час (диагностика)
+- **check-device-by-id-template.sql** - Шаблон для проверки данных конкретного устройства (замените YOUR_DEVICE_ID)
+- **check-today-hourly-readings.sql** - Проверка данных за сегодня по часам
+- **check-yesterday-data.sql** - Проверка данных за вчера
+- **check-missing-devices.sql** - Проверка отсутствующих устройств
+- **monitor-recent-readings.sql** - Мониторинг недавних показаний
 
 ## Как использовать
 

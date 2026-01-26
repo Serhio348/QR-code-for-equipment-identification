@@ -8,7 +8,7 @@
  */
 
 // Реэкспорт типов
-export type { ApiResponse, DriveFolderResult, DriveFile } from '../../../services/api/types';
+export type { ApiResponse, DriveFolderResult, DriveFile } from '@/shared/services/api/types';
 
 // Реэкспорт GET запросов
 export {

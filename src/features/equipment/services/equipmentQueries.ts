@@ -5,9 +5,9 @@
  */
 
 import { Equipment, EquipmentType } from '../types/equipment';
-import { apiRequest } from '../../../services/api/apiRequest';
-import { API_CONFIG } from '../../../shared/config/api';
-import { ApiResponse } from '../../../services/api/types';
+import { apiRequest } from '@/shared/services/api/apiRequest';
+import { API_CONFIG } from '@/shared/config/api';
+import { ApiResponse } from '@/shared/services/api/types';
 
 /**
  * Получить все оборудование

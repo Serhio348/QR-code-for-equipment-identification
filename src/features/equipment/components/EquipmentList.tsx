@@ -5,11 +5,11 @@
 
 import React, { useState, useMemo } from 'react';
 import { Equipment } from '../types/equipment';
-import { formatDate } from '../../../shared/utils/dateFormatting';
+import { formatDate } from '@/shared/utils/dateFormatting';
 import { EQUIPMENT_TYPE_OPTIONS } from '../constants/equipmentTypes';
 import { useEquipmentData } from '../hooks/useEquipmentData';
 import { useWorkshops } from '../../workshops/hooks/useWorkshops';
-import { isDriveId } from '../../../shared/utils/qrCodeParser';
+import { isDriveId } from '@/shared/utils/qrCodeParser';
 import StatusBadge from '../../common/components/StatusBadge';
 import QRScanner from '../../common/components/QRScanner/QRScanner';
 import './EquipmentList.css';

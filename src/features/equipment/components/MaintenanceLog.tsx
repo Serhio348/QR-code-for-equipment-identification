@@ -13,7 +13,7 @@ import {
   deleteMaintenanceEntry,
   updateEquipment
 } from '../services/equipmentApi';
-import { formatDate } from '../../../shared/utils/dateFormatting';
+import { formatDate } from '@/shared/utils/dateFormatting';
 import './MaintenanceLog.css';
 
 interface MaintenanceLogProps {

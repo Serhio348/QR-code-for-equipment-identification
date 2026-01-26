@@ -16,8 +16,8 @@ import {
   type ErrorLog,
   type ErrorLogFilters,
 } from '../services/errorLogsApi';
-import { showError, showSuccess } from '../../../shared/utils/toast';
-import { ROUTES } from '../../../shared/utils/routes';
+import { showError, showSuccess } from '@/shared/utils/toast';
+import { ROUTES } from '@/shared/utils/routes';
 import LoadingSpinner from '../../common/components/LoadingSpinner';
 import './ErrorLogsPage.css';
 

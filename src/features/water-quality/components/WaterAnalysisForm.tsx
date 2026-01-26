@@ -19,7 +19,7 @@ import { useWaterAnalysisManagement, useWaterAnalysis } from '../hooks/useWaterQ
 import { useSamplingPoints } from '../hooks/useSamplingPoints';
 import { useCurrentUser } from '../../auth/hooks/useCurrentUser';
 import { createAnalysisResults, updateAnalysisResult, deleteAnalysisResult, checkResultCompliance, uploadAnalysisPDF, deleteAnalysisPDF } from '../services';
-import { ROUTES } from '../../../shared/utils/routes';
+import { ROUTES } from '@/shared/utils/routes';
 import './WaterAnalysisForm.css';
 
 interface WaterAnalysisFormProps {

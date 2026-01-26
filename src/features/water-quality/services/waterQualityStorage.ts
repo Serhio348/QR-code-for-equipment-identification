@@ -3,7 +3,7 @@
  * Загрузка PDF файлов в Supabase Storage
  */
 
-import { supabase } from '../../../shared/config/supabase';
+import { supabase } from '@/shared/config/supabase';
 
 const STORAGE_BUCKET = 'water-quality-analysis';
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 МБ
