@@ -8,7 +8,7 @@ import { Equipment, EquipmentType, EquipmentStatus } from '../types/equipment';
 import { useEquipmentForm } from '../hooks/useEquipmentForm';
 import { SpecFieldsRenderer } from './EquipmentForm/SpecFields/SpecFieldsRenderer';
 import { EQUIPMENT_TYPE_OPTIONS } from '../constants/equipmentTypes';
-import { useWorkshops } from '../../../hooks/useWorkshops';
+import { useWorkshops } from '../../workshops/hooks/useWorkshops';
 import './EquipmentForm.css';
 
 interface EquipmentFormProps {
