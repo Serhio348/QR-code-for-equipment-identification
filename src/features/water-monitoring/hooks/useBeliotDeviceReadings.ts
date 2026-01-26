@@ -14,7 +14,7 @@ import {
   type BeliotDeviceReading,
   type GetReadingsOptions,
   type BeliotReadingStats,
-} from '../services/api/supabaseBeliotReadingsApi';
+} from '../services/supabaseBeliotReadingsApi';
 
 /**
  * Результат работы хука

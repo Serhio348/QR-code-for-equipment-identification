@@ -11,15 +11,15 @@ import {
   getDeviceReadings,
   BeliotDevice,
   DeviceReadings,
-} from '../services/api/beliotDeviceApi';
+} from '../services/beliotDeviceApi';
 import { useBeliotDevicesStorage } from '../hooks/useBeliotDevicesStorage';
 import {
   getBeliotDevicesOverrides,
   saveBeliotDeviceOverride,
   BeliotDeviceOverride,
-} from '../services/api/supabaseBeliotOverridesApi';
+} from '../../../services/api/supabaseBeliotOverridesApi';
 import { useBeliotDeviceReadings } from '../hooks/useBeliotDeviceReadings';
-import { saveBeliotReading } from '../services/api/supabaseBeliotReadingsApi';
+import { saveBeliotReading } from '../services/supabaseBeliotReadingsApi';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import {

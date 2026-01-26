@@ -9,7 +9,7 @@
  * Примечание: API может быть доступен только из внутренней сети или через VPN
  */
 
-import { API_CONFIG } from '../../config/api';
+import { API_CONFIG } from '../../../config/api';
 
 /**
  * Базовый URL beliot API

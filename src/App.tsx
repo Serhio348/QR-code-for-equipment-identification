@@ -10,7 +10,7 @@ import RegisterPage from './pages/RegisterPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import EquipmentPage from './features/equipment/pages/EquipmentPage';
 import EquipmentFormPage from './features/equipment/pages/EquipmentFormPage';
-import WaterPage from './pages/WaterPage';
+import WaterPage from './features/water-monitoring/pages/WaterPage';
 import AccessSettingsPage from './pages/AccessSettingsPage';
 import ErrorLogsPage from './pages/ErrorLogsPage';
 import WorkshopSettingsPage from './pages/WorkshopSettingsPage';
