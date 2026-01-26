@@ -52,6 +52,9 @@ export default defineConfig(({ mode }) => ({
     port: 3000,
     host: true, // Разрешает доступ из локальной сети
     strictPort: false, // Если порт занят, попробует другой
+    hmr: {
+      clientPort: 3000, // Явно указываем порт для HMR WebSocket
+    },
   },
   preview: {
     port: 3000,
