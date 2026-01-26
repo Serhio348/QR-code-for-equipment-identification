@@ -4,12 +4,12 @@ import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useAuth } from './contexts/AuthContext';
 import MainMenuPage from './pages/MainMenuPage';
-import HomePage from './pages/HomePage';
+import EquipmentListPage from './features/equipment/pages/EquipmentListPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
-import EquipmentPage from './pages/EquipmentPage';
-import EquipmentFormPage from './pages/EquipmentFormPage';
+import EquipmentPage from './features/equipment/pages/EquipmentPage';
+import EquipmentFormPage from './features/equipment/pages/EquipmentFormPage';
 import WaterPage from './pages/WaterPage';
 import AccessSettingsPage from './pages/AccessSettingsPage';
 import ErrorLogsPage from './pages/ErrorLogsPage';
@@ -162,7 +162,7 @@ const App: React.FC = () => {
             element={
               <ProtectedRoute>
                 <AppAccessGuard appId="equipment">
-                <HomePage />
+                <EquipmentListPage />
                 </AppAccessGuard>
               </ProtectedRoute>
             } 

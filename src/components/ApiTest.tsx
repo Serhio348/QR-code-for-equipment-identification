@@ -11,8 +11,8 @@ import {
   addEquipment,
   updateEquipment,
   deleteEquipment
-} from '../services/equipmentApi';
-import { Equipment } from '../types/equipment';
+} from '../features/equipment/services/equipmentApi';
+import { Equipment } from '../features/equipment/types/equipment';
 import { API_CONFIG } from '../config/api';
 import './ApiTest.css';
 

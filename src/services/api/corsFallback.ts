@@ -5,8 +5,8 @@
  */
 
 import { API_CONFIG } from '../../config/api';
-import { Equipment } from '../../types/equipment';
-import { getEquipmentById } from './equipmentQueries';
+import { Equipment } from '../../features/equipment/types/equipment';
+import { getEquipmentById } from '../../features/equipment/services/equipmentQueries';
 
 /**
  * Проверяет, является ли ошибка CORS ошибкой
