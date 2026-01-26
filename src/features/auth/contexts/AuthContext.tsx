@@ -6,11 +6,11 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase, invalidateProfileCache } from '../../../config/supabase';
+import { supabase, invalidateProfileCache } from '../../../shared/config/supabase';
 import { login as loginApi, logout as logoutApi, register as registerApi, getCurrentUser } from '../services/supabaseAuthApi';
-import { startActivityTracking, stopActivityTracking, checkSessionTimeout as checkTimeout } from '../../../utils/sessionTimeout';
-import { clearLastPath } from '../../../utils/pathStorage';
-import { ROUTES } from '../../../utils/routes';
+import { startActivityTracking, stopActivityTracking, checkSessionTimeout as checkTimeout } from '../../../shared/utils/sessionTimeout';
+import { clearLastPath } from '../../../shared/utils/pathStorage';
+import { ROUTES } from '../../../shared/utils/routes';
 import type { User } from '../types/user';
 import type { AuthState } from '../types/auth';
 import type { LoginData, RegisterData } from '../types/user';
@@ -193,7 +193,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             // Создаем или обновляем user_session в localStorage для отслеживания активности
             // Это нужно для проверки таймаута бездействия
             try {
-              const { saveSession } = await import('../../../utils/sessionStorage');
+              const { saveSession } = await import('../../../shared/utils/sessionStorage');
               const now = new Date().toISOString();
               saveSession({
                 user: currentUser,
@@ -228,7 +228,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             
             // Сохраняем в localStorage
             try {
-              const { saveSession } = await import('../../../utils/sessionStorage');
+              const { saveSession } = await import('../../../shared/utils/sessionStorage');
               const now = new Date().toISOString();
               saveSession({
                 user: fallbackUser,
@@ -277,7 +277,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           try {
             // Обновляем expiresAt в localStorage
             if (session.expires_at) {
-              const { updateSessionExpiresAt } = await import('../../../utils/sessionStorage');
+              const { updateSessionExpiresAt } = await import('../../../shared/utils/sessionStorage');
               const newExpiresAt = new Date(session.expires_at * 1000).toISOString();
               updateSessionExpiresAt(newExpiresAt);
               console.debug('✅ expiresAt обновлен в localStorage:', newExpiresAt);
@@ -325,7 +325,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 // Создаем или обновляем user_session в localStorage для отслеживания активности
                 // Это нужно для проверки таймаута бездействия
                 try {
-                  const { saveSession } = await import('../../../utils/sessionStorage');
+                  const { saveSession } = await import('../../../shared/utils/sessionStorage');
                   const now = new Date().toISOString();
                   saveSession({
                     user: currentUser,

@@ -44,4 +44,3 @@ export function generateShortUrl(equipmentId: string, baseUrl?: string): string 
   // Можно использовать более короткий путь, например /e/:id
   return `${appBaseUrl}/e/${equipmentId}`;
 }
-

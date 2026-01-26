@@ -65,4 +65,3 @@ export function getDeviceInfo() {
     screenHeight: window.innerHeight,
   };
 }
-

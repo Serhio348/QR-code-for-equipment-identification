@@ -16,7 +16,7 @@ import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../auth/contexts/AuthContext';
 import { Equipment } from '../../types/equipment';
-import { getEquipmentEditUrl } from '../../../../utils/routes';
+import { getEquipmentEditUrl } from '../../../../shared/utils/routes';
 import DateEditor from './DateEditor';
 import './EquipmentSidebar.css';
 

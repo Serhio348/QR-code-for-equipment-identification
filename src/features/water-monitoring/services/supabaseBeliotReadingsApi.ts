@@ -5,7 +5,7 @@
  * Показания автоматически собираются через Railway cron job.
  */
 
-import { supabase } from '../../../config/supabase';
+import { supabase } from '../../../shared/config/supabase';
 
 /**
  * Интерфейс для показания счетчика Beliot

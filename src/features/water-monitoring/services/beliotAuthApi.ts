@@ -8,7 +8,7 @@
  */
 
 import { beliotApiRequest } from './beliotApi';
-import { API_CONFIG } from '../../../config/api';
+import { API_CONFIG } from '../../../shared/config/api';
 
 /**
  * Интерфейс для данных входа

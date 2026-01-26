@@ -4,7 +4,7 @@
  * Функции для создания папок и получения списка файлов
  */
 
-import { API_CONFIG } from '../../../config/api';
+import { API_CONFIG } from '../../../shared/config/api';
 import { apiRequest } from '../../../services/api/apiRequest';
 import { isCorsError } from '../../../services/api/corsFallback';
 import { DriveFolderResult, DriveFile } from '../../../services/api/types';

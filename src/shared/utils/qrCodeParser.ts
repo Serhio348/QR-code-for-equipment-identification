@@ -71,4 +71,3 @@ export function extractDriveId(qrCodeText: string): string | null {
 export function isDriveId(id: string): boolean {
   return id.startsWith('DRIVE:');
 }
-

@@ -6,7 +6,7 @@
 
 import { Equipment, EquipmentType } from '../types/equipment';
 import { apiRequest } from '../../../services/api/apiRequest';
-import { API_CONFIG } from '../../../config/api';
+import { API_CONFIG } from '../../../shared/config/api';
 import { ApiResponse } from '../../../services/api/types';
 
 /**

@@ -9,7 +9,7 @@ import type {
   WaterQualityNorm,
   WaterQualityAlert,
   WaterQualityIncident,
-} from '../../types/waterQuality';
+} from '@/features/water-quality/types/waterQuality';
 
 export function mapSamplingPointFromDb(data: any): SamplingPoint {
   return {

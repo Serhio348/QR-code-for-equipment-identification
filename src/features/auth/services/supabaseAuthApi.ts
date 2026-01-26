@@ -5,7 +5,7 @@
  * Заменяет старый authApi.ts (Google Sheets)
  */
 
-import { supabase, getCurrentProfile, type Profile } from '../../../config/supabase';
+import { supabase, getCurrentProfile, type Profile } from '../../../shared/config/supabase';
 import type { RegisterData, LoginData, AuthResponse, User } from '../types/user';
 import type { LoginHistoryEntry, SessionCheckResponse } from '../types/auth';
 

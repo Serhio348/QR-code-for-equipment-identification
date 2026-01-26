@@ -5,7 +5,7 @@
  * Заменяет старый accessApi.ts (Google Sheets)
  */
 
-import { supabase } from '../../../config/supabase';
+import { supabase } from '../../../shared/config/supabase';
 import type { UserAppAccess, UpdateUserAccessData } from '../types/access';
 
 /**

@@ -10,8 +10,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/contexts/AuthContext';
 import { getAllUserAccess, updateUserAccess } from '../services/supabaseAccessApi';
 import { AVAILABLE_APPS, type UserAppAccess, type AppId } from '../types/access';
-import { ROUTES } from '../../../utils/routes';
-import { showError, showSuccess } from '../../../utils/toast';
+import { ROUTES } from '../../../shared/utils/routes';
+import { showError, showSuccess } from '../../../shared/utils/toast';
 import LoadingSpinner from '../../common/components/LoadingSpinner';
 import './AccessSettingsPage.css';
 

@@ -6,7 +6,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSamplingPoints, useSamplingPointManagement } from '../hooks/useSamplingPoints';
-import { ROUTES } from '../../../utils/routes';
+import { ROUTES } from '../../../shared/utils/routes';
 import type { SamplingFrequency } from '../types/waterQuality';
 import { toast } from 'react-toastify';
 import './SamplingPointsPage.css';

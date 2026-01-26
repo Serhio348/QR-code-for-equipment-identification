@@ -5,13 +5,13 @@
  * и (опционально) для конкретной точки отбора проб или оборудования.
  */
 
-import { supabase } from '../../../config/supabase';
+import { supabase } from '../../../shared/config/supabase';
 import type {
   CacheOptions,
   WaterQualityNorm,
   WaterQualityNormInput,
   WaterQualityNormUpdate,
-} from '../../types/waterQuality';
+} from '@/features/water-quality/types/waterQuality';
 
 import {
   deduplicateRequest,

@@ -5,14 +5,14 @@
  * Использует модули cache, validators и mappers для переиспользования кода.
  */
 
-import { supabase } from '../../../config/supabase';
+import { supabase } from '../../../shared/config/supabase';
 import type {
   AnalysisResult,
   AnalysisResultInput,
   PaginationOptions,
   PaginatedResponse,
   AnalysisResultsFilter,
-} from '../../types/waterQuality';
+} from '@/features/water-quality/types/waterQuality';
 
 // Импортируем функции из модулей
 import { clearWaterQualityCache } from './cache';

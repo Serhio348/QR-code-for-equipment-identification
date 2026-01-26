@@ -92,4 +92,3 @@ export function clearRedirectPath(): void {
     console.error('Ошибка очистки пути редиректа:', error);
   }
 }
-

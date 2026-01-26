@@ -6,7 +6,7 @@
 
 import { beliotApiRequest } from './beliotApi';
 import { getBeliotToken } from './beliotAuthApi';
-import { API_CONFIG } from '../../../config/api';
+import { API_CONFIG } from '../../../shared/config/api';
 
 /**
  * Интерфейс объекта

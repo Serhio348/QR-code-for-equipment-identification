@@ -7,7 +7,7 @@
 import { useState, FormEvent, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { updatePassword } from '../services/supabaseAuthApi';
-import { ROUTES } from '../../../utils/routes';
+import { ROUTES } from '../../../shared/utils/routes';
 import './ResetPasswordPage.css';
 
 /**

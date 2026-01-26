@@ -464,7 +464,7 @@ export async function updateUserRole(
       // Используем динамический импорт, чтобы избежать циклических зависимостей
       // (supabaseAuthApi импортирует из config/supabase, поэтому прямой импорт создаст цикл)
       try {
-        const { invalidateAdminCache } = await import('../features/auth/services/supabaseAuthApi');
+        const { invalidateAdminCache } = await import('../../features/auth/services/supabaseAuthApi');
         invalidateAdminCache(userId);
       } catch (cacheError) {
         // Игнорируем ошибки инвалидации кэша, чтобы не блокировать обновление роли
@@ -546,4 +546,3 @@ export async function getAllProfiles(): Promise<Profile[]> {
     throw new Error(error.message || 'Ошибка при получении списка пользователей');
   }
 }
-

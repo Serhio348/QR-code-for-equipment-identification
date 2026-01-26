@@ -9,8 +9,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/contexts/AuthContext';
 import { getUserAccess } from '../../access-management/services/supabaseAccessApi';
 import { AVAILABLE_APPS, type UserAppAccess } from '../../access-management/types/access';
-import { ROUTES } from '../../../utils/routes';
-import { clearLastPath } from '../../../utils/pathStorage';
+import { ROUTES } from '../../../shared/utils/routes';
+import { clearLastPath } from '../../../shared/utils/pathStorage';
 import AdminModal from '../components/AdminModal';
 import './MainMenuPage.css';
 

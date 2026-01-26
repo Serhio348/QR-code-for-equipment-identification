@@ -53,4 +53,3 @@ export function formatDate(dateString?: string): string {
   console.warn('⚠️ Не удалось распарсить дату:', dateString);
   return '—';
 }
-

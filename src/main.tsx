@@ -4,8 +4,8 @@ import { BrowserRouter } from 'react-router-dom'
 import { AuthProvider } from './features/auth/contexts/AuthContext'
 import App from './App'
 import './index.css'
-import { registerServiceWorker } from './utils/registerServiceWorker'
-import { validateApiConfig } from './config/api'
+import { registerServiceWorker } from './shared/utils/registerServiceWorker'
+import { validateApiConfig } from './shared/config/api'
 
 // Проверка конфигурации API при загрузке приложения
 validateApiConfig();

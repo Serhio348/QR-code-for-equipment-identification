@@ -45,8 +45,8 @@ export const API_CONFIG = {
    * 
    * Используются для автоматической аутентификации и получения Bearer token
    */
-  BELIOT_LOGIN: import.meta.env.VITE_BELIOT_LOGIN || 'energo@brestvodka.by',
-  BELIOT_PASSWORD: import.meta.env.VITE_BELIOT_PASSWORD || 'wSjzy2WJxnj5DPk!',
+  BELIOT_LOGIN: import.meta.env.VITE_BELIOT_LOGIN ,
+  BELIOT_PASSWORD: import.meta.env.VITE_BELIOT_PASSWORD ,
   
   /**
    * Использовать beliot API вместо Google Apps Script
@@ -115,4 +115,3 @@ export function validateApiConfig(): boolean {
   
   return true;
 }
-

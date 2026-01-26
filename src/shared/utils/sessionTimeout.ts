@@ -105,4 +105,3 @@ export function checkSessionTimeout(): boolean {
   updateLastActivity();
   return true;
 }
-

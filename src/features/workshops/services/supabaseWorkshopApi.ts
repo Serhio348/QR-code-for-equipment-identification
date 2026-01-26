@@ -5,7 +5,7 @@
  * Заменяет старый workshopApi.ts (Google Apps Script)
  */
 
-import { supabase } from '../../../config/supabase';
+import { supabase } from '../../../shared/config/supabase';
 
 export interface Workshop {
   id: string;
