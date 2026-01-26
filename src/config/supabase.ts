@@ -464,7 +464,7 @@ export async function updateUserRole(
       // Используем динамический импорт, чтобы избежать циклических зависимостей
       // (supabaseAuthApi импортирует из config/supabase, поэтому прямой импорт создаст цикл)
       try {
-        const { invalidateAdminCache } = await import('../services/api/supabaseAuthApi');
+        const { invalidateAdminCache } = await import('../features/auth/services/supabaseAuthApi');
         invalidateAdminCache(userId);
       } catch (cacheError) {
         // Игнорируем ошибки инвалидации кэша, чтобы не блокировать обновление роли

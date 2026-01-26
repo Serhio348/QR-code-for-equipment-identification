@@ -6,7 +6,7 @@
 
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../../contexts/AuthContext';
+import { useAuth } from '../../auth/contexts/AuthContext';
 import EquipmentList from '../components/EquipmentList';
 import { Equipment } from '../types/equipment';
 import { ROUTES, getEquipmentViewUrl } from '../../../utils/routes';

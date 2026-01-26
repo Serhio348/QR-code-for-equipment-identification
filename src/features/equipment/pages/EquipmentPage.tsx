@@ -11,7 +11,7 @@ import DocumentationModal from '../../../components/DocumentationModal';
 import PlateExportSettingsModal from '../components/PlateExportSettingsModal';
 import EquipmentPageHeader from '../components/EquipmentPage/EquipmentPageHeader';
 import StatusMessages from '../components/EquipmentPage/StatusMessages';
-import { useAuth } from '../../../contexts/AuthContext';
+import { useAuth } from '../../auth/contexts/AuthContext';
 import { getEquipmentEditUrl } from '../../../utils/routes';
 import { filterSpecs, FilterSpecs } from '../types/equipment';
 import { PlateExportSettings } from '../../../types/plateExport';

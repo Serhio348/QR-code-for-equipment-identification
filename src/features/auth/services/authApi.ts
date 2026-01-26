@@ -4,9 +4,9 @@
  * API функции для аутентификации и управления пользователями
  */
 
-import { API_CONFIG } from '../../config/api';
-import type { RegisterData, LoginData, AuthResponse, ChangePasswordData } from '../../types/user';
-import type { LoginHistoryEntry } from '../../types/auth';
+import { API_CONFIG } from '../../../config/api';
+import type { RegisterData, LoginData, AuthResponse, ChangePasswordData } from '../types/user';
+import type { LoginHistoryEntry } from '../types/auth';
 
 const API_URL = API_CONFIG.EQUIPMENT_API_URL;
 
