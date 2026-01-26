@@ -86,4 +86,3 @@ export function conditionalLog(
     logger[level](...args);
   }
 }
-

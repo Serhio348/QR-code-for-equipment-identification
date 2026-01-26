@@ -15,10 +15,10 @@ import {
   markErrorAsUnresolved,
   type ErrorLog,
   type ErrorLogFilters,
-} from '../services/api/errorLogsApi';
-import { showError, showSuccess } from '../utils/toast';
-import { ROUTES } from '../utils/routes';
-import LoadingSpinner from '../components/LoadingSpinner';
+} from '../services/errorLogsApi';
+import { showError, showSuccess } from '../../../utils/toast';
+import { ROUTES } from '../../../utils/routes';
+import LoadingSpinner from '../../../components/LoadingSpinner';
 import './ErrorLogsPage.css';
 
 export default function ErrorLogsPage() {
