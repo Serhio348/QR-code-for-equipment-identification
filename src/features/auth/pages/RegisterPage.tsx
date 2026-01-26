@@ -7,9 +7,9 @@
 import { useState, FormEvent, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import LoadingSpinner from '../components/LoadingSpinner';
-import { loadRedirectPath, clearRedirectPath, clearLastPath } from '../utils/pathStorage';
-import { ROUTES } from '../utils/routes';
+import LoadingSpinner from '../../../components/LoadingSpinner';
+import { loadRedirectPath, clearRedirectPath, clearLastPath } from '../../../utils/pathStorage';
+import { ROUTES } from '../../../utils/routes';
 import './RegisterPage.css';
 
 export default function RegisterPage() {

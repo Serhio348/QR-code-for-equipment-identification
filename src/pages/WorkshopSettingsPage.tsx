@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../features/auth/contexts/AuthContext';
 import { Workshop, WorkshopInput, getAllWorkshops, addWorkshop, updateWorkshop, deleteWorkshop } from '../services/api/supabaseWorkshopApi';
 import { showError, showSuccess } from '../utils/toast';
 import { ROUTES } from '../utils/routes';

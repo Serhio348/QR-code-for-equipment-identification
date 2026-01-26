@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../features/auth/contexts/AuthContext';
 import { checkUserAccess } from '../services/api/supabaseAccessApi';
 import { ROUTES } from '../utils/routes';
 import LoadingSpinner from './LoadingSpinner';

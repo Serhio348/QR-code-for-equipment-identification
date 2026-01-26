@@ -7,7 +7,7 @@
 
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../features/auth/contexts/AuthContext';
 import { ROUTES } from '../../utils/routes';
 import './PWAMenu.css';
 
