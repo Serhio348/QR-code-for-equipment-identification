@@ -5,9 +5,9 @@
  */
 
 import { Navigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../features/auth/contexts/AuthContext';
-import { ROUTES } from '../utils/routes';
-import { saveRedirectPath } from '../utils/pathStorage';
+import { useAuth } from '../../auth/contexts/AuthContext';
+import { ROUTES } from '../../../utils/routes';
+import { saveRedirectPath } from '../../../utils/pathStorage';
 import LoadingSpinner from './LoadingSpinner';
 import type { ReactNode } from 'react';
 

@@ -4,7 +4,7 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { ROUTES } from '../utils/routes';
+import { ROUTES } from '../../../utils/routes';
 import './NotFoundPage.css';
 
 const NotFoundPage: React.FC = () => {

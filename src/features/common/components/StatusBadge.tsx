@@ -12,7 +12,7 @@
  */
 
 import React from 'react';
-import { EquipmentStatus } from '../features/equipment/types/equipment';
+import { EquipmentStatus } from '../../equipment/types/equipment';
 import './StatusBadge.css';
 
 interface StatusBadgeProps {

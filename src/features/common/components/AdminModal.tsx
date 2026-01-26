@@ -5,7 +5,7 @@
 
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ROUTES } from '../utils/routes';
+import { ROUTES } from '../../../utils/routes';
 import './AdminModal.css';
 
 interface AdminModalProps {

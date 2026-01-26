@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { FilterSpecs } from '../types/equipment';
-import QRCodeComponent from '../../../components/QRCode';
+import QRCodeComponent from '../../common/components/QRCode';
 import { formatDate } from '../../../utils/dateFormatting';
 import './EquipmentPlate.css';
 

@@ -3,7 +3,7 @@ import { Routes, Route, Link, useLocation, Navigate, useNavigate } from 'react-r
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useAuth } from './features/auth/contexts/AuthContext';
-import MainMenuPage from './pages/MainMenuPage';
+import MainMenuPage from './features/common/pages/MainMenuPage';
 import EquipmentListPage from './features/equipment/pages/EquipmentListPage';
 import LoginPage from './features/auth/pages/LoginPage';
 import RegisterPage from './features/auth/pages/RegisterPage';
@@ -23,11 +23,11 @@ import WaterQualityNormViewPage from './features/water-quality/pages/WaterQualit
 import SamplingPointsPage from './features/water-quality/pages/SamplingPointsPage';
 import SamplingPointFormPage from './features/water-quality/pages/SamplingPointFormPage';
 import SamplingPointViewPage from './features/water-quality/pages/SamplingPointViewPage';
-import NotFoundPage from './pages/NotFoundPage';
-import ProtectedRoute from './components/ProtectedRoute';
+import NotFoundPage from './features/common/pages/NotFoundPage';
+import ProtectedRoute from './features/common/components/ProtectedRoute';
 import AppAccessGuard from './features/access-management/components/AppAccessGuard';
-import InstallPWA from './components/InstallPWA';
-import AppFooter from './components/AppFooter';
+import InstallPWA from './features/common/components/InstallPWA';
+import AppFooter from './features/common/components/AppFooter';
 import { isEquipmentRoute, ROUTES } from './utils/routes';
 import { saveLastPath, loadLastPath } from './utils/pathStorage';
 import './styles/colors.css';

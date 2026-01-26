@@ -6,11 +6,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../features/auth/contexts/AuthContext';
-import { getUserAccess } from '../features/access-management/services/supabaseAccessApi';
-import { AVAILABLE_APPS, type UserAppAccess } from '../features/access-management/types/access';
-import { ROUTES } from '../utils/routes';
-import { clearLastPath } from '../utils/pathStorage';
+import { useAuth } from '../../auth/contexts/AuthContext';
+import { getUserAccess } from '../../access-management/services/supabaseAccessApi';
+import { AVAILABLE_APPS, type UserAppAccess } from '../../access-management/types/access';
+import { ROUTES } from '../../../utils/routes';
+import { clearLastPath } from '../../../utils/pathStorage';
 import AdminModal from '../components/AdminModal';
 import './MainMenuPage.css';
 

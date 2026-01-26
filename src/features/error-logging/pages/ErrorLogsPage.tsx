@@ -18,7 +18,7 @@ import {
 } from '../services/errorLogsApi';
 import { showError, showSuccess } from '../../../utils/toast';
 import { ROUTES } from '../../../utils/routes';
-import LoadingSpinner from '../../../components/LoadingSpinner';
+import LoadingSpinner from '../../common/components/LoadingSpinner';
 import './ErrorLogsPage.css';
 
 export default function ErrorLogsPage() {

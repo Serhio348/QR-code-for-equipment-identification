@@ -10,8 +10,8 @@ import { EQUIPMENT_TYPE_OPTIONS } from '../constants/equipmentTypes';
 import { useEquipmentData } from '../hooks/useEquipmentData';
 import { useWorkshops } from '../../workshops/hooks/useWorkshops';
 import { isDriveId } from '../../../utils/qrCodeParser';
-import StatusBadge from '../../../components/StatusBadge';
-import QRScanner from '../../../components/QRScanner/QRScanner';
+import StatusBadge from '../../common/components/StatusBadge';
+import QRScanner from '../../common/components/QRScanner/QRScanner';
 import './EquipmentList.css';
 
 interface EquipmentListProps {

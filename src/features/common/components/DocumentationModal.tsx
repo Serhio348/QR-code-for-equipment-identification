@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import DriveFilesList from '../features/equipment/components/DriveFilesList';
+import DriveFilesList from '../../equipment/components/DriveFilesList';
 import './DocumentationModal.css';
 
 interface DocumentationModalProps {

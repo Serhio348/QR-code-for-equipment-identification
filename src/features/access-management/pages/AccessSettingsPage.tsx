@@ -12,7 +12,7 @@ import { getAllUserAccess, updateUserAccess } from '../services/supabaseAccessAp
 import { AVAILABLE_APPS, type UserAppAccess, type AppId } from '../types/access';
 import { ROUTES } from '../../../utils/routes';
 import { showError, showSuccess } from '../../../utils/toast';
-import LoadingSpinner from '../../../components/LoadingSpinner';
+import LoadingSpinner from '../../common/components/LoadingSpinner';
 import './AccessSettingsPage.css';
 
 const AccessSettingsPage: React.FC = () => {
