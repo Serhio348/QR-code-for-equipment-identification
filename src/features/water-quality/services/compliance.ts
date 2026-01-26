@@ -14,7 +14,7 @@ import type {
   ResultEvaluation,
   WaterQualityNorm,
   WaterQualityParameter,
-} from '../../../types/waterQuality';
+} from '../../types/waterQuality';
 import { mapWaterQualityNormFromDb } from './mappers';
 
 function validateNonEmptyString(value: string, fieldName: string): void {

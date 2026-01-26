@@ -11,7 +11,7 @@ import type {
   WaterAnalysisInput,
   WaterAnalysisWithResults,
   CacheOptions,
-} from '../../../types/waterQuality';
+} from '../../types/waterQuality';
 
 // Импортируем функции из модулей
 import {

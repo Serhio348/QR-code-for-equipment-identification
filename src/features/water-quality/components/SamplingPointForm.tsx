@@ -11,7 +11,7 @@ import type {
   SamplingFrequency,
 } from '../types/waterQuality';
 import { useSamplingPointManagement, useSamplingPoint } from '../hooks/useSamplingPoints';
-import { ROUTES } from '../utils/routes';
+import { ROUTES } from '../../../utils/routes';
 import './SamplingPointForm.css';
 
 interface SamplingPointFormProps {

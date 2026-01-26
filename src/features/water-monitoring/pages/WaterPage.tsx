@@ -8,7 +8,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import BeliotDevicesTest from '../components/BeliotDevicesTest';
-import WaterQualityJournalPage from '../../../pages/WaterQualityJournalPage';
+import WaterQualityJournalPage from '../../water-quality/pages/WaterQualityJournalPage';
 import { ROUTES } from '../../../utils/routes';
 import './WaterPage.css';
 

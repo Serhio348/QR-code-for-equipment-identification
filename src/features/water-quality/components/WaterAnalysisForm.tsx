@@ -17,11 +17,9 @@ import type {
 import { PARAMETER_METADATA, getAllParameters } from '../types/waterQuality';
 import { useWaterAnalysisManagement, useWaterAnalysis } from '../hooks/useWaterQualityMeasurements';
 import { useSamplingPoints } from '../hooks/useSamplingPoints';
-import { useCurrentUser } from '../hooks/useCurrentUser';
-import { createAnalysisResults, updateAnalysisResult, deleteAnalysisResult } from '../services/api/waterQuality';
-import { checkResultCompliance } from '../services/api/waterQuality';
-import { uploadAnalysisPDF, deleteAnalysisPDF } from '../services/api/waterQualityStorage';
-import { ROUTES } from '../utils/routes';
+import { useCurrentUser } from '../../../hooks/useCurrentUser';
+import { createAnalysisResults, updateAnalysisResult, deleteAnalysisResult, checkResultCompliance, uploadAnalysisPDF, deleteAnalysisPDF } from '../services';
+import { ROUTES } from '../../../utils/routes';
 import './WaterAnalysisForm.css';
 
 interface WaterAnalysisFormProps {
