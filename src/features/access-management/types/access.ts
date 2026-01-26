@@ -83,4 +83,3 @@ export const AVAILABLE_APPS: App[] = [
     route: '/water',
   },
 ];
-

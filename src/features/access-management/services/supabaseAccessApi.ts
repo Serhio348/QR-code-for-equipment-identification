@@ -5,8 +5,8 @@
  * Заменяет старый accessApi.ts (Google Sheets)
  */
 
-import { supabase } from '../../config/supabase';
-import type { UserAppAccess, UpdateUserAccessData } from '../../types/access';
+import { supabase } from '../../../config/supabase';
+import type { UserAppAccess, UpdateUserAccessData } from '../types/access';
 
 /**
  * Получить список всех пользователей с их настройками доступа
@@ -239,4 +239,3 @@ export async function checkUserAccess(email: string, appId: 'equipment' | 'water
     return false;
   }
 }
-

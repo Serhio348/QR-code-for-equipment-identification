@@ -11,7 +11,7 @@ import ResetPasswordPage from './features/auth/pages/ResetPasswordPage';
 import EquipmentPage from './features/equipment/pages/EquipmentPage';
 import EquipmentFormPage from './features/equipment/pages/EquipmentFormPage';
 import WaterPage from './features/water-monitoring/pages/WaterPage';
-import AccessSettingsPage from './pages/AccessSettingsPage';
+import AccessSettingsPage from './features/access-management/pages/AccessSettingsPage';
 import ErrorLogsPage from './pages/ErrorLogsPage';
 import WorkshopSettingsPage from './pages/WorkshopSettingsPage';
 import WaterAnalysisFormPage from './features/water-quality/pages/WaterAnalysisFormPage';
@@ -25,7 +25,7 @@ import SamplingPointFormPage from './features/water-quality/pages/SamplingPointF
 import SamplingPointViewPage from './features/water-quality/pages/SamplingPointViewPage';
 import NotFoundPage from './pages/NotFoundPage';
 import ProtectedRoute from './components/ProtectedRoute';
-import AppAccessGuard from './components/AppAccessGuard';
+import AppAccessGuard from './features/access-management/components/AppAccessGuard';
 import InstallPWA from './components/InstallPWA';
 import AppFooter from './components/AppFooter';
 import { isEquipmentRoute, ROUTES } from './utils/routes';
