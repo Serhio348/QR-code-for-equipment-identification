@@ -5,8 +5,8 @@
  */
 
 import { Equipment } from '../types/equipment';
-import { apiRequest } from '../../../services/api/apiRequest';
-import { isCorsError, sendNoCorsRequest, waitForEquipmentUpdate, waitForEquipmentDeletion } from '../../../services/api/corsFallback';
+import { apiRequest } from '@/shared/services/api/apiRequest';
+import { isCorsError, sendNoCorsRequest, waitForEquipmentUpdate, waitForEquipmentDeletion } from '@/shared/services/api/corsFallback';
 import { getAllEquipment } from './equipmentQueries';
 
 /**

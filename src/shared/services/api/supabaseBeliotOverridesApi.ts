@@ -4,7 +4,7 @@
  * Заменяет хранение в Google Sheets на Supabase для улучшения производительности.
  */
 
-import { supabase } from '../../shared/config/supabase';
+import { supabase } from '@/shared/config/supabase';
 
 export interface BeliotDeviceOverride {
   id?: string;

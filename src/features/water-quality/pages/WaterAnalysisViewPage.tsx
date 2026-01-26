@@ -8,7 +8,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useWaterAnalysis, useWaterAnalysisManagement } from '../hooks/useWaterQualityMeasurements';
 import { useSamplingPoints } from '../hooks/useSamplingPoints';
-import { ROUTES } from '../../../shared/utils/routes';
+import { ROUTES } from '@/shared/utils/routes';
 import type { AnalysisStatus, SampleCondition, ComplianceStatus } from '../types/waterQuality';
 import { PARAMETER_METADATA } from '../types/waterQuality';
 import './WaterAnalysisViewPage.css';

@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../auth/contexts/AuthContext';
 import { checkUserAccess } from '../services/supabaseAccessApi';
-import { ROUTES } from '../../../shared/utils/routes';
+import { ROUTES } from '@/shared/utils/routes';
 import LoadingSpinner from '../../common/components/LoadingSpinner';
 
 interface AppAccessGuardProps {

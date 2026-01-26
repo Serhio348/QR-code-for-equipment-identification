@@ -13,7 +13,7 @@ import {
   deleteEquipment
 } from '../../equipment/services/equipmentApi';
 import { Equipment } from '../../equipment/types/equipment';
-import { API_CONFIG } from '../../../shared/config/api';
+import { API_CONFIG } from '@/shared/config/api';
 import './ApiTest.css';
 
 const ApiTest: React.FC = () => {

@@ -4,7 +4,7 @@
  * Инцидент — это агрегированная сущность для анализа, когда есть превышения/проблемы.
  */
 
-import { supabase } from '../../../shared/config/supabase';
+import { supabase } from '@/shared/config/supabase';
 import type {
   IncidentSeverity,
   IncidentStatus,

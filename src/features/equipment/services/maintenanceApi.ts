@@ -5,11 +5,11 @@
  * в журнале обслуживания через Google Apps Script API
  */
 
-import { apiRequest } from '../../../services/api/apiRequest';
-import { isCorsError, sendNoCorsRequest } from '../../../services/api/corsFallback';
+import { apiRequest } from '@/shared/services/api/apiRequest';
+import { isCorsError, sendNoCorsRequest } from '@/shared/services/api/corsFallback';
 import { MaintenanceEntry, MaintenanceEntryInput } from '../types/equipment';
-import { API_CONFIG } from '../../../shared/config/api';
-import { ApiResponse } from '../../../services/api/types';
+import { API_CONFIG } from '@/shared/config/api';
+import { ApiResponse } from '@/shared/services/api/types';
 
 /**
  * Получить журнал обслуживания для оборудования

@@ -9,7 +9,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import BeliotDevicesTest from '../components/BeliotDevicesTest';
 import WaterQualityJournalPage from '../../water-quality/pages/WaterQualityJournalPage';
-import { ROUTES } from '../../../shared/utils/routes';
+import { ROUTES } from '@/shared/utils/routes';
 import './WaterPage.css';
 
 type WaterTab = 'counters' | 'quality';

@@ -4,10 +4,10 @@
  * Функции для создания папок и получения списка файлов
  */
 
-import { API_CONFIG } from '../../../shared/config/api';
-import { apiRequest } from '../../../services/api/apiRequest';
-import { isCorsError } from '../../../services/api/corsFallback';
-import { DriveFolderResult, DriveFile } from '../../../services/api/types';
+import { API_CONFIG } from '@/shared/config/api';
+import { apiRequest } from '@/shared/services/api/apiRequest';
+import { isCorsError } from '@/shared/services/api/corsFallback';
+import { DriveFolderResult, DriveFile } from '@/shared/services/api/types';
 
 /**
  * Создать папку в Google Drive для оборудования

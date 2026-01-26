@@ -12,14 +12,14 @@ import PlateExportSettingsModal from '../components/PlateExportSettingsModal';
 import EquipmentPageHeader from '../components/EquipmentPage/EquipmentPageHeader';
 import StatusMessages from '../components/EquipmentPage/StatusMessages';
 import { useAuth } from '../../auth/contexts/AuthContext';
-import { getEquipmentEditUrl } from '../../../shared/utils/routes';
+import { getEquipmentEditUrl } from '@/shared/utils/routes';
 import { filterSpecs, FilterSpecs } from '../types/equipment';
-import { PlateExportSettings } from '../../../shared/types/plateExport';
+import { PlateExportSettings } from '@/shared/types/plateExport';
 import { deleteEquipment } from '../services/equipmentApi';
 import { useEquipmentData, clearEquipmentCache } from '../hooks/useEquipmentData';
 import { useEquipmentDates } from '../hooks/useEquipmentDates';
-import { exportToPDF } from '../../../shared/utils/pdfExport';
-import { ROUTES } from '../../../shared/utils/routes';
+import { exportToPDF } from '@/shared/utils/pdfExport';
+import { ROUTES } from '@/shared/utils/routes';
 import './EquipmentPage.css';
 
 const EquipmentPage: React.FC = () => {

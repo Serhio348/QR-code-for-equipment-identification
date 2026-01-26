@@ -3,7 +3,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { PlateExportSettings, PlateSize, PlateTemplate, DEFAULT_EXPORT_SETTINGS, PLATE_TEMPLATES } from '../../../shared/types/plateExport';
+import { PlateExportSettings, PlateSize, PlateTemplate, DEFAULT_EXPORT_SETTINGS, PLATE_TEMPLATES } from '@/shared/types/plateExport';
 import { FilterSpecs } from '../types/equipment';
 import './PlateExportSettingsModal.css';
 

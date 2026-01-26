@@ -17,7 +17,7 @@ import {
   getBeliotDevicesOverrides,
   saveBeliotDeviceOverride,
   BeliotDeviceOverride,
-} from '../../../services/api/supabaseBeliotOverridesApi';
+} from '@/shared/services/api/supabaseBeliotOverridesApi';
 import { useBeliotDeviceReadings } from '../hooks/useBeliotDeviceReadings';
 import { saveBeliotReading } from '../services/supabaseBeliotReadingsApi';
 import jsPDF from 'jspdf';

@@ -3,7 +3,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { isMobileDevice, isPWA, getDeviceInfo } from '../shared/utils/deviceDetection';
+import { isMobileDevice, isPWA, getDeviceInfo } from '@/shared/utils/deviceDetection';
 
 interface DeviceInfo {
   isMobile: boolean;

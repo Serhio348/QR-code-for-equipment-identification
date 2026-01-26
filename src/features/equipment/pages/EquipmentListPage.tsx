@@ -9,7 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/contexts/AuthContext';
 import EquipmentList from '../components/EquipmentList';
 import { Equipment } from '../types/equipment';
-import { ROUTES, getEquipmentViewUrl } from '../../../shared/utils/routes';
+import { ROUTES, getEquipmentViewUrl } from '@/shared/utils/routes';
 import './EquipmentListPage.css';
 
 const EquipmentListPage: React.FC = () => {

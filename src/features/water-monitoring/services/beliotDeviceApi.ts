@@ -7,7 +7,7 @@
  */
 
 import { beliotApiRequest } from './beliotApi';
-import { API_CONFIG } from '../../../shared/config/api';
+import { API_CONFIG } from '@/shared/config/api';
 import { getBeliotToken } from './beliotAuthApi';
 
 /**
