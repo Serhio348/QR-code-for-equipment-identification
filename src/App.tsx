@@ -13,7 +13,7 @@ import EquipmentFormPage from './features/equipment/pages/EquipmentFormPage';
 import WaterPage from './features/water-monitoring/pages/WaterPage';
 import AccessSettingsPage from './features/access-management/pages/AccessSettingsPage';
 import ErrorLogsPage from './features/error-logging/pages/ErrorLogsPage';
-import WorkshopSettingsPage from './pages/WorkshopSettingsPage';
+import WorkshopSettingsPage from './features/workshops/pages/WorkshopSettingsPage';
 import WaterAnalysisFormPage from './features/water-quality/pages/WaterAnalysisFormPage';
 import WaterAnalysisViewPage from './features/water-quality/pages/WaterAnalysisViewPage';
 import WaterQualityAlertsPage from './features/water-quality/pages/WaterQualityAlertsPage';

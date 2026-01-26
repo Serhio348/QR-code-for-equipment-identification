@@ -3,7 +3,7 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { getAllWorkshops } from '../services/api/supabaseWorkshopApi';
+import { getAllWorkshops } from '../services/supabaseWorkshopApi';
 import { WORKSHOP_OPTIONS } from '../constants/workshops';
 
 /**

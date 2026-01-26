@@ -8,7 +8,7 @@ import { Equipment } from '../types/equipment';
 import { formatDate } from '../../../utils/dateFormatting';
 import { EQUIPMENT_TYPE_OPTIONS } from '../constants/equipmentTypes';
 import { useEquipmentData } from '../hooks/useEquipmentData';
-import { useWorkshops } from '../../../hooks/useWorkshops';
+import { useWorkshops } from '../../workshops/hooks/useWorkshops';
 import { isDriveId } from '../../../utils/qrCodeParser';
 import StatusBadge from '../../../components/StatusBadge';
 import QRScanner from '../../../components/QRScanner/QRScanner';

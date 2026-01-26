@@ -4,10 +4,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../features/auth/contexts/AuthContext';
-import { Workshop, WorkshopInput, getAllWorkshops, addWorkshop, updateWorkshop, deleteWorkshop } from '../services/api/supabaseWorkshopApi';
-import { showError, showSuccess } from '../utils/toast';
-import { ROUTES } from '../utils/routes';
+import { useAuth } from '../../auth/contexts/AuthContext';
+import { Workshop, WorkshopInput, getAllWorkshops, addWorkshop, updateWorkshop, deleteWorkshop } from '../services/supabaseWorkshopApi';
+import { showError, showSuccess } from '../../../utils/toast';
+import { ROUTES } from '../../../utils/routes';
 import './WorkshopSettingsPage.css';
 
 const WorkshopSettingsPage: React.FC = () => {
