@@ -5,7 +5,7 @@
  * (обычно через RPC в БД).
  */
 
-import { supabase } from '../../../config/supabase';
+import { supabase } from '../../../shared/config/supabase';
 import type {
   AlertPriority,
   AlertStatus,
@@ -14,7 +14,7 @@ import type {
   PaginatedResponse,
   WaterQualityAlert,
   WaterQualityParameter,
-} from '../../types/waterQuality';
+} from '@/features/water-quality/types/waterQuality';
 
 import { MAX_HISTORICAL_LIMIT, clearWaterQualityCache } from './cache';
 import { validateId, validateLimit } from './validators';

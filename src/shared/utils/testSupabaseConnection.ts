@@ -66,4 +66,3 @@ export async function checkSupabaseSetup(): Promise<void> {
 if (typeof window !== 'undefined') {
   (window as any).checkSupabaseSetup = checkSupabaseSetup;
 }
-

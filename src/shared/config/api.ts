@@ -115,4 +115,3 @@ export function validateApiConfig(): boolean {
   
   return true;
 }
-

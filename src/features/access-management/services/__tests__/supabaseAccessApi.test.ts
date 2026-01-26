@@ -4,10 +4,10 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { checkUserAccess, getUserAccess } from '../supabaseAccessApi';
-import { supabase } from '../../../../config/supabase';
+import { supabase } from '../../../../shared/config/supabase';
 
 // Мокаем Supabase клиент
-vi.mock('../../../../config/supabase', () => ({
+vi.mock('../../../../shared/config/supabase', () => ({
   supabase: {
     from: vi.fn(),
   },

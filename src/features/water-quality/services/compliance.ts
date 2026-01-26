@@ -5,7 +5,7 @@
  * для подбора/проверки применимых нормативов.
  */
 
-import { supabase } from '../../../config/supabase';
+import { supabase } from '../../../shared/config/supabase';
 import { clearWaterQualityCache } from './cache';
 import { validateId } from './validators';
 import type {
@@ -14,7 +14,7 @@ import type {
   ResultEvaluation,
   WaterQualityNorm,
   WaterQualityParameter,
-} from '../../types/waterQuality';
+} from '@/features/water-quality/types/waterQuality';
 import { mapWaterQualityNormFromDb } from './mappers';
 
 function validateNonEmptyString(value: string, fieldName: string): void {

@@ -5,7 +5,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
-import { parseEquipmentId } from '../../../utils/qrCodeParser';
+import { parseEquipmentId } from '../../../../shared/utils/qrCodeParser';
 import './QRScanner.css';
 
 interface QRScannerProps {

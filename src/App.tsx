@@ -28,8 +28,8 @@ import ProtectedRoute from './features/common/components/ProtectedRoute';
 import AppAccessGuard from './features/access-management/components/AppAccessGuard';
 import InstallPWA from './features/common/components/InstallPWA';
 import AppFooter from './features/common/components/AppFooter';
-import { isEquipmentRoute, ROUTES } from './utils/routes';
-import { saveLastPath, loadLastPath } from './utils/pathStorage';
+import { isEquipmentRoute, ROUTES } from './shared/utils/routes';
+import { saveLastPath, loadLastPath } from './shared/utils/pathStorage';
 import './styles/colors.css';
 import './App.css';
 

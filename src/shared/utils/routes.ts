@@ -138,4 +138,3 @@ export function extractEquipmentId(pathname: string): string | null {
 export function isEquipmentRoute(pathname: string): boolean {
   return pathname.startsWith('/equipment');
 }
-

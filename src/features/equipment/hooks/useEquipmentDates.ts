@@ -15,7 +15,7 @@ import { useState, useEffect } from 'react';
 import { Equipment } from '../types/equipment';
 import { updateEquipment } from '../services/equipmentApi';
 import { updateEquipmentCache } from './useEquipmentData';
-import { normalizeDate } from '../../../utils/dateNormalization';
+import { normalizeDate } from '../../../shared/utils/dateNormalization';
 
 interface UseEquipmentDatesProps {
   equipment: Equipment | null;

@@ -5,8 +5,8 @@
  * Использует модули cache, validators и mappers для переиспользования кода.
  */
 
-import { supabase } from '../../../config/supabase';
-import type { SamplingPoint, SamplingPointInput, CacheOptions } from '../../types/waterQuality';
+import { supabase } from '../../../shared/config/supabase';
+import type { SamplingPoint, SamplingPointInput, CacheOptions } from '@/features/water-quality/types/waterQuality';
 
 // Импортируем функции из модулей
 import {

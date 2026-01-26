@@ -4,11 +4,11 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { login, register, logout, verifyAdmin, invalidateAdminCache } from '../supabaseAuthApi';
-import { supabase } from '../../../../config/supabase';
+import { supabase } from '../../../../shared/config/supabase';
 import type { LoginData, RegisterData } from '../../types/user';
 
 // Мокаем Supabase клиент
-vi.mock('../../../../config/supabase', () => {
+vi.mock('../../../../shared/config/supabase', () => {
   const mockUser = {
     id: 'test-user-id',
     email: 'test@example.com',
@@ -356,7 +356,7 @@ describe('supabaseAuthApi', () => {
     
     it('should return false when user is not logged in', async () => {
       // Мокаем getCurrentProfile для возврата null
-      const { getCurrentProfile } = await import('../../../../config/supabase');
+      const { getCurrentProfile } = await import('../../../../shared/config/supabase');
       (getCurrentProfile as any).mockResolvedValue(null);
 
       const result = await verifyAdmin();

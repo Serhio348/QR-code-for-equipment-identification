@@ -4,7 +4,7 @@
  * Используется для POST запросов, когда CORS блокирует обычные запросы
  */
 
-import { API_CONFIG } from '../../config/api';
+import { API_CONFIG } from '../../shared/config/api';
 import { Equipment } from '../../features/equipment/types/equipment';
 import { getEquipmentById } from '../../features/equipment/services/equipmentQueries';
 

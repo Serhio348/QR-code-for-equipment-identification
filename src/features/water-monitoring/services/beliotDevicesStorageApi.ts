@@ -10,7 +10,7 @@
  */
 
 import { apiRequest } from '../../../services/api/apiRequest';
-import { API_CONFIG } from '../../../config/api';
+import { API_CONFIG } from '../../../shared/config/api';
 
 export interface BeliotDeviceOverride {
   name?: string;

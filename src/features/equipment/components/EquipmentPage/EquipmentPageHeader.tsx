@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Equipment } from '../../types/equipment';
-import { ROUTES } from '../../../../utils/routes';
+import { ROUTES } from '../../../../shared/utils/routes';
 import './EquipmentPageHeader.css';
 
 interface EquipmentPageHeaderProps {

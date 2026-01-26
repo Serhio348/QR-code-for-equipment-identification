@@ -8,7 +8,7 @@
 import { apiRequest } from '../../../services/api/apiRequest';
 import { isCorsError, sendNoCorsRequest } from '../../../services/api/corsFallback';
 import { MaintenanceEntry, MaintenanceEntryInput } from '../types/equipment';
-import { API_CONFIG } from '../../../config/api';
+import { API_CONFIG } from '../../../shared/config/api';
 import { ApiResponse } from '../../../services/api/types';
 
 /**

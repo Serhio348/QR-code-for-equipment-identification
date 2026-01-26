@@ -8,9 +8,9 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Equipment, EquipmentType, EquipmentStatus, EquipmentSpecs } from '../types/equipment';
 import { addEquipment, updateEquipment, getEquipmentById } from '../services/equipmentApi';
-import { generateQRCodeUrl } from '../../../utils/urlGenerator';
-import { getEquipmentViewUrl } from '../../../utils/routes';
-import { normalizeDate } from '../../../utils/dateNormalization';
+import { generateQRCodeUrl } from '../../../shared/utils/urlGenerator';
+import { getEquipmentViewUrl } from '../../../shared/utils/routes';
+import { normalizeDate } from '../../../shared/utils/dateNormalization';
 import { updateEquipmentCache } from './useEquipmentData';
 
 interface UseEquipmentFormProps {

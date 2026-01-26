@@ -7,7 +7,7 @@ import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useWaterQualityNorm } from '../hooks/useWaterQualityNorms';
 import { useSamplingPoints } from '../hooks/useSamplingPoints';
-import { ROUTES } from '../../../utils/routes';
+import { ROUTES } from '../../../shared/utils/routes';
 import { PARAMETER_METADATA } from '../types/waterQuality';
 import './WaterQualityNormViewPage.css';
 

@@ -396,4 +396,3 @@ export function unregisterServiceWorker(): void {
       });
   }
 }
-

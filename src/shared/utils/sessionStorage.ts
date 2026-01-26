@@ -7,8 +7,8 @@
  * между обновлениями страницы и перезапусками браузера
  */
 
-import type { UserSession } from '../features/auth/types/auth';
-import type { User } from '../features/auth/types/user';
+import type { UserSession } from '../../features/auth/types/auth';
+import type { User } from '../../features/auth/types/user';
 
 const SESSION_KEY = 'user_session';
 
@@ -200,4 +200,3 @@ export function getRemainingTime(): number {
   const remaining = timeoutMs - diffMs;
   return remaining > 0 ? remaining : 0;
 }
-

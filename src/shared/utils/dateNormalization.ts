@@ -43,4 +43,3 @@ export function normalizeDate(dateString?: string): string {
   console.warn('⚠️ Не удалось нормализовать дату:', dateString);
   return '';
 }
-

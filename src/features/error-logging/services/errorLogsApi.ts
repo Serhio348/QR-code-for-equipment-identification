@@ -5,7 +5,7 @@
  * Доступны только администраторам
  */
 
-import { supabase } from '../../../config/supabase';
+import { supabase } from '../../../shared/config/supabase';
 
 export interface ErrorLog {
   id: string;

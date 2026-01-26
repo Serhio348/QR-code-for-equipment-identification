@@ -4,7 +4,7 @@
  * Инцидент — это агрегированная сущность для анализа, когда есть превышения/проблемы.
  */
 
-import { supabase } from '../../../config/supabase';
+import { supabase } from '../../../shared/config/supabase';
 import type {
   IncidentSeverity,
   IncidentStatus,
@@ -14,7 +14,7 @@ import type {
   WaterQualityIncident,
   WaterQualityIncidentInput,
   WaterQualityIncidentUpdate,
-} from '../../types/waterQuality';
+} from '@/features/water-quality/types/waterQuality';
 
 import { MAX_HISTORICAL_LIMIT, clearWaterQualityCache } from './cache';
 import { validateId, validateLimit } from './validators';
