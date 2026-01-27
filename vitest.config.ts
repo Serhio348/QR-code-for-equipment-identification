@@ -3,7 +3,9 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 
 export default defineConfig({
-  plugins: [react()],
+  // Vitest uses its own Vite version, causing type incompatibility
+  // Using type assertion to work around this issue
+  plugins: [react() as any],
   test: {
     globals: true,
     environment: 'jsdom',
@@ -20,6 +22,9 @@ export default defineConfig({
         '**/*.config.*',
         '**/mockData/**',
       ],
+    },
+    typecheck: {
+      tsconfig: './tsconfig.test.json',
     },
   },
   resolve: {

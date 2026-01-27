@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
+import path from 'path'
 
 // Плагин для замены версии кэша в Service Worker при сборке
 function serviceWorkerCacheVersion() {
@@ -34,6 +35,11 @@ function serviceWorkerCacheVersion() {
 
 export default defineConfig(({ mode }) => ({
   plugins: [react(), serviceWorkerCacheVersion()],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
+  },
   build: {
     rollupOptions: {
       output: {
@@ -52,6 +58,9 @@ export default defineConfig(({ mode }) => ({
     port: 3000,
     host: true, // Разрешает доступ из локальной сети
     strictPort: false, // Если порт занят, попробует другой
+    hmr: {
+      clientPort: 3000, // Явно указываем порт для HMR WebSocket
+    },
   },
   preview: {
     port: 3000,

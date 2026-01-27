@@ -2,34 +2,34 @@ import React, { useEffect } from 'react';
 import { Routes, Route, Link, useLocation, Navigate, useNavigate } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { useAuth } from './contexts/AuthContext';
-import MainMenuPage from './pages/MainMenuPage';
-import HomePage from './pages/HomePage';
-import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
-import ResetPasswordPage from './pages/ResetPasswordPage';
-import EquipmentPage from './pages/EquipmentPage';
-import EquipmentFormPage from './pages/EquipmentFormPage';
-import WaterPage from './pages/WaterPage';
-import AccessSettingsPage from './pages/AccessSettingsPage';
-import ErrorLogsPage from './pages/ErrorLogsPage';
-import WorkshopSettingsPage from './pages/WorkshopSettingsPage';
-import WaterAnalysisFormPage from './pages/WaterAnalysisFormPage';
-import WaterAnalysisViewPage from './pages/WaterAnalysisViewPage';
-import WaterQualityAlertsPage from './pages/WaterQualityAlertsPage';
-import WaterQualityNormsPage from './pages/WaterQualityNormsPage';
-import WaterQualityNormFormPage from './pages/WaterQualityNormFormPage';
-import WaterQualityNormViewPage from './pages/WaterQualityNormViewPage';
-import SamplingPointsPage from './pages/SamplingPointsPage';
-import SamplingPointFormPage from './pages/SamplingPointFormPage';
-import SamplingPointViewPage from './pages/SamplingPointViewPage';
-import NotFoundPage from './pages/NotFoundPage';
-import ProtectedRoute from './components/ProtectedRoute';
-import AppAccessGuard from './components/AppAccessGuard';
-import InstallPWA from './components/InstallPWA';
-import AppFooter from './components/AppFooter';
-import { isEquipmentRoute, ROUTES } from './utils/routes';
-import { saveLastPath, loadLastPath } from './utils/pathStorage';
+import { useAuth } from './features/auth/contexts/AuthContext';
+import MainMenuPage from './features/common/pages/MainMenuPage';
+import EquipmentListPage from './features/equipment/pages/EquipmentListPage';
+import LoginPage from './features/auth/pages/LoginPage';
+import RegisterPage from './features/auth/pages/RegisterPage';
+import ResetPasswordPage from './features/auth/pages/ResetPasswordPage';
+import EquipmentPage from './features/equipment/pages/EquipmentPage';
+import EquipmentFormPage from './features/equipment/pages/EquipmentFormPage';
+import WaterPage from './features/water-monitoring/pages/WaterPage';
+import AccessSettingsPage from './features/access-management/pages/AccessSettingsPage';
+import ErrorLogsPage from './features/error-logging/pages/ErrorLogsPage';
+import WorkshopSettingsPage from './features/workshops/pages/WorkshopSettingsPage';
+import WaterAnalysisFormPage from './features/water-quality/pages/WaterAnalysisFormPage';
+import WaterAnalysisViewPage from './features/water-quality/pages/WaterAnalysisViewPage';
+import WaterQualityAlertsPage from './features/water-quality/pages/WaterQualityAlertsPage';
+import WaterQualityNormsPage from './features/water-quality/pages/WaterQualityNormsPage';
+import WaterQualityNormFormPage from './features/water-quality/pages/WaterQualityNormFormPage';
+import WaterQualityNormViewPage from './features/water-quality/pages/WaterQualityNormViewPage';
+import SamplingPointsPage from './features/water-quality/pages/SamplingPointsPage';
+import SamplingPointFormPage from './features/water-quality/pages/SamplingPointFormPage';
+import SamplingPointViewPage from './features/water-quality/pages/SamplingPointViewPage';
+import NotFoundPage from './features/common/pages/NotFoundPage';
+import ProtectedRoute from './features/common/components/ProtectedRoute';
+import AppAccessGuard from './features/access-management/components/AppAccessGuard';
+import InstallPWA from './features/common/components/InstallPWA';
+import AppFooter from './features/common/components/AppFooter';
+import { isEquipmentRoute, ROUTES } from './shared/utils/routes';
+import { saveLastPath, loadLastPath } from './shared/utils/pathStorage';
 import './styles/colors.css';
 import './App.css';
 
@@ -162,7 +162,7 @@ const App: React.FC = () => {
             element={
               <ProtectedRoute>
                 <AppAccessGuard appId="equipment">
-                <HomePage />
+                <EquipmentListPage />
                 </AppAccessGuard>
               </ProtectedRoute>
             } 
