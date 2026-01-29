@@ -100,7 +100,9 @@ const BeliotDevicesTest: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
   // Состояние для показа поля поиска на мобильных
   const [isMobileSearchVisible, setIsMobileSearchVisible] = useState<boolean>(false);
-  
+  // Состояние для сворачивания панели настроек архива
+  const [isArchiveSettingsCollapsed, setIsArchiveSettingsCollapsed] = useState<boolean>(false);
+
   // Функция для установки дат по умолчанию
   // Начальная дата всегда: первое число текущего месяца (независимо от группировки)
   const updateDefaultDates = useCallback((_groupBy: 'hour' | 'day' | 'week' | 'month' | 'year') => {
@@ -159,7 +161,7 @@ const BeliotDevicesTest: React.FC = () => {
   const handleLoadArchiveData = useCallback(async () => {
     if (!currentDeviceId || !archiveStartDate || !archiveEndDate) return;
     setArchiveDataLoaded(true);
-    
+
     // Для всех группировок используем loadByPeriod
     // чтобы загрузить ВСЕ данные за период без ограничений
     if (loadByPeriod) {
@@ -168,23 +170,28 @@ const BeliotDevicesTest: React.FC = () => {
       const endDate = new Date(`${archiveEndDate}T23:59:59.999Z`);
       endDate.setDate(endDate.getDate() + 1);
       const endDateStr = endDate.toISOString();
-      
+
       console.log('📥 Загрузка данных архива:', {
         deviceId: currentDeviceId,
         startDate: startDateStr,
         endDate: endDateStr,
         groupBy: archiveGroupBy
       });
-      
+
       await loadByPeriod(startDateStr, endDateStr);
-      
+
       console.log('✅ Данные загружены, проверяем количество:', {
         deviceId: currentDeviceId,
         // Проверим количество после загрузки через useEffect
       });
+
+      // Сворачиваем панель настроек после загрузки данных
+      setIsArchiveSettingsCollapsed(true);
     } else {
       // Fallback: используем обычную загрузку
       await refreshArchive();
+      // Сворачиваем панель настроек после загрузки данных
+      setIsArchiveSettingsCollapsed(true);
     }
   }, [currentDeviceId, archiveStartDate, archiveEndDate, archiveGroupBy, loadByPeriod, refreshArchive]);
 
@@ -746,15 +753,21 @@ const BeliotDevicesTest: React.FC = () => {
     }
   }, [archiveStartDate, archiveEndDate, currentDeviceId, isArchiveOpen, archiveDataLoaded, loadByPeriod, refreshArchive]);
   
-  // При открытии/закрытии архива сбрасываем флаг загрузки и блокируем прокрутку основного контента
+  // При открытии/закрытии архива сбрасываем флаг загрузки и управляем видимостью элементов
   useEffect(() => {
     if (!isArchiveOpen) {
       setArchiveDataLoaded(false);
       setArchiveCurrentPage(1);
+      setIsArchiveSettingsCollapsed(false);
+      // Убираем класс при закрытии архива
+      document.body.classList.remove('archive-modal-open');
     } else {
       // При открытии архива также сбрасываем флаг, чтобы показать кнопку загрузки
       setArchiveDataLoaded(false);
       setArchiveCurrentPage(1);
+      setIsArchiveSettingsCollapsed(false);
+      // Добавляем класс при открытии архива для скрытия header
+      document.body.classList.add('archive-modal-open');
     }
   }, [isArchiveOpen]);
   
@@ -2540,7 +2553,18 @@ const BeliotDevicesTest: React.FC = () => {
             </div>
             
             <div className="archive-modal-content">
-              <div className="archive-controls">
+              {/* Кнопка для раскрытия/сворачивания панели настроек */}
+              {archiveDataLoaded && (
+                <button
+                  className="archive-settings-toggle-button"
+                  onClick={() => setIsArchiveSettingsCollapsed(!isArchiveSettingsCollapsed)}
+                  title={isArchiveSettingsCollapsed ? 'Показать настройки' : 'Скрыть настройки'}
+                >
+                  {isArchiveSettingsCollapsed ? '⚙️ Показать настройки' : '⬆️ Скрыть настройки'}
+                </button>
+              )}
+
+              <div className={`archive-controls ${isArchiveSettingsCollapsed ? 'collapsed' : ''}`}>
                 {/* Выбор диапазона дат */}
                 <div className="archive-date-range">
                   <label>С:</label>
@@ -2551,6 +2575,7 @@ const BeliotDevicesTest: React.FC = () => {
                     onChange={(e) => {
                       setArchiveStartDate(e.target.value);
                       setArchiveDataLoaded(false);
+                      setIsArchiveSettingsCollapsed(false);
                     }}
                   />
                   <label>По:</label>
@@ -2561,10 +2586,11 @@ const BeliotDevicesTest: React.FC = () => {
                     onChange={(e) => {
                       setArchiveEndDate(e.target.value);
                       setArchiveDataLoaded(false);
+                      setIsArchiveSettingsCollapsed(false);
                     }}
                   />
                 </div>
-                
+
                 {/* Выбор группировки */}
                 <div className="archive-group-select">
                   <label>Группировка:</label>
@@ -2580,7 +2606,7 @@ const BeliotDevicesTest: React.FC = () => {
                     <option value="year">По годам</option>
                   </select>
                 </div>
-                
+
                 {/* Переключатель режима отображения (таблица/графики) */}
                 <div className="archive-view-toggle archive-display-mode-toggle">
                   <button
@@ -2598,7 +2624,7 @@ const BeliotDevicesTest: React.FC = () => {
                     📊 Графики
                   </button>
                 </div>
-                
+
                 {/* Переключатель показания/объем */}
                 <div className="archive-view-toggle">
                   <button
@@ -2614,7 +2640,7 @@ const BeliotDevicesTest: React.FC = () => {
                     Объем (м³)
                   </button>
                 </div>
-                
+
                 {/* Размер пагинации */}
                 <select
                   className="page-size-select"
@@ -2629,7 +2655,7 @@ const BeliotDevicesTest: React.FC = () => {
                   <option value={50}>50</option>
                   <option value={100}>100</option>
                 </select>
-                
+
                 {/* Кнопка загрузки данных */}
                 {!archiveDataLoaded && (
                   <button
@@ -3254,9 +3280,9 @@ const BeliotDevicesTest: React.FC = () => {
                         ←
                       </button>
                       <span className="pagination-info">
-                        Страница {archiveCurrentPage} из {archiveTotalPages}
-                        <span style={{ marginLeft: '8px', fontSize: '12px', color: '#666' }}>
-                          (Показано {archiveStartIndex + 1}-{Math.min(archiveEndIndex, archiveReadings.length)} из {archiveReadings.length})
+                        <span className="pagination-page-number">{archiveCurrentPage} / {archiveTotalPages}</span>
+                        <span className="pagination-details">
+                          ({archiveStartIndex + 1}-{Math.min(archiveEndIndex, archiveReadings.length)} из {archiveReadings.length})
                         </span>
                       </span>
                       <button
