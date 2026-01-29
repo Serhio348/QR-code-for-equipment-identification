@@ -8,9 +8,9 @@
 import React, { useState, useEffect } from 'react';
 import { MaintenanceEntry, MaintenanceEntryInput, Equipment } from '../types/equipment';
 import { TechnicalInspectionData } from '../types/technicalInspection';
-import { 
-  getMaintenanceLog, 
-  addMaintenanceEntry, 
+import {
+  getMaintenanceLog,
+  addMaintenanceEntry,
   deleteMaintenanceEntry,
   updateEquipment,
   getEquipmentById
@@ -21,6 +21,7 @@ import { InspectionExportSettings } from '@/shared/types/inspectionExport';
 import { TechnicalInspectionForm } from './TechnicalInspectionForm';
 import { TechnicalInspectionPDF } from './TechnicalInspectionPDF';
 import InspectionExportSettingsModal from './InspectionExportSettingsModal';
+import { showSuccess } from '@/shared/utils/toast';
 import './MaintenanceLog.css';
 
 interface MaintenanceLogProps {
@@ -37,6 +38,7 @@ const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanc
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState<boolean>(false);
+  const [savingProgress, setSavingProgress] = useState<number>(0);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [equipment, setEquipment] = useState<Equipment | null>(propEquipment || null);
   const [showInspectionForm, setShowInspectionForm] = useState<boolean>(false);
@@ -230,14 +232,18 @@ const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanc
     if (!equipment) return;
 
     setSaving(true);
+    setSavingProgress(0);
     setError(null);
 
     try {
+      // Шаг 1: Подготовка данных (20%)
+      setSavingProgress(20);
+
       // Вычисляем дату следующего освидетельствования (текущая дата + 1 год)
       const inspectionDate = new Date(data.inspectionDate);
       const nextInspectionDate = new Date(inspectionDate);
       nextInspectionDate.setFullYear(nextInspectionDate.getFullYear() + 1);
-      
+
       // Форматируем дату в формат YYYY-MM-DD
       const nextInspectionDateStr = nextInspectionDate.toISOString().split('T')[0];
 
@@ -246,8 +252,8 @@ const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanc
         .filter(m => m.name.trim() !== '')
         .map(m => `${m.position ? m.position + ', ' : ''}${m.name}`)
         .join('; ');
-      
-      const description = `Техническое освидетельствование №${data.actNumber}. 
+
+      const description = `Техническое освидетельствование №${data.actNumber}.
 Организация: ${data.organization || 'не указана'}.
 Количество котлов: ${data.boilersCount || 'не указано'}.
 Предохранительные устройства: ${data.safetyDeviceType || 'не указаны'}.
@@ -266,8 +272,13 @@ ${data.notes ? `Примечания: ${data.notes}` : ''}`;
         status: 'completed'
       };
 
+      // Шаг 2: Сохранение записи в журнал (40%)
+      setSavingProgress(40);
       await addMaintenanceEntry(equipmentId, entryData, maintenanceSheetId);
-      
+
+      // Шаг 3: Обновление даты следующего испытания (70%)
+      setSavingProgress(70);
+
       // Обновляем дату следующего испытания в характеристиках оборудования
       // Автоматически устанавливаем дату следующего освидетельствования (текущая дата + 1 год)
       try {
@@ -282,17 +293,28 @@ ${data.notes ? `Примечания: ${data.notes}` : ''}`;
         console.warn('⚠️ Не удалось обновить дату следующего испытания:', updateError);
       }
 
-      // Успешное сохранение - закрываем форму и перезагружаем журнал
+      // Шаг 4: Обновление журнала (90%)
+      setSavingProgress(90);
+      await loadMaintenanceLog();
+
+      // Шаг 5: Завершение (100%)
+      setSavingProgress(100);
+
+      // Успешное сохранение - закрываем форму
       setShowInspectionForm(false);
-      loadMaintenanceLog();
 
       // Показываем уведомление об успехе
-      alert('✅ Акт технического освидетельствования успешно сохранен в журнал!');
+      showSuccess('✅ Акт технического освидетельствования успешно сохранен в журнал!');
     } catch (err: any) {
       console.error('Ошибка сохранения освидетельствования:', err);
       setError(`Не удалось сохранить освидетельствование: ${err.message || 'Неизвестная ошибка'}`);
+      setSavingProgress(0);
     } finally {
       setSaving(false);
+      // Сбрасываем прогресс через небольшую задержку для визуального эффекта
+      setTimeout(() => {
+        setSavingProgress(0);
+      }, 500);
     }
   };
 
@@ -469,6 +491,8 @@ ${data.notes ? `Примечания: ${data.notes}` : ''}`;
               onSave={handleInspectionSave}
               onCancel={() => setShowInspectionForm(false)}
               onGeneratePDF={handleGenerateInspectionPDF}
+              saving={saving}
+              savingProgress={savingProgress}
             />
           </div>
         </div>
