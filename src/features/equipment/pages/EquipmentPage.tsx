@@ -13,7 +13,7 @@ import EquipmentPageHeader from '../components/EquipmentPage/EquipmentPageHeader
 import StatusMessages from '../components/EquipmentPage/StatusMessages';
 import { useAuth } from '../../auth/contexts/AuthContext';
 import { getEquipmentEditUrl } from '@/shared/utils/routes';
-import { filterSpecs, FilterSpecs } from '../types/equipment';
+import { filterSpecs } from '../types/equipment';
 import { PlateExportSettings } from '@/shared/types/plateExport';
 import { deleteEquipment } from '../services/equipmentApi';
 import { useEquipmentData, clearEquipmentCache } from '../hooks/useEquipmentData';
@@ -174,8 +174,9 @@ const EquipmentPage: React.FC = () => {
         ) : (
           <>
             <EquipmentPlate 
-              specs={(currentEquipment?.specs as FilterSpecs) || filterSpecs} 
+              specs={currentEquipment?.specs || filterSpecs} 
               equipmentName={currentEquipment?.name}
+              equipmentType={currentEquipment?.type}
               filterNumber={getFilterNumber()}
               commissioningDate={commissioningDate}
               lastMaintenanceDate={lastMaintenanceDate}
@@ -187,6 +188,7 @@ const EquipmentPage: React.FC = () => {
                 equipmentId={currentEquipment.id}
                 equipmentName={currentEquipment.name}
                 maintenanceSheetId={currentEquipment.maintenanceSheetId}
+                equipment={currentEquipment}
                 onClose={() => setMaintenanceLogOpen(false)}
               />
             )}
@@ -205,7 +207,8 @@ const EquipmentPage: React.FC = () => {
                 onClose={() => setIsExportSettingsOpen(false)}
                 onExport={handleExportWithSettings}
                 equipmentName={currentEquipment.name}
-                specs={(currentEquipment.specs as FilterSpecs) || filterSpecs}
+                specs={currentEquipment.specs}
+                equipmentType={currentEquipment.type}
               />
             )}
           </>

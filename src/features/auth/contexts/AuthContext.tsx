@@ -151,37 +151,34 @@ export function AuthProvider({ children }: AuthProviderProps) {
           // Инвалидируем кеш профиля, чтобы получить свежие данные
           invalidateProfileCache();
           
-          // Получаем пользователя с таймаутом, чтобы не зависнуть
-          // Fallback: если getCurrentUser() зависает или возвращает null, создаем пользователя из сессии
+          // Получаем пользователя с уменьшенным таймаутом для быстрой загрузки
           const getUserWithTimeout = Promise.race([
             getCurrentUser(),
-            new Promise<User | null>((resolve) => 
+            new Promise<User | null>((resolve) =>
               setTimeout(() => {
-                console.debug('⚠️ Таймаут getCurrentUser() при SIGNED_IN (2 секунды)');
+                console.debug('⚠️ Таймаут getCurrentUser() (800ms)');
                 resolve(null);
-              }, 2000)
+              }, 800)
             )
           ]);
-          
+
           let currentUser = await getUserWithTimeout;
-          
-          // Если пользователь не найден сразу, делаем повторную попытку через небольшую задержку
-          // Это помогает, если профиль создается с задержкой через триггер
+
+          // Если пользователь не найден, делаем одну быструю повторную попытку
           if (!currentUser) {
-            console.debug('⚠️ Пользователь не найден сразу после SIGNED_IN, повторная попытка через 500ms...');
-            await new Promise(resolve => setTimeout(resolve, 500));
-            
-            // Повторная попытка тоже с таймаутом
+            console.debug('⚠️ Повторная попытка загрузки профиля...');
+            await new Promise(resolve => setTimeout(resolve, 200));
+
             const retryGetUser = Promise.race([
               getCurrentUser(),
-              new Promise<User | null>((resolve) => 
+              new Promise<User | null>((resolve) =>
                 setTimeout(() => {
-                  console.debug('⚠️ Таймаут повторной попытки getCurrentUser() (1.5 секунды)');
+                  console.debug('⚠️ Таймаут повторной попытки (600ms)');
                   resolve(null);
-                }, 1500)
+                }, 600)
               )
             ]);
-            
+
             currentUser = await retryGetUser;
           }
           

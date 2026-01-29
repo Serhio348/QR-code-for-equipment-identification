@@ -32,6 +32,7 @@ import { ValveSpecFields } from './ValveSpecFields';             // Клапан
 import { ElectricalSpecFields } from './ElectricalSpecFields';   // Электрооборудование
 import { VentilationSpecFields } from './VentilationSpecFields'; // Вентиляционное оборудование
 import { PlumbingSpecFields } from './PlumbingSpecFields';        // Сантехническое оборудование
+import { EnergySourceSpecFields } from './EnergySourceSpecFields'; // Энергоисточники
 import { IndustrialSpecFields } from './IndustrialSpecFields';   // Прочее промышленное оборудование
 import { OtherSpecFields } from './OtherSpecFields';              // Другое
 import { AdditionalNotesField } from './CommonSpecFields';        // Дополнительные характеристики (для всех типов)
@@ -111,6 +112,11 @@ export const SpecFieldsRenderer: React.FC<SpecFieldsRendererProps> = ({
     // Сантехническое оборудование - компонент с полями: Наименование, Инвентарный номер, Диаметр, Материал, и т.д.
     case 'plumbing':
       specificFields = <PlumbingSpecFields specs={specs} onSpecChange={onSpecChange} />;
+      break;
+    
+    // Энергоисточники - компонент с полями: Наименование, Инвентарный номер, Тип энергоисточника, Тепловая мощность, Топливо, КПД, и т.д.
+    case 'energy_source':
+      specificFields = <EnergySourceSpecFields specs={specs} onSpecChange={onSpecChange} />;
       break;
     
     // Прочее промышленное оборудование - компонент с полями: Наименование, Инвентарный номер, Заводской номер, Производительность

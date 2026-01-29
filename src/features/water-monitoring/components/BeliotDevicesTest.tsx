@@ -2197,136 +2197,128 @@ const BeliotDevicesTest: React.FC = () => {
                 </button>
               </div>
             )}
-            <div className="group-devices-table-container">
-              <table className="group-devices-table">
-                <thead>
-                  <tr>
-                    <th>Счётчик</th>
-                    <th>Показание</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(() => {
-                    const filteredDevices = selectedGroup.devices.filter((device) => {
-                      // Фильтрация по поисковому запросу
-                      if (!searchQuery.trim()) return true;
-                      const query = searchQuery.toLowerCase();
-                      const deviceName = getDeviceName(device).toLowerCase();
-                      const deviceId = String(device.device_id || device.id || device._id).toLowerCase();
-                      const address = (device.address || '').toLowerCase();
-                      const serialNumber = (device.serialNumber || device.serial_number || '').toLowerCase();
-                      return deviceName.includes(query) || 
-                             deviceId.includes(query) || 
-                             address.includes(query) || 
-                             serialNumber.includes(query);
-                    });
-                    
-                    if (filteredDevices.length === 0 && searchQuery.trim()) {
-                      return (
-                        <tr key="no-results">
-                          <td colSpan={2} className="empty-state" style={{ textAlign: 'center', padding: '20px' }}>
-                            Счетчики не найдены по запросу "{searchQuery}"
-                          </td>
-                        </tr>
-                      );
-                    }
-                    
-                    return filteredDevices.map((device, index) => {
-                    const deviceId = String(device.device_id || device.id || device._id);
-                    const isSelected = selectedDevice === device;
-                    const isEditingName = editingCell?.deviceId === deviceId && editingCell?.field === 'name';
-                    const isEditingSerial = editingCell?.deviceId === deviceId && editingCell?.field === 'serialNumber';
-                    
-                    return (
-                      <tr
-                        key={deviceId || index}
-                        className={isSelected ? 'selected' : ''}
-                        onClick={async (e) => {
-                          if ((e.target as HTMLElement).tagName !== 'INPUT') {
-                            await handleDeviceClick(device);
-                            // На мобильных не открываем боковую панель, показываем в основном контенте
-                          }
-                        }}
-                        style={{ cursor: 'pointer' }}
-                      >
-                        <td className="device-info-cell">
-                          <div className="device-name-container">
-                            <div
-                              className="editable-cell device-name-editable"
-                              onDoubleClick={(e) => {
-                                e.stopPropagation();
-                                setEditingCell({ deviceId, field: 'name' });
+            <div className="mobile-devices-cards-container">
+              {(() => {
+                const filteredDevices = selectedGroup.devices.filter((device) => {
+                  // Фильтрация по поисковому запросу
+                  if (!searchQuery.trim()) return true;
+                  const query = searchQuery.toLowerCase();
+                  const deviceName = getDeviceName(device).toLowerCase();
+                  const deviceId = String(device.device_id || device.id || device._id).toLowerCase();
+                  const address = (device.address || '').toLowerCase();
+                  const serialNumber = (device.serialNumber || device.serial_number || '').toLowerCase();
+                  return deviceName.includes(query) ||
+                         deviceId.includes(query) ||
+                         address.includes(query) ||
+                         serialNumber.includes(query);
+                });
+
+                if (filteredDevices.length === 0 && searchQuery.trim()) {
+                  return (
+                    <div className="empty-state" style={{ textAlign: 'center', padding: '20px' }}>
+                      Счетчики не найдены по запросу "{searchQuery}"
+                    </div>
+                  );
+                }
+
+                return filteredDevices.map((device, index) => {
+                  const deviceId = String(device.device_id || device.id || device._id);
+                  const isSelected = selectedDevice === device;
+                  const isEditingName = editingCell?.deviceId === deviceId && editingCell?.field === 'name';
+                  const isEditingSerial = editingCell?.deviceId === deviceId && editingCell?.field === 'serialNumber';
+
+                  return (
+                    <div
+                      key={deviceId || index}
+                      className={`mobile-device-card ${isSelected ? 'selected' : ''}`}
+                      onClick={async (e) => {
+                        if ((e.target as HTMLElement).tagName !== 'INPUT') {
+                          await handleDeviceClick(device);
+                        }
+                      }}
+                    >
+                      <div className="mobile-device-card-header">
+                        <div
+                          className="mobile-device-name-editable"
+                          onDoubleClick={(e) => {
+                            e.stopPropagation();
+                            setEditingCell({ deviceId, field: 'name' });
+                          }}
+                        >
+                          {isEditingName ? (
+                            <input
+                              type="text"
+                              className="mobile-editable-input"
+                              value={getEditableValue(deviceId, 'name', getDeviceName(device))}
+                              onChange={(e) => updateLocalValue(deviceId, 'name', e.target.value)}
+                              onBlur={async () => {
+                                await syncOverrideToSupabase(deviceId, 'name');
+                                setEditingCell(null);
                               }}
-                            >
-                              {isEditingName ? (
-                                <input
-                                  type="text"
-                                  className="editable-input"
-                                  value={getEditableValue(deviceId, 'name', getDeviceName(device))}
-                                  onChange={(e) => updateLocalValue(deviceId, 'name', e.target.value)}
-                                  onBlur={async () => {
-                                    await syncOverrideToSupabase(deviceId, 'name');
-                                    setEditingCell(null);
-                                  }}
-                                  onKeyDown={async (e) => {
-                                    if (e.key === 'Enter') {
-                                      await syncOverrideToSupabase(deviceId, 'name');
-                                      setEditingCell(null);
-                                    } else if (e.key === 'Escape') {
-                                      setEditingCell(null);
-                                    }
-                                  }}
-                                  onClick={(e) => e.stopPropagation()}
-                                  autoFocus
-                                />
-                              ) : (
-                                <span className="editable-text device-name-text">{getDeviceName(device) || '-'}</span>
-                              )}
-                            </div>
-                            <div
-                              className="editable-cell device-serial-editable"
-                              onDoubleClick={(e) => {
-                                e.stopPropagation();
-                                setEditingCell({ deviceId, field: 'serialNumber' });
+                              onKeyDown={async (e) => {
+                                if (e.key === 'Enter') {
+                                  await syncOverrideToSupabase(deviceId, 'name');
+                                  setEditingCell(null);
+                                } else if (e.key === 'Escape') {
+                                  setEditingCell(null);
+                                }
                               }}
-                            >
-                              {isEditingSerial ? (
-                                <input
-                                  type="text"
-                                  className="editable-input"
-                                  value={getEditableValue(deviceId, 'serialNumber', getDeviceSerialNumber(device))}
-                                  onChange={(e) => updateLocalValue(deviceId, 'serialNumber', e.target.value)}
-                                  onBlur={async () => {
+                              onClick={(e) => e.stopPropagation()}
+                              autoFocus
+                            />
+                          ) : (
+                            <span className="mobile-device-name">{getDeviceName(device) || '-'}</span>
+                          )}
+                        </div>
+                        <div className="mobile-device-reading">{getLastReading(device) || '-'}</div>
+                      </div>
+
+                      <div className="mobile-device-card-body">
+                        <div className="mobile-device-info-row">
+                          <span className="mobile-device-label">Серийный номер:</span>
+                          <div
+                            className="mobile-device-serial-editable"
+                            onDoubleClick={(e) => {
+                              e.stopPropagation();
+                              setEditingCell({ deviceId, field: 'serialNumber' });
+                            }}
+                          >
+                            {isEditingSerial ? (
+                              <input
+                                type="text"
+                                className="mobile-editable-input"
+                                value={getEditableValue(deviceId, 'serialNumber', getDeviceSerialNumber(device))}
+                                onChange={(e) => updateLocalValue(deviceId, 'serialNumber', e.target.value)}
+                                onBlur={async () => {
+                                  await syncOverrideToSupabase(deviceId, 'serialNumber');
+                                  setEditingCell(null);
+                                }}
+                                onKeyDown={async (e) => {
+                                  if (e.key === 'Enter') {
                                     await syncOverrideToSupabase(deviceId, 'serialNumber');
                                     setEditingCell(null);
-                                  }}
-                                  onKeyDown={async (e) => {
-                                    if (e.key === 'Enter') {
-                                      await syncOverrideToSupabase(deviceId, 'serialNumber');
-                                      setEditingCell(null);
-                                    } else if (e.key === 'Escape') {
-                                      setEditingCell(null);
-                                    }
-                                  }}
-                                  onClick={(e) => e.stopPropagation()}
-                                  autoFocus
-                                />
-                              ) : (
-                                <span className="editable-text device-serial-text">{getDeviceSerialNumber(device) || '-'}</span>
-                              )}
-                            </div>
-                            <div className="device-object-text">
-                              {getDeviceObject(device) || '-'}
-                            </div>
+                                  } else if (e.key === 'Escape') {
+                                    setEditingCell(null);
+                                  }
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                                autoFocus
+                              />
+                            ) : (
+                              <span className="mobile-device-value">{getDeviceSerialNumber(device) || '-'}</span>
+                            )}
                           </div>
-                        </td>
-                        <td className="reading-cell">{getLastReading(device) || '-'}</td>
-                      </tr>
-                    );
-                  });
-                  })()}
-                </tbody>
-              </table>
+                        </div>
+
+                        <div className="mobile-device-info-row">
+                          <span className="mobile-device-label">Объект:</span>
+                          <span className="mobile-device-value">{getDeviceObject(device) || '-'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
             </div>
           </div>
         ) : (

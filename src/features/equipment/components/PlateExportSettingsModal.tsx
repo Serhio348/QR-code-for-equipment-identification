@@ -4,7 +4,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { PlateExportSettings, PlateSize, PlateTemplate, DEFAULT_EXPORT_SETTINGS, PLATE_TEMPLATES } from '@/shared/types/plateExport';
-import { FilterSpecs } from '../types/equipment';
+import { EquipmentType, EquipmentSpecs } from '../types/equipment';
+import { getAllSpecFieldsForType } from '../constants/equipmentSpecFields';
 import './PlateExportSettingsModal.css';
 
 interface PlateExportSettingsModalProps {
@@ -12,7 +13,8 @@ interface PlateExportSettingsModalProps {
   onClose: () => void;
   onExport: (settings: PlateExportSettings) => void;
   equipmentName: string;
-  specs: FilterSpecs;
+  specs: EquipmentSpecs;
+  equipmentType: EquipmentType;
 }
 
 const PlateExportSettingsModal: React.FC<PlateExportSettingsModalProps> = ({
@@ -21,39 +23,16 @@ const PlateExportSettingsModal: React.FC<PlateExportSettingsModalProps> = ({
   onExport,
   equipmentName: _equipmentName,
   specs,
+  equipmentType,
 }) => {
   const [settings, setSettings] = useState<PlateExportSettings>(DEFAULT_EXPORT_SETTINGS);
   const [customWidth, setCustomWidth] = useState<number>(210); // A4 width in mm
   const [customHeight, setCustomHeight] = useState<number>(297); // A4 height in mm
 
-  // Список доступных полей характеристик
-  const availableSpecFields = [
-    { key: 'inventoryNumber', label: 'Инвентарный номер' },
-    { key: 'height', label: 'Высота' },
-    { key: 'diameter', label: 'Диаметр' },
-    { key: 'capacity', label: 'Производительность' },
-    { key: 'filtrationArea', label: 'Площадь фильтрации' },
-    { key: 'filtrationSpeed', label: 'Скорость фильтрации' },
-    { key: 'fillingMaterial', label: 'Засыпка' },
-    { key: 'fillingVolume', label: 'Объем засыпки' },
-    { key: 'power', label: 'Мощность' },
-    { key: 'voltage', label: 'Напряжение' },
-    { key: 'current', label: 'Ток' },
-    { key: 'equipmentType', label: 'Тип оборудования' },
-    { key: 'protectionClass', label: 'Класс защиты' },
-    { key: 'fanType', label: 'Тип вентилятора' },
-    { key: 'pressure', label: 'Напор' },
-    { key: 'material', label: 'Материал' },
-    { key: 'workingPressure', label: 'Рабочее давление' },
-    { key: 'temperature', label: 'Температура' },
-    { key: 'head', label: 'Напор' },
-    { key: 'volume', label: 'Объем' },
-    { key: 'valveType', label: 'Тип клапана' },
-    { key: 'serialNumber', label: 'Заводской номер' },
-    { key: 'additionalNotes', label: 'Дополнительные характеристики' },
-  ];
+  // Получаем список полей для текущего типа оборудования
+  const availableSpecFields = getAllSpecFieldsForType(equipmentType);
 
-  // Фильтруем только те поля, которые есть в specs
+  // Фильтруем только те поля, которые есть в specs (имеют значение)
   const visibleSpecFields = availableSpecFields.filter(field => {
     const value = specs[field.key];
     return value !== undefined && value !== null && value !== '';
@@ -63,16 +42,12 @@ const PlateExportSettingsModal: React.FC<PlateExportSettingsModalProps> = ({
     if (isOpen) {
       // Сбрасываем настройки при открытии
       const defaultSettings = { ...DEFAULT_EXPORT_SETTINGS };
-      // Если selectedSpecFields не определен, инициализируем всеми видимыми полями
-      // Это позволяет различать undefined (показать все) и [] (скрыть все)
-      if (defaultSettings.selectedSpecFields === undefined) {
-        // При открытии модального окна инициализируем всеми видимыми полями
-        // чтобы пользователь видел все чекбоксы отмеченными по умолчанию
-        defaultSettings.selectedSpecFields = visibleSpecFields.map(f => f.key);
-      }
+      // При открытии модального окна инициализируем всеми видимыми полями
+      // чтобы пользователь видел все чекбоксы отмеченными по умолчанию
+      defaultSettings.selectedSpecFields = visibleSpecFields.map(f => f.key);
       setSettings(defaultSettings);
     }
-  }, [isOpen]);
+  }, [isOpen, visibleSpecFields]);
 
   const handleTemplateChange = (template: PlateTemplate) => {
     const templateSettings = PLATE_TEMPLATES[template];

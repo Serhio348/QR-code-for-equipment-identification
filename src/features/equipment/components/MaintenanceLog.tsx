@@ -6,14 +6,21 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { MaintenanceEntry, MaintenanceEntryInput } from '../types/equipment';
+import { MaintenanceEntry, MaintenanceEntryInput, Equipment } from '../types/equipment';
+import { TechnicalInspectionData } from '../types/technicalInspection';
 import { 
   getMaintenanceLog, 
   addMaintenanceEntry, 
   deleteMaintenanceEntry,
-  updateEquipment
+  updateEquipment,
+  getEquipmentById
 } from '../services/equipmentApi';
 import { formatDate } from '@/shared/utils/dateFormatting';
+import { exportToPDF } from '@/shared/utils/pdfExport';
+import { InspectionExportSettings } from '@/shared/types/inspectionExport';
+import { TechnicalInspectionForm } from './TechnicalInspectionForm';
+import { TechnicalInspectionPDF } from './TechnicalInspectionPDF';
+import InspectionExportSettingsModal from './InspectionExportSettingsModal';
 import './MaintenanceLog.css';
 
 interface MaintenanceLogProps {
@@ -21,14 +28,21 @@ interface MaintenanceLogProps {
   equipmentId: string;
   /** Опциональный ID общего журнала обслуживания (для нескольких единиц оборудования) */
   maintenanceSheetId?: string;
+  /** Опциональная информация об оборудовании (если уже загружена) */
+  equipment?: Equipment;
 }
 
-const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanceSheetId }) => {
+const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanceSheetId, equipment: propEquipment }) => {
   const [entries, setEntries] = useState<MaintenanceEntry[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState<boolean>(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [equipment, setEquipment] = useState<Equipment | null>(propEquipment || null);
+  const [showInspectionForm, setShowInspectionForm] = useState<boolean>(false);
+  const [showInspectionPDF, setShowInspectionPDF] = useState<boolean>(false);
+  const [showInspectionExportSettings, setShowInspectionExportSettings] = useState<boolean>(false);
+  const [inspectionData, setInspectionData] = useState<TechnicalInspectionData | null>(null);
 
   const [formData, setFormData] = useState<MaintenanceEntryInput>({
     date: new Date().toISOString().split('T')[0],
@@ -39,11 +53,47 @@ const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanc
   });
 
   /**
-   * Загрузка журнала обслуживания при монтировании компонента
+   * Загрузка журнала обслуживания и информации об оборудовании при монтировании компонента
    */
   useEffect(() => {
     loadMaintenanceLog();
-  }, [equipmentId, maintenanceSheetId]);
+    // Всегда загружаем оборудование для определения типа
+    if (propEquipment) {
+      // Если оборудование передано, используем его
+      setEquipment(propEquipment);
+      console.log('✅ Оборудование передано в пропсах:', {
+        id: propEquipment.id,
+        name: propEquipment.name,
+        type: propEquipment.type,
+        isEnergySource: propEquipment.type === 'energy_source'
+      });
+    } else if (equipmentId) {
+      // Если не передано, загружаем по ID
+      loadEquipment();
+    }
+  }, [equipmentId, maintenanceSheetId, propEquipment]);
+
+  /**
+   * Загрузить информацию об оборудовании
+   */
+  const loadEquipment = async () => {
+    try {
+      const eq = await getEquipmentById(equipmentId);
+      if (eq) {
+        console.log('✅ Оборудование загружено:', {
+          id: eq.id,
+          name: eq.name,
+          type: eq.type,
+          isEnergySource: eq.type === 'energy_source'
+        });
+        setEquipment(eq);
+      } else {
+        console.warn('⚠️ Оборудование не найдено для ID:', equipmentId);
+      }
+    } catch (err) {
+      console.error('❌ Ошибка загрузки оборудования:', err);
+    }
+  };
 
   /**
    * Загрузить журнал обслуживания с сервера
@@ -174,6 +224,115 @@ const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanc
   };
 
   /**
+   * Сохранение данных технического освидетельствования в журнал
+   */
+  const handleInspectionSave = async (data: TechnicalInspectionData) => {
+    if (!equipment) return;
+
+    setSaving(true);
+    setError(null);
+
+    try {
+      // Вычисляем дату следующего освидетельствования (текущая дата + 1 год)
+      const inspectionDate = new Date(data.inspectionDate);
+      const nextInspectionDate = new Date(inspectionDate);
+      nextInspectionDate.setFullYear(nextInspectionDate.getFullYear() + 1);
+      
+      // Форматируем дату в формат YYYY-MM-DD
+      const nextInspectionDateStr = nextInspectionDate.toISOString().split('T')[0];
+
+      // Формируем описание для записи в журнал
+      const membersList = data.commissionMembers
+        .filter(m => m.name.trim() !== '')
+        .map(m => `${m.position ? m.position + ', ' : ''}${m.name}`)
+        .join('; ');
+      
+      const description = `Техническое освидетельствование №${data.actNumber}. 
+Организация: ${data.organization || 'не указана'}.
+Количество котлов: ${data.boilersCount || 'не указано'}.
+Предохранительные устройства: ${data.safetyDeviceType || 'не указаны'}.
+Объект: ${data.facilityName || ''}${data.facilityAddress ? ', ' + data.facilityAddress : ''}.
+Комиссия: ${data.commissionChairmanPosition ? data.commissionChairmanPosition + ', ' : ''}${data.commissionChairman}${membersList ? '; ' + membersList : ''}.
+Заключение: ${data.conclusion === 'suitable' ? 'Годен к эксплуатации' : 'Не годен к эксплуатации'}.
+Следующее освидетельствование: ${nextInspectionDateStr}.
+${data.notes ? `Примечания: ${data.notes}` : ''}`;
+
+      // Создаем запись в журнале
+      const entryData: MaintenanceEntryInput = {
+        date: data.inspectionDate,
+        type: 'Техническое освидетельствование',
+        description: description,
+        performedBy: data.commissionChairman,
+        status: 'completed'
+      };
+
+      await addMaintenanceEntry(equipmentId, entryData, maintenanceSheetId);
+      
+      // Обновляем дату следующего испытания в характеристиках оборудования
+      // Автоматически устанавливаем дату следующего освидетельствования (текущая дата + 1 год)
+      try {
+        await updateEquipment(equipmentId, {
+          specs: {
+            ...equipment.specs,
+            nextTestDate: nextInspectionDateStr
+          }
+        });
+        console.log('✅ Дата следующего испытания обновлена:', nextInspectionDateStr);
+      } catch (updateError) {
+        console.warn('⚠️ Не удалось обновить дату следующего испытания:', updateError);
+      }
+
+      // Успешное сохранение - закрываем форму и перезагружаем журнал
+      setShowInspectionForm(false);
+      loadMaintenanceLog();
+
+      // Показываем уведомление об успехе
+      alert('✅ Акт технического освидетельствования успешно сохранен в журнал!');
+    } catch (err: any) {
+      console.error('Ошибка сохранения освидетельствования:', err);
+      setError(`Не удалось сохранить освидетельствование: ${err.message || 'Неизвестная ошибка'}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /**
+   * Открытие модального окна настроек экспорта PDF акта освидетельствования
+   */
+  const handleGenerateInspectionPDF = (data: TechnicalInspectionData) => {
+    if (!equipment) return;
+    setInspectionData(data);
+    setShowInspectionExportSettings(true);
+  };
+
+  /**
+   * Экспорт PDF акта освидетельствования с настройками
+   */
+  const handleExportInspectionWithSettings = async (settings: InspectionExportSettings) => {
+    if (!equipment || !inspectionData) return;
+
+    setShowInspectionExportSettings(false);
+    setShowInspectionPDF(true);
+
+    // Задержка для рендеринга компонента (увеличена для надежности)
+    setTimeout(async () => {
+      try {
+        console.log('Начинаем экспорт акта освидетельствования...');
+        const filename = `Акт_освидетельствования_${equipment.name.replace(/[^a-zA-Z0-9]/g, '_')}_${inspectionData.actNumber.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+        await exportToPDF('technical-inspection-pdf', filename, settings);
+        console.log('Экспорт успешно завершен');
+        setShowInspectionPDF(false);
+        setInspectionData(null);
+      } catch (error) {
+        console.error('Ошибка генерации PDF:', error);
+        alert(`Ошибка при генерации PDF: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}\n\nПроверьте консоль браузера для деталей.`);
+        setShowInspectionPDF(false);
+        setInspectionData(null);
+      }
+    }, 1000);
+  };
+
+  /**
    * Удаление записи из журнала
    */
   const handleDelete = async (entryId: string) => {
@@ -213,6 +372,33 @@ const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanc
         <div className="error-message">
           {error}
           <button onClick={() => setError(null)} className="close-error">×</button>
+        </div>
+      )}
+
+      {/* Кнопка для открытия формы технического освидетельствования (только для энергоисточников) */}
+      {equipment?.type === 'energy_source' && (
+        <div style={{ marginBottom: '20px', textAlign: 'center' }}>
+          <button
+            type="button"
+            onClick={() => setShowInspectionForm(true)}
+            className="inspection-form-button"
+            style={{ 
+              background: '#2196F3', 
+              color: 'white', 
+              border: 'none', 
+              padding: '14px 28px', 
+              borderRadius: '6px', 
+              fontSize: '16px', 
+              fontWeight: '600', 
+              cursor: 'pointer',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+              transition: 'background 0.3s'
+            }}
+            onMouseOver={(e) => e.currentTarget.style.background = '#0b7dda'}
+            onMouseOut={(e) => e.currentTarget.style.background = '#2196F3'}
+          >
+            📋 Техническое освидетельствование
+          </button>
         </div>
       )}
 
@@ -273,6 +459,54 @@ const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanc
           {saving ? 'Добавление...' : 'Добавить запись'}
         </button>
       </form>
+
+      {/* Форма технического освидетельствования */}
+      {showInspectionForm && equipment && (
+        <div className="inspection-form-overlay">
+          <div className="inspection-form-container">
+            <TechnicalInspectionForm
+              equipment={equipment}
+              onSave={handleInspectionSave}
+              onCancel={() => setShowInspectionForm(false)}
+              onGeneratePDF={handleGenerateInspectionPDF}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Модальное окно настроек экспорта акта освидетельствования */}
+      {showInspectionExportSettings && inspectionData && (
+        <InspectionExportSettingsModal
+          isOpen={showInspectionExportSettings}
+          onClose={() => {
+            setShowInspectionExportSettings(false);
+            setInspectionData(null);
+          }}
+          onExport={handleExportInspectionWithSettings}
+          actNumber={inspectionData.actNumber}
+        />
+      )}
+
+      {/* PDF акта освидетельствования (скрытый, для генерации) */}
+      {showInspectionPDF && equipment && inspectionData && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          visibility: 'hidden',
+          opacity: 0,
+          pointerEvents: 'none',
+          zIndex: -1,
+          overflow: 'auto'
+        }}>
+          <TechnicalInspectionPDF
+            equipment={equipment}
+            inspectionData={inspectionData}
+          />
+        </div>
+      )}
 
       <div className="entries-list">
         <h3>История обслуживания ({entries.length})</h3>
