@@ -27,6 +27,7 @@ export const EQUIPMENT_TYPE_LABELS: Record<EquipmentType, string> = {
   electrical: 'Электрооборудование',
   ventilation: 'Вентиляционное оборудование',
   plumbing: 'Сантехническое оборудование',
+  energy_source: 'Энергоисточники',
   industrial: 'Прочее промышленное оборудование',
   other: 'Другое',
 };
@@ -44,6 +45,7 @@ export const EQUIPMENT_TYPES: EquipmentType[] = [
   'electrical',
   'ventilation',
   'plumbing',
+  'energy_source',
   'industrial',
   'other',
 ];
