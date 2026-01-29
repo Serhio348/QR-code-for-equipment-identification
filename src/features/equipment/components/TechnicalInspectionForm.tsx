@@ -14,13 +14,17 @@ interface TechnicalInspectionFormProps {
   onSave: (data: TechnicalInspectionData) => void;
   onCancel: () => void;
   onGeneratePDF: (data: TechnicalInspectionData) => void;
+  saving?: boolean;
+  savingProgress?: number;
 }
 
 export const TechnicalInspectionForm: React.FC<TechnicalInspectionFormProps> = ({
   equipment,
   onSave,
   onCancel,
-  onGeneratePDF
+  onGeneratePDF,
+  saving = false,
+  savingProgress = 0
 }) => {
   const specs = equipment.specs;
   
@@ -424,19 +428,44 @@ export const TechnicalInspectionForm: React.FC<TechnicalInspectionFormProps> = (
           </div>
         </div>
 
+        {/* Индикатор загрузки */}
+        {saving && savingProgress > 0 && (
+          <div className="saving-progress-container">
+            <div className="saving-progress-bar">
+              <div
+                className="saving-progress-fill"
+                style={{ width: `${savingProgress}%` }}
+              ></div>
+            </div>
+            <div className="saving-progress-text">
+              Сохранение... {savingProgress}%
+            </div>
+          </div>
+        )}
+
         <div className="form-actions">
-          <button type="button" onClick={onCancel} className="cancel-btn">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="cancel-btn"
+            disabled={saving}
+          >
             Отмена
           </button>
           <button
             type="button"
             onClick={handleGeneratePDF}
             className="generate-pdf-btn"
+            disabled={saving}
           >
             Сгенерировать PDF
           </button>
-          <button type="submit" className="save-btn">
-            Сохранить в журнал
+          <button
+            type="submit"
+            className="save-btn"
+            disabled={saving}
+          >
+            {saving ? 'Сохранение...' : 'Сохранить в журнал'}
           </button>
         </div>
       </form>

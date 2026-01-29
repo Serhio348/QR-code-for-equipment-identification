@@ -149,3 +149,58 @@
 .save-btn:hover {
   background: #45a049;
 }
+
+.save-btn:disabled,
+.cancel-btn:disabled,
+.generate-pdf-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Индикатор загрузки */
+.saving-progress-container {
+  margin-top: 20px;
+  margin-bottom: 20px;
+}
+
+.saving-progress-bar {
+  width: 100%;
+  height: 30px;
+  background-color: #f0f0f0;
+  border-radius: 15px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.saving-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4CAF50 0%, #45a049 100%);
+  transition: width 0.3s ease;
+  border-radius: 15px;
+  box-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
+}
+
+.saving-progress-text {
+  text-align: center;
+  margin-top: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #4CAF50;
+}
+
+/* Адаптивность для мобильных устройств */
+@media (max-width: 768px) {
+  .form-actions {
+    flex-direction: column;
+  }
+
+  .cancel-btn,
+  .generate-pdf-btn,
+  .save-btn {
+    width: 100%;
+  }
+
+  .saving-progress-text {
+    font-size: 12px;
+  }
+}
