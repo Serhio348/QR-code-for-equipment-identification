@@ -203,7 +203,7 @@ function doGet(e) {
         return createJsonResponse(getEquipmentById(id));
       
       case 'getByType':
-        // Получить оборудование определенного типа (filter, pump, tank, electrical, ventilation, plumbing, industrial, other)
+        // Получить оборудование определенного типа (filter, pump, tank, valve, electrical, ventilation, plumbing, energy_source, industrial, other)
         const type = e.parameter.type;
         if (!type) {
           return createErrorResponse('Тип не указан');

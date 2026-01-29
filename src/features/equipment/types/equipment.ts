@@ -10,6 +10,7 @@ export type EquipmentType =
   | 'electrical'       // Электрооборудование
   | 'ventilation'      // Вентиляционное оборудование
   | 'plumbing'         // Сантехническое оборудование
+  | 'energy_source'    // Энергоисточники (котлы и другие)
   | 'industrial'       // Прочее промышленное оборудование
   | 'other';           // Другое
 
@@ -60,7 +61,7 @@ export interface Equipment {
   /** Название оборудования */
   name: string;
   
-  /** Тип оборудования (filter, pump, tank, valve, electrical, ventilation, plumbing, industrial, other) */
+  /** Тип оборудования (filter, pump, tank, valve, electrical, ventilation, plumbing, energy_source, industrial, other) */
   type: EquipmentType;
   
   /** Характеристики оборудования (JSON объект, структура зависит от типа) */

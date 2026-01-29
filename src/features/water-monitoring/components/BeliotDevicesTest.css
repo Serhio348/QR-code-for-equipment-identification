@@ -1449,8 +1449,8 @@
     position: relative; /* Обычное позиционирование в потоке документа */
     padding: 0 !important;
     margin: 0 !important;
-    height: calc(100vh - 70px - 60px); /* Высота = viewport минус хедер и футер */
-    max-height: calc(100vh - 70px - 60px);
+    height: calc(100vh - 80px - 25px - 40px - 20px); /* Высота = viewport - app header - app footer - water tabs - water padding */
+    max-height: calc(100vh - 80px - 25px - 40px - 20px);
     overflow: hidden;
     width: 100%;
     box-sizing: border-box;
@@ -1811,6 +1811,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    position: relative;
   }
 
   .mobile-devices-header {
@@ -1872,6 +1873,53 @@
     line-height: 1.2;
   }
 
+  /* Контейнер поиска в мобильной версии */
+  .mobile-search-container {
+    padding: 8px 12px;
+    background: white;
+    border-bottom: 1px solid #e0e0e0;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .mobile-search-input {
+    flex: 1;
+    padding: 10px 12px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 14px;
+    background: white;
+    color: #333;
+  }
+
+  .mobile-search-input:focus {
+    outline: none;
+    border-color: #667eea;
+  }
+
+  .mobile-search-close {
+    background: #f5f5f5;
+    border: none;
+    color: #666;
+    font-size: 24px;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.2s;
+  }
+
+  .mobile-search-close:active {
+    background: #e0e0e0;
+    transform: scale(0.95);
+  }
+
   .mobile-main-content .group-devices-section {
     margin: 0;
     padding: 16px 12px;
@@ -1889,126 +1937,123 @@
     border-bottom: 2px solid #667eea;
   }
 
-  .mobile-main-content .group-devices-table-container {
-    flex: 1;
+  /* Контейнер карточек счетчиков для мобильной версии */
+  .mobile-devices-cards-container {
+    flex: 1 1 0;
+    height: 0;
     overflow-y: auto;
-    overflow-x: auto;
-    border: none;
-    border-radius: 0;
-    padding: 0 12px;
+    overflow-x: hidden;
+    padding: 8px 12px 70px 12px;
+    -webkit-overflow-scrolling: touch;
   }
 
-  .mobile-main-content .group-devices-table {
-    width: 100%;
-    font-size: 14px;
-    border-collapse: collapse;
+  /* Карточка счетчика */
+  .mobile-device-card {
     background: white;
-    table-layout: fixed; /* Фиксированная ширина столбцов */
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    padding: 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    margin-bottom: 12px;
   }
 
-  .mobile-main-content .group-devices-table thead {
-    position: sticky;
-    top: 0;
-    background: #f0f0f0;
-    z-index: 3;
+  .mobile-device-card:last-child {
+    margin-bottom: 0;
   }
 
-  .mobile-main-content .group-devices-table th {
-    padding: 14px 10px;
-    font-size: 14px;
+  .mobile-device-card:active {
+    transform: scale(0.98);
+    background: #f8f9fa;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  }
+
+  .mobile-device-card.selected {
+    background: #e3f2fd;
+    border-color: #667eea;
+    border-width: 3px;
+    box-shadow: 0 4px 8px rgba(102, 126, 234, 0.2);
+  }
+
+  /* Заголовок карточки: название и показание */
+  .mobile-device-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #f0f0f0;
+  }
+
+  .mobile-device-name-editable {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .mobile-device-name {
+    font-size: 18px;
     font-weight: 600;
     color: #333;
-    border-bottom: 2px solid #ddd;
-    white-space: nowrap;
-    text-align: left;
-    background: #f0f0f0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  /* Фиксированные ширины столбцов */
-  .mobile-main-content .group-devices-table th:nth-child(1),
-  .mobile-main-content .group-devices-table td:nth-child(1) {
-    width: 60%; /* Счётчик (название + номер) */
-  }
-
-  .mobile-main-content .group-devices-table th:nth-child(2),
-  .mobile-main-content .group-devices-table td:nth-child(2) {
-    width: 40%; /* Показание */
-  }
-
-  .mobile-main-content .group-devices-table td {
-    padding: 16px 10px;
-    font-size: 14px;
-    border-bottom: 1px solid #eee;
-    color: #333;
-    vertical-align: middle;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    line-height: 1.3;
     word-wrap: break-word;
   }
 
-  /* Ячейка с информацией о счетчике */
-  .mobile-main-content .group-devices-table .device-info-cell {
-    padding: 16px 10px;
-    vertical-align: top;
+  .mobile-device-reading {
+    font-size: 24px;
+    font-weight: 700;
+    color: #667eea;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 
-  .device-name-container {
+  /* Тело карточки: дополнительная информация */
+  .mobile-device-card-body {
     display: flex;
     flex-direction: column;
     gap: 8px;
   }
 
-  .device-name-editable,
-  .device-serial-editable {
-    min-height: auto;
-    padding: 0;
+  .mobile-device-info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
   }
 
-  .device-name-text {
-    font-size: 15px;
-    font-weight: 600;
-    color: #333;
-    display: block;
-  }
-
-  .device-serial-text {
+  .mobile-device-label {
     font-size: 13px;
     color: #666;
-    display: block;
+    font-weight: 500;
+    flex-shrink: 0;
   }
 
-  .device-object-text {
-    font-size: 11px;
-    color: #999;
-    display: block;
-    margin-top: 4px;
-    font-style: italic;
+  .mobile-device-serial-editable,
+  .mobile-device-value {
+    font-size: 14px;
+    color: #333;
+    flex: 1;
+    text-align: right;
+    word-wrap: break-word;
   }
 
-  .mobile-main-content .group-devices-table .reading-cell {
-    font-weight: 700;
-    color: #667eea;
-    font-size: 20px;
-    text-align: center;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    vertical-align: middle;
+  /* Редактируемые поля в карточках */
+  .mobile-editable-input {
+    width: 100%;
+    padding: 8px;
+    border: 2px solid #667eea;
+    border-radius: 6px;
+    font-size: 14px;
+    background: white;
+    color: #333;
+    box-sizing: border-box;
   }
 
-  .mobile-main-content .group-devices-table tbody tr {
-    transition: background-color 0.2s;
-    cursor: pointer;
-  }
-
-  .mobile-main-content .group-devices-table tbody tr:active {
-    background-color: #e3f2fd;
-  }
-
-  .mobile-main-content .group-devices-table tbody tr.selected {
-    background-color: #e3f2fd;
-    border-left: 4px solid #667eea;
+  .mobile-editable-input:focus {
+    outline: none;
+    border-color: #764ba2;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
   }
 
   /* Улучшаем читаемость на мобильных */
@@ -2258,8 +2303,8 @@
 /* Для очень маленьких экранов */
 @media (max-width: 480px) {
   .beliot-devices-admin {
-    height: calc(100vh - 65px - 60px); /* Высота = viewport минус хедер (65px) и футер (60px) */
-    max-height: calc(100vh - 65px - 60px);
+    height: calc(100vh - 75px - 20px - 38px - 20px); /* Высота = viewport - app header - app footer - water tabs - water padding */
+    max-height: calc(100vh - 75px - 20px - 38px - 20px);
   }
 }
 

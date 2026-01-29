@@ -81,26 +81,28 @@
 /* Адаптивность */
 @media (max-width: 768px) {
   .water-page-header {
-    padding: 10px 15px;
+    padding: 6px 10px;
   }
 
   .water-page-tabs {
-    gap: 5px;
+    gap: 3px;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+    border-bottom-width: 1px;
   }
 
   .water-tab {
-    padding: 8px 12px;
-    font-size: 13px;
+    padding: 6px 10px;
+    font-size: 12px;
     flex-shrink: 0;
+    border-bottom-width: 2px;
   }
 
   .water-tab-icon {
-    font-size: 14px;
+    font-size: 13px;
   }
 
   .water-page-content {
-    padding: 15px;
+    padding: 10px;
   }
 }

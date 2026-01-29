@@ -24,7 +24,7 @@ import React from 'react';
  * @param value - Текущее значение поля (контролируемый компонент)
  * @param onChange - Callback функция, вызываемая при изменении значения
  * @param placeholder - Подсказка внутри input (опционально)
- * @param type - Тип input: 'text' (по умолчанию) или 'number'
+ * @param type - Тип input: 'text' (по умолчанию), 'number' или 'date'
  * @param required - Флаг обязательности поля (добавляет * к label)
  */
 interface SpecFieldProps {
@@ -32,7 +32,7 @@ interface SpecFieldProps {
   value: string;              // Текущее значение из specs
   onChange: (value: string) => void;  // Функция обновления значения
   placeholder?: string;        // Подсказка (например: "Например: 5,5 кВт")
-  type?: 'text' | 'number';   // Тип input поля
+  type?: 'text' | 'number' | 'date';   // Тип input поля
   required?: boolean;          // Обязательное ли поле
 }
 

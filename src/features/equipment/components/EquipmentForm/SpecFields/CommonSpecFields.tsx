@@ -6,7 +6,7 @@
  * Это поля "Наименование" и "Инвентарный номер" - они всегда первыми в форме.
  * 
  * АРХИТЕКТУРА:
- * - Экспортирует два компонента: NameField и InventoryNumberField
+ * - Экспортирует компоненты: NameField, InventoryNumberField, SerialNumberField
  * - Эти компоненты используются в каждом *SpecFields.tsx компоненте
  * - Обеспечивает единообразие общих полей во всех типах оборудования
  * 
@@ -103,6 +103,36 @@ export const InventoryNumberField: React.FC<CommonSpecFieldsProps> = ({ specs, o
         onChange={(e) => onSpecChange('inventoryNumber', e.target.value)}  // Обновляем 'inventoryNumber'
         placeholder="Например: ИН-001"
         // required отсутствует - поле необязательное
+      />
+    </div>
+  );
+};
+
+/**
+ * SerialNumberField - Поле "Серийный номер"
+ *
+ * НАЗНАЧЕНИЕ:
+ * Общее поле (необязательное), используемое там, где важно хранить серийный номер,
+ * а не инвентарный (например, для энергоисточников).
+ *
+ * ЛОГИКА:
+ * - Необязательное поле (может быть пустым)
+ * - Значение хранится в specs.serialNumber
+ * - При изменении вызывает onSpecChange('serialNumber', новоеЗначение)
+ *
+ * ПРИМЕРЫ ЗНАЧЕНИЙ:
+ * - "SN-000123"
+ * - "A1B2C3D4"
+ */
+export const SerialNumberField: React.FC<CommonSpecFieldsProps> = ({ specs, onSpecChange }) => {
+  return (
+    <div className="form-group">
+      <label>Серийный номер</label>
+      <input
+        type="text"
+        value={specs.serialNumber || ''}
+        onChange={(e) => onSpecChange('serialNumber', e.target.value)}
+        placeholder="Например: SN-000123"
       />
     </div>
   );

@@ -1,0 +1,360 @@
+.technical-inspection-pdf {
+  width: 210mm;
+  min-height: 297mm;
+  padding: 6mm;
+  background: white;
+  font-family: 'Times New Roman', serif;
+  font-size: 12pt;
+  line-height: 1.4;
+  color: #000;
+  margin: 0;
+  box-sizing: border-box;
+}
+
+.inspection-header {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.act-location-date {
+  text-align: left;
+  margin-bottom: 10px;
+  font-size: 13pt;
+}
+
+.inspection-header h1 {
+  font-size: 16pt;
+  font-weight: bold;
+  margin: 10px 0 5px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.act-number {
+  font-size: 13pt;
+  font-weight: bold;
+  margin: 5px 0 8px 0;
+  text-align: center;
+}
+
+.inspection-header h2 {
+  font-size: 13pt;
+  font-weight: normal;
+  margin: 3px 0;
+  text-transform: lowercase;
+}
+
+.inspection-header h2::first-letter {
+  text-transform: uppercase;
+}
+
+.inspection-content {
+  margin-top: 15px;
+}
+
+.inspection-section {
+  margin-bottom: 10px;
+}
+
+.organization-label {
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+.underline-field {
+  border-bottom: 1px solid #000;
+  min-height: 20px;
+  margin-bottom: 15px;
+  padding-bottom: 2px;
+}
+
+.commission-intro {
+  margin-bottom: 10px;
+}
+
+.commission-members-list {
+  margin: 10px 0;
+}
+
+.commission-member-line {
+  margin-bottom: 8px;
+  min-height: 25px;
+  border-bottom: 1px solid #000;
+  padding-bottom: 2px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.member-position {
+  flex: 0 0 auto;
+  margin-right: 20px;
+}
+
+.member-name-inline {
+  flex: 0 0 auto;
+  text-align: right;
+}
+
+.member-info {
+  display: inline-block;
+}
+
+.member-note {
+  font-size: 13pt;
+  font-style: italic;
+  color: #555;
+  margin-top: 5px;
+}
+
+.inspection-text {
+  text-align: justify;
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+.equipment-name {
+  font-weight: bold;
+}
+
+.safety-device-info {
+  border-bottom: 1px solid #000;
+  min-height: 20px;
+  margin: 10px 0 5px 0;
+  padding-bottom: 2px;
+}
+
+.safety-device-note,
+.facility-note {
+  font-size: 9pt;
+  font-style: italic;
+  color: #555;
+  margin-bottom: 6px;
+}
+
+.facility-info {
+  border-bottom: 1px solid #000;
+  min-height: 20px;
+  margin: 10px 0 5px 0;
+  padding-bottom: 2px;
+}
+
+.conclusion-label {
+  font-weight: bold;
+  font-size: 14pt;
+  margin-bottom: 8px;
+  margin-top: 20px;
+  text-transform: uppercase;
+  page-break-before: auto;
+}
+
+.conclusion-text {
+  text-align: justify;
+  line-height: 1.4;
+  margin-bottom: 10px;
+}
+
+.signatures-section {
+  margin-top: 40px;
+}
+
+.signatures-label {
+  font-weight: bold;
+  margin-bottom: 15px;
+}
+
+.signatures-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.signature-item {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  width: 100%;
+  margin-bottom: 25px;
+  gap: 10px;
+}
+
+.signature-item-chairman {
+  margin-bottom: 30px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #ddd;
+}
+
+.signature-line-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  align-items: flex-start;
+}
+
+.signature-line-long {
+  border-bottom: 1px solid #000;
+  width: 100%;
+  min-height: 25px;
+  margin-bottom: 5px;
+}
+
+.signature-label {
+  font-size: 9pt;
+  font-style: italic;
+  color: #555;
+  margin: 0;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.signature-name {
+  font-size: 12pt;
+  margin: 0;
+  font-weight: normal;
+  white-space: nowrap;
+  padding-top: 2px;
+  min-width: 120px;
+}
+
+.signature-item-chairman .signature-name {
+  font-weight: bold;
+}
+
+/* Дополнительная информация об оборудовании */
+.equipment-details-section {
+  margin-top: 12px;
+  margin-bottom: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #ddd;
+}
+
+.equipment-details-label {
+  font-weight: bold;
+  margin-bottom: 6px;
+  font-size: 12pt;
+}
+
+.equipment-detail-item {
+  margin-bottom: 5px;
+  line-height: 1.4;
+}
+
+.detail-label {
+  font-weight: bold;
+  margin-right: 8px;
+}
+
+/* Результаты освидетельствования */
+.results-section {
+  page-break-inside: avoid;
+  margin-top: 15px;
+}
+
+.results-label {
+  font-weight: bold;
+  font-size: 14pt;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  margin-top: 0;
+}
+
+.results-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.results-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.result-item {
+  page-break-inside: avoid;
+  background: #f8f8f8;
+  padding: 8px 10px;
+  border-radius: 4px;
+  border-left: 3px solid #2196F3;
+  height: fit-content;
+}
+
+.result-label {
+  font-weight: bold;
+  margin-bottom: 4px;
+  font-size: 11pt;
+}
+
+.result-text {
+  text-align: justify;
+  line-height: 1.3;
+  margin-bottom: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-size: 11pt;
+}
+
+/* Дата следующего освидетельствования */
+.next-inspection-date {
+  margin-top: 15px;
+  margin-bottom: 10px;
+  font-size: 15pt;
+}
+
+/* Примечания */
+.notes-section {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #ddd;
+}
+
+.notes-label {
+  font-weight: bold;
+  margin-bottom: 6px;
+  font-size: 12pt;
+}
+
+.notes-text {
+  text-align: justify;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* Печать */
+@media print {
+  .technical-inspection-pdf {
+    margin: 0;
+    padding: 10mm;
+    box-shadow: none;
+  }
+  
+  .signatures-section {
+    page-break-inside: avoid;
+  }
+  
+  .inspection-section {
+    page-break-inside: avoid;
+  }
+  
+  .inspection-header {
+    page-break-after: avoid;
+  }
+  
+  .commission-members-list {
+    page-break-inside: avoid;
+  }
+  
+  .signatures-list {
+    page-break-inside: avoid;
+  }
+  
+  .results-section {
+    page-break-before: always;
+    page-break-inside: avoid;
+  }
+  
+  .result-item {
+    page-break-inside: avoid;
+  }
+}

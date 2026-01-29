@@ -131,7 +131,7 @@ function getEquipmentById(id) {
 /**
  * Получить оборудование по типу
  * 
- * Фильтрует все оборудование по типу (filter, pump, tank, valve, electrical, ventilation, plumbing, industrial, other)
+ * Фильтрует все оборудование по типу (filter, pump, tank, valve, electrical, ventilation, plumbing, energy_source, industrial, other)
  * 
  * @param {string} type - Тип оборудования для фильтрации
  * @returns {Array} Массив объектов Equipment указанного типа
