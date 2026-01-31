@@ -16,9 +16,10 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
     "@supabase/supabase-js": "^2.89.0",
+    "esbuild": "^0.27.2",
     "html2canvas": "^1.4.1",
     "html5-qrcode": "^2.3.8",
-    "jspdf": "^2.5.1",
+    "jspdf": "^4.0.0",
     "qrcode.react": "^3.1.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -31,7 +32,7 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.1",
     "@testing-library/user-event": "^14.6.1",
-    "@types/node": "^25.0.6",
+    "@types/node": "^25.1.0",
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",
     "@types/react-router-dom": "^5.3.3",
@@ -39,8 +40,24 @@
     "@vitest/ui": "^4.0.16",
     "jsdom": "^27.4.0",
     "tsx": "^4.7.0",
-    "typescript": "^5.3.3",
-    "vite": "^5.0.8",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1",
     "vitest": "^4.0.16"
-  }
+  },
+  "description": "Веб-приложение для управления оборудованием с генерацией табличек, QR-кодов, интеграцией с Google Drive и автоматическим сбором данных со счетчиков воды через Beliot API.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Serhio348/QR-code-for-equipment-identification.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Serhio348/QR-code-for-equipment-identification/issues"
+  },
+  "homepage": "https://github.com/Serhio348/QR-code-for-equipment-identification#readme"
 }

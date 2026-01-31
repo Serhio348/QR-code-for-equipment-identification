@@ -1,0 +1,28 @@
+# Зависимости
+node_modules/
+
+# Скомпилированный код
+dist/
+
+# Переменные окружения
+.env
+.env.local
+
+# Секретные ключи Google (КРИТИЧЕСКИ ВАЖНО!)
+credentials/
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+
+# IDE
+.vscode/
+.idea/
+
+# Логи
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
