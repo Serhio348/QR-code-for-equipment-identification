@@ -151,14 +151,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
           // Инвалидируем кеш профиля, чтобы получить свежие данные
           invalidateProfileCache();
           
-          // Получаем пользователя с уменьшенным таймаутом для быстрой загрузки
+          // Получаем пользователя с таймаутом для предотвращения зависания
           const getUserWithTimeout = Promise.race([
             getCurrentUser(),
             new Promise<User | null>((resolve) =>
               setTimeout(() => {
-                console.debug('⚠️ Таймаут getCurrentUser() (800ms)');
+                console.debug('⚠️ Таймаут getCurrentUser() (1500ms)');
                 resolve(null);
-              }, 800)
+              }, 1500)
             )
           ]);
 
@@ -173,9 +173,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
               getCurrentUser(),
               new Promise<User | null>((resolve) =>
                 setTimeout(() => {
-                  console.debug('⚠️ Таймаут повторной попытки (600ms)');
+                  console.debug('⚠️ Таймаут повторной попытки (1000ms)');
                   resolve(null);
-                }, 600)
+                }, 1000)
               )
             ]);
 
@@ -211,11 +211,28 @@ export function AuthProvider({ children }: AuthProviderProps) {
             // Если профиль не найден, создаем пользователя из данных сессии
             // Это позволяет странице загрузиться даже если профиль еще не создан
             console.debug('⚠️ Профиль не найден, создаем пользователя из данных сессии');
+
+            // Пытаемся получить кэшированную роль из localStorage
+            // Это позволяет админам видеть вкладку "Администрирование" сразу
+            let cachedRole: 'admin' | 'user' = 'user';
+            try {
+              const cachedSessionData = localStorage.getItem('user_session');
+              if (cachedSessionData) {
+                const cachedSession = JSON.parse(cachedSessionData);
+                if (cachedSession?.user?.id === session.user.id && cachedSession?.user?.role) {
+                  cachedRole = cachedSession.user.role;
+                  console.debug('✅ Используем кэшированную роль:', cachedRole);
+                }
+              }
+            } catch (cacheError) {
+              console.debug('⚠️ Ошибка чтения кэшированной роли (не критично):', cacheError);
+            }
+
             const fallbackUser: User = {
               id: session.user.id,
               email: session.user.email || '',
               name: session.user.user_metadata?.name || undefined,
-              role: 'user', // По умолчанию user, пока не загрузится профиль
+              role: cachedRole, // Используем кэшированную роль или 'user' по умолчанию
               createdAt: session.user.created_at || new Date().toISOString(),
             };
             
