@@ -59,5 +59,8 @@
   "bugs": {
     "url": "https://github.com/Serhio348/QR-code-for-equipment-identification/issues"
   },
-  "homepage": "https://github.com/Serhio348/QR-code-for-equipment-identification#readme"
+  "homepage": "https://github.com/Serhio348/QR-code-for-equipment-identification#readme",
+  "optionalDependencies": {
+    "@rollup/rollup-win32-x64-msvc": "^4.57.1"
+  }
 }

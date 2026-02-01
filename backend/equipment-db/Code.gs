@@ -312,7 +312,13 @@ function doGet(e) {
           return createErrorResponse('Email пользователя обязателен');
         }
         return handleGetUserAccess({ email: getUserEmail });
-      
+
+      case 'syncFolderAccess':
+        // Синхронизировать доступ к папкам оборудования через GET
+        Logger.log('🔄 [doGet] Обработка syncFolderAccess (GET)');
+        const syncFolderUrl = e.parameter.folderUrl || null;
+        return handleSyncFolderAccess({ folderUrl: syncFolderUrl });
+
       // ========================================================================
       // ДЕЙСТВИЯ ДЛЯ СЧЕТЧИКОВ BELIOT (GET)
       // ========================================================================
@@ -846,6 +852,11 @@ function doPost(e) {
         // TODO: Добавить проверку прав администратора
         // const adminEmail = data.adminEmail || null;
         return handleUpdateUserAccess(data, data.adminEmail || null);
+
+      case 'syncFolderAccess':
+        // Синхронизировать доступ к папкам оборудования
+        Logger.log('🔄 Обработка syncFolderAccess');
+        return handleSyncFolderAccess(data);
       
       case 'check-session':
         // Проверка активности сессии
