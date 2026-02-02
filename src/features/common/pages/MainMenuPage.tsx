@@ -29,6 +29,11 @@ const MainMenuPage: React.FC = () => {
 
   // Загрузка настроек доступа для обычных пользователей
   useEffect(() => {
+    let mounted = true;
+    let retryCount = 0;
+    const maxRetries = 3;
+    const retryDelay = 1000; // 1 секунда между попытками
+
     const loadAccess = async () => {
       if (!user) {
         setLoading(false);
@@ -43,15 +48,37 @@ const MainMenuPage: React.FC = () => {
 
       try {
         const access = await getUserAccess(user.email);
-        setUserAccess(access);
+
+        // Если профиль не найден (null), возможно он ещё не создан после регистрации
+        // Пробуем повторить запрос через некоторое время
+        if (access === null && retryCount < maxRetries && mounted) {
+          retryCount++;
+          console.debug(`[MainMenuPage] Профиль не найден, повторная попытка ${retryCount}/${maxRetries}...`);
+          setTimeout(() => {
+            if (mounted) {
+              loadAccess();
+            }
+          }, retryDelay);
+          return;
+        }
+
+        if (mounted) {
+          setUserAccess(access);
+          setLoading(false);
+        }
       } catch (error) {
         console.error('Ошибка загрузки настроек доступа:', error);
-      } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
     loadAccess();
+
+    return () => {
+      mounted = false;
+    };
   }, [user, isAdmin]);
 
   // Проверка доступа к приложению

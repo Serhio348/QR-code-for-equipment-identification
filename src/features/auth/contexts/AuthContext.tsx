@@ -4,7 +4,7 @@
  * Контекст для управления аутентификацией пользователя
  */
 
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase, invalidateProfileCache } from '@/shared/config/supabase';
 import { login as loginApi, logout as logoutApi, register as registerApi, getCurrentUser } from '../services/supabaseAuthApi';
@@ -32,6 +32,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Ref для хранения актуального пользователя (для использования в callbacks)
+  const userRef = useRef<User | null>(null);
+
+  // Синхронизируем ref с state
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   // Инициализация аутентификации и отслеживание изменений сессии
   useEffect(() => {
@@ -137,13 +145,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
             console.debug('🔐 SIGNED_IN уже обрабатывается, пропускаем повторное событие');
             return;
           }
-          
+
           // Если пользователь уже установлен с тем же ID, не обрабатываем повторно
-          if (user && user.id === session.user.id) {
+          // Используем userRef.current для получения актуального значения (не stale из closure)
+          const existingUser = userRef.current;
+          if (existingUser && existingUser.id === session.user.id) {
             console.debug('🔐 Пользователь уже установлен, пропускаем повторное SIGNED_IN');
             return;
           }
-          
+
           // Устанавливаем флаг обработки
           signedInProcessing = true;
           
