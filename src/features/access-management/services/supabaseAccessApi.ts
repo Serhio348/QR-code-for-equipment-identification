@@ -6,7 +6,71 @@
  */
 
 import { supabase } from '@/shared/config/supabase';
+import { API_CONFIG } from '@/shared/config/api';
 import type { UserAppAccess, UpdateUserAccessData } from '../types/access';
+
+/**
+ * Синхронизировать настройки доступа с Google Sheets через GAS API
+ * Это необходимо для корректной работы доступа к папкам Google Drive
+ *
+ * @param email - Email пользователя
+ * @param access - Настройки доступа
+ * @param syncFolders - Синхронизировать ли доступ к папкам Drive (по умолчанию true)
+ */
+async function syncToGoogleSheets(
+  email: string,
+  access: { equipment?: boolean; water?: boolean },
+  syncFolders: boolean = true
+): Promise<void> {
+  if (!API_CONFIG.EQUIPMENT_API_URL) {
+    console.warn('[supabaseAccessApi] GAS API URL не настроен, пропуск синхронизации');
+    return;
+  }
+
+  try {
+    const params = new URLSearchParams({
+      action: 'updateUserAccess',
+      email: email,
+      syncFolders: syncFolders.toString(),
+    });
+
+    if (access.equipment !== undefined) {
+      params.append('equipment', access.equipment.toString());
+    }
+    if (access.water !== undefined) {
+      params.append('water', access.water.toString());
+    }
+
+    const response = await fetch(`${API_CONFIG.EQUIPMENT_API_URL}?${params.toString()}`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error: ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    if (result.error) {
+      throw new Error(result.error);
+    }
+
+    console.log('[supabaseAccessApi] Синхронизация с Google Sheets завершена:', result);
+  } catch (error: any) {
+    // Подробное логирование ошибки для отладки
+    const errorDetails = {
+      message: error?.message || 'Unknown error',
+      name: error?.name,
+      status: error?.status,
+      url: `${API_CONFIG.EQUIPMENT_API_URL}?action=updateUserAccess`,
+    };
+    console.warn('[supabaseAccessApi] Ошибка синхронизации с Google Sheets:', errorDetails);
+    // Не прерываем выполнение - основные данные в Supabase уже обновлены
+  }
+}
 
 /**
  * Получить список всех пользователей с их настройками доступа
@@ -186,7 +250,7 @@ export async function updateUserAccess(data: UpdateUserAccessData): Promise<User
       throw new Error(accessError.message || 'Ошибка при обновлении настроек доступа');
     }
 
-    return {
+    const result: UserAppAccess = {
       email: profile.email,
       userId: profile.id,
       name: profile.name || undefined,
@@ -195,6 +259,14 @@ export async function updateUserAccess(data: UpdateUserAccessData): Promise<User
       updatedAt: access.updated_at || new Date().toISOString(),
       updatedBy: access.updated_by || undefined,
     };
+
+    // Синхронизируем с Google Sheets (для доступа к папкам Drive)
+    // Особенно важно при изменении доступа к оборудованию
+    if (data.access.equipment !== undefined || data.access.water !== undefined) {
+      await syncToGoogleSheets(profile.email, data.access, data.access.equipment !== undefined);
+    }
+
+    return result;
   } catch (error: any) {
     console.error('[supabaseAccessApi] Ошибка updateUserAccess:', error);
     throw error;

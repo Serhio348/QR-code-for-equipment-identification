@@ -484,34 +484,53 @@ function handleGetUserAccess(params) {
 /**
  * Обработчик для обновления настроек доступа
  * Вызывается из Code.gs при action='updateUserAccess'
- * 
- * @param {Object} params - Параметры запроса {email: string, equipment: boolean, water: boolean}
+ *
+ * @param {Object} params - Параметры запроса {email: string, equipment: boolean, water: boolean, syncFolders: boolean}
  * @param {string} adminEmail - Email администратора, который обновляет настройки
  * @returns {Object} JSON ответ с обновленными настройками доступа
  */
 function handleUpdateUserAccess(params, adminEmail) {
   try {
     const email = params.email;
-    
+
     if (!email) {
       return createErrorResponse('Email пользователя обязателен');
     }
-    
+
     const accessData = {};
-    
+
     if (params.equipment !== undefined) {
       accessData.equipment = params.equipment === 'true' || params.equipment === true;
     }
     if (params.water !== undefined) {
       accessData.water = params.water === 'true' || params.water === true;
     }
-    
+
     if (Object.keys(accessData).length === 0) {
       return createErrorResponse('Не указаны настройки доступа для обновления');
     }
-    
+
     const updatedAccess = updateUserAccess(email, accessData, adminEmail);
-    
+
+    // Если изменились права на оборудование, синхронизируем доступ к папкам
+    if (accessData.equipment !== undefined) {
+      const syncFolders = params.syncFolders === 'true' || params.syncFolders === true;
+
+      if (syncFolders) {
+        // Синхронизация всех папок (может быть медленной)
+        Logger.log('🔄 Запуск синхронизации доступа к папкам после изменения прав пользователя: ' + email);
+        try {
+          const syncResult = syncAllEquipmentFoldersAccess();
+          Logger.log('✅ Синхронизация завершена: ' + syncResult.message);
+        } catch (syncError) {
+          Logger.log('⚠️ Ошибка синхронизации папок: ' + syncError.toString());
+          // Не прерываем выполнение - доступ обновлен, только папки не синхронизированы
+        }
+      } else {
+        Logger.log('ℹ️ Синхронизация папок не запрошена. Для синхронизации вызовите action=syncFolderAccess');
+      }
+    }
+
     return createJsonResponse(updatedAccess);
   } catch (error) {
     Logger.log('❌ Ошибка handleUpdateUserAccess: ' + error.toString());

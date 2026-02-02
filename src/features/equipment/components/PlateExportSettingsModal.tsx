@@ -2,7 +2,7 @@
  * Модальное окно настроек экспорта таблички оборудования
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { PlateExportSettings, PlateSize, PlateTemplate, DEFAULT_EXPORT_SETTINGS, PLATE_TEMPLATES } from '@/shared/types/plateExport';
 import { EquipmentType, EquipmentSpecs } from '../types/equipment';
 import { getAllSpecFieldsForType } from '../constants/equipmentSpecFields';
@@ -29,25 +29,33 @@ const PlateExportSettingsModal: React.FC<PlateExportSettingsModalProps> = ({
   const [customWidth, setCustomWidth] = useState<number>(210); // A4 width in mm
   const [customHeight, setCustomHeight] = useState<number>(297); // A4 height in mm
 
-  // Получаем список полей для текущего типа оборудования
-  const availableSpecFields = getAllSpecFieldsForType(equipmentType);
+  // Мемоизируем список полей для текущего типа оборудования
+  const availableSpecFields = useMemo(() => {
+    return getAllSpecFieldsForType(equipmentType);
+  }, [equipmentType]);
 
   // Фильтруем только те поля, которые есть в specs (имеют значение)
-  const visibleSpecFields = availableSpecFields.filter(field => {
-    const value = specs[field.key];
-    return value !== undefined && value !== null && value !== '';
-  });
+  const visibleSpecFields = useMemo(() => {
+    return availableSpecFields.filter(field => {
+      const value = specs[field.key];
+      return value !== undefined && value !== null && value !== '';
+    });
+  }, [availableSpecFields, specs]);
+
+  // Мемоизируем строку ключей для стабильного сравнения в useEffect
+  const visibleSpecFieldKeysString = useMemo(() => {
+    return visibleSpecFields.map(f => f.key).join(',');
+  }, [visibleSpecFields]);
 
   useEffect(() => {
     if (isOpen) {
       // Сбрасываем настройки при открытии
       const defaultSettings = { ...DEFAULT_EXPORT_SETTINGS };
       // При открытии модального окна инициализируем всеми видимыми полями
-      // чтобы пользователь видел все чекбоксы отмеченными по умолчанию
-      defaultSettings.selectedSpecFields = visibleSpecFields.map(f => f.key);
+      defaultSettings.selectedSpecFields = visibleSpecFieldKeysString ? visibleSpecFieldKeysString.split(',') : [];
       setSettings(defaultSettings);
     }
-  }, [isOpen, visibleSpecFields]);
+  }, [isOpen, visibleSpecFieldKeysString]);
 
   const handleTemplateChange = (template: PlateTemplate) => {
     const templateSettings = PLATE_TEMPLATES[template];
@@ -127,26 +135,26 @@ const PlateExportSettingsModal: React.FC<PlateExportSettingsModalProps> = ({
 
         <div className="plate-export-modal-content">
           {/* Выбор шаблона */}
-          <div className="export-setting-group">
-            <label className="export-setting-label">Шаблон таблички:</label>
-            <div className="template-buttons">
+          <div className="plate-export-setting-group">
+            <label className="plate-export-setting-label">Шаблон таблички:</label>
+            <div className="plate-export-template-buttons">
               <button
                 type="button"
-                className={`template-button ${settings.template === 'full' ? 'active' : ''}`}
+                className={`plate-export-template-button ${settings.template === 'full' ? 'active' : ''}`}
                 onClick={() => handleTemplateChange('full')}
               >
                 Полный
               </button>
               <button
                 type="button"
-                className={`template-button ${settings.template === 'minimal' ? 'active' : ''}`}
+                className={`plate-export-template-button ${settings.template === 'minimal' ? 'active' : ''}`}
                 onClick={() => handleTemplateChange('minimal')}
               >
                 Минималистичный
               </button>
               <button
                 type="button"
-                className={`template-button ${settings.template === 'qr-only' ? 'active' : ''}`}
+                className={`plate-export-template-button ${settings.template === 'qr-only' ? 'active' : ''}`}
                 onClick={() => handleTemplateChange('qr-only')}
               >
                 Только QR-код
@@ -155,34 +163,34 @@ const PlateExportSettingsModal: React.FC<PlateExportSettingsModalProps> = ({
           </div>
 
           {/* Выбор размера */}
-          <div className="export-setting-group">
-            <label className="export-setting-label">Размер таблички:</label>
-            <div className="size-buttons">
+          <div className="plate-export-setting-group">
+            <label className="plate-export-setting-label">Размер таблички:</label>
+            <div className="plate-export-size-buttons">
               <button
                 type="button"
-                className={`size-button ${settings.size === 'A4' ? 'active' : ''}`}
+                className={`plate-export-size-button ${settings.size === 'A4' ? 'active' : ''}`}
                 onClick={() => handleSizeChange('A4')}
               >
                 A4 (210×297 мм)
               </button>
               <button
                 type="button"
-                className={`size-button ${settings.size === 'A5' ? 'active' : ''}`}
+                className={`plate-export-size-button ${settings.size === 'A5' ? 'active' : ''}`}
                 onClick={() => handleSizeChange('A5')}
               >
                 A5 (148×210 мм)
               </button>
               <button
                 type="button"
-                className={`size-button ${settings.size === 'custom' ? 'active' : ''}`}
+                className={`plate-export-size-button ${settings.size === 'custom' ? 'active' : ''}`}
                 onClick={() => handleSizeChange('custom')}
               >
                 Произвольный
               </button>
             </div>
             {settings.size === 'custom' && (
-              <div className="custom-size-inputs">
-                <div className="custom-size-input">
+              <div className="plate-export-custom-size-inputs">
+                <div className="plate-export-custom-size-input">
                   <label>Ширина (мм):</label>
                   <input
                     type="number"
@@ -192,7 +200,7 @@ const PlateExportSettingsModal: React.FC<PlateExportSettingsModalProps> = ({
                     onChange={(e) => handleCustomSizeChange(Number(e.target.value), customHeight)}
                   />
                 </div>
-                <div className="custom-size-input">
+                <div className="plate-export-custom-size-input">
                   <label>Высота (мм):</label>
                   <input
                     type="number"
@@ -207,10 +215,10 @@ const PlateExportSettingsModal: React.FC<PlateExportSettingsModalProps> = ({
           </div>
 
           {/* Выбор отображаемых элементов */}
-          <div className="export-setting-group">
-            <label className="export-setting-label">Отображаемые элементы:</label>
-            <div className="field-checkboxes">
-              <label className="field-checkbox">
+          <div className="plate-export-setting-group">
+            <label className="plate-export-setting-label">Отображаемые элементы:</label>
+            <div className="plate-export-field-checkboxes">
+              <label className="plate-export-field-checkbox">
                 <input
                   type="checkbox"
                   checked={settings.showName}
@@ -218,7 +226,7 @@ const PlateExportSettingsModal: React.FC<PlateExportSettingsModalProps> = ({
                 />
                 <span>Название оборудования</span>
               </label>
-              <label className="field-checkbox">
+              <label className="plate-export-field-checkbox">
                 <input
                   type="checkbox"
                   checked={settings.showInventoryNumber}
@@ -226,7 +234,7 @@ const PlateExportSettingsModal: React.FC<PlateExportSettingsModalProps> = ({
                 />
                 <span>Инвентарный номер</span>
               </label>
-              <label className="field-checkbox">
+              <label className="plate-export-field-checkbox">
                 <input
                   type="checkbox"
                   checked={settings.showSpecs}
@@ -235,26 +243,26 @@ const PlateExportSettingsModal: React.FC<PlateExportSettingsModalProps> = ({
                 <span>Характеристики</span>
               </label>
               {settings.showSpecs && visibleSpecFields.length > 0 && (
-                <div className="spec-fields-selection">
-                  <div className="spec-fields-actions">
+                <div className="plate-export-spec-fields-selection">
+                  <div className="plate-export-spec-fields-actions">
                     <button
                       type="button"
-                      className="spec-field-action-button"
+                      className="plate-export-spec-field-action-button"
                       onClick={handleSelectAllSpecFields}
                     >
                       Выбрать все
                     </button>
                     <button
                       type="button"
-                      className="spec-field-action-button"
+                      className="plate-export-spec-field-action-button"
                       onClick={handleDeselectAllSpecFields}
                     >
                       Снять все
                     </button>
                   </div>
-                  <div className="spec-fields-list">
+                  <div className="plate-export-spec-fields-list">
                     {visibleSpecFields.map(field => (
-                      <label key={field.key} className="field-checkbox spec-field-checkbox">
+                      <label key={field.key} className="plate-export-field-checkbox plate-export-spec-field-checkbox">
                         <input
                           type="checkbox"
                           checked={(settings.selectedSpecFields || []).includes(field.key)}
@@ -266,7 +274,7 @@ const PlateExportSettingsModal: React.FC<PlateExportSettingsModalProps> = ({
                   </div>
                 </div>
               )}
-              <label className="field-checkbox">
+              <label className="plate-export-field-checkbox">
                 <input
                   type="checkbox"
                   checked={settings.showCommissioningDate}
@@ -274,7 +282,7 @@ const PlateExportSettingsModal: React.FC<PlateExportSettingsModalProps> = ({
                 />
                 <span>Дата ввода в эксплуатацию</span>
               </label>
-              <label className="field-checkbox">
+              <label className="plate-export-field-checkbox">
                 <input
                   type="checkbox"
                   checked={settings.showLastMaintenanceDate}
@@ -282,7 +290,7 @@ const PlateExportSettingsModal: React.FC<PlateExportSettingsModalProps> = ({
                 />
                 <span>Дата последнего обслуживания</span>
               </label>
-              <label className="field-checkbox">
+              <label className="plate-export-field-checkbox">
                 <input
                   type="checkbox"
                   checked={settings.showQRCode}
@@ -291,7 +299,7 @@ const PlateExportSettingsModal: React.FC<PlateExportSettingsModalProps> = ({
                 <span>QR-код</span>
               </label>
               {settings.showQRCode && (
-                <div className="qr-size-input">
+                <div className="plate-export-qr-size-input">
                   <label>Размер QR-кода (пиксели):</label>
                   <input
                     type="number"
@@ -309,14 +317,14 @@ const PlateExportSettingsModal: React.FC<PlateExportSettingsModalProps> = ({
         <div className="plate-export-modal-footer">
           <button
             type="button"
-            className="export-cancel-button"
+            className="plate-export-cancel-button"
             onClick={onClose}
           >
             Отмена
           </button>
           <button
             type="button"
-            className="export-confirm-button"
+            className="plate-export-confirm-button"
             onClick={handleExport}
           >
             Экспортировать

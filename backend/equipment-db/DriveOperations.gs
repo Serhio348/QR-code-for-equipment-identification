@@ -132,7 +132,27 @@ function createDriveFolder(equipmentName, parentFolderId) {
     // Получаем URL папки
     const folderUrl = folder.getUrl();
     const folderId = folder.getId();
-    
+
+    // Добавляем доступ для пользователей с разрешением на "Оборудование"
+    try {
+      const usersWithAccess = getUsersWithEquipmentAccess();
+      Logger.log('📋 Пользователей с доступом к оборудованию: ' + usersWithAccess.length);
+
+      for (let i = 0; i < usersWithAccess.length; i++) {
+        try {
+          folder.addViewer(usersWithAccess[i]);
+          Logger.log('  ✅ Добавлен viewer: ' + usersWithAccess[i]);
+        } catch (viewerError) {
+          Logger.log('  ⚠️ Не удалось добавить viewer ' + usersWithAccess[i] + ': ' + viewerError);
+        }
+      }
+
+      Logger.log('✅ Настроен доступ к папке для пользователей с разрешением на оборудование');
+    } catch (sharingError) {
+      Logger.log('⚠️ Не удалось настроить доступ: ' + sharingError);
+      // Продолжаем выполнение, папка создана, просто без настроенного доступа
+    }
+
     // Логируем для отладки
     Logger.log('✅ Успешно создана папка: ' + folderName + ' | URL: ' + folderUrl + ' | ID: ' + folderId);
     
@@ -365,5 +385,278 @@ function extractDriveIdFromUrl(urlOrId) {
   }
 
   return null;
+}
+
+// ============================================================================
+// ФУНКЦИИ УПРАВЛЕНИЯ ДОСТУПОМ К ПАПКАМ
+// ============================================================================
+
+/**
+ * Получить список email пользователей с доступом к разделу "Оборудование"
+ *
+ * Читает данные из листа "Доступ к приложениям" и возвращает email
+ * пользователей, у которых equipment = true
+ *
+ * @returns {Array<string>} Массив email адресов пользователей с доступом
+ */
+function getUsersWithEquipmentAccess() {
+  try {
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    const accessSheet = spreadsheet.getSheetByName('Доступ к приложениям');
+
+    if (!accessSheet) {
+      Logger.log('⚠️ Лист "Доступ к приложениям" не найден');
+      return [];
+    }
+
+    const data = accessSheet.getDataRange().getValues();
+
+    if (data.length < 2) {
+      Logger.log('ℹ️ Нет данных о доступе пользователей');
+      return [];
+    }
+
+    const headers = data[0];
+    const emailIndex = headers.indexOf('Email');
+    const equipmentIndex = headers.indexOf('Оборудование');
+
+    if (emailIndex === -1 || equipmentIndex === -1) {
+      Logger.log('❌ Не найдены колонки Email или Оборудование');
+      return [];
+    }
+
+    const usersWithAccess = [];
+
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      const email = row[emailIndex];
+      const hasAccess = row[equipmentIndex] === true ||
+                        row[equipmentIndex] === 'true' ||
+                        row[equipmentIndex] === 'TRUE';
+
+      if (email && hasAccess) {
+        usersWithAccess.push(email.toString().trim());
+      }
+    }
+
+    Logger.log('📋 Найдено пользователей с доступом к оборудованию: ' + usersWithAccess.length);
+    return usersWithAccess;
+
+  } catch (error) {
+    Logger.log('❌ Ошибка getUsersWithEquipmentAccess: ' + error.toString());
+    return [];
+  }
+}
+
+/**
+ * Синхронизировать доступ к папке с текущими настройками пользователей
+ *
+ * Удаляет всех viewers (кроме владельца) и добавляет пользователей
+ * с текущим доступом к оборудованию
+ *
+ * @param {string} folderUrlOrId - URL или ID папки
+ * @returns {Object} {success: boolean, message: string, addedCount: number}
+ */
+function syncFolderAccess(folderUrlOrId) {
+  try {
+    Logger.log('🔄 Синхронизация доступа к папке: ' + folderUrlOrId);
+
+    if (!folderUrlOrId || !folderUrlOrId.trim()) {
+      return {
+        success: false,
+        message: 'URL или ID папки не указан',
+        addedCount: 0
+      };
+    }
+
+    const folderId = extractDriveIdFromUrl(folderUrlOrId);
+
+    if (!folderId) {
+      return {
+        success: false,
+        message: 'Неверный формат URL папки',
+        addedCount: 0
+      };
+    }
+
+    const folder = DriveApp.getFolderById(folderId);
+    const folderName = folder.getName();
+    Logger.log('📁 Папка: "' + folderName + '"');
+
+    // Получаем текущих viewers (getViewers возвращает массив User[], а не итератор)
+    const currentViewers = folder.getViewers();
+    const currentViewerEmails = [];
+
+    for (var j = 0; j < currentViewers.length; j++) {
+      currentViewerEmails.push(currentViewers[j].getEmail().toLowerCase());
+    }
+
+    Logger.log('👥 Текущих viewers: ' + currentViewerEmails.length);
+
+    // Получаем пользователей с доступом к оборудованию
+    const usersWithAccess = getUsersWithEquipmentAccess();
+    const usersWithAccessLower = usersWithAccess.map(function(email) {
+      return email.toLowerCase();
+    });
+
+    // Удаляем viewers, которые больше не имеют доступа
+    let removedCount = 0;
+    for (let i = 0; i < currentViewerEmails.length; i++) {
+      const viewerEmail = currentViewerEmails[i];
+      if (usersWithAccessLower.indexOf(viewerEmail) === -1) {
+        try {
+          folder.removeViewer(viewerEmail);
+          Logger.log('  ➖ Удален viewer: ' + viewerEmail);
+          removedCount++;
+        } catch (removeError) {
+          Logger.log('  ⚠️ Не удалось удалить viewer ' + viewerEmail + ': ' + removeError);
+        }
+      }
+    }
+
+    // Добавляем новых viewers
+    let addedCount = 0;
+    for (let i = 0; i < usersWithAccess.length; i++) {
+      const userEmail = usersWithAccess[i];
+      if (currentViewerEmails.indexOf(userEmail.toLowerCase()) === -1) {
+        try {
+          folder.addViewer(userEmail);
+          Logger.log('  ➕ Добавлен viewer: ' + userEmail);
+          addedCount++;
+        } catch (addError) {
+          Logger.log('  ⚠️ Не удалось добавить viewer ' + userEmail + ': ' + addError);
+        }
+      }
+    }
+
+    Logger.log('✅ Синхронизация завершена. Удалено: ' + removedCount + ', добавлено: ' + addedCount);
+
+    return {
+      success: true,
+      message: 'Синхронизация завершена. Удалено: ' + removedCount + ', добавлено: ' + addedCount,
+      addedCount: addedCount,
+      removedCount: removedCount
+    };
+
+  } catch (error) {
+    Logger.log('❌ Ошибка syncFolderAccess: ' + error.toString());
+    return {
+      success: false,
+      message: 'Ошибка: ' + error.toString(),
+      addedCount: 0
+    };
+  }
+}
+
+/**
+ * Синхронизировать доступ ко всем папкам оборудования
+ *
+ * Получает список всего оборудования из листа "Оборудование" и
+ * синхронизирует доступ к каждой папке
+ *
+ * @returns {Object} {success: boolean, message: string, processedCount: number, errorCount: number}
+ */
+function syncAllEquipmentFoldersAccess() {
+  try {
+    Logger.log('🔄 Массовая синхронизация доступа ко всем папкам оборудования');
+
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    const equipmentSheet = spreadsheet.getSheetByName('Оборудование');
+
+    if (!equipmentSheet) {
+      return {
+        success: false,
+        message: 'Лист "Оборудование" не найден',
+        processedCount: 0,
+        errorCount: 0
+      };
+    }
+
+    const data = equipmentSheet.getDataRange().getValues();
+
+    if (data.length < 2) {
+      return {
+        success: true,
+        message: 'Нет оборудования для обработки',
+        processedCount: 0,
+        errorCount: 0
+      };
+    }
+
+    const headers = data[0];
+    const driveUrlIndex = headers.indexOf('Google Drive URL');
+
+    if (driveUrlIndex === -1) {
+      return {
+        success: false,
+        message: 'Колонка "Google Drive URL" не найдена',
+        processedCount: 0,
+        errorCount: 0
+      };
+    }
+
+    let processedCount = 0;
+    let errorCount = 0;
+
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      const driveUrl = row[driveUrlIndex];
+
+      if (driveUrl && driveUrl.toString().trim()) {
+        const result = syncFolderAccess(driveUrl);
+
+        if (result.success) {
+          processedCount++;
+        } else {
+          errorCount++;
+          Logger.log('❌ Ошибка для строки ' + (i + 1) + ': ' + result.message);
+        }
+
+        // Небольшая пауза, чтобы не превысить лимиты API
+        Utilities.sleep(100);
+      }
+    }
+
+    Logger.log('✅ Массовая синхронизация завершена. Обработано: ' + processedCount + ', ошибок: ' + errorCount);
+
+    return {
+      success: true,
+      message: 'Обработано папок: ' + processedCount + ', ошибок: ' + errorCount,
+      processedCount: processedCount,
+      errorCount: errorCount
+    };
+
+  } catch (error) {
+    Logger.log('❌ Ошибка syncAllEquipmentFoldersAccess: ' + error.toString());
+    return {
+      success: false,
+      message: 'Ошибка: ' + error.toString(),
+      processedCount: 0,
+      errorCount: 0
+    };
+  }
+}
+
+/**
+ * Обработчик для синхронизации доступа (вызывается из Code.gs)
+ *
+ * @param {Object} params - Параметры {folderUrl: string} или пустой для всех
+ * @returns {Object} JSON ответ с результатом
+ */
+function handleSyncFolderAccess(params) {
+  try {
+    if (params && params.folderUrl) {
+      // Синхронизация конкретной папки
+      const result = syncFolderAccess(params.folderUrl);
+      return createJsonResponse(result);
+    } else {
+      // Синхронизация всех папок
+      const result = syncAllEquipmentFoldersAccess();
+      return createJsonResponse(result);
+    }
+  } catch (error) {
+    Logger.log('❌ Ошибка handleSyncFolderAccess: ' + error.toString());
+    return createErrorResponse('Ошибка синхронизации: ' + error.toString());
+  }
 }
 
