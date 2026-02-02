@@ -79,34 +79,34 @@ const InspectionExportSettingsModal: React.FC<InspectionExportSettingsModalProps
 
         <div className="inspection-export-modal-content">
           {/* Выбор размера */}
-          <div className="export-setting-group">
-            <label className="export-setting-label">Размер документа:</label>
-            <div className="size-buttons">
+          <div className="inspection-export-setting-group">
+            <label className="inspection-export-setting-label">Размер документа:</label>
+            <div className="inspection-export-size-buttons">
               <button
                 type="button"
-                className={`size-button ${settings.size === 'A4' ? 'active' : ''}`}
+                className={`inspection-export-size-button ${settings.size === 'A4' ? 'active' : ''}`}
                 onClick={() => handleSizeChange('A4')}
               >
                 A4 (210×297 мм)
               </button>
               <button
                 type="button"
-                className={`size-button ${settings.size === 'A5' ? 'active' : ''}`}
+                className={`inspection-export-size-button ${settings.size === 'A5' ? 'active' : ''}`}
                 onClick={() => handleSizeChange('A5')}
               >
                 A5 (148×210 мм)
               </button>
               <button
                 type="button"
-                className={`size-button ${settings.size === 'custom' ? 'active' : ''}`}
+                className={`inspection-export-size-button ${settings.size === 'custom' ? 'active' : ''}`}
                 onClick={() => handleSizeChange('custom')}
               >
                 Произвольный
               </button>
             </div>
             {settings.size === 'custom' && (
-              <div className="custom-size-inputs">
-                <div className="custom-size-input">
+              <div className="inspection-export-custom-size-inputs">
+                <div className="inspection-export-custom-size-input">
                   <label>Ширина (мм):</label>
                   <input
                     type="number"
@@ -116,7 +116,7 @@ const InspectionExportSettingsModal: React.FC<InspectionExportSettingsModalProps
                     onChange={(e) => handleCustomSizeChange(Number(e.target.value), customHeight)}
                   />
                 </div>
-                <div className="custom-size-input">
+                <div className="inspection-export-custom-size-input">
                   <label>Высота (мм):</label>
                   <input
                     type="number"
@@ -131,11 +131,11 @@ const InspectionExportSettingsModal: React.FC<InspectionExportSettingsModalProps
           </div>
 
           {/* Настройки отступов */}
-          <div className="export-setting-group">
-            <label className="export-setting-label">Отступы (мм):</label>
-            <div className="padding-inputs">
-              <div className="padding-input-row">
-                <div className="padding-input">
+          <div className="inspection-export-setting-group">
+            <label className="inspection-export-setting-label">Отступы (мм):</label>
+            <div className="inspection-export-padding-inputs">
+              <div className="inspection-export-padding-input-row">
+                <div className="inspection-export-padding-input">
                   <label>Сверху:</label>
                   <input
                     type="number"
@@ -145,7 +145,7 @@ const InspectionExportSettingsModal: React.FC<InspectionExportSettingsModalProps
                     onChange={(e) => handlePaddingChange('Top', Number(e.target.value))}
                   />
                 </div>
-                <div className="padding-input">
+                <div className="inspection-export-padding-input">
                   <label>Снизу:</label>
                   <input
                     type="number"
@@ -156,8 +156,8 @@ const InspectionExportSettingsModal: React.FC<InspectionExportSettingsModalProps
                   />
                 </div>
               </div>
-              <div className="padding-input-row">
-                <div className="padding-input">
+              <div className="inspection-export-padding-input-row">
+                <div className="inspection-export-padding-input">
                   <label>Слева:</label>
                   <input
                     type="number"
@@ -167,7 +167,7 @@ const InspectionExportSettingsModal: React.FC<InspectionExportSettingsModalProps
                     onChange={(e) => handlePaddingChange('Left', Number(e.target.value))}
                   />
                 </div>
-                <div className="padding-input">
+                <div className="inspection-export-padding-input">
                   <label>Справа:</label>
                   <input
                     type="number"
@@ -185,14 +185,14 @@ const InspectionExportSettingsModal: React.FC<InspectionExportSettingsModalProps
         <div className="inspection-export-modal-footer">
           <button
             type="button"
-            className="export-cancel-button"
+            className="inspection-export-cancel-button"
             onClick={onClose}
           >
             Отмена
           </button>
           <button
             type="button"
-            className="export-confirm-button"
+            className="inspection-export-confirm-button"
             onClick={handleExport}
           >
             Экспортировать
