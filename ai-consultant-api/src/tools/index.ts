@@ -40,6 +40,7 @@
 
 // Типы Anthropic SDK — нужен Anthropic.Tool для типизации массива tools
 import Anthropic from '@anthropic-ai/sdk';
+import crypto from 'crypto';
 
 // Tools для работы с оборудованием (Google Sheets через GAS API):
 // - equipmentTools: определения 4 инструментов (поиск, детали, журнал, добавление записи)
@@ -136,6 +137,11 @@ export async function executeToolCall(
     name: string,
     input: Record<string, unknown>
 ): Promise<unknown> {
+    const requestId = crypto.randomUUID();
+    const startTime = Date.now();
+    
+    console.log(`[${requestId}] Tool ${name} called`);
+    
     // Поиск исполнителя по имени tool
     const executor = toolExecutors[name];
 
@@ -143,10 +149,52 @@ export async function executeToolCall(
     // Такое может случиться, если определения tools и toolExecutors
     // рассинхронизировались (добавили tool, но забыли добавить executor)
     if (!executor) {
+        const availableTools = Object.keys(toolExecutors).join(', ');
+        console.error(`[${requestId}] Unknown tool: ${name}. Available: ${availableTools}`);
         throw new Error(`Unknown tool: ${name}`);
     }
 
-    // Делегируем вызов соответствующей функции
-    // (executeEquipmentTool или executeDriveTool)
-    return await executor(name, input);
+    try {
+        const result = await executor(name, input);
+        const duration = Date.now() - startTime;
+        console.log(`[${requestId}] Tool ${name} completed in ${duration}ms`);
+        return result;
+    } catch (error) {
+        const duration = Date.now() - startTime;
+        console.error(`[${requestId}] Tool ${name} failed after ${duration}ms:`, error);
+        throw error;
+    }
+}
+
+/**
+ * Валидация регистрации tools при запуске приложения.
+ * Проверяет, что для каждого tool есть исполнитель и наоборот.
+ *
+ * @throws Error если найдены расхождения
+ */
+export function validateToolRegistration(): void {
+    const registeredToolNames = new Set(tools.map(t => t.name));
+    const executorToolNames = new Set(Object.keys(toolExecutors));
+    
+    const toolsWithoutExecutor = [...registeredToolNames]
+        .filter(name => !executorToolNames.has(name));
+        
+    const executorsWithoutTool = [...executorToolNames]
+        .filter(name => !registeredToolNames.has(name));
+    
+    if (toolsWithoutExecutor.length > 0 || executorsWithoutTool.length > 0) {
+        const errors: string[] = [];
+        
+        if (toolsWithoutExecutor.length > 0) {
+            errors.push(`Tools без исполнителей: ${toolsWithoutExecutor.join(', ')}`);
+        }
+        
+        if (executorsWithoutTool.length > 0) {
+            errors.push(`Исполнители без tool определений: ${executorsWithoutTool.join(', ')}`);
+        }
+        
+        throw new Error(`Ошибка регистрации tools:\n${errors.join('\n')}`);
+    }
+    
+    console.log(`✅ Все ${registeredToolNames.size} tools зарегистрированы корректно`);
 }
