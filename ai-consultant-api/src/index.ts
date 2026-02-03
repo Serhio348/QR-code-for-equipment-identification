@@ -4,9 +4,13 @@ import helmet from 'helmet';
 import { config, validateConfig } from './config/env.js';
 import { authMiddleware, AuthenticatedRequest } from './middleware/auth.js';
 import { processChatMessage } from './services/anthropic.js';
+import { validateToolRegistration } from './tools/index.js';
 
 // Проверка обязательных переменных окружения
 validateConfig();
+
+// Проверка что все tools корректно зарегистрированы
+validateToolRegistration();
 
 const app = express();
 
