@@ -337,12 +337,25 @@ function doGet(e) {
         }
         const override = getBeliotDeviceOverride(overrideDeviceId);
         return createJsonResponse(override);
-      
+
+      case 'getFileContent':
+        // Получить содержимое файла (PDF, Google Docs и т.д.)
+        Logger.log('📄 Обработка getFileContent');
+        const contentFileUrl = e.parameter.fileId || e.parameter.fileUrl;
+        if (!contentFileUrl) {
+          return createErrorResponse('Не указан fileId или fileUrl');
+        }
+        return handleGetFileContent({
+          fileId: contentFileUrl,
+          maxLength: e.parameter.maxLength,
+          keepTempFile: e.parameter.keepTempFile
+        });
+
       default:
         // Если действие не распознано, возвращаем ошибку
         Logger.log('❌ Неизвестное действие: ' + action);
-        Logger.log('  - Доступные действия: getAll, getById, getByType, getFolderFiles, getMaintenanceLog, addMaintenanceEntry, verify-admin, get-login-history, getAllUserAccess, getUserAccess, getBeliotDevicesOverrides, getBeliotDeviceOverride');
-        return createErrorResponse('Неизвестное действие. Используйте: getAll, getById, getByType, getFolderFiles, getMaintenanceLog, addMaintenanceEntry, verify-admin, get-login-history, getAllUserAccess, getUserAccess, getBeliotDevicesOverrides, getBeliotDeviceOverride');
+        Logger.log('  - Доступные действия: getAll, getById, getByType, getFolderFiles, getMaintenanceLog, addMaintenanceEntry, verify-admin, get-login-history, getAllUserAccess, getUserAccess, getBeliotDevicesOverrides, getBeliotDeviceOverride, getFileContent');
+        return createErrorResponse('Неизвестное действие. Используйте: getAll, getById, getByType, getFolderFiles, getMaintenanceLog, addMaintenanceEntry, verify-admin, get-login-history, getAllUserAccess, getUserAccess, getBeliotDevicesOverrides, getBeliotDeviceOverride, getFileContent');
     }
   } catch (error) {
     // Логируем ошибку для отладки
