@@ -29,7 +29,7 @@ import { z } from 'zod';
 import { gasClient } from '../clients/gasClient.js';
 
 // Типы для Drive операций
-import type { DriveFile, DriveFolder, CreateFolderResult } from '../types/drive.js';
+import type { DriveFile, DriveFolder, CreateFolderResult, ReadFileResult } from '../types/drive.js';
 
 // Утилита для парсинга Google Drive URL
 import { extractDriveId } from '../utils/urlParser.js';
@@ -99,6 +99,25 @@ const createFolderSchema = z.object({
 const deleteFolderSchema = z.object({
   // URL или ID папки для удаления
   folderUrl: z.string().min(1, 'URL или ID папки обязателен'),
+});
+
+/**
+ * Схема для чтения содержимого файла.
+ *
+ * Поддерживаемые форматы:
+ * - PDF (с OCR для отсканированных документов)
+ * - Word (.doc, .docx)
+ * - Excel (.xls, .xlsx)
+ * - Google Docs, Google Sheets
+ * - Текстовые файлы (.txt, .md, .csv, .json, .xml)
+ */
+const readFileSchema = z.object({
+  // URL или ID файла (обязательно)
+  fileUrl: z.string().min(1, 'URL или ID файла обязателен'),
+
+  // Максимальная длина текста (опционально)
+  // По умолчанию 50000 символов
+  maxLength: z.number().min(100).max(100000).optional(),
 });
 
 // ============================================
@@ -403,6 +422,107 @@ export function registerDriveTools(server: McpServer): void {
           content: [{
             type: 'text' as const,
             text: `Ошибка удаления папки: ${getErrorMessage(error)}`,
+          }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // ==========================================
+  // Инструмент 5: Чтение содержимого файла
+  // ==========================================
+
+  server.tool(
+    'drive_read_file',
+
+    'Прочитать текстовое содержимое файла из Google Drive. ' +
+    'Поддерживает: PDF (с OCR), Word (.doc, .docx), Excel (.xls, .xlsx), ' +
+    'Google Docs, Google Sheets, текстовые файлы (.txt, .md, .csv, .json, .xml). ' +
+    'Для PDF файлов автоматически распознается текст, включая отсканированные документы. ' +
+    'Возвращает текст файла (до 50000 символов по умолчанию).',
+
+    readFileSchema.shape,
+
+    async (params) => {
+      try {
+        // Валидация входных данных
+        const parsed = readFileSchema.safeParse(params);
+
+        if (!parsed.success) {
+          return {
+            content: [{
+              type: 'text' as const,
+              text: `Ошибка валидации: ${parsed.error.message}`,
+            }],
+            isError: true,
+          };
+        }
+
+        // Извлекаем ID файла из URL
+        const fileId = extractDriveId(parsed.data.fileUrl);
+
+        if (!fileId) {
+          return {
+            content: [{
+              type: 'text' as const,
+              text: 'Не удалось извлечь ID файла из указанного URL',
+            }],
+            isError: true,
+          };
+        }
+
+        // Формируем параметры запроса к GAS API
+        const queryParams: Record<string, string> = {
+          fileId: fileId,
+        };
+
+        if (parsed.data.maxLength) {
+          queryParams.maxLength = String(parsed.data.maxLength);
+        }
+
+        // Вызываем GAS API
+        // Действие 'getFileContent' соответствует функции в DriveOperations.gs
+        // GAS возвращает вложенную структуру: {success, data: {success, content, fileName...}}
+        const response = await gasClient.get<{ success: boolean; data?: ReadFileResult; error?: string }>('getFileContent', queryParams);
+
+        // Извлекаем данные из вложенной структуры
+        const fileData = response.data;
+
+        // Проверяем результат
+        if (!response.success || !fileData) {
+          return {
+            content: [{
+              type: 'text' as const,
+              text: `Ошибка чтения файла: ${response.error || 'Неизвестная ошибка'}`,
+            }],
+            isError: true,
+          };
+        }
+
+        // Формируем информативный ответ
+        let responseText = `📄 Файл: ${fileData.fileName}\n`;
+        responseText += `📋 Тип: ${fileData.mimeType}\n`;
+        responseText += `📊 Символов: ${fileData.charCount}`;
+
+        if (fileData.truncated) {
+          responseText += ` (текст обрезан до ${parsed.data.maxLength || 50000} символов)`;
+        }
+
+        responseText += `\n\n--- Содержимое файла ---\n\n${fileData.content}`;
+
+        return {
+          content: [{
+            type: 'text' as const,
+            text: responseText,
+          }],
+        };
+
+      } catch (error) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `Ошибка чтения файла: ${getErrorMessage(error)}`,
           }],
           isError: true,
         };
