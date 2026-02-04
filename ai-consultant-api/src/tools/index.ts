@@ -52,6 +52,11 @@ import { equipmentTools, executeEquipmentTool } from './equipmentTools.js';
 // - executeDriveTool: функция выполнения — парсит Drive URL и вызывает gasClient.get
 import { driveTools, executeDriveTool } from './driveTools.js';
 
+// Tools для работы с фото обслуживания (загрузка, просмотр, поиск):
+// - photoTools: определения 3 инструментов (загрузка, список, поиск фото)
+// - executePhotoTool: функция выполнения — загружает фото через gasClient.post
+import { photoTools, executePhotoTool } from './photoTools.js';
+
 // ============================================
 // Объединённый массив tools
 // ============================================
@@ -63,17 +68,21 @@ import { driveTools, executeDriveTool } from './driveTools.js';
  * через параметр `tools` в anthropic.messages.create().
  * Claude видит все инструменты и решает, какие вызвать.
  *
- * Текущий состав (6 tools):
- * - get_all_equipment      — поиск/список оборудования
- * - get_equipment_details  — детали одного оборудования
- * - get_maintenance_log    — журнал обслуживания
- * - add_maintenance_entry  — добавление записи в журнал
- * - search_files_in_folder — поиск файлов в папке Drive
- * - read_file_content      — чтение содержимого файла
+ * Текущий состав (9 tools):
+ * - get_all_equipment         — поиск/список оборудования
+ * - get_equipment_details     — детали одного оборудования
+ * - get_maintenance_log       — журнал обслуживания
+ * - add_maintenance_entry     — добавление записи в журнал
+ * - search_files_in_folder    — поиск файлов в папке Drive
+ * - read_file_content         — чтение содержимого файла
+ * - upload_maintenance_photo  — загрузка фото обслуживания
+ * - get_maintenance_photos    — получение списка фото
+ * - search_maintenance_photos — поиск фото по запросу
  */
 export const tools: Anthropic.Tool[] = [
     ...equipmentTools,
     ...driveTools,
+    ...photoTools,
 ];
 
 // ============================================
@@ -103,6 +112,11 @@ const toolExecutors: Record<string, (name: string, input: Record<string, unknown
     // Drive tools → executeDriveTool (GAS: getFolderFiles, getFileContent)
     'search_files_in_folder': executeDriveTool,
     'read_file_content': executeDriveTool,
+
+    // Photo tools → executePhotoTool (GAS: uploadMaintenancePhoto, getMaintenancePhotos, searchMaintenancePhotos)
+    'upload_maintenance_photo': executePhotoTool,
+    'get_maintenance_photos': executePhotoTool,
+    'search_maintenance_photos': executePhotoTool,
 };
 
 // ============================================

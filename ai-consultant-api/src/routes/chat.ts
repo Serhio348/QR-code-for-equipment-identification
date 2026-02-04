@@ -113,8 +113,9 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
         // ----------------------------------------
         // Проверяем, что каждое сообщение имеет role и content.
         // role может быть только 'user' или 'assistant'.
-        // Это защита от некорректных данных с фронтенда
-        // (например, пустые сообщения или role: 'system')
+        // content может быть:
+        //   - string (простое текстовое сообщение)
+        //   - Array<TextBlock | ImageBlock> (мультимодальное сообщение с фото)
         for (const msg of messages) {
             if (!msg.role || !msg.content) {
                 res.status(400).json({ error: 'Invalid message format' });
@@ -122,6 +123,11 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
             }
             if (msg.role !== 'user' && msg.role !== 'assistant') {
                 res.status(400).json({ error: 'Invalid message role' });
+                return;
+            }
+            // Проверяем тип content: должен быть string или array
+            if (typeof msg.content !== 'string' && !Array.isArray(msg.content)) {
+                res.status(400).json({ error: 'Invalid content type' });
                 return;
             }
         }
