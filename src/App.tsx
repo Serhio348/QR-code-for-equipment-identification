@@ -30,6 +30,7 @@ import InstallPWA from './features/common/components/InstallPWA';
 import AppFooter from './features/common/components/AppFooter';
 import { isEquipmentRoute, ROUTES } from './shared/utils/routes';
 import { saveLastPath, loadLastPath } from './shared/utils/pathStorage';
+import { ChatWidget } from './features/ai-consultant/components/ChatWidget';
 import './styles/colors.css';
 import './App.css';
 
@@ -417,6 +418,7 @@ const App: React.FC = () => {
         pauseOnHover
         theme="light"
       />
+      <ChatWidget />
     </div>
   );
 };
