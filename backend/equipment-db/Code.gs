@@ -351,11 +351,26 @@ function doGet(e) {
           keepTempFile: e.parameter.keepTempFile
         });
 
+      case 'getMaintenancePhotos':
+        // Получить список фото обслуживания для оборудования
+        Logger.log('📷 Обработка getMaintenancePhotos');
+        const photosEquipmentId = e.parameter.equipmentId;
+        if (!photosEquipmentId) {
+          return createErrorResponse('ID оборудования не указан');
+        }
+        try {
+          const photosResult = getMaintenancePhotos(photosEquipmentId);
+          return createJsonResponse(photosResult);
+        } catch (error) {
+          Logger.log('❌ Ошибка getMaintenancePhotos: ' + error.toString());
+          return createErrorResponse('Ошибка получения фото: ' + error.toString());
+        }
+
       default:
         // Если действие не распознано, возвращаем ошибку
         Logger.log('❌ Неизвестное действие: ' + action);
-        Logger.log('  - Доступные действия: getAll, getById, getByType, getFolderFiles, getMaintenanceLog, addMaintenanceEntry, verify-admin, get-login-history, getAllUserAccess, getUserAccess, getBeliotDevicesOverrides, getBeliotDeviceOverride, getFileContent');
-        return createErrorResponse('Неизвестное действие. Используйте: getAll, getById, getByType, getFolderFiles, getMaintenanceLog, addMaintenanceEntry, verify-admin, get-login-history, getAllUserAccess, getUserAccess, getBeliotDevicesOverrides, getBeliotDeviceOverride, getFileContent');
+        Logger.log('  - Доступные действия: getAll, getById, getByType, getFolderFiles, getMaintenanceLog, addMaintenanceEntry, verify-admin, get-login-history, getAllUserAccess, getUserAccess, getBeliotDevicesOverrides, getBeliotDeviceOverride, getFileContent, getMaintenancePhotos');
+        return createErrorResponse('Неизвестное действие. Используйте: getAll, getById, getByType, getFolderFiles, getMaintenanceLog, addMaintenanceEntry, verify-admin, get-login-history, getAllUserAccess, getUserAccess, getBeliotDevicesOverrides, getBeliotDeviceOverride, getFileContent, getMaintenancePhotos');
     }
   } catch (error) {
     // Логируем ошибку для отладки
@@ -1036,10 +1051,38 @@ function doPost(e) {
           Logger.log('❌ Ошибка при удалении участка: ' + error.toString());
           return createErrorResponse('Ошибка при удалении участка: ' + error.toString());
         }
-      
+
+      case 'uploadMaintenancePhoto':
+        // Загрузить фото обслуживания
+        Logger.log('📷 Обработка uploadMaintenancePhoto');
+        Logger.log('  - data: ' + JSON.stringify(Object.keys(data)));
+
+        if (!data.equipmentId) {
+          return createErrorResponse('ID оборудования не указан');
+        }
+        if (!data.photoBase64) {
+          return createErrorResponse('Фото не предоставлено');
+        }
+
+        try {
+          const uploadResult = uploadMaintenancePhoto(
+            data.equipmentId,
+            data.photoBase64,
+            data.mimeType || 'image/jpeg',
+            data.description || '',
+            data.date || new Date().toISOString().split('T')[0],
+            data.maintenanceType || 'Обслуживание'
+          );
+          Logger.log('✅ Фото успешно загружено');
+          return createJsonResponse(uploadResult);
+        } catch (error) {
+          Logger.log('❌ Ошибка uploadMaintenancePhoto: ' + error.toString());
+          return createErrorResponse('Ошибка загрузки фото: ' + error.toString());
+        }
+
       default:
         // Если действие не распознано, возвращаем ошибку
-        return createErrorResponse('Неизвестное действие. Используйте: add, update, delete, createFolder, addMaintenanceEntry, updateMaintenanceEntry, deleteMaintenanceEntry, register, login, logout, change-password, check-session, verify-admin, add-admin, remove-admin, getAllUserAccess, getUserAccess, updateUserAccess, saveBeliotDeviceOverride, saveBeliotDevicesOverrides, deleteBeliotDeviceOverride, addDeviceReading, deleteDeviceReadings');
+        return createErrorResponse('Неизвестное действие. Используйте: add, update, delete, createFolder, addMaintenanceEntry, updateMaintenanceEntry, deleteMaintenanceEntry, uploadMaintenancePhoto, register, login, logout, change-password, check-session, verify-admin, add-admin, remove-admin, getAllUserAccess, getUserAccess, updateUserAccess, saveBeliotDeviceOverride, saveBeliotDevicesOverrides, deleteBeliotDeviceOverride, addDeviceReading, deleteDeviceReadings');
     }
       } catch (error) {
     // Логируем ошибку для отладки

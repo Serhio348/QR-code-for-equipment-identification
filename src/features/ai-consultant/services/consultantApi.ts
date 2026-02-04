@@ -3,9 +3,33 @@ import { supabase } from '../../../shared/config/supabase';
 // URL API (из переменных окружения)
 const API_URL = import.meta.env.VITE_AI_CONSULTANT_API_URL || '';
 
+/**
+ * Блок текста в мультимодальном сообщении.
+ */
+export interface TextContentBlock {
+  type: 'text';
+  text: string;
+}
+
+/**
+ * Блок изображения в мультимодальном сообщении.
+ */
+export interface ImageContentBlock {
+  type: 'image';
+  source: {
+    type: 'base64';
+    media_type: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+    data: string;
+  };
+}
+
+/**
+ * Сообщение в чате.
+ * Поддерживает простой текст или мультимодальный контент (текст + изображения).
+ */
 export interface ChatMessage {
   role: 'user' | 'assistant';
-  content: string;
+  content: string | Array<TextContentBlock | ImageContentBlock>;
 }
 
 export interface ChatResponse {

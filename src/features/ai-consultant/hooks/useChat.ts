@@ -34,7 +34,8 @@
 // ============================================
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { ChatMessage, sendChatMessage } from '../services/consultantApi';
+import { ChatMessage, sendChatMessage, TextContentBlock, ImageContentBlock } from '../services/consultantApi';
+import type { ChatInputMessage, PhotoData } from '../components/ChatInput';
 
 // ============================================
 // Константы
@@ -72,8 +73,8 @@ export interface UseChatReturn {
   error: string | null;
   /** true если есть неудачное сообщение, которое можно повторить */
   canRetry: boolean;
-  /** Отправить новое сообщение */
-  sendMessage: (text: string) => Promise<void>;
+  /** Отправить новое сообщение (с текстом и/или фото) */
+  sendMessage: (message: ChatInputMessage) => Promise<void>;
   /** Повторить последнее неудачное сообщение */
   retryLastMessage: () => Promise<void>;
   /** Очистить историю чата */
@@ -94,9 +95,50 @@ const generateId = (): string =>
   `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 
 /**
+ * Преобразует ChatInputMessage (с фото) в формат Anthropic API.
+ * Создает мультимодальный content: [текст, изображение1, изображение2, ...]
+ */
+const createMultimodalContent = (
+  message: ChatInputMessage
+): string | Array<TextContentBlock | ImageContentBlock> => {
+  // Если нет фото — возвращаем простой текст
+  if (!message.photos || message.photos.length === 0) {
+    return message.text;
+  }
+
+  // Если есть фото — создаём массив content блоков
+  const content: Array<TextContentBlock | ImageContentBlock> = [];
+
+  // Добавляем текстовый блок (даже если текст пустой)
+  if (message.text) {
+    content.push({
+      type: 'text',
+      text: message.text,
+    });
+  }
+
+  // Добавляем каждое фото как image блок
+  message.photos.forEach(photo => {
+    content.push({
+      type: 'image',
+      source: {
+        type: 'base64',
+        media_type: photo.mimeType,
+        data: photo.data,
+      },
+    });
+  });
+
+  return content;
+};
+
+/**
  * Создание сообщения с метаданными.
  */
-const createMessage = (role: ChatMessage['role'], content: string): ChatMessageWithMeta => ({
+const createMessage = (
+  role: ChatMessage['role'],
+  content: string | Array<TextContentBlock | ImageContentBlock>
+): ChatMessageWithMeta => ({
   id: generateId(),
   role,
   content,
@@ -120,9 +162,9 @@ export function useChat(): UseChatReturn {
   const [error, setError] = useState<string | null>(null);
 
   // Последнее неудачное сообщение — для retry механизма.
-  // Хранит текст и историю на момент отправки
+  // Хранит сообщение и историю на момент отправки
   const [lastFailed, setLastFailed] = useState<{
-    text: string;
+    message: ChatInputMessage;
     messagesSnapshot: ChatMessage[];
   } | null>(null);
 
@@ -154,13 +196,17 @@ export function useChat(): UseChatReturn {
    * Алгоритм:
    * 1. Валидация (пустые, повторные)
    * 2. Создать AbortController для возможности отмены
-   * 3. Оптимистичное обновление UI
-   * 4. Обрезать историю до MAX_HISTORY_FOR_API
-   * 5. Отправить на сервер
-   * 6. Успех → добавить ответ / Ошибка → откат + сохранить для retry
+   * 3. Преобразовать сообщение с фото в мультимодальный формат
+   * 4. Оптимистичное обновление UI
+   * 5. Обрезать историю до MAX_HISTORY_FOR_API
+   * 6. Отправить на сервер
+   * 7. Успех → добавить ответ / Ошибка → откат + сохранить для retry
    */
-  const sendMessage = useCallback(async (text: string) => {
-    if (!text.trim() || isLoading) return;
+  const sendMessage = useCallback(async (inputMessage: ChatInputMessage) => {
+    // Валидация: нужен хотя бы текст или фото
+    if ((!inputMessage.text.trim() && !inputMessage.photos?.length) || isLoading) {
+      return;
+    }
 
     // Сбрасываем ошибку и retry
     setError(null);
@@ -173,8 +219,11 @@ export function useChat(): UseChatReturn {
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
+    // Преобразуем входное сообщение в формат Anthropic API
+    const content = createMultimodalContent(inputMessage);
+
     // Оптимистичное обновление
-    const userMessage = createMessage('user', text.trim());
+    const userMessage = createMessage('user', content);
     const newMessages = [...messages, userMessage];
     setMessages(newMessages);
 
@@ -193,13 +242,15 @@ export function useChat(): UseChatReturn {
           duration: `${duration}ms`,
           toolsUsed: response.data.toolsUsed,
           responseLength: response.data.message.length,
+          hasPhotos: !!inputMessage.photos?.length,
+          photoCount: inputMessage.photos?.length || 0,
         });
 
         const assistantMessage = createMessage('assistant', response.data.message);
         setMessages([...newMessages, assistantMessage]);
       } else {
         setError(response.error || 'Неизвестная ошибка');
-        setLastFailed({ text, messagesSnapshot: apiMessages });
+        setLastFailed({ message: inputMessage, messagesSnapshot: apiMessages });
       }
     } catch (err) {
       // AbortError — запрос отменён при размонтировании, не показываем ошибку
@@ -214,7 +265,7 @@ export function useChat(): UseChatReturn {
 
       setError(errorMessage);
       // Сохраняем для retry
-      setLastFailed({ text, messagesSnapshot: trimForApi(newMessages) });
+      setLastFailed({ message: inputMessage, messagesSnapshot: trimForApi(newMessages) });
       // Откатываем оптимистичное обновление
       setMessages(messages);
     } finally {
@@ -238,8 +289,11 @@ export function useChat(): UseChatReturn {
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
+    // Преобразуем входное сообщение в формат Anthropic API
+    const content = createMultimodalContent(lastFailed.message);
+
     // Восстанавливаем сообщение пользователя в UI (если было откачено)
-    const userMessage = createMessage('user', lastFailed.text);
+    const userMessage = createMessage('user', content);
     const newMessages = [...messages, userMessage];
     setMessages(newMessages);
 

@@ -1,9 +1,18 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { VoiceButton } from './VoiceButton';
+import { PhotoButton, PhotoData } from './PhotoButton';
 import './ChatWidget.css';
 
+// Реэкспортируем PhotoData для использования в других модулях
+export type { PhotoData };
+
+export interface ChatInputMessage {
+  text: string;
+  photos?: PhotoData[];
+}
+
 interface ChatInputProps {
-  onSend: (text: string) => void;
+  onSend: (message: ChatInputMessage) => void;
   isLoading: boolean;
   voiceTranscript?: string;
   onVoiceTranscriptUsed?: () => void;
@@ -16,6 +25,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   onVoiceTranscriptUsed,
 }) => {
   const [text, setText] = useState('');
+  const [selectedPhotos, setSelectedPhotos] = useState<PhotoData[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Обновляем текст при получении голосового ввода
@@ -37,9 +47,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
 
-    if (text.trim() && !isLoading) {
-      onSend(text.trim());
+    // Можно отправить если есть текст или фото
+    if ((text.trim() || selectedPhotos.length > 0) && !isLoading) {
+      onSend({
+        text: text.trim(),
+        photos: selectedPhotos.length > 0 ? selectedPhotos : undefined,
+      });
       setText('');
+      setSelectedPhotos([]);
     }
   };
 
@@ -50,8 +65,35 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   };
 
+  const handlePhotosSelected = (photos: PhotoData[]) => {
+    setSelectedPhotos(prev => [...prev, ...photos]);
+  };
+
+  const handleRemovePhoto = (index: number) => {
+    setSelectedPhotos(prev => prev.filter((_, i) => i !== index));
+  };
+
   return (
     <form className="ai-chat-input" onSubmit={handleSubmit}>
+      {/* Превью выбранных фото */}
+      {selectedPhotos.length > 0 && (
+        <div className="ai-chat-input__photo-preview">
+          {selectedPhotos.map((photo, index) => (
+            <div key={index} className="ai-chat-input__photo-item">
+              <img src={photo.previewUrl} alt={photo.fileName} />
+              <button
+                type="button"
+                onClick={() => handleRemovePhoto(index)}
+                className="ai-chat-input__photo-remove"
+                title="Удалить фото"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       <textarea
         ref={textareaRef}
         value={text}
@@ -64,11 +106,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       />
 
       <div className="ai-chat-input__actions">
+        <PhotoButton disabled={isLoading} onPhotosSelected={handlePhotosSelected} />
         <VoiceButton disabled={isLoading} />
 
         <button
           type="submit"
-          disabled={!text.trim() || isLoading}
+          disabled={(!text.trim() && selectedPhotos.length === 0) || isLoading}
           className="ai-chat-input__send"
           title="Отправить"
         >

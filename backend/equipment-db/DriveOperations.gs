@@ -1079,3 +1079,231 @@ function handleGetFileContent(params) {
   }
 }
 
+// ============================================================================
+// ФУНКЦИИ РАБОТЫ С ФОТО ОБСЛУЖИВАНИЯ
+// ============================================================================
+
+/**
+ * Загрузить фото обслуживания в папку оборудования
+ *
+ * Создает подпапку "Фото обслуживания" если её нет, затем сохраняет фото с именем
+ * формата: YYYY-MM-DD_ТипРабот_Описание.jpg
+ *
+ * @param {string} equipmentId - ID оборудования
+ * @param {string} photoBase64 - Фото в формате Base64 (без префикса data:image/...)
+ * @param {string} mimeType - MIME тип изображения (image/jpeg, image/png)
+ * @param {string} description - Описание фото (используется в имени файла)
+ * @param {string} date - Дата работ (YYYY-MM-DD)
+ * @param {string} maintenanceType - Тип работ (ТО, Ремонт и т.д.)
+ * @returns {Object} {success, fileId, fileUrl, thumbnailUrl, fileName}
+ */
+function uploadMaintenancePhoto(equipmentId, photoBase64, mimeType, description, date, maintenanceType) {
+  try {
+    Logger.log('📷 uploadMaintenancePhoto');
+    Logger.log('  - equipmentId: ' + equipmentId);
+    Logger.log('  - mimeType: ' + mimeType);
+    Logger.log('  - description: ' + description);
+    Logger.log('  - date: ' + date);
+    Logger.log('  - maintenanceType: ' + maintenanceType);
+    Logger.log('  - photoBase64 length: ' + (photoBase64 ? photoBase64.length : 0));
+
+    // Валидация параметров
+    if (!equipmentId) {
+      throw new Error('ID оборудования не указан');
+    }
+    if (!photoBase64) {
+      throw new Error('Фото не предоставлено');
+    }
+    if (!mimeType) {
+      mimeType = 'image/jpeg'; // По умолчанию JPEG
+    }
+
+    // Получаем оборудование для доступа к папке
+    var equipment = getEquipmentById(equipmentId);
+    if (!equipment) {
+      throw new Error('Оборудование с ID ' + equipmentId + ' не найдено');
+    }
+
+    if (!equipment.googleDriveUrl) {
+      throw new Error('У оборудования нет папки Google Drive');
+    }
+
+    // Получаем папку оборудования
+    var equipmentFolderId = extractDriveIdFromUrl(equipment.googleDriveUrl);
+    var equipmentFolder = DriveApp.getFolderById(equipmentFolderId);
+    Logger.log('  - Папка оборудования: "' + equipmentFolder.getName() + '"');
+
+    // Ищем или создаем подпапку "Фото обслуживания"
+    var photosFolderName = 'Фото обслуживания';
+    var photosFolder = null;
+
+    var subFolders = equipmentFolder.getFoldersByName(photosFolderName);
+    if (subFolders.hasNext()) {
+      photosFolder = subFolders.next();
+      Logger.log('  - Найдена существующая подпапка: "' + photosFolderName + '"');
+    } else {
+      photosFolder = equipmentFolder.createFolder(photosFolderName);
+      Logger.log('  - Создана новая подпапка: "' + photosFolderName + '"');
+    }
+
+    // Формируем имя файла: YYYY-MM-DD_ТипРабот_Описание
+    var safeDate = date ? date.replace(/[/\\:*?"<>|]/g, '-') : new Date().toISOString().split('T')[0];
+    var safeType = maintenanceType ? maintenanceType.replace(/[/\\:*?"<>|]/g, '_') : 'Обслуживание';
+    var safeDesc = description ? description.replace(/[/\\:*?"<>|]/g, '_').substring(0, 50) : 'фото';
+
+    // Определяем расширение файла по MIME типу
+    var extension = '.jpg';
+    if (mimeType === 'image/png') {
+      extension = '.png';
+    } else if (mimeType === 'image/gif') {
+      extension = '.gif';
+    } else if (mimeType === 'image/webp') {
+      extension = '.webp';
+    }
+
+    var fileName = safeDate + '_' + safeType + '_' + safeDesc + extension;
+    Logger.log('  - Имя файла: "' + fileName + '"');
+
+    // Декодируем Base64 в Blob
+    var photoBlob = Utilities.newBlob(
+      Utilities.base64Decode(photoBase64),
+      mimeType,
+      fileName
+    );
+
+    // Создаем файл в папке
+    var file = photosFolder.createFile(photoBlob);
+    Logger.log('  - Файл создан: ' + file.getId());
+
+    // Получаем URL и thumbnail
+    var fileUrl = file.getUrl();
+    var thumbnailUrl = 'https://drive.google.com/thumbnail?id=' + file.getId() + '&sz=w400';
+
+    Logger.log('✅ Фото успешно загружено');
+    Logger.log('  - File ID: ' + file.getId());
+    Logger.log('  - File URL: ' + fileUrl);
+
+    return {
+      success: true,
+      fileId: file.getId(),
+      fileUrl: fileUrl,
+      thumbnailUrl: thumbnailUrl,
+      fileName: fileName,
+      folderUrl: photosFolder.getUrl()
+    };
+
+  } catch (error) {
+    Logger.log('❌ Ошибка uploadMaintenancePhoto: ' + error.toString());
+    Logger.log('  - Stack: ' + (error.stack || 'нет стека'));
+    throw error;
+  }
+}
+
+/**
+ * Получить список всех фото обслуживания для оборудования
+ *
+ * Ищет подпапку "Фото обслуживания" в папке оборудования и возвращает
+ * список всех изображений с метаданными
+ *
+ * @param {string} equipmentId - ID оборудования
+ * @returns {Object} {success, photos: [{id, name, url, thumbnailUrl, createdTime}], folderUrl}
+ */
+function getMaintenancePhotos(equipmentId) {
+  try {
+    Logger.log('📷 getMaintenancePhotos');
+    Logger.log('  - equipmentId: ' + equipmentId);
+
+    if (!equipmentId) {
+      throw new Error('ID оборудования не указан');
+    }
+
+    // Получаем оборудование
+    var equipment = getEquipmentById(equipmentId);
+    if (!equipment) {
+      throw new Error('Оборудование с ID ' + equipmentId + ' не найдено');
+    }
+
+    if (!equipment.googleDriveUrl) {
+      return {
+        success: true,
+        photos: [],
+        folderUrl: null,
+        message: 'У оборудования нет папки Google Drive'
+      };
+    }
+
+    // Получаем папку оборудования
+    var equipmentFolderId = extractDriveIdFromUrl(equipment.googleDriveUrl);
+    var equipmentFolder = DriveApp.getFolderById(equipmentFolderId);
+
+    // Ищем подпапку "Фото обслуживания"
+    var photosFolderName = 'Фото обслуживания';
+    var photosFolder = null;
+
+    var subFolders = equipmentFolder.getFoldersByName(photosFolderName);
+    if (subFolders.hasNext()) {
+      photosFolder = subFolders.next();
+    } else {
+      // Папка с фото еще не создана
+      return {
+        success: true,
+        photos: [],
+        folderUrl: null,
+        message: 'Папка "Фото обслуживания" еще не создана'
+      };
+    }
+
+    Logger.log('  - Папка с фото: "' + photosFolder.getName() + '"');
+
+    // Получаем все файлы-изображения из папки
+    var files = photosFolder.getFiles();
+    var photos = [];
+
+    var imageTypes = [
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'image/bmp'
+    ];
+
+    while (files.hasNext()) {
+      var file = files.next();
+      var mimeType = file.getMimeType();
+
+      // Проверяем, что это изображение
+      if (imageTypes.indexOf(mimeType) !== -1) {
+        var photoData = {
+          id: file.getId(),
+          name: file.getName(),
+          url: file.getUrl(),
+          thumbnailUrl: 'https://drive.google.com/thumbnail?id=' + file.getId() + '&sz=w400',
+          createdTime: file.getDateCreated().toISOString(),
+          size: file.getSize(),
+          mimeType: mimeType
+        };
+        photos.push(photoData);
+      }
+    }
+
+    // Сортируем по дате создания (новые сначала)
+    photos.sort(function(a, b) {
+      return new Date(b.createdTime) - new Date(a.createdTime);
+    });
+
+    Logger.log('  - Найдено фото: ' + photos.length);
+
+    return {
+      success: true,
+      photos: photos,
+      folderUrl: photosFolder.getUrl()
+    };
+
+  } catch (error) {
+    Logger.log('❌ Ошибка getMaintenancePhotos: ' + error.toString());
+    Logger.log('  - Stack: ' + (error.stack || 'нет стека'));
+    throw error;
+  }
+}
+
