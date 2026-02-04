@@ -35,7 +35,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { ChatMessage, sendChatMessage, TextContentBlock, ImageContentBlock } from '../services/consultantApi';
-import type { ChatInputMessage, PhotoData } from '../components/ChatInput';
+import type { ChatInputMessage } from '../components/ChatInput';
 
 // ============================================
 // Константы
