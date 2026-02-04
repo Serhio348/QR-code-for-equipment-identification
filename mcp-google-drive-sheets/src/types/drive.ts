@@ -118,6 +118,40 @@ export interface SearchFilesResult {
   error?: string;
 }
 
+/**
+ * Результат чтения содержимого файла.
+ *
+ * Поддерживаемые форматы:
+ * - PDF: конвертируется в Google Docs с OCR
+ * - Word (.doc, .docx): конвертируется в Google Docs
+ * - Excel (.xls, .xlsx): конвертируется в Google Sheets
+ * - Google Docs: читается напрямую
+ * - Google Sheets: данные извлекаются как текст
+ * - Текстовые файлы (.txt, .md, .csv, .json, .xml): читаются как есть
+ */
+export interface ReadFileResult {
+  /** Успешность операции */
+  success: boolean;
+
+  /** Текстовое содержимое файла */
+  content?: string;
+
+  /** Имя файла */
+  fileName?: string;
+
+  /** MIME тип файла */
+  mimeType?: string;
+
+  /** Количество символов в исходном файле */
+  charCount?: number;
+
+  /** Был ли текст обрезан из-за превышения лимита */
+  truncated?: boolean;
+
+  /** Сообщение об ошибке */
+  error?: string;
+}
+
 // ============================================
 // Параметры запросов
 // ============================================

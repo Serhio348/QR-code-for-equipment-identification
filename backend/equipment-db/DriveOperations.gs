@@ -660,3 +660,422 @@ function handleSyncFolderAccess(params) {
   }
 }
 
+// ============================================================================
+// ФУНКЦИИ ЧТЕНИЯ СОДЕРЖИМОГО ФАЙЛОВ
+// ============================================================================
+
+/**
+ * Получить текстовое содержимое файла из Google Drive
+ *
+ * Поддерживаемые форматы:
+ * - PDF: конвертируется в Google Docs, затем извлекается текст (с OCR)
+ * - Google Docs: извлекается текст напрямую
+ * - Google Sheets: извлекаются данные как текст
+ * - Word (.doc, .docx): конвертируется в Google Docs
+ * - Excel (.xls, .xlsx): конвертируется в Google Sheets
+ * - Текстовые файлы (.txt, .md, .csv): читаются как есть
+ *
+ * @param {string} fileUrlOrId - URL файла или его ID
+ * @param {Object} options - Опции (опционально)
+ * @param {boolean} options.keepTempFile - Не удалять временный Google Doc (для отладки)
+ * @param {number} options.maxLength - Максимальная длина текста (по умолчанию 50000)
+ * @returns {Object} {success, content, fileName, mimeType, charCount, error}
+ */
+function getFileContent(fileUrlOrId, options) {
+  options = options || {};
+  const maxLength = options.maxLength || 50000;
+  const keepTempFile = options.keepTempFile || false;
+
+  try {
+    Logger.log('📄 getFileContent: начало');
+    Logger.log('  - fileUrlOrId: ' + fileUrlOrId);
+
+    if (!fileUrlOrId || !fileUrlOrId.trim()) {
+      return {
+        success: false,
+        error: 'URL или ID файла не указан'
+      };
+    }
+
+    // Извлекаем ID файла
+    const fileId = extractFileIdFromUrl(fileUrlOrId);
+
+    if (!fileId) {
+      return {
+        success: false,
+        error: 'Не удалось извлечь ID файла из URL: ' + fileUrlOrId
+      };
+    }
+
+    Logger.log('  - fileId: ' + fileId);
+
+    // Получаем файл
+    const file = DriveApp.getFileById(fileId);
+    const fileName = file.getName();
+    const mimeType = file.getMimeType();
+
+    Logger.log('  - fileName: ' + fileName);
+    Logger.log('  - mimeType: ' + mimeType);
+
+    let content = '';
+
+    // Обрабатываем в зависимости от типа файла
+    if (mimeType === 'application/pdf') {
+      // PDF: конвертируем в Google Docs для извлечения текста
+      content = extractTextFromPdf(file, keepTempFile);
+
+    } else if (mimeType === 'application/vnd.google-apps.document') {
+      // Google Docs: извлекаем текст напрямую
+      content = extractTextFromGoogleDoc(fileId);
+
+    } else if (mimeType === 'application/msword' ||
+               mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+      // Word (.doc, .docx): конвертируем в Google Docs
+      content = extractTextFromWordFile(file, keepTempFile);
+
+    } else if (mimeType.startsWith('text/') ||
+               mimeType === 'application/json' ||
+               mimeType === 'application/xml') {
+      // Текстовые файлы: читаем как есть
+      content = file.getBlob().getDataAsString('UTF-8');
+
+    } else if (mimeType === 'application/vnd.google-apps.spreadsheet') {
+      // Google Sheets: извлекаем данные как текст
+      content = extractTextFromGoogleSheet(fileId);
+
+    } else if (mimeType === 'application/vnd.ms-excel' ||
+               mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
+      // Excel (.xls, .xlsx): конвертируем в Google Sheets
+      content = extractTextFromExcelFile(file, keepTempFile);
+
+    } else {
+      return {
+        success: false,
+        error: 'Неподдерживаемый тип файла: ' + mimeType + '. Поддерживаются: PDF, Word (.doc, .docx), Excel (.xls, .xlsx), Google Docs, Google Sheets, текстовые файлы.'
+      };
+    }
+
+    // Ограничиваем длину текста
+    const originalLength = content.length;
+    if (content.length > maxLength) {
+      content = content.substring(0, maxLength) + '\n\n... [текст обрезан, показано ' + maxLength + ' из ' + originalLength + ' символов]';
+    }
+
+    Logger.log('✅ getFileContent: успешно извлечено ' + content.length + ' символов');
+
+    return {
+      success: true,
+      content: content,
+      fileName: fileName,
+      mimeType: mimeType,
+      charCount: originalLength,
+      truncated: originalLength > maxLength
+    };
+
+  } catch (error) {
+    Logger.log('❌ getFileContent ошибка: ' + error.toString());
+    Logger.log('  - Stack: ' + (error.stack || 'нет стека'));
+
+    return {
+      success: false,
+      error: 'Ошибка чтения файла: ' + error.toString()
+    };
+  }
+}
+
+/**
+ * Извлечь текст из PDF файла
+ *
+ * Использует конвертацию в Google Docs с OCR
+ *
+ * @param {File} file - Объект файла DriveApp
+ * @param {boolean} keepTempFile - Не удалять временный файл
+ * @returns {string} Извлеченный текст
+ */
+function extractTextFromPdf(file, keepTempFile) {
+  Logger.log('📄 extractTextFromPdf: конвертация PDF в Google Docs');
+
+  var tempDoc = null;
+
+  try {
+    // Получаем blob файла
+    var blob = file.getBlob();
+
+    // Для PDF с OCR НЕ указываем целевой mimeType в resource
+    var resource = {
+      title: '[TEMP] ' + file.getName() + ' - извлечение текста'
+    };
+
+    // Используем Drive API для конвертации с OCR
+    // convert: true + ocr: true для PDF файлов
+    tempDoc = Drive.Files.insert(resource, blob, {
+      convert: true,
+      ocr: true,
+      ocrLanguage: 'ru'
+    });
+
+    Logger.log('  - Создан временный документ: ' + tempDoc.id);
+
+    // Извлекаем текст из созданного документа
+    var doc = DocumentApp.openById(tempDoc.id);
+    var text = doc.getBody().getText();
+
+    Logger.log('  - Извлечено символов: ' + text.length);
+
+    return text;
+
+  } finally {
+    // Удаляем временный документ (если не указано keepTempFile)
+    if (tempDoc && !keepTempFile) {
+      try {
+        Drive.Files.remove(tempDoc.id);
+        Logger.log('  - Временный документ удален');
+      } catch (deleteError) {
+        Logger.log('  ⚠️ Не удалось удалить временный документ: ' + deleteError);
+      }
+    }
+  }
+}
+
+/**
+ * Извлечь текст из Google Docs
+ *
+ * @param {string} docId - ID документа
+ * @returns {string} Текст документа
+ */
+function extractTextFromGoogleDoc(docId) {
+  Logger.log('📄 extractTextFromGoogleDoc: ' + docId);
+
+  const doc = DocumentApp.openById(docId);
+  const text = doc.getBody().getText();
+
+  Logger.log('  - Извлечено символов: ' + text.length);
+
+  return text;
+}
+
+/**
+ * Извлечь данные из Google Sheets как текст
+ *
+ * @param {string} sheetId - ID таблицы
+ * @returns {string} Данные в текстовом формате
+ */
+function extractTextFromGoogleSheet(sheetId) {
+  Logger.log('📄 extractTextFromGoogleSheet: ' + sheetId);
+
+  const spreadsheet = SpreadsheetApp.openById(sheetId);
+  const sheets = spreadsheet.getSheets();
+
+  var result = [];
+
+  for (var i = 0; i < sheets.length; i++) {
+    var sheet = sheets[i];
+    var sheetName = sheet.getName();
+    var data = sheet.getDataRange().getValues();
+
+    result.push('=== Лист: ' + sheetName + ' ===\n');
+
+    for (var row = 0; row < data.length; row++) {
+      var rowText = data[row].map(function(cell) {
+        return cell !== null && cell !== undefined ? String(cell) : '';
+      }).join(' | ');
+      result.push(rowText);
+    }
+
+    result.push('\n');
+  }
+
+  var text = result.join('\n');
+  Logger.log('  - Извлечено символов: ' + text.length);
+
+  return text;
+}
+
+/**
+ * Извлечь текст из Word файла (.doc, .docx)
+ *
+ * Конвертирует файл в Google Docs, затем извлекает текст
+ *
+ * @param {File} file - Объект файла DriveApp
+ * @param {boolean} keepTempFile - Не удалять временный файл
+ * @returns {string} Извлеченный текст
+ */
+function extractTextFromWordFile(file, keepTempFile) {
+  Logger.log('📄 extractTextFromWordFile: конвертация Word в Google Docs');
+  Logger.log('  - fileName: ' + file.getName());
+  Logger.log('  - mimeType: ' + file.getMimeType());
+
+  var tempDoc = null;
+
+  try {
+    // Получаем blob файла
+    var blob = file.getBlob();
+
+    // Создаем временный Google Doc
+    var resource = {
+      title: '[TEMP] ' + file.getName() + ' - извлечение текста',
+      mimeType: 'application/vnd.google-apps.document'
+    };
+
+    // Используем Drive API для конвертации
+    // convert: true автоматически конвертирует в Google формат
+    tempDoc = Drive.Files.insert(resource, blob, {
+      convert: true
+    });
+
+    Logger.log('  - Создан временный документ: ' + tempDoc.id);
+
+    // Извлекаем текст из созданного документа
+    var doc = DocumentApp.openById(tempDoc.id);
+    var text = doc.getBody().getText();
+
+    Logger.log('  - Извлечено символов: ' + text.length);
+
+    return text;
+
+  } finally {
+    // Удаляем временный документ
+    if (tempDoc && !keepTempFile) {
+      try {
+        Drive.Files.remove(tempDoc.id);
+        Logger.log('  - Временный документ удален');
+      } catch (deleteError) {
+        Logger.log('  ⚠️ Не удалось удалить временный документ: ' + deleteError);
+      }
+    }
+  }
+}
+
+/**
+ * Извлечь данные из Excel файла (.xls, .xlsx)
+ *
+ * Конвертирует файл в Google Sheets, затем извлекает данные
+ *
+ * @param {File} file - Объект файла DriveApp
+ * @param {boolean} keepTempFile - Не удалять временный файл
+ * @returns {string} Извлеченные данные в текстовом формате
+ */
+function extractTextFromExcelFile(file, keepTempFile) {
+  Logger.log('📄 extractTextFromExcelFile: конвертация Excel в Google Sheets');
+  Logger.log('  - fileName: ' + file.getName());
+  Logger.log('  - mimeType: ' + file.getMimeType());
+
+  var tempSheet = null;
+
+  try {
+    // Получаем blob файла
+    var blob = file.getBlob();
+
+    // Создаем временный Google Sheet
+    var resource = {
+      title: '[TEMP] ' + file.getName() + ' - извлечение данных',
+      mimeType: 'application/vnd.google-apps.spreadsheet'
+    };
+
+    // Используем Drive API для конвертации
+    tempSheet = Drive.Files.insert(resource, blob, {
+      convert: true
+    });
+
+    Logger.log('  - Создана временная таблица: ' + tempSheet.id);
+
+    // Извлекаем данные используя существующую функцию
+    var text = extractTextFromGoogleSheet(tempSheet.id);
+
+    return text;
+
+  } finally {
+    // Удаляем временную таблицу
+    if (tempSheet && !keepTempFile) {
+      try {
+        Drive.Files.remove(tempSheet.id);
+        Logger.log('  - Временная таблица удалена');
+      } catch (deleteError) {
+        Logger.log('  ⚠️ Не удалось удалить временную таблицу: ' + deleteError);
+      }
+    }
+  }
+}
+
+/**
+ * Извлечь ID файла из URL Google Drive
+ *
+ * Поддерживает форматы:
+ * - https://drive.google.com/file/d/FILE_ID/view
+ * - https://drive.google.com/open?id=FILE_ID
+ * - FILE_ID (прямой ID)
+ *
+ * @param {string} urlOrId - URL или ID файла
+ * @returns {string|null} ID файла или null
+ */
+function extractFileIdFromUrl(urlOrId) {
+  if (!urlOrId) {
+    return null;
+  }
+
+  var trimmed = String(urlOrId).trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  // Формат: https://drive.google.com/file/d/FILE_ID/view
+  var fileMatch = trimmed.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (fileMatch && fileMatch[1]) {
+    return fileMatch[1];
+  }
+
+  // Формат: https://drive.google.com/open?id=FILE_ID
+  var idMatch = trimmed.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (idMatch && idMatch[1]) {
+    return idMatch[1];
+  }
+
+  // Прямой ID
+  var idPattern = /^[a-zA-Z0-9_-]{20,}$/;
+  if (idPattern.test(trimmed) && trimmed.indexOf('/') === -1 && trimmed.indexOf('?') === -1) {
+    return trimmed;
+  }
+
+  return null;
+}
+
+/**
+ * Обработчик запроса на чтение содержимого файла
+ *
+ * @param {Object} params - Параметры запроса
+ * @param {string} params.fileId - ID или URL файла
+ * @param {number} params.maxLength - Максимальная длина текста
+ * @param {boolean} params.keepTempFile - Не удалять временный файл
+ * @returns {TextOutput} JSON ответ с содержимым файла
+ */
+function handleGetFileContent(params) {
+  try {
+    Logger.log('📄 handleGetFileContent');
+    Logger.log('  - params: ' + JSON.stringify(params));
+
+    if (!params.fileId && !params.fileUrl) {
+      return createErrorResponse('Не указан fileId или fileUrl');
+    }
+
+    var fileUrlOrId = params.fileId || params.fileUrl;
+
+    var options = {
+      maxLength: params.maxLength ? parseInt(params.maxLength, 10) : 50000,
+      keepTempFile: params.keepTempFile === 'true' || params.keepTempFile === true
+    };
+
+    var result = getFileContent(fileUrlOrId, options);
+
+    if (result.success) {
+      // Возвращаем result напрямую, createJsonResponse сам обернёт в {success, data}
+      return createJsonResponse(result);
+    } else {
+      return createErrorResponse(result.error);
+    }
+
+  } catch (error) {
+    Logger.log('❌ handleGetFileContent ошибка: ' + error.toString());
+    return createErrorResponse('Ошибка: ' + error.toString());
+  }
+}
+

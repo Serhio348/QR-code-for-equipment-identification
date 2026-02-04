@@ -62,7 +62,7 @@ export const config = {
    * process.env.XXX возвращает string | undefined
    * || '' - если undefined, используем пустую строку
    */
-  gasApiUrl: process.env.GaS_EQUIPMENT_API_URL || '',
+  gasApiUrl: process.env.GAS_EQUIPMENT_API_URL || '',
 
   /**
    * Таймаут API запросов в миллисекундах.
