@@ -56,25 +56,76 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const quickSessionCheck = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        
+
         if (session?.user && mounted) {
           console.debug('🔐 Найдена активная сессия, восстанавливаем пользователя...');
-          
+
           // Устанавливаем флаг, что восстановление началось
           restorationInProgress = true;
-          
-          // Восстанавливаем пользователя
-          const currentUser = await getCurrentUser();
-          
+
+          // Восстанавливаем пользователя с таймаутом 3 секунды
+          // При возвращении после долгого отсутствия getSession может вернуть сессию,
+          // но getCurrentUser зависнет из-за медленного запроса к профилю
+          const currentUser = await Promise.race([
+            getCurrentUser(),
+            new Promise<User | null>((resolve) =>
+              setTimeout(() => {
+                console.debug('⚠️ Таймаут getCurrentUser() в quickSessionCheck (3000ms)');
+                resolve(null);
+              }, 3000)
+            )
+          ]);
+
           if (currentUser && mounted) {
             setUser(currentUser);
             startActivityTracking();
             userRestored = true;
             console.debug('🔐 Пользователь восстановлен:', currentUser.email);
-          } else {
-            console.debug('🔐 Сессия найдена, но профиль не восстановлен');
+          } else if (mounted && !userRestored) {
+            // Fallback: создаём пользователя из данных сессии
+            // Это позволяет не зависать на экране загрузки при медленном профиле
+            console.debug('⚠️ Профиль не загружен, используем данные сессии (quickSessionCheck)');
+
+            let cachedRole: 'admin' | 'user' = 'user';
+            try {
+              const cachedSessionData = localStorage.getItem('user_session');
+              if (cachedSessionData) {
+                const cachedSession = JSON.parse(cachedSessionData);
+                if (cachedSession?.user?.id === session.user.id && cachedSession?.user?.role) {
+                  cachedRole = cachedSession.user.role;
+                }
+              }
+            } catch (cacheError) {
+              console.debug('⚠️ Ошибка чтения кэшированной роли (не критично):', cacheError);
+            }
+
+            const fallbackUser: User = {
+              id: session.user.id,
+              email: session.user.email || '',
+              name: session.user.user_metadata?.name || undefined,
+              role: cachedRole,
+              createdAt: session.user.created_at || new Date().toISOString(),
+            };
+
+            setUser(fallbackUser);
+            startActivityTracking();
+            userRestored = true;
+            console.debug('🔐 Пользователь восстановлен из данных сессии:', fallbackUser.email);
+
+            // Пытаемся обновить профиль в фоне через 2 секунды
+            setTimeout(async () => {
+              try {
+                const updatedUser = await getCurrentUser();
+                if (updatedUser && mounted) {
+                  setUser(updatedUser);
+                  console.debug('✅ Пользователь обновлен из профиля (фоновая загрузка)');
+                }
+              } catch (bgError) {
+                console.debug('⚠️ Ошибка фоновой загрузки профиля (не критично):', bgError);
+              }
+            }, 2000);
           }
-          
+
           // Восстановление завершено
           restorationInProgress = false;
         } else {
@@ -297,7 +348,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
           stopActivityTracking();
           setError(null);
         } else if (event === 'TOKEN_REFRESHED' && session) {
-          // Токен обновлен, обновляем данные пользователя и expiresAt в localStorage
+          // Токен обновлен — это происходит при возвращении после долгого отсутствия
+          // ВАЖНО: нужно восстановить пользователя и завершить инициализацию,
+          // иначе пользователь увидит страницу логина и будет вынужден входить заново
           try {
             // Обновляем expiresAt в localStorage
             if (session.expires_at) {
@@ -308,10 +361,88 @@ export function AuthProvider({ children }: AuthProviderProps) {
             } else {
               console.warn('⚠️ TOKEN_REFRESHED: expires_at отсутствует в сессии');
             }
-            
-            const currentUser = await getCurrentUser();
-            if (currentUser) {
+
+            // Получаем пользователя с таймаутом 2 секунды
+            // (профиль может загружаться медленно из-за холодного старта Supabase)
+            const currentUser = await Promise.race([
+              getCurrentUser(),
+              new Promise<User | null>((resolve) =>
+                setTimeout(() => {
+                  console.debug('⚠️ Таймаут getCurrentUser() в TOKEN_REFRESHED (2000ms)');
+                  resolve(null);
+                }, 2000)
+              )
+            ]);
+
+            if (currentUser && mounted) {
               setUser(currentUser);
+              startActivityTracking();
+            } else if (session?.user && mounted && !userRef.current) {
+              // Если профиль не загрузился и пользователь ещё не установлен —
+              // создаём fallback из данных сессии.
+              // Это предотвращает показ страницы логина после долгого отсутствия.
+              console.debug('⚠️ TOKEN_REFRESHED: профиль не загружен, используем данные сессии');
+
+              let cachedRole: 'admin' | 'user' = 'user';
+              try {
+                const cachedSessionData = localStorage.getItem('user_session');
+                if (cachedSessionData) {
+                  const cachedSession = JSON.parse(cachedSessionData);
+                  if (cachedSession?.user?.id === session.user.id && cachedSession?.user?.role) {
+                    cachedRole = cachedSession.user.role;
+                  }
+                }
+              } catch (cacheError) {
+                console.debug('⚠️ Ошибка чтения кэшированной роли (не критично):', cacheError);
+              }
+
+              const fallbackUser: User = {
+                id: session.user.id,
+                email: session.user.email || '',
+                name: session.user.user_metadata?.name || undefined,
+                role: cachedRole,
+                createdAt: session.user.created_at || new Date().toISOString(),
+              };
+
+              setUser(fallbackUser);
+              startActivityTracking();
+
+              // Сохраняем сессию в localStorage
+              try {
+                const { saveSession } = await import('../../../shared/utils/sessionStorage');
+                saveSession({
+                  user: fallbackUser,
+                  token: session.access_token || '',
+                  expiresAt: session.expires_at
+                    ? new Date(session.expires_at * 1000).toISOString()
+                    : new Date(Date.now() + (8 * 60 * 60 * 1000)).toISOString(),
+                  lastActivityAt: new Date().toISOString(),
+                });
+                console.debug('✅ user_session создана из данных сессии при TOKEN_REFRESHED');
+              } catch (saveError) {
+                console.debug('⚠️ Ошибка сохранения сессии (не критично):', saveError);
+              }
+
+              // Пытаемся обновить профиль в фоне через 2 секунды
+              setTimeout(async () => {
+                try {
+                  const updatedUser = await getCurrentUser();
+                  if (updatedUser && mounted) {
+                    setUser(updatedUser);
+                    console.debug('✅ Пользователь обновлен из профиля после TOKEN_REFRESHED');
+                  }
+                } catch (bgError) {
+                  console.debug('⚠️ Ошибка фоновой загрузки профиля (не критично):', bgError);
+                }
+              }, 2000);
+            }
+
+            // Если инициализация ещё не завершена — завершаем
+            // Это предотвращает ожидание 5-секундного таймаута
+            if (mounted && !initializationComplete) {
+              initializationComplete = true;
+              setLoading(false);
+              console.debug('🔐 Инициализация завершена (TOKEN_REFRESHED)');
             }
           } catch (error) {
             // Игнорируем ошибки при обновлении токена
