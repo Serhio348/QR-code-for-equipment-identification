@@ -16,7 +16,7 @@ export const config = {
 
   // Google Gemini API
   geminiApiKey: process.env.GEMINI_API_KEY || '',
-  geminiModel: process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp',
+  geminiModel: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
 
   // Supabase (для проверки токенов)
   supabaseUrl: process.env.SUPABASE_URL || '',
