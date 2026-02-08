@@ -4,8 +4,8 @@
  * Маршрут (route) для чат-эндпоинта AI-консультанта.
  *
  * Обрабатывает POST /api/chat — единственный эндпоинт, через который
- * фронтенд общается с Claude AI. Принимает историю переписки,
- * передаёт её в anthropic.ts и возвращает ответ Claude.
+ * фронтенд общается с AI (Claude, Gemini, или другой провайдер).
+ * Принимает историю переписки и возвращает ответ AI.
  *
  * Цепочка обработки запроса:
  * ┌─────────────────────────────────────────────────────────────┐
@@ -17,7 +17,9 @@
  * │       ↓                                                     │
  * │  chat.ts (этот файл) — валидация messages                   │
  * │       ↓                                                     │
- * │  processChatMessage() — агентный цикл Claude                │
+ * │  ProviderFactory.create() — выбор AI провайдера             │
+ * │       ↓                                                     │
+ * │  provider.chat() — агентный цикл с tool calling             │
  * │       ↓                                                     │
  * │  Ответ: { success: true, data: { message, toolsUsed } }    │
  * └─────────────────────────────────────────────────────────────┘
@@ -34,9 +36,13 @@
 // Response — тип для типизации res параметра
 import { Router, Response } from 'express';
 
-// processChatMessage — основная функция обработки чата (агентный цикл Claude)
+// ProviderFactory — фабрика для создания AI провайдера (Claude, Gemini, OpenAI)
 // ChatMessage — тип сообщения { role: 'user' | 'assistant', content: string }
-import { processChatMessage, ChatMessage } from '../services/anthropic.js';
+// ToolDefinition — универсальный формат определения tool
+import { ProviderFactory, type ChatMessage, type ToolDefinition } from '../services/ai/index.js';
+
+// tools — определения всех доступных инструментов для AI
+import { tools } from '../tools/index.js';
 
 // authMiddleware — middleware для проверки JWT токена Supabase
 // AuthenticatedRequest — расширенный Request с полем req.user
@@ -137,15 +143,18 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
         console.log(`Chat request from user ${req.user?.email}, messages: ${messages.length}`);
 
         // ----------------------------------------
-        // Обработка через Claude API
+        // Обработка через AI Provider (Claude, Gemini, или другой)
         // ----------------------------------------
-        // processChatMessage запускает агентный цикл:
-        // Claude может вызывать tools (поиск оборудования, чтение файлов)
-        // несколько раз, пока не сформирует финальный текстовый ответ
-        const response = await processChatMessage({
+        // ProviderFactory создаёт провайдер на основе конфигурации (AI_PROVIDER)
+        // с автоматическим fallback на доступные провайдеры.
+        // Провайдер запускает агентный цикл с tool calling.
+        const provider = await ProviderFactory.create();
+
+        const response = await provider.chat(
             messages,
-            userId: req.user?.id || '',
-        });
+            tools as ToolDefinition[], // Type assertion для совместимости Anthropic.Tool с ToolDefinition
+            req.user?.id || ''
+        );
 
         // Успешный ответ — оборачиваем в { success, data }
         // для единообразия с остальными API ответами

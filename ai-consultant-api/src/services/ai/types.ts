@@ -44,7 +44,7 @@ export interface ChatResponse {
 // Определение tool (инструмента)
 export interface ToolDefinition {
   name: string;
-  description: string;
+  description?: string; // Опционально для совместимости с Anthropic.Tool
   input_schema: {
     type: 'object';
     properties: Record<string, any>;
