@@ -189,7 +189,8 @@ export class GeminiProvider extends BaseAIProvider {
       const genAI = this.client.getGenerativeModel({ model: this.model });
       const result = await genAI.generateContent('test');
       return !!result.response;
-    } catch {
+    } catch (error) {
+      console.error('[GeminiProvider] Not available:', error instanceof Error ? error.message : error);
       return false;
     }
   }

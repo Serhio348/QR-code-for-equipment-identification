@@ -88,23 +88,14 @@ export class ProviderFactory {
     if (available.includes(targetType)) {
       try {
         const provider = this.createProviderByType(targetType);
-
-        // Проверяем доступность провайдера
         const isAvailable = await provider.isAvailable();
 
         if (isAvailable) {
-          console.log(`[ProviderFactory] Using ${targetType} provider`);
           return provider;
-        } else {
-          console.warn(`[ProviderFactory] ${targetType} provider is not available, trying fallback...`);
         }
       } catch (error) {
         console.error(`[ProviderFactory] Failed to create ${targetType} provider:`, error);
       }
-    } else {
-      console.warn(
-        `[ProviderFactory] Preferred provider ${targetType} is not configured, using fallback...`
-      );
     }
 
     // Fallback: пробуем создать первый доступный провайдер
@@ -113,11 +104,9 @@ export class ProviderFactory {
 
       try {
         const provider = this.createProviderByType(providerType);
-
         const isAvailable = await provider.isAvailable();
 
         if (isAvailable) {
-          console.log(`[ProviderFactory] Fallback to ${providerType} provider`);
           return provider;
         }
       } catch (error) {

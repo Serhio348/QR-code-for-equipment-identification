@@ -210,7 +210,8 @@ export class ClaudeProvider extends BaseAIProvider {
         messages: [{ role: 'user', content: 'test' }],
       });
       return true;
-    } catch {
+    } catch (error) {
+      console.error('[ClaudeProvider] Not available:', error instanceof Error ? error.message : error);
       return false;
     }
   }
