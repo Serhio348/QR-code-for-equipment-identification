@@ -66,7 +66,7 @@ function convertProperties(properties: Record<string, any>): Record<string, any>
 export function convertToGeminiTools(tools: ToolDefinition[]): any[] {
   return tools.map(tool => ({
     name: tool.name,
-    description: tool.description,
+    description: tool.description || '',
     parameters: {
       type: 'OBJECT',
       properties: convertProperties(tool.input_schema.properties),

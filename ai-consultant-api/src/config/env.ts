@@ -7,9 +7,16 @@ export const config = {
   port: parseInt(process.env.PORT || '3001', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
 
+  // AI Provider Configuration
+  aiProvider: process.env.AI_PROVIDER || 'gemini', // 'claude' | 'gemini' | 'openai'
+
   // Anthropic Claude API
   anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
   claudeModel: process.env.CLAUDE_MODEL || 'claude-sonnet-4-20250514',
+
+  // Google Gemini API
+  geminiApiKey: process.env.GEMINI_API_KEY || '',
+  geminiModel: process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp',
 
   // Supabase (для проверки токенов)
   supabaseUrl: process.env.SUPABASE_URL || '',
@@ -47,7 +54,6 @@ export const config = {
 // Проверка обязательных переменных
 export function validateConfig(): void {
   const required = [
-    'anthropicApiKey',
     'supabaseUrl',
     'supabaseServiceKey',
     'gasApiUrl',
@@ -57,5 +63,11 @@ export function validateConfig(): void {
 
   if (missing.length > 0) {
     throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+  }
+
+  // Проверка наличия хотя бы одного AI провайдера
+  const hasAnyProvider = config.anthropicApiKey || config.geminiApiKey;
+  if (!hasAnyProvider) {
+    throw new Error('At least one AI provider API key must be configured (ANTHROPIC_API_KEY or GEMINI_API_KEY)');
   }
 }
