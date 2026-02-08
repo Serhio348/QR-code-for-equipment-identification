@@ -8,7 +8,8 @@
 export type { ChatMessage, ChatRequest, ChatResponse, ToolDefinition } from './types.js';
 
 // Интерфейсы и базовые классы
-export { AIProvider, BaseAIProvider } from './AIProvider.js';
+export type { AIProvider } from './AIProvider.js'; // Type-only export для интерфейса
+export { BaseAIProvider } from './AIProvider.js';
 
 // Провайдеры
 export { ClaudeProvider } from './providers/ClaudeProvider.js';
