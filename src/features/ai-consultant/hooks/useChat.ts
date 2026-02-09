@@ -310,7 +310,7 @@ export function useChat(equipmentContext?: EquipmentContext | null): UseChatRetu
       setIsLoading(false);
       abortControllerRef.current = null;
     }
-  }, [messages, isLoading, trimForApi]);
+  }, [messages, isLoading, trimForApi, equipmentContext]);
 
   /**
    * Повторить последнее неудачное сообщение.
@@ -363,7 +363,7 @@ export function useChat(equipmentContext?: EquipmentContext | null): UseChatRetu
       setIsLoading(false);
       abortControllerRef.current = null;
     }
-  }, [lastFailed, messages, isLoading]);
+  }, [lastFailed, messages, isLoading, equipmentContext]);
 
   /**
    * Очистить историю чата.
