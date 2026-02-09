@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { VoiceButton } from './VoiceButton';
 import { PhotoButton, PhotoData } from './PhotoButton';
+import { QRButton } from './QRButton';
 import './ChatWidget.css';
 
 // Реэкспортируем PhotoData для использования в других модулях
@@ -16,6 +17,7 @@ interface ChatInputProps {
   isLoading: boolean;
   voiceTranscript?: string;
   onVoiceTranscriptUsed?: () => void;
+  onQRScanClick?: () => void;
 }
 
 export const ChatInput: React.FC<ChatInputProps> = ({
@@ -23,6 +25,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   isLoading,
   voiceTranscript,
   onVoiceTranscriptUsed,
+  onQRScanClick,
 }) => {
   const [text, setText] = useState('');
   const [selectedPhotos, setSelectedPhotos] = useState<PhotoData[]>([]);
@@ -108,6 +111,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       <div className="ai-chat-input__actions">
         <PhotoButton disabled={isLoading} onPhotosSelected={handlePhotosSelected} />
         <VoiceButton disabled={isLoading} />
+        {onQRScanClick && <QRButton disabled={isLoading} onClick={onQRScanClick} />}
 
         <button
           type="submit"

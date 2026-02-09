@@ -63,8 +63,8 @@
   position: absolute;
   bottom: 70px;
   right: 0;
-  width: 380px;
-  max-width: calc(100vw - 40px);
+  width: 90vw;
+  max-width: 600px;
   height: 550px;
   max-height: calc(100vh - 100px);
   background: var(--ai-chat-bg);
@@ -114,6 +114,67 @@
 
 .ai-chat-widget__clear:hover {
   opacity: 1;
+}
+
+/* Контекст оборудования */
+.ai-chat-widget__context {
+  padding: 12px 20px;
+  background: #f0fdf4;
+  border-bottom: 1px solid #bbf7d0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  animation: ai-chat-slide-down 0.3s ease;
+}
+
+@keyframes ai-chat-slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ai-chat-widget__context-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.ai-chat-widget__context-icon {
+  font-size: 18px;
+}
+
+.ai-chat-widget__context-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: #166534;
+}
+
+.ai-chat-widget__context-clear {
+  background: transparent;
+  border: none;
+  color: #166534;
+  font-size: 16px;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+  padding: 4px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.ai-chat-widget__context-clear:hover {
+  opacity: 1;
+  background: rgba(22, 101, 52, 0.1);
 }
 
 /* Область сообщений */
@@ -383,6 +444,30 @@
   cursor: not-allowed;
 }
 
+/* Кнопка QR-сканера */
+.ai-chat-qr-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--ai-chat-border);
+  background: white;
+  font-size: 18px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ai-chat-qr-btn:hover:not(:disabled) {
+  background: #f9fafb;
+}
+
+.ai-chat-qr-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Превью фото */
 .ai-chat-input__photo-preview {
   display: flex;
@@ -433,18 +518,35 @@
 
 /* Мобильная адаптация */
 @media (max-width: 480px) {
-  .ai-chat-widget__window {
-    width: 100%;
-    height: calc(100vh - 80px);
-    max-height: none;
+  .ai-chat-widget {
     bottom: 0;
     right: 0;
+    left: 0;
+    width: 100%;
+  }
+
+  .ai-chat-widget__window {
+    position: fixed;
+    width: 100vw;
+    height: calc(100vh - 60px);
+    max-height: calc(100vh - 60px);
+    bottom: 0;
+    right: 0;
+    left: 0;
     border-radius: var(--ai-chat-radius) var(--ai-chat-radius) 0 0;
   }
 
   .ai-chat-widget--open .ai-chat-widget__toggle {
+    position: fixed;
     top: 10px;
     right: 10px;
     bottom: auto;
+    z-index: 10001;
+  }
+
+  .ai-chat-widget__toggle {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
   }
 }

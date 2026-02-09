@@ -5,7 +5,7 @@
  */
 
 // Типы
-export type { ChatMessage, ChatRequest, ChatResponse, ToolDefinition } from './types.js';
+export type { ChatMessage, ChatRequest, ChatResponse, ToolDefinition, EquipmentContext } from './types.js';
 
 // Интерфейсы и базовые классы
 export type { AIProvider } from './AIProvider.js'; // Type-only export для интерфейса

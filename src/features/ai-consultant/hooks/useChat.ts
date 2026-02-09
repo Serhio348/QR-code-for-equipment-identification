@@ -34,8 +34,15 @@
 // ============================================
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { ChatMessage, sendChatMessage, TextContentBlock, ImageContentBlock } from '../services/consultantApi';
+import {
+  ChatMessage,
+  sendChatMessage,
+  TextContentBlock,
+  ImageContentBlock,
+  EquipmentContext,
+} from '../services/consultantApi';
 import type { ChatInputMessage } from '../components/ChatInput';
+import { logUserActivity } from '../../user-activity/services/activityLogsApi';
 
 // ============================================
 // Константы
@@ -152,10 +159,11 @@ const createMessage = (
 /**
  * Хук для управления чатом с AI-консультантом.
  *
+ * @param equipmentContext - Контекст оборудования для поиска в конкретной папке
  * @example
- * const { messages, isLoading, error, canRetry, sendMessage, retryLastMessage } = useChat();
+ * const { messages, isLoading, error, canRetry, sendMessage, retryLastMessage } = useChat(equipmentContext);
  */
-export function useChat(): UseChatReturn {
+export function useChat(equipmentContext?: EquipmentContext | null): UseChatReturn {
   // --- Состояние ---
   const [messages, setMessages] = useState<ChatMessageWithMeta[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -233,7 +241,11 @@ export function useChat(): UseChatReturn {
     try {
       // Обрезаем историю перед отправкой на сервер
       const apiMessages = trimForApi(newMessages);
-      const response = await sendChatMessage(apiMessages, controller.signal);
+      const response = await sendChatMessage(
+        apiMessages,
+        controller.signal,
+        equipmentContext || undefined
+      );
       const duration = Date.now() - startTime;
 
       if (response.success && response.data) {
@@ -244,7 +256,33 @@ export function useChat(): UseChatReturn {
           responseLength: response.data.message.length,
           hasPhotos: !!inputMessage.photos?.length,
           photoCount: inputMessage.photos?.length || 0,
+          hasContext: !!equipmentContext,
+          equipmentId: equipmentContext?.id,
         });
+
+        // Логируем активность пользователя
+        const messagePreview = typeof content === 'string'
+          ? content.substring(0, 100)
+          : 'Сообщение с изображением';
+        logUserActivity(
+          'chat_message',
+          equipmentContext
+            ? `Отправлено сообщение в AI-консультант (контекст: ${equipmentContext.name}): "${messagePreview}"`
+            : `Отправлено сообщение в AI-консультант: "${messagePreview}"`,
+          {
+            entityType: 'chat',
+            entityId: equipmentContext?.id,
+            metadata: {
+              hasPhotos: !!inputMessage.photos?.length,
+              photoCount: inputMessage.photos?.length || 0,
+              toolsUsed: response.data.toolsUsed,
+              duration,
+              hasContext: !!equipmentContext,
+              equipmentName: equipmentContext?.name,
+              equipmentType: equipmentContext?.type,
+            },
+          }
+        );
 
         const assistantMessage = createMessage('assistant', response.data.message);
         setMessages([...newMessages, assistantMessage]);
@@ -302,7 +340,8 @@ export function useChat(): UseChatReturn {
     try {
       const response = await sendChatMessage(
         lastFailed.messagesSnapshot,
-        controller.signal
+        controller.signal,
+        equipmentContext || undefined
       );
       const duration = Date.now() - startTime;
 
