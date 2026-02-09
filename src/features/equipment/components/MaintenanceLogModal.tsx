@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { Equipment } from '../types/equipment';
 import MaintenanceLog from './MaintenanceLog';
+import { logUserActivity } from '@/features/user-activity/services/activityLogsApi';
 import './MaintenanceLogModal.css';
 
 interface MaintenanceLogModalProps {
@@ -18,6 +19,22 @@ const MaintenanceLogModal: React.FC<MaintenanceLogModalProps> = ({
   equipment,
   onClose
 }) => {
+  // Логирование открытия журнала обслуживания
+  useEffect(() => {
+    logUserActivity(
+      'maintenance_log_open',
+      `Открытие журнала обслуживания${equipmentName ? `: "${equipmentName}"` : ''}`,
+      {
+        entityType: 'equipment',
+        entityId: equipmentId,
+        metadata: {
+          equipmentName: equipmentName || undefined,
+          hasMaintenanceSheet: !!maintenanceSheetId,
+        },
+      }
+    ).catch(() => {});
+  }, [equipmentId, equipmentName, maintenanceSheetId]);
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {

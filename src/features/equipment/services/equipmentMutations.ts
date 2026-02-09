@@ -8,6 +8,7 @@ import { Equipment } from '../types/equipment';
 import { apiRequest } from '@/shared/services/api/apiRequest';
 import { isCorsError, sendNoCorsRequest, waitForEquipmentUpdate, waitForEquipmentDeletion } from '@/shared/services/api/corsFallback';
 import { getAllEquipment } from './equipmentQueries';
+import { logUserActivity } from '../../user-activity/services/activityLogsApi';
 
 /**
  * Добавить новое оборудование
@@ -47,6 +48,20 @@ export async function addEquipment(
       throw new Error('Ошибка при добавлении оборудования: данные не получены');
     }
 
+    // Логируем создание оборудования
+    logUserActivity(
+      'equipment_create',
+      `Создано оборудование: "${response.data.name}" (${response.data.type})`,
+      {
+        entityType: 'equipment',
+        entityId: response.data.id,
+        metadata: {
+          type: response.data.type,
+          status: response.data.status,
+        },
+      }
+    );
+
     return response.data;
   } catch (error: any) {
     if (isCorsError(error)) {
@@ -77,8 +92,22 @@ export async function addEquipment(
             eq.type === equipment.type &&
             eq.status === equipment.status
           );
-          
+
           if (added) {
+            // Логируем создание оборудования
+            logUserActivity(
+              'equipment_create',
+              `Создано оборудование: "${added.name}" (${added.type})`,
+              {
+                entityType: 'equipment',
+                entityId: added.id,
+                metadata: {
+                  type: added.type,
+                  status: added.status,
+                  fallback: 'no-cors',
+                },
+              }
+            );
             return added;
           }
         }
@@ -123,6 +152,19 @@ export async function updateEquipment(
       throw new Error('Ошибка при обновлении оборудования: данные не получены');
     }
 
+    // Логируем обновление оборудования
+    logUserActivity(
+      'equipment_update',
+      `Обновлено оборудование: "${response.data.name}"`,
+      {
+        entityType: 'equipment',
+        entityId: response.data.id,
+        metadata: {
+          updatedFields: Object.keys(updates),
+        },
+      }
+    );
+
     return response.data;
   } catch (error: any) {
     if (isCorsError(error)) {
@@ -162,6 +204,19 @@ export async function updateEquipment(
             commissioningDate: updated.commissioningDate,
             lastMaintenanceDate: updated.lastMaintenanceDate
           });
+          // Логируем обновление оборудования
+          logUserActivity(
+            'equipment_update',
+            `Обновлено оборудование: "${updated.name}"`,
+            {
+              entityType: 'equipment',
+              entityId: updated.id,
+              metadata: {
+                updatedFields: Object.keys(normalizedUpdates),
+                fallback: 'no-cors',
+              },
+            }
+          );
           return updated;
         }
         
@@ -195,6 +250,16 @@ export async function deleteEquipment(id: string): Promise<void> {
 
   try {
     await apiRequest('delete', 'POST', { id });
+
+    // Логируем удаление оборудования
+    logUserActivity(
+      'equipment_delete',
+      `Удалено оборудование (ID: ${id.substring(0, 8)}...)`,
+      {
+        entityType: 'equipment',
+        entityId: id,
+      }
+    );
   } catch (error: any) {
     if (isCorsError(error)) {
       console.log('📤 Отправка запроса на удаление через no-cors fallback');
@@ -206,6 +271,18 @@ export async function deleteEquipment(id: string): Promise<void> {
         const deleted = await waitForEquipmentDeletion(id, 8, 1500);
         if (deleted) {
           console.log('✅ Оборудование успешно удалено');
+          // Логируем удаление оборудования
+          logUserActivity(
+            'equipment_delete',
+            `Удалено оборудование (ID: ${id.substring(0, 8)}...)`,
+            {
+              entityType: 'equipment',
+              entityId: id,
+              metadata: {
+                fallback: 'no-cors',
+              },
+            }
+          );
           return;
         }
         

@@ -177,7 +177,7 @@ const MainMenuPage: React.FC = () => {
                 </div>
                 <div className="main-menu-button-text">
                   <span className="main-menu-button-title">Администрирование</span>
-                  <span className="main-menu-button-subtitle">Настройки доступа, логи ошибок, управление участками</span>
+                  <span className="main-menu-button-subtitle">Настройки доступа, логи ошибок и активности, управление участками</span>
                 </div>
               </button>
             )}

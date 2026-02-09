@@ -5,6 +5,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { DriveFile } from '../services/equipmentApi';
 import { getFolderFiles } from '../services/equipmentApi';
+import { logUserActivity } from '@/features/user-activity/services/activityLogsApi';
 import './DriveFilesList.css';
 
 interface DriveFilesListProps {
@@ -167,11 +168,40 @@ const DriveFilesList: React.FC<DriveFilesListProps> = ({ folderUrl, equipmentNam
     return '📎';
   };
 
-  const handleOpenFile = (fileUrl: string) => {
-    window.open(fileUrl, '_blank', 'noopener,noreferrer');
+  const handleOpenFile = (file: DriveFile) => {
+    // Логируем просмотр файла
+    logUserActivity(
+      'file_view',
+      `Просмотр файла: "${file.name}"${equipmentName ? ` (${equipmentName})` : ''}`,
+      {
+        entityType: 'file',
+        entityId: file.id,
+        metadata: {
+          fileName: file.name,
+          fileSize: file.size,
+          mimeType: file.mimeType,
+          equipmentName: equipmentName || undefined,
+        },
+      }
+    ).catch(() => {});
+
+    window.open(file.url, '_blank', 'noopener,noreferrer');
   };
 
   const handleOpenFolder = () => {
+    // Логируем открытие папки в Google Drive
+    logUserActivity(
+      'folder_open',
+      `Открытие папки в Google Drive${equipmentName ? `: "${equipmentName}"` : ''}`,
+      {
+        entityType: 'other',
+        metadata: {
+          folderUrl,
+          equipmentName: equipmentName || undefined,
+        },
+      }
+    ).catch(() => {});
+
     window.open(folderUrl, '_blank', 'noopener,noreferrer');
   };
 
@@ -250,7 +280,7 @@ const DriveFilesList: React.FC<DriveFilesListProps> = ({ folderUrl, equipmentNam
             <div
               key={file.id}
               className="file-card"
-              onClick={() => handleOpenFile(file.url)}
+              onClick={() => handleOpenFile(file)}
               title="Открыть файл"
             >
               <div className="file-icon">{getFileIcon(file.mimeType)}</div>

@@ -3,7 +3,7 @@
  * Отображает все оборудование из базы данных в виде списка
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Equipment } from '../types/equipment';
 import { formatDate } from '@/shared/utils/dateFormatting';
 import { EQUIPMENT_TYPE_OPTIONS } from '../constants/equipmentTypes';
@@ -12,6 +12,7 @@ import { useWorkshops } from '../../workshops/hooks/useWorkshops';
 import { isDriveId } from '@/shared/utils/qrCodeParser';
 import StatusBadge from '../../common/components/StatusBadge';
 import QRScanner from '../../common/components/QRScanner/QRScanner';
+import { logUserActivity } from '@/features/user-activity/services/activityLogsApi';
 import './EquipmentList.css';
 
 interface EquipmentListProps {
@@ -63,21 +64,49 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
    */
   const handleScanSuccess = (scannedId: string) => {
     console.debug('[EquipmentList] Отсканирован ID:', scannedId);
-    
+
     // Ищем оборудование в списке
     const equipment = findEquipmentById(scannedId);
-    
+
     if (equipment) {
       console.debug('[EquipmentList] Оборудование найдено:', equipment.name);
-      
+
+      // Логируем успешное сканирование
+      logUserActivity(
+        'qr_code_scan',
+        `Сканирование QR-кода: "${equipment.name}"`,
+        {
+          entityType: 'equipment',
+          entityId: equipment.id,
+          metadata: {
+            equipmentName: equipment.name,
+            equipmentType: equipment.type,
+            scannedId,
+          },
+        }
+      ).catch(() => {});
+
       // Закрываем сканер
       setIsScannerOpen(false);
-      
+
       // Автоматически открываем карточку оборудования
       if (onSelectEquipment) {
         onSelectEquipment(equipment);
       }
     } else {
+      // Логируем неудачное сканирование
+      logUserActivity(
+        'qr_code_scan',
+        `Сканирование QR-кода: оборудование не найдено (ID: ${scannedId})`,
+        {
+          entityType: 'other',
+          metadata: {
+            scannedId,
+            success: false,
+          },
+        }
+      ).catch(() => {});
+
       // Оборудование не найдено - показываем сообщение
       alert(`Оборудование с ID "${scannedId}" не найдено в списке.\n\nВозможно, список нужно обновить.`);
       setIsScannerOpen(false);
@@ -138,6 +167,65 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
   React.useEffect(() => {
     setCurrentPage(1);
   }, [filterType, filterStatus, searchQuery]);
+
+  // Логирование поиска (с задержкой для debounce)
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  useEffect(() => {
+    if (searchQuery) {
+      // Очищаем предыдущий таймаут
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+
+      // Устанавливаем новый таймаут (1 секунда)
+      searchTimeoutRef.current = setTimeout(() => {
+        logUserActivity(
+          'equipment_search',
+          `Поиск оборудования: "${searchQuery}"`,
+          {
+            entityType: 'other',
+            metadata: {
+              searchQuery,
+              resultsCount: filteredEquipment.length,
+            },
+          }
+        ).catch(() => {});
+      }, 1000);
+    }
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchQuery, filteredEquipment.length]);
+
+  // Логирование фильтрации
+  const prevFilterRef = useRef({ type: filterType, status: filterStatus, workshop: filterWorkshop });
+  useEffect(() => {
+    const hasFilterChanged =
+      prevFilterRef.current.type !== filterType ||
+      prevFilterRef.current.status !== filterStatus ||
+      prevFilterRef.current.workshop !== filterWorkshop;
+
+    if (hasFilterChanged && (filterType !== 'all' || filterStatus !== 'all' || filterWorkshop !== 'all')) {
+      logUserActivity(
+        'equipment_filter',
+        'Фильтрация списка оборудования',
+        {
+          entityType: 'other',
+          metadata: {
+            filterType: filterType !== 'all' ? filterType : undefined,
+            filterStatus: filterStatus !== 'all' ? filterStatus : undefined,
+            filterWorkshop: filterWorkshop !== 'all' ? filterWorkshop : undefined,
+            resultsCount: filteredEquipment.length,
+          },
+        }
+      ).catch(() => {});
+
+      prevFilterRef.current = { type: filterType, status: filterStatus, workshop: filterWorkshop };
+    }
+  }, [filterType, filterStatus, filterWorkshop, filteredEquipment.length]);
 
 
 
