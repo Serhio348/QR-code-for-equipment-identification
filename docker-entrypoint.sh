@@ -1,4 +1,8 @@
 #!/bin/sh
+
+echo "=== ENTRYPOINT START ===" >&2
+echo "Script started successfully" >&2
+
 set -e
 
 # Railway proxies to port 80 inside the container
@@ -9,10 +13,12 @@ echo "🚀 Starting container initialization..."
 echo "PORT environment variable: ${PORT:-not set}"
 echo "Railway proxies to port 80, nginx will listen on port $NGINX_PORT"
 
-# Create nginx user if it doesn't exist
-if ! id -u nginx > /dev/null 2>&1; then
+# Check if nginx user already exists (created during nginx installation)
+if id -u nginx > /dev/null 2>&1; then
+    echo "✅ nginx user already exists"
+else
     echo "Creating nginx user..."
-    adduser -D -H -u 1000 -s /sbin/nologin nginx
+    adduser -D -H -u 101 -s /sbin/nologin nginx || true
 fi
 
 echo "📂 Contents of /usr/share/nginx/html:"
