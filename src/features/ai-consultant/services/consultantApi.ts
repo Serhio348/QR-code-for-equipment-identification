@@ -32,6 +32,17 @@ export interface ChatMessage {
   content: string | Array<TextContentBlock | ImageContentBlock>;
 }
 
+/**
+ * Контекст оборудования для AI-консультанта.
+ * Позволяет AI искать файлы только в папке конкретного оборудования.
+ */
+export interface EquipmentContext {
+  id: string;
+  name: string;
+  type: string;
+  googleDriveUrl?: string;
+}
+
 export interface ChatResponse {
   success: boolean;
   data?: {
@@ -43,10 +54,14 @@ export interface ChatResponse {
 
 /**
  * Отправить сообщение в AI-консультант
+ * @param messages - История сообщений
+ * @param signal - AbortSignal для отмены запроса
+ * @param equipmentContext - Контекст оборудования (для поиска в конкретной папке)
  */
 export async function sendChatMessage(
   messages: ChatMessage[],
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  equipmentContext?: EquipmentContext
 ): Promise<ChatResponse> {
   // Получаем текущий токен сессии
   const { data: { session } } = await supabase.auth.getSession();
@@ -61,7 +76,10 @@ export async function sendChatMessage(
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${session.access_token}`,
     },
-    body: JSON.stringify({ messages }),
+    body: JSON.stringify({
+      messages,
+      equipmentContext,
+    }),
     signal,
   });
 

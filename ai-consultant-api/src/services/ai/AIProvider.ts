@@ -2,6 +2,7 @@ import {
   ChatMessage,
   ChatResponse,
   ToolDefinition,
+  EquipmentContext,
 } from './types.js';
 
 /**
@@ -22,12 +23,14 @@ export interface AIProvider {
    * @param messages - История сообщений
    * @param tools - Доступные инструменты
    * @param userId - ID пользователя (для логирования)
+   * @param equipmentContext - Контекст оборудования (для поиска в конкретной папке)
    * @returns Ответ от AI
    */
   chat(
     messages: ChatMessage[],
     tools: ToolDefinition[],
-    userId: string
+    userId: string,
+    equipmentContext?: EquipmentContext
   ): Promise<ChatResponse>;
 
   /**
@@ -47,7 +50,8 @@ export abstract class BaseAIProvider implements AIProvider {
   abstract chat(
     messages: ChatMessage[],
     tools: ToolDefinition[],
-    userId: string
+    userId: string,
+    equipmentContext?: EquipmentContext
   ): Promise<ChatResponse>;
 
   async isAvailable(): Promise<boolean> {

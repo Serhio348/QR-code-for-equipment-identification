@@ -10,7 +10,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { BaseAIProvider } from '../AIProvider.js';
-import { ChatMessage, ChatResponse, ToolDefinition } from '../types.js';
+import { ChatMessage, ChatResponse, ToolDefinition, EquipmentContext } from '../types.js';
 import {
   convertToClaudeTools,
   extractClaudeToolCalls,
@@ -38,7 +38,8 @@ export class ClaudeProvider extends BaseAIProvider {
   async chat(
     messages: ChatMessage[],
     tools: ToolDefinition[],
-    userId: string
+    userId: string,
+    equipmentContext?: EquipmentContext
   ): Promise<ChatResponse> {
     try {
       // Защита от бесконечного цикла
@@ -60,8 +61,8 @@ export class ClaudeProvider extends BaseAIProvider {
       // Конвертируем tools в формат Claude
       const claudeTools = convertToClaudeTools(tools);
 
-      // Системный промпт
-      const systemPrompt = this.getSystemPrompt();
+      // Системный промпт с учётом контекста оборудования
+      const systemPrompt = this.getSystemPrompt(equipmentContext);
 
       // ----------------------------------------
       // Шаг 2: Первый запрос к Claude
@@ -219,9 +220,20 @@ export class ClaudeProvider extends BaseAIProvider {
   /**
    * Системный промпт для Claude
    */
-  private getSystemPrompt(): string {
+  private getSystemPrompt(equipmentContext?: EquipmentContext): string {
+    const contextInfo = equipmentContext
+      ? `\n\nКОНТЕКСТ ОБОРУДОВАНИЯ:
+Пользователь работает с конкретным оборудованием:
+- ID: ${equipmentContext.id}
+- Название: ${equipmentContext.name}
+- Тип: ${equipmentContext.type}${equipmentContext.googleDriveUrl ? `\n- Папка Google Drive: ${equipmentContext.googleDriveUrl}` : ''}
+
+ВАЖНО: При поиске файлов и работе с журналом обслуживания используй это оборудование.
+Когда пользователь спрашивает о "журнале" или "файлах" - он имеет в виду журнал/файлы ЭТОГО оборудования.`
+      : '';
+
     return `Ты — AI-консультант по обслуживанию оборудования на производстве.
-Твоя задача — помогать сотрудникам работать с оборудованием.
+Твоя задача — помогать сотрудникам работать с оборудованием.${contextInfo}
 
 Ты можешь:
 1. Искать оборудование по названию или характеристикам

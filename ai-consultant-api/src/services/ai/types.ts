@@ -30,6 +30,14 @@ export interface ChatRequest {
   userId: string;
 }
 
+// Контекст оборудования для AI (для поиска в конкретной папке)
+export interface EquipmentContext {
+  id: string;
+  name: string;
+  type: string;
+  googleDriveUrl?: string;
+}
+
 // Ответ от AI
 export interface ChatResponse {
   message: string;

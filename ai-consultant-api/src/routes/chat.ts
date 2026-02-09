@@ -39,7 +39,8 @@ import { Router, Response } from 'express';
 // ProviderFactory — фабрика для создания AI провайдера (Claude, Gemini, OpenAI)
 // ChatMessage — тип сообщения { role: 'user' | 'assistant', content: string }
 // ToolDefinition — универсальный формат определения tool
-import { ProviderFactory, type ChatMessage, type ToolDefinition } from '../services/ai/index.js';
+// EquipmentContext — контекст оборудования для поиска в конкретной папке
+import { ProviderFactory, type ChatMessage, type ToolDefinition, type EquipmentContext } from '../services/ai/index.js';
 
 // tools — определения всех доступных инструментов для AI
 import { tools } from '../tools/index.js';
@@ -73,11 +74,18 @@ const router = Router();
  *     { "role": "user", "content": "Найди фильтр ФО-0,8" },
  *     { "role": "assistant", "content": "Найден фильтр: ФО-0,8-1,5..." },
  *     { "role": "user", "content": "Покажи журнал обслуживания" }
- *   ]
+ *   ],
+ *   "equipmentContext": {
+ *     "id": "eq123",
+ *     "name": "Фильтр ФО-0,8",
+ *     "type": "Фильтр обезжелезивания",
+ *     "googleDriveUrl": "https://drive.google.com/..."
+ *   }
  * }
  */
 interface ChatRequestBody {
     messages: ChatMessage[];
+    equipmentContext?: EquipmentContext;
 }
 
 // ============================================
@@ -104,7 +112,7 @@ interface ChatRequestBody {
  */
 router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const { messages } = req.body as ChatRequestBody;
+        const { messages, equipmentContext } = req.body as ChatRequestBody;
 
         // ----------------------------------------
         // Валидация: messages обязателен и не пуст
@@ -138,9 +146,12 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
             }
         }
 
-        // Логируем запрос (email пользователя + количество сообщений)
+        // Логируем запрос (email пользователя + количество сообщений + контекст)
         // Полезно для отладки и мониторинга использования
-        console.log(`Chat request from user ${req.user?.email}, messages: ${messages.length}`);
+        console.log(
+            `Chat request from user ${req.user?.email}, messages: ${messages.length}`,
+            equipmentContext ? `context: ${equipmentContext.name} (${equipmentContext.id})` : 'no context'
+        );
 
         // ----------------------------------------
         // Обработка через AI Provider (Claude, Gemini, или другой)
@@ -153,7 +164,8 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
         const response = await provider.chat(
             messages,
             tools as ToolDefinition[], // Type assertion для совместимости Anthropic.Tool с ToolDefinition
-            req.user?.id || ''
+            req.user?.id || '',
+            equipmentContext
         );
 
         // Успешный ответ — оборачиваем в { success, data }

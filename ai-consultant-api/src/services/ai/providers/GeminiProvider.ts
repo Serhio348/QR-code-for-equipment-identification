@@ -7,7 +7,7 @@
 
 import { GoogleGenerativeAI, Content } from '@google/generative-ai';
 import { BaseAIProvider } from '../AIProvider.js';
-import { ChatMessage, ChatResponse, ToolDefinition } from '../types.js';
+import { ChatMessage, ChatResponse, ToolDefinition, EquipmentContext } from '../types.js';
 import {
   convertToGeminiTools,
   extractGeminiFunctionCalls,
@@ -35,7 +35,8 @@ export class GeminiProvider extends BaseAIProvider {
   async chat(
     messages: ChatMessage[],
     tools: ToolDefinition[],
-    userId: string
+    userId: string,
+    equipmentContext?: EquipmentContext
   ): Promise<ChatResponse> {
     try {
       // Защита от бесконечного цикла
@@ -48,10 +49,10 @@ export class GeminiProvider extends BaseAIProvider {
       // Шаг 1: Подготовка модели и сообщений
       // ----------------------------------------
 
-      // Создаём модель с системным промптом и tools
+      // Создаём модель с системным промптом и tools (с учётом контекста оборудования)
       const genAI = this.client.getGenerativeModel({
         model: this.model,
-        systemInstruction: this.getSystemPrompt(),
+        systemInstruction: this.getSystemPrompt(equipmentContext),
       });
 
       // Конвертируем tools в формат Gemini
@@ -198,9 +199,20 @@ export class GeminiProvider extends BaseAIProvider {
   /**
    * Системный промпт для Gemini
    */
-  private getSystemPrompt(): string {
+  private getSystemPrompt(equipmentContext?: EquipmentContext): string {
+    const contextInfo = equipmentContext
+      ? `\n\nКОНТЕКСТ ОБОРУДОВАНИЯ:
+Пользователь работает с конкретным оборудованием:
+- ID: ${equipmentContext.id}
+- Название: ${equipmentContext.name}
+- Тип: ${equipmentContext.type}${equipmentContext.googleDriveUrl ? `\n- Папка Google Drive: ${equipmentContext.googleDriveUrl}` : ''}
+
+ВАЖНО: При поиске файлов и работе с журналом обслуживания используй это оборудование.
+Когда пользователь спрашивает о "журнале" или "файлах" - он имеет в виду журнал/файлы ЭТОГО оборудования.`
+      : '';
+
     return `Ты — AI-консультант по обслуживанию оборудования на производстве.
-Твоя задача — помогать сотрудникам работать с оборудованием.
+Твоя задача — помогать сотрудникам работать с оборудованием.${contextInfo}
 
 Ты можешь:
 1. Искать оборудование по названию или характеристикам
