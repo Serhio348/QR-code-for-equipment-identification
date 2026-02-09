@@ -88,12 +88,7 @@ const app = express();
 // Middleware
 // ============================================
 
-// --- Безопасность ---
-// helmet() добавляет ~15 HTTP-заголовков безопасности.
-// Подробнее: https://helmetjs.github.io/
-app.use(helmet());
-
-// --- CORS ---
+// --- CORS (ВАЖНО: должен быть ПЕРЕД helmet) ---
 // Разрешаем запросы только с доверенных origins (из .env ALLOWED_ORIGINS).
 // credentials: true — разрешает отправку cookies и Authorization заголовков.
 // Без CORS браузер заблокирует запросы фронтенда к API,
@@ -102,6 +97,7 @@ const corsOptions = {
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
     // Разрешаем запросы без origin (например, Postman, curl)
     if (!origin) {
+      console.log('✅ CORS: Request without origin (Postman/curl) - allowed');
       return callback(null, true);
     }
 
@@ -126,6 +122,14 @@ app.use(cors(corsOptions));
 
 // Явная обработка OPTIONS запросов для CORS pre-flight
 app.options('*', cors(corsOptions));
+
+// --- Безопасность ---
+// helmet() добавляет ~15 HTTP-заголовков безопасности.
+// Подробнее: https://helmetjs.github.io/
+// ВАЖНО: после CORS, чтобы не блокировать CORS заголовки
+app.use(helmet({
+  crossOriginResourcePolicy: false, // Отключаем, чтобы не мешал CORS
+}));
 
 // --- Парсинг JSON ---
 // Автоматически парсит тело запроса с Content-Type: application/json.
@@ -199,4 +203,9 @@ app.listen(config.port, () => {
 ║   Allowed origins: ${config.allowedOrigins.length.toString().padEnd(25)}║
 ╚══════════════════════════════════════════════╝
   `);
+  console.log('📋 Configured allowed origins:');
+  config.allowedOrigins.forEach((origin, index) => {
+    console.log(`   ${index + 1}. ${origin}`);
+  });
+  console.log('');
 });
