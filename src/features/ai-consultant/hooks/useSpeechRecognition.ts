@@ -160,35 +160,27 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
 
     const recognition = new SpeechRecognitionAPI();
 
-    // continuous: true — не останавливаться после первой распознанной фразы.
-    // Пользователь может говорить несколько предложений подряд
-    recognition.continuous = true;
+    // continuous: false — останавливается после первой фразы (после паузы).
+    // Это предотвращает дублирование слов, которое возникает в continuous режиме.
+    // Пользователь нажимает кнопку для каждого нового высказывания.
+    recognition.continuous = false;
 
-    // interimResults: true — получать промежуточные результаты.
-    // Мы их не показываем в transcript, но они нужны для отзывчивости
-    recognition.interimResults = true;
+    // interimResults: false — только финальный результат.
+    // Промежуточные результаты вызывают дублирование в русском языке.
+    recognition.interimResults = false;
 
     // Язык распознавания — русский
     recognition.lang = 'ru-RU';
 
     // --- Обработчик результатов ---
-    // Вызывается при каждом новом распознанном фрагменте.
-    // event.results — кумулятивный массив, onresult может сработать
-    // несколько раз для одного и того же индекса (interim → final).
-    // Используем processedIndicesRef чтобы не добавлять один результат дважды.
+    // С continuous=false и interimResults=false получаем один чистый результат.
     recognition.onresult = (event: SpeechRecognitionEvent) => {
-      let newText = '';
-
-      for (let i = 0; i < event.results.length; i++) {
-        const result = event.results[i];
-        if (result.isFinal && !processedIndicesRef.current.has(i)) {
-          newText += result[0].transcript;
-          processedIndicesRef.current.add(i);
+      const result = event.results[0];
+      if (result && result.isFinal) {
+        const text = result[0].transcript.trim();
+        if (text) {
+          setTranscript(prev => prev ? prev + ' ' + text : text);
         }
-      }
-
-      if (newText) {
-        setTranscript(prev => prev + newText);
       }
     };
 
