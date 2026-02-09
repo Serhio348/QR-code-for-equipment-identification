@@ -89,8 +89,8 @@ RUN echo "📋 Verifying copied files in /usr/share/nginx/html/:" && \
     fi && \
     echo "✅ Dist directory looks good"
 
-# Copy static nginx configuration (hardcoded port 8080)
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Copy complete nginx configuration (with http block and server on port 8080)
+COPY nginx-full.conf /etc/nginx/nginx.conf
 
 # Railway expects applications on port 8080
 EXPOSE 8080
