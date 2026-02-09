@@ -59,8 +59,8 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 # Copy nginx configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Railway expects port 8080
-EXPOSE 8080
+# Expose standard HTTP port
+EXPOSE 80
 
 # Start nginx
 CMD ["nginx", "-g", "daemon off;"]
