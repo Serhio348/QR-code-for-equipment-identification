@@ -98,15 +98,34 @@ app.use(helmet());
 // credentials: true — разрешает отправку cookies и Authorization заголовков.
 // Без CORS браузер заблокирует запросы фронтенда к API,
 // если они на разных портах (5173 vs 3001)
-app.use(cors({
-  origin: config.allowedOrigins,
+const corsOptions = {
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    // Разрешаем запросы без origin (например, Postman, curl)
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    // Проверяем, есть ли origin в списке разрешённых
+    if (config.allowedOrigins.includes(origin)) {
+      console.log(`✅ CORS: Allowed origin: ${origin}`);
+      callback(null, true);
+    } else {
+      console.warn(`❌ CORS: Blocked origin: ${origin}`);
+      console.warn(`   Allowed origins: ${config.allowedOrigins.join(', ')}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-}));
+  exposedHeaders: ['Content-Length', 'Content-Type'],
+  maxAge: 86400, // 24 hours - кэширование preflight запросов
+};
+
+app.use(cors(corsOptions));
 
 // Явная обработка OPTIONS запросов для CORS pre-flight
-app.options('*', cors());
+app.options('*', cors(corsOptions));
 
 // --- Парсинг JSON ---
 // Автоматически парсит тело запроса с Content-Type: application/json.
