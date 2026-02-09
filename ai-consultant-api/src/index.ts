@@ -101,7 +101,12 @@ app.use(helmet());
 app.use(cors({
   origin: config.allowedOrigins,
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
+
+// Явная обработка OPTIONS запросов для CORS pre-flight
+app.options('*', cors());
 
 // --- Парсинг JSON ---
 // Автоматически парсит тело запроса с Content-Type: application/json.
