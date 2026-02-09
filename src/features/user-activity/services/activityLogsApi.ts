@@ -199,6 +199,70 @@ export async function cleanupOldActivityLogs(daysToKeep: number = 90): Promise<n
 }
 
 /**
+ * Удалить логи за сегодняшний день
+ */
+export async function deleteLogsForToday(): Promise<number> {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const { data, error } = await supabase
+      .from('user_activity_logs')
+      .delete()
+      .gte('created_at', today.toISOString())
+      .select('id');
+
+    if (error) throw error;
+    return data?.length || 0;
+  } catch (error) {
+    console.error('[ActivityLog] Failed to delete today logs:', error);
+    throw error;
+  }
+}
+
+/**
+ * Удалить логи за текущий месяц
+ */
+export async function deleteLogsForMonth(): Promise<number> {
+  try {
+    const firstDayOfMonth = new Date();
+    firstDayOfMonth.setDate(1);
+    firstDayOfMonth.setHours(0, 0, 0, 0);
+
+    const { data, error } = await supabase
+      .from('user_activity_logs')
+      .delete()
+      .gte('created_at', firstDayOfMonth.toISOString())
+      .select('id');
+
+    if (error) throw error;
+    return data?.length || 0;
+  } catch (error) {
+    console.error('[ActivityLog] Failed to delete month logs:', error);
+    throw error;
+  }
+}
+
+/**
+ * Удалить все логи
+ */
+export async function deleteAllLogs(): Promise<number> {
+  try {
+    const { data, error } = await supabase
+      .from('user_activity_logs')
+      .delete()
+      .gte('created_at', '2000-01-01T00:00:00.000Z')
+      .select('id');
+
+    if (error) throw error;
+    return data?.length || 0;
+  } catch (error) {
+    console.error('[ActivityLog] Failed to delete all logs:', error);
+    throw error;
+  }
+}
+
+/**
  * Экспортировать логи активности в CSV
  */
 export async function exportActivityLogsToCSV(
