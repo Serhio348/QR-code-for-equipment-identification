@@ -5,13 +5,12 @@ echo "Script started successfully" >&2
 
 set -e
 
-# Railway proxies to port 80 inside the container
-# So we always listen on port 80, regardless of PORT env var
-NGINX_PORT=80
+# Use PORT from environment, default to 80 if not set
+NGINX_PORT=${PORT:-80}
 
 echo "🚀 Starting container initialization..."
 echo "PORT environment variable: ${PORT:-not set}"
-echo "Railway proxies to port 80, nginx will listen on port $NGINX_PORT"
+echo "Nginx will listen on port: $NGINX_PORT"
 
 # Check if nginx user already exists (created during nginx installation)
 if id -u nginx > /dev/null 2>&1; then
