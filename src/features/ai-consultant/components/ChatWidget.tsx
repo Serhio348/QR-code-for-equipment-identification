@@ -52,10 +52,32 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({ initialOpen = false }) =
   // Обработка успешного сканирования QR-кода
   const handleQRScanSuccess = (equipmentId: string) => {
     console.log('[ChatWidget] QR сканирование успешно, ID:', equipmentId);
+    console.log('[ChatWidget] Тип ID:', typeof equipmentId);
 
     // Ищем оборудование в списке
     const equipmentList = Array.isArray(equipmentListData) ? equipmentListData : [];
-    const foundEquipment = equipmentList.find(eq => eq.id === equipmentId);
+    console.log('[ChatWidget] Список оборудования:', equipmentList.length, 'записей');
+    console.log('[ChatWidget] Первые 3 ID в списке:', equipmentList.slice(0, 3).map(eq => ({ id: eq.id, type: typeof eq.id, name: eq.name })));
+
+    // Поддерживаем два варианта поиска:
+    // 1. По обычному ID (UUID)
+    // 2. По Google Drive ID (если отсканирован QR-код папки Drive)
+    let foundEquipment: Equipment | undefined;
+
+    if (equipmentId.startsWith('DRIVE:')) {
+      // Извлекаем ID папки Drive
+      const driveId = equipmentId.replace('DRIVE:', '');
+      console.log('[ChatWidget] Поиск по Google Drive ID:', driveId);
+
+      // Ищем по googleDriveUrl
+      foundEquipment = equipmentList.find(eq =>
+        eq.googleDriveUrl?.includes(driveId)
+      );
+    } else {
+      // Ищем по обычному ID
+      console.log('[ChatWidget] Поиск по ID оборудования:', equipmentId);
+      foundEquipment = equipmentList.find(eq => eq.id === equipmentId);
+    }
 
     if (foundEquipment) {
       setEquipmentContext(foundEquipment);
@@ -77,7 +99,13 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({ initialOpen = false }) =
       ).catch(() => {});
     } else {
       console.warn('[ChatWidget] Оборудование не найдено:', equipmentId);
-      alert(`Оборудование с ID "${equipmentId}" не найдено в списке.`);
+
+      // Формируем информативное сообщение об ошибке
+      const errorMessage = equipmentId.startsWith('DRIVE:')
+        ? `Оборудование с Google Drive папкой не найдено.\n\nВозможно, оборудование не создано в системе или QR-код указывает на неправильную папку.`
+        : `Оборудование с ID "${equipmentId}" не найдено в списке.\n\nПроверьте, что оборудование создано в системе.`;
+
+      alert(errorMessage);
 
       // Логируем неудачное сканирование
       logUserActivity(
