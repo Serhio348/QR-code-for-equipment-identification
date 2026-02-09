@@ -13,7 +13,6 @@ RUN npm ci
 COPY . .
 
 # Build arguments for VITE environment variables
-# Railway passes environment variables as build args automatically
 ARG VITE_SUPABASE_URL
 ARG VITE_SUPABASE_ANON_KEY
 ARG VITE_SUPABASE_SERVICE_ROLE_KEY
@@ -36,7 +35,6 @@ RUN echo "🔍 Validating build arguments..." && \
     echo "✅ Required variables are set"
 
 # Create .env file from build args for Vite to use during build
-# Railway automatically passes all environment variables as build args
 RUN echo "📝 Creating .env file from build args..." && \
     echo "VITE_SUPABASE_URL=${VITE_SUPABASE_URL}" > .env && \
     echo "VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}" >> .env && \
@@ -47,54 +45,25 @@ RUN echo "📝 Creating .env file from build args..." && \
     [ -n "$VITE_BELIOT_API_KEY" ] && echo "VITE_BELIOT_API_KEY=${VITE_BELIOT_API_KEY}" >> .env || true && \
     [ -n "$VITE_BELIOT_LOGIN" ] && echo "VITE_BELIOT_LOGIN=${VITE_BELIOT_LOGIN}" >> .env || true && \
     echo "✅ .env file created" && \
-    cat .env && \
-    echo "Checking VITE_SUPABASE_URL: $(head -1 .env | cut -d'=' -f2 | cut -c1-30)..."
+    cat .env
 
 # Build the application
 RUN echo "🔨 Starting Vite build..." && \
     npm run build && \
-    echo "✅ Build completed successfully" && \
-    ls -la dist/ && \
-    echo "📦 dist/ directory contents:" && \
-    find dist -type f | head -20
+    echo "✅ Build completed" && \
+    ls -la dist/
 
-# Production stage
-FROM node:20-alpine
+# Production stage - use official nginx alpine image
+FROM nginx:alpine
 
-# Install nginx and envsubst for serving static files
-RUN apk add --no-cache nginx gettext && \
-    mkdir -p /etc/nginx/conf.d && \
-    mkdir -p /etc/nginx/templates
-
-# Set working directory for cron jobs
-WORKDIR /app
-
-# Copy built files from builder
+# Copy built files to nginx html directory
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Copy source code and dependencies for cron job execution
-COPY --from=builder /app/package*.json ./
-COPY --from=builder /app/scripts ./scripts
-COPY --from=builder /app/node_modules ./node_modules
+# Copy nginx configuration
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Verify dist files exist
-RUN echo "📋 Verifying copied files in /usr/share/nginx/html/:" && \
-    ls -la /usr/share/nginx/html/ && \
-    FILE_COUNT=$(find /usr/share/nginx/html -type f | wc -l) && \
-    echo "Total files copied: $FILE_COUNT" && \
-    if [ "$FILE_COUNT" -lt 5 ]; then \
-        echo "❌ ERROR: Expected more files in dist directory!" && \
-        echo "Something went wrong during build or copy" && \
-        exit 1; \
-    fi && \
-    echo "✅ Dist directory looks good"
-
-# Copy complete nginx configuration (with http block and server on port 8080)
-COPY nginx-full.conf /etc/nginx/nginx.conf
-
-# Railway expects applications on port 8080
+# Railway expects port 8080
 EXPOSE 8080
 
-# Start nginx directly (no custom entrypoint needed)
+# Start nginx
 CMD ["nginx", "-g", "daemon off;"]
-
