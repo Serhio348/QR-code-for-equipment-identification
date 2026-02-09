@@ -59,6 +59,15 @@ import { authMiddleware, AuthenticatedRequest } from '../middleware/auth.js';
 const router = Router();
 
 // ============================================
+// CORS preflight для этого роута
+// ============================================
+// Явно обрабатываем OPTIONS запрос для preflight
+router.options('/', (req, res) => {
+    console.log('OPTIONS /api/chat - preflight request');
+    res.status(200).end();
+});
+
+// ============================================
 // Типы
 // ============================================
 
