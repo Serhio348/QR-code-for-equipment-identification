@@ -96,9 +96,8 @@ COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
-# Expose port (Railway will set PORT env var)
-# Railway proxies to port 80, but we listen on PORT env var
-EXPOSE 80
+# Expose port (Railway will set PORT env var dynamically)
+# Nginx will listen on $PORT which Railway provides
 EXPOSE 8080
 
 # Use entrypoint script
