@@ -918,12 +918,51 @@ QR-code-for-equipment-identification/
 1. **Создайте новый сервис** в Railway для бэкенда AI-консультанта
 2. **Подключите тот же репозиторий**, но укажите root directory: `ai-consultant-api`
 3. **Настройте переменные окружения**:
+
+   **Обязательные:**
    - `SUPABASE_URL` - URL проекта Supabase
    - `SUPABASE_SERVICE_KEY` - Service role key (НЕ anon key!)
-   - `ANTHROPIC_API_KEY` - API ключ с [console.anthropic.com](https://console.anthropic.com)
    - `GAS_API_URL` - URL Google Apps Script API
    - `ALLOWED_ORIGINS` - URL фронтенда (например: `https://your-app.railway.app`)
+
+   **AI Provider (Multi-Provider поддержка):**
+
+   Система поддерживает несколько AI провайдеров. Настройте хотя бы один:
+
+   **Вариант 1: Gemini (рекомендуется - бесплатный)**
+   ```env
+   AI_PROVIDER=gemini
+   GEMINI_API_KEY=AIza...
+   GEMINI_MODEL=gemini-2.5-flash
+   ```
+   - Получить ключ: https://aistudio.google.com/app/apikey
+   - Бесплатный tier: 15 запросов/минуту
+   - Хорошее качество ответов
+
+   **Вариант 2: Claude (платный, лучшее качество)**
+   ```env
+   AI_PROVIDER=claude
+   ANTHROPIC_API_KEY=sk-ant-api03-...
+   CLAUDE_MODEL=claude-sonnet-4-20250514
+   ```
+   - Получить ключ: https://console.anthropic.com/settings/keys
+   - Стоимость: ~$0.05 за запрос
+   - Лучшее качество ответов и понимание контекста
+
+   **Вариант 3: Оба провайдера (с автоматическим fallback)**
+   ```env
+   AI_PROVIDER=gemini
+   FALLBACK_PROVIDER=claude
+   GEMINI_API_KEY=AIza...
+   ANTHROPIC_API_KEY=sk-ant-api03-...
+   ```
+   - Основной: Gemini (бесплатный)
+   - Запасной: Claude (если Gemini недоступен)
+
+   **Опционально:**
    - `PORT` - можно не указывать, Railway установит автоматически
+   - `MAX_AGENT_ITERATIONS` - максимум итераций агента (по умолчанию: 15)
+
 4. Railway автоматически установит зависимости и запустит сервис
 5. **Скопируйте URL** развернутого сервиса AI (например: `https://ai-consultant-api.railway.app`)
 6. **Обновите переменную** `VITE_AI_CONSULTANT_API_URL` в фронтенд сервисе
@@ -933,8 +972,17 @@ QR-code-for-equipment-identification/
 - **Два отдельных сервиса**: Фронтенд и AI-консультант должны быть развернуты как два независимых сервиса
 - **CORS**: Убедитесь, что `ALLOWED_ORIGINS` в AI-консультанте содержит URL фронтенда
 - **Service role key**: Используйте настоящий service_role key из Supabase (Settings → API)
-- **Anthropic баланс**: Проверьте баланс на [console.anthropic.com](https://console.anthropic.com) перед деплоем
-- **Health check**: После деплоя проверьте `https://your-ai-api.railway.app/health`
+- **AI Provider**: Выберите подходящий провайдер:
+  - **Gemini** - бесплатный, хорошее качество (рекомендуется для старта)
+  - **Claude** - платный, лучшее качество (проверьте баланс на [console.anthropic.com](https://console.anthropic.com))
+  - **Оба** - автоматический fallback при недоступности основного
+- **Health check**: После деплоя проверьте:
+  - `https://your-ai-api.railway.app/health` - статус сервиса
+  - Логи должны показать: `[ProviderFactory] Creating primary provider: gemini` (или `claude`)
+- **Мониторинг**: В Railway Logs отслеживайте:
+  - Успешные запуски провайдера
+  - Использование токенов (отображается в логах)
+  - Ошибки API (rate limits, auth errors)
 
 ### Локальный сервер
 
