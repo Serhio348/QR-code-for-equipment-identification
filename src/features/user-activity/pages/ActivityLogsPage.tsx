@@ -9,7 +9,6 @@ import {
   getActivityLogs,
   getActivityStatistics,
   exportActivityLogsToCSV,
-  cleanupOldActivityLogs,
   deleteLogsForToday,
   deleteLogsForMonth,
   deleteAllLogs,
