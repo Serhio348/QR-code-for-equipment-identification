@@ -92,12 +92,15 @@ RUN echo "📋 Verifying copied files in /usr/share/nginx/html/:" && \
 # Copy nginx configuration template
 COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 
-# Expose port (Railway will set PORT env var)
-EXPOSE 80
+# Copy entrypoint script
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
 
-# Create nginx config and start nginx directly (bypassing entrypoint for debugging)
-CMD /bin/sh -c "mkdir -p /etc/nginx/conf.d /var/log/nginx /run/nginx && \
-    sed 's/\${PORT}/80/g' /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && \
-    echo '=== Starting nginx ===' && \
-    nginx -g 'daemon off;'"
+# Expose port (Railway will set PORT env var)
+# Railway proxies to port 80, but we listen on PORT env var
+EXPOSE 80
+EXPOSE 8080
+
+# Use entrypoint script
+ENTRYPOINT ["/docker-entrypoint.sh"]
 
