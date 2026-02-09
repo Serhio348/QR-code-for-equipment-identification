@@ -4,17 +4,34 @@
  * Для обычных пользователей на мобильных устройствах показывается PWA меню
  */
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/contexts/AuthContext';
 import EquipmentList from '../components/EquipmentList';
 import { Equipment } from '../types/equipment';
 import { ROUTES, getEquipmentViewUrl } from '@/shared/utils/routes';
+import { logUserActivity } from '@/features/user-activity/services/activityLogsApi';
 import './EquipmentListPage.css';
 
 const EquipmentListPage: React.FC = () => {
   const navigate = useNavigate();
   const { isAdmin, loading } = useAuth();
+
+  // Логирование просмотра списка оборудования
+  useEffect(() => {
+    if (!loading) {
+      logUserActivity(
+        'equipment_list_view',
+        'Просмотр списка оборудования',
+        {
+          entityType: 'other',
+          metadata: {
+            isAdmin,
+          },
+        }
+      ).catch(() => {});
+    }
+  }, [loading, isAdmin]);
 
   const handleSelectEquipment = (equipment: Equipment) => {
     // Переход на страницу оборудования

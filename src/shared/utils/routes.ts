@@ -78,7 +78,10 @@ export const ROUTES = {
   
   /** Страница просмотра логов ошибок (только для администраторов) */
   ERROR_LOGS: '/admin/error-logs',
-  
+
+  /** Страница просмотра логов активности пользователей (только для администраторов) */
+  ACTIVITY_LOGS: '/admin/activity-logs',
+
   /** Страница управления участками (только для администраторов) */
   WORKSHOP_SETTINGS: '/admin/workshop-settings',
   

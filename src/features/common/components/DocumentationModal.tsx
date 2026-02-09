@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import DriveFilesList from '../../equipment/components/DriveFilesList';
+import { logUserActivity } from '@/features/user-activity/services/activityLogsApi';
 import './DocumentationModal.css';
 
 interface DocumentationModalProps {
@@ -13,6 +14,21 @@ const DocumentationModal: React.FC<DocumentationModalProps> = ({
   equipmentName,
   onClose
 }) => {
+  // Логирование открытия окна документации
+  useEffect(() => {
+    logUserActivity(
+      'documentation_open',
+      `Открытие окна документации${equipmentName ? `: "${equipmentName}"` : ''}`,
+      {
+        entityType: 'other',
+        metadata: {
+          folderUrl,
+          equipmentName: equipmentName || undefined,
+        },
+      }
+    ).catch(() => {});
+  }, [folderUrl, equipmentName]);
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {

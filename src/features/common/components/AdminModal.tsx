@@ -77,6 +77,18 @@ const AdminModal: React.FC<AdminModalProps> = ({ onClose }) => {
 
             <button
               className="admin-option"
+              onClick={() => handleNavigate(ROUTES.ACTIVITY_LOGS)}
+              type="button"
+            >
+              <div className="admin-option-icon">👤</div>
+              <div className="admin-option-text">
+                <span className="admin-option-title">Логи активности</span>
+                <span className="admin-option-subtitle">История действий пользователей</span>
+              </div>
+            </button>
+
+            <button
+              className="admin-option"
               onClick={() => handleNavigate(ROUTES.WORKSHOP_SETTINGS)}
               type="button"
             >

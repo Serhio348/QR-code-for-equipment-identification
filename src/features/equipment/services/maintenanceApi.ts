@@ -10,6 +10,7 @@ import { isCorsError, sendNoCorsRequest } from '@/shared/services/api/corsFallba
 import { MaintenanceEntry, MaintenanceEntryInput } from '../types/equipment';
 import { API_CONFIG } from '@/shared/config/api';
 import { ApiResponse } from '@/shared/services/api/types';
+import { logUserActivity } from '../../user-activity/services/activityLogsApi';
 
 /**
  * Получить журнал обслуживания для оборудования
@@ -208,6 +209,24 @@ export async function addMaintenanceEntry(
       'POST',
       requestData
     );
+
+    // Логируем добавление записи ТО
+    if (response.data) {
+      logUserActivity(
+        'maintenance_add',
+        `Добавлена запись ТО: ${response.data.type} (${response.data.date})`,
+        {
+          entityType: 'maintenance_entry',
+          entityId: response.data.id,
+          metadata: {
+            equipmentId,
+            type: response.data.type,
+            performedBy: response.data.performedBy,
+          },
+        }
+      );
+    }
+
     return response.data!;
   } catch (error: any) {
     // Если это CORS ошибка, пробуем fallback механизм
@@ -277,9 +296,24 @@ export async function addMaintenanceEntry(
                        e.description === entry.description &&
                        e.performedBy === entry.performedBy;
               });
-              
+
               if (newEntry) {
                 console.log('✅ Новая запись найдена в журнале (точное совпадение):', newEntry);
+                // Логируем добавление записи ТО (fallback)
+                logUserActivity(
+                  'maintenance_add',
+                  `Добавлена запись ТО: ${newEntry.type} (${newEntry.date})`,
+                  {
+                    entityType: 'maintenance_entry',
+                    entityId: newEntry.id,
+                    metadata: {
+                      equipmentId,
+                      type: newEntry.type,
+                      performedBy: newEntry.performedBy,
+                      fallback: 'no-cors',
+                    },
+                  }
+                );
                 return newEntry;
               }
               
@@ -422,6 +456,22 @@ export async function updateMaintenanceEntry(
         ...entry
       }
     );
+
+    // Логируем обновление записи ТО
+    if (response.data) {
+      logUserActivity(
+        'maintenance_update',
+        `Обновлена запись ТО (ID: ${entryId.substring(0, 8)}...)`,
+        {
+          entityType: 'maintenance_entry',
+          entityId: entryId,
+          metadata: {
+            updatedFields: Object.keys(entry),
+          },
+        }
+      );
+    }
+
     return response.data!;
   } catch (error: any) {
     // Если это CORS ошибка, пробуем fallback механизм
@@ -477,6 +527,17 @@ export async function deleteMaintenanceEntry(
         entryId
       }
     );
+
+    // Логируем удаление записи ТО
+    logUserActivity(
+      'maintenance_delete',
+      `Удалена запись ТО (ID: ${entryId.substring(0, 8)}...)`,
+      {
+        entityType: 'maintenance_entry',
+        entityId: entryId,
+      }
+    );
+
     return response.data || { success: true, message: 'Запись удалена' };
   } catch (error: any) {
     // Если это CORS ошибка, пробуем fallback механизм
@@ -486,6 +547,18 @@ export async function deleteMaintenanceEntry(
         await sendNoCorsRequest('deleteMaintenanceEntry', { entryId });
         // Ждем немного для обработки на сервере
         await new Promise(resolve => setTimeout(resolve, 1500));
+        // Логируем удаление записи ТО (fallback)
+        logUserActivity(
+          'maintenance_delete',
+          `Удалена запись ТО (ID: ${entryId.substring(0, 8)}...)`,
+          {
+            entityType: 'maintenance_entry',
+            entityId: entryId,
+            metadata: {
+              fallback: 'no-cors',
+            },
+          }
+        );
         return { success: true, message: 'Запись может быть удалена. Обновите страницу для проверки.' };
       } catch (fallbackError: any) {
         console.error('Ошибка в fallback удаления записи:', fallbackError);

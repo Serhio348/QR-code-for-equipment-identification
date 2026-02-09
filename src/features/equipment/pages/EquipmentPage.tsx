@@ -20,6 +20,7 @@ import { useEquipmentData, clearEquipmentCache } from '../hooks/useEquipmentData
 import { useEquipmentDates } from '../hooks/useEquipmentDates';
 import { exportToPDF } from '@/shared/utils/pdfExport';
 import { ROUTES } from '@/shared/utils/routes';
+import { logUserActivity } from '@/features/user-activity/services/activityLogsApi';
 import './EquipmentPage.css';
 
 const EquipmentPage: React.FC = () => {
@@ -81,6 +82,24 @@ const EquipmentPage: React.FC = () => {
     }
   }, [currentEquipment]);
 
+  // Логирование просмотра оборудования
+  useEffect(() => {
+    if (currentEquipment && !loading) {
+      logUserActivity(
+        'equipment_view',
+        `Просмотр оборудования: "${currentEquipment.name}" (${currentEquipment.type})`,
+        {
+          entityType: 'equipment',
+          entityId: currentEquipment.id,
+          metadata: {
+            equipmentType: currentEquipment.type,
+            equipmentStatus: currentEquipment.status,
+          },
+        }
+      ).catch(() => {});
+    }
+  }, [currentEquipment, loading]);
+
   /**
    * Удаление оборудования
    */
@@ -133,12 +152,29 @@ const EquipmentPage: React.FC = () => {
    */
   const handleExportWithSettings = async (settings: PlateExportSettings) => {
     setIsExportSettingsOpen(false);
-    
+
     // Небольшая задержка для закрытия модального окна
     setTimeout(async () => {
       try {
         const filename = `${currentEquipment?.name || 'Оборудование'}-табличка.pdf`;
         await exportToPDF('equipment-plate', filename, settings);
+
+        // Логируем успешный экспорт
+        if (currentEquipment) {
+          logUserActivity(
+            'equipment_export_pdf',
+            `Экспорт паспорта оборудования в PDF: "${currentEquipment.name}"`,
+            {
+              entityType: 'equipment',
+              entityId: currentEquipment.id,
+              metadata: {
+                equipmentName: currentEquipment.name,
+                equipmentType: currentEquipment.type,
+                exportSettings: settings,
+              },
+            }
+          ).catch(() => {});
+        }
       } catch (error) {
         alert('Ошибка при экспорте в PDF. Попробуйте еще раз.');
         console.error(error);

@@ -8,6 +8,7 @@
 import { supabase, getCurrentProfile, type Profile } from '@/shared/config/supabase';
 import type { RegisterData, LoginData, AuthResponse, User } from '../types/user';
 import type { LoginHistoryEntry, SessionCheckResponse } from '../types/auth';
+import { logUserActivity } from '@/features/user-activity/services/activityLogsApi';
 
 /**
  * Кэш для проверки прав администратора
@@ -238,6 +239,15 @@ export async function register(data: RegisterData): Promise<AuthResponse> {
 
     console.debug('✅ Регистрация успешна:', user.email);
 
+    // Логируем успешную регистрацию
+    logUserActivity('user_register', 'Регистрация нового пользователя', {
+      entityType: 'user',
+      metadata: {
+        userEmail: user.email,
+        userName: user.name,
+      },
+    }).catch(() => {});
+
     return {
       user,
       sessionToken: sessionData?.session?.access_token || '',
@@ -365,6 +375,14 @@ export async function login(data: LoginData): Promise<AuthResponse> {
 
     console.debug('✅ Вход выполнен успешно:', user.email);
 
+    // Логируем успешный вход
+    logUserActivity('login', `Вход в систему`, {
+      entityType: 'user',
+      metadata: {
+        userEmail: user.email,
+      },
+    }).catch(() => {});
+
     return {
       user,
       sessionToken: sessionData?.session?.access_token || '',
@@ -390,10 +408,15 @@ export async function login(data: LoginData): Promise<AuthResponse> {
 export async function logout(): Promise<void> {
   try {
     console.debug('📤 Выход пользователя');
-    
+
+    // Логируем выход ДО выхода из системы (пока есть пользователь)
+    logUserActivity('logout', 'Выход из системы', {
+      entityType: 'user',
+    }).catch(() => {});
+
     // Инвалидируем кэш сессии перед выходом
     invalidateSessionCache();
-    
+
     const { error } = await supabase.auth.signOut();
     if (error) {
       console.error('❌ Ошибка выхода:', error);
