@@ -139,6 +139,10 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
   // Хранит единственный экземпляр SpeechRecognition на всё время жизни компонента
   const recognitionRef = useRef<SpeechRecognition | null>(null);
 
+  // Отслеживаем уже обработанные индексы результатов,
+  // чтобы не добавлять один и тот же финальный результат повторно
+  const processedIndicesRef = useRef<Set<number>>(new Set());
+
   // Проверка поддержки браузером.
   // SSR-safe: проверяем typeof window !== 'undefined'
   const isSupported = typeof window !== 'undefined' &&
@@ -169,24 +173,22 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
 
     // --- Обработчик результатов ---
     // Вызывается при каждом новом распознанном фрагменте.
-    // event.results — массив результатов, каждый может быть:
-    //   - isFinal: true  — окончательный результат (фраза завершена)
-    //   - isFinal: false — промежуточный результат (пользователь ещё говорит)
-    // Мы берём только финальные результаты для transcript
+    // event.results — кумулятивный массив, onresult может сработать
+    // несколько раз для одного и того же индекса (interim → final).
+    // Используем processedIndicesRef чтобы не добавлять один результат дважды.
     recognition.onresult = (event: SpeechRecognitionEvent) => {
-      let finalTranscript = '';
+      let newText = '';
 
-      // Перебираем только новые результаты (начиная с resultIndex)
-      for (let i = event.resultIndex; i < event.results.length; i++) {
+      for (let i = 0; i < event.results.length; i++) {
         const result = event.results[i];
-        if (result.isFinal) {
-          finalTranscript += result[0].transcript;
+        if (result.isFinal && !processedIndicesRef.current.has(i)) {
+          newText += result[0].transcript;
+          processedIndicesRef.current.add(i);
         }
       }
 
-      // Добавляем к накопленному тексту (не заменяем!)
-      if (finalTranscript) {
-        setTranscript(prev => prev + finalTranscript);
+      if (newText) {
+        setTranscript(prev => prev + newText);
       }
     };
 
@@ -243,6 +245,7 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
 
     setError(null);
     setTranscript('');
+    processedIndicesRef.current.clear();
 
     try {
       recognitionRef.current.start();
