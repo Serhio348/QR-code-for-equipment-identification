@@ -7,17 +7,26 @@
  */
 export type ActivityType =
   | 'chat_message'
+  | 'qr_code_scan'
   | 'equipment_view'
+  | 'equipment_list_view'
   | 'equipment_create'
   | 'equipment_update'
   | 'equipment_delete'
+  | 'equipment_search'
+  | 'equipment_filter'
+  | 'equipment_export_pdf'
   | 'maintenance_add'
   | 'maintenance_update'
   | 'maintenance_delete'
+  | 'maintenance_log_open'
   | 'file_upload'
   | 'file_view'
+  | 'folder_open'
+  | 'documentation_open'
   | 'login'
   | 'logout'
+  | 'user_register'
   | 'other';
 
 /**

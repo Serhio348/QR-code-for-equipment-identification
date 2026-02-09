@@ -290,7 +290,7 @@ export async function testActivityLogging(): Promise<DiagnosticResult> {
     result.details.userEmail = user.email || 'Не указан';
 
     // Шаг 2: Проверка доступа к таблице (чтение)
-    const { data: existingLogs, error: readError } = await supabase
+    const { error: readError } = await supabase
       .from('user_activity_logs')
       .select('id')
       .limit(1);

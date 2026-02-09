@@ -26,17 +26,26 @@ import './ActivityLogsPage.css';
  */
 const activityTypeLabels: Record<ActivityType, string> = {
   chat_message: 'Сообщение в чат',
+  qr_code_scan: 'Сканирование QR-кода',
   equipment_view: 'Просмотр оборудования',
+  equipment_list_view: 'Просмотр списка оборудования',
   equipment_create: 'Создание оборудования',
   equipment_update: 'Обновление оборудования',
   equipment_delete: 'Удаление оборудования',
+  equipment_search: 'Поиск оборудования',
+  equipment_filter: 'Фильтрация оборудования',
+  equipment_export_pdf: 'Экспорт в PDF',
   maintenance_add: 'Добавление записи ТО',
   maintenance_update: 'Обновление записи ТО',
   maintenance_delete: 'Удаление записи ТО',
+  maintenance_log_open: 'Открытие журнала ТО',
   file_upload: 'Загрузка файла',
   file_view: 'Просмотр файла',
+  folder_open: 'Открытие папки',
+  documentation_open: 'Открытие документации',
   login: 'Вход в систему',
   logout: 'Выход из системы',
+  user_register: 'Регистрация пользователя',
   other: 'Другое',
 };
 
