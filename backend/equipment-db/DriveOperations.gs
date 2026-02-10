@@ -259,78 +259,84 @@ function deleteDriveFolder(folderUrl) {
 }
 
 /**
- * Получить список файлов из папки Google Drive
- * 
- * Извлекает ID папки из URL и возвращает список всех файлов в папке
- * 
+ * Получить список файлов и/или подпапок из папки Google Drive
+ *
  * @param {string} folderUrlOrId - URL папки или ID папки
- * @returns {Array} Массив объектов с информацией о файлах
- * 
- * Формат возвращаемого объекта:
- * {
- *   id: "file_id",
- *   name: "Название файла.pdf",
- *   url: "https://drive.google.com/file/d/...",
- *   size: 12345, // размер в байтах
- *   mimeType: "application/pdf",
- *   modifiedTime: "2024-01-15T10:30:00.000Z"
- * }
- * 
- * @throws {Error} Если папка не найдена или произошла ошибка
- * 
- * Зависимости:
- * - extractDriveIdFromUrl() - для извлечения ID из URL
+ * @param {string} mimeType - Опциональный фильтр по MIME-типу.
+ *   "application/vnd.google-apps.folder" — вернуть только подпапки.
+ *   Любой другой тип — вернуть только файлы с этим MIME.
+ *   Не указан — вернуть все файлы (без подпапок).
+ * @param {string} query - Опциональный поиск по названию (регистронезависимый).
+ * @returns {Array} Массив объектов {id, name, url, size, mimeType, modifiedTime, isFolder}
  */
-function getFolderFiles(folderUrlOrId) {
+function getFolderFiles(folderUrlOrId, mimeType, query) {
   try {
-    Logger.log('📁 Получение списка файлов из папки');
+    Logger.log('📁 Получение содержимого папки');
     Logger.log('  - folderUrlOrId: ' + folderUrlOrId);
-    
+    Logger.log('  - mimeType: ' + (mimeType || 'не указан'));
+    Logger.log('  - query: ' + (query || 'не указан'));
+
     if (!folderUrlOrId || !folderUrlOrId.trim()) {
       throw new Error('URL или ID папки не указан');
     }
-    
-    const folderId = extractDriveIdFromUrl(folderUrlOrId);
-    
+
+    var folderId = extractDriveIdFromUrl(folderUrlOrId);
     if (!folderId) {
       throw new Error('Неверный формат URL папки: ' + folderUrlOrId);
     }
-    
-    Logger.log('  - Folder ID для получения файлов: ' + folderId);
-    
-    // Получаем папку по ID
-    const folder = DriveApp.getFolderById(folderId);
-    const folderName = folder.getName();
-    Logger.log('  - Название папки: "' + folderName + '"');
-    
-    // Получаем все файлы из папки
-    const files = folder.getFiles();
-    const filesList = [];
-    
-    while (files.hasNext()) {
-      const file = files.next();
-      const fileData = {
-        id: file.getId(),
-        name: file.getName(),
-        url: file.getUrl(),
-        size: file.getSize(),
-        mimeType: file.getMimeType(),
-        modifiedTime: file.getLastUpdated().toISOString()
-      };
-      filesList.push(fileData);
+
+    var folder = DriveApp.getFolderById(folderId);
+    Logger.log('  - Папка: "' + folder.getName() + '"');
+
+    var resultList = [];
+    var queryLower = query ? query.toLowerCase() : null;
+
+    if (mimeType === 'application/vnd.google-apps.folder') {
+      // Ищем только подпапки
+      var subFolders = folder.getFolders();
+      while (subFolders.hasNext()) {
+        var sub = subFolders.next();
+        if (queryLower && sub.getName().toLowerCase().indexOf(queryLower) === -1) continue;
+        resultList.push({
+          id: sub.getId(),
+          name: sub.getName(),
+          url: sub.getUrl(),
+          size: 0,
+          mimeType: 'application/vnd.google-apps.folder',
+          modifiedTime: sub.getLastUpdated().toISOString(),
+          isFolder: true
+        });
+      }
+    } else {
+      // Ищем файлы
+      var files = folder.getFiles();
+      while (files.hasNext()) {
+        var file = files.next();
+        if (mimeType && file.getMimeType() !== mimeType) continue;
+        if (queryLower && file.getName().toLowerCase().indexOf(queryLower) === -1) continue;
+        resultList.push({
+          id: file.getId(),
+          name: file.getName(),
+          url: file.getUrl(),
+          size: file.getSize(),
+          mimeType: file.getMimeType(),
+          modifiedTime: file.getLastUpdated().toISOString(),
+          isFolder: false
+        });
+      }
     }
-    
-    Logger.log('  - Найдено файлов: ' + filesList.length);
-    
+
+    Logger.log('  - Найдено элементов: ' + resultList.length);
+
     // Сортируем по дате изменения (новые сначала)
-    filesList.sort((a, b) => {
+    resultList.sort(function(a, b) {
       return new Date(b.modifiedTime) - new Date(a.modifiedTime);
     });
-    
-    return filesList;
+
+    return resultList;
   } catch (error) {
-    Logger.log('❌ Ошибка при получении списка файлов: ' + error.toString());
-    Logger.log('  - Error stack: ' + (error.stack || 'нет стека'));
+    Logger.log('❌ Ошибка getFolderFiles: ' + error.toString());
+    Logger.log('  - Stack: ' + (error.stack || 'нет стека'));
     throw error;
   }
 }

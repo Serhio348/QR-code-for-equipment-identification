@@ -211,17 +211,21 @@ function doGet(e) {
         return createJsonResponse(getEquipmentByType(type));
       
       case 'getFolderFiles':
-        // Получить список файлов из папки Google Drive
+        // Получить список файлов/папок из папки Google Drive
         Logger.log('📁 Обработка getFolderFiles');
         const folderUrl = e.parameter.folderUrl || e.parameter.folderId;
+        const folderMimeType = e.parameter.mimeType || null;
+        const folderQuery = e.parameter.query || null;
         Logger.log('  - folderUrl: ' + folderUrl);
+        Logger.log('  - mimeType: ' + folderMimeType);
+        Logger.log('  - query: ' + folderQuery);
         if (!folderUrl) {
           Logger.log('❌ URL папки не указан');
           return createErrorResponse('URL или ID папки не указан');
         }
-        Logger.log('✅ Вызов getFolderFiles с URL: ' + folderUrl);
-        const files = getFolderFiles(folderUrl);
-        Logger.log('✅ getFolderFiles вернул ' + files.length + ' файлов');
+        Logger.log('✅ Вызов getFolderFiles');
+        const files = getFolderFiles(folderUrl, folderMimeType, folderQuery);
+        Logger.log('✅ getFolderFiles вернул ' + files.length + ' элементов');
         return createJsonResponse(files);
       
       case 'getMaintenanceLog':
