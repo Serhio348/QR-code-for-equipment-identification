@@ -55,6 +55,16 @@ export const config = {
   maxAgentIterations: parseInt(process.env.MAX_AGENT_ITERATIONS || '15', 15),
 };
 
+// Диагностическое логирование при старте
+export function logProviderConfig(): void {
+  console.log('[Config] AI provider configuration:');
+  console.log(`  AI_PROVIDER = "${process.env.AI_PROVIDER || '(not set)'}"`);
+  console.log(`  ANTHROPIC_API_KEY = ${process.env.ANTHROPIC_API_KEY ? `"sk-...${process.env.ANTHROPIC_API_KEY.slice(-4)}"` : '(not set)'}`);
+  console.log(`  GEMINI_API_KEY = ${process.env.GEMINI_API_KEY ? `"...${process.env.GEMINI_API_KEY.slice(-4)}"` : '(not set)'}`);
+  console.log(`  DEEPSEEK_API_KEY = ${process.env.DEEPSEEK_API_KEY ? `"sk-...${process.env.DEEPSEEK_API_KEY.slice(-4)}"` : '(not set)'}`);
+  console.log(`  DEEPSEEK_MODEL = "${process.env.DEEPSEEK_MODEL || '(not set)'}"`);
+}
+
 // Проверка обязательных переменных
 export function validateConfig(): void {
   const required = [
