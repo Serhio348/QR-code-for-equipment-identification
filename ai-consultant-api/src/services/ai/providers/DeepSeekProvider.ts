@@ -211,16 +211,16 @@ export class DeepSeekProvider extends BaseAIProvider {
 Пользователь отсканировал QR-код оборудования и работает с ним:
 - ID: ${equipmentContext.id}
 - Название: ${equipmentContext.name}
-- Тип: ${equipmentContext.type}${equipmentContext.googleDriveUrl ? `\n- Папка Google Drive: ${equipmentContext.googleDriveUrl}` : ''}
+- Тип: ${equipmentContext.type}${equipmentContext.googleDriveUrl ? `\n- Папка Google Drive: ${equipmentContext.googleDriveUrl}` : ''}${equipmentContext.maintenanceSheetId ? `\n- ID журнала обслуживания: ${equipmentContext.maintenanceSheetId}` : ''}
 
 🚨 КРИТИЧЕСКИ ВАЖНО:
 Когда пользователь запрашивает информацию БЕЗ указания конкретного оборудования, АВТОМАТИЧЕСКИ используй ID этого оборудования: ${equipmentContext.id}
 
 Примеры:
-- "Покажи журнал обслуживания" → используй equipment_id="${equipmentContext.id}" в get_maintenance_log
+- "Покажи журнал обслуживания" → используй equipment_id="${equipmentContext.id}"${equipmentContext.maintenanceSheetId ? ` и maintenance_sheet_id="${equipmentContext.maintenanceSheetId}"` : ''} в get_maintenance_log
 - "Покажи файлы" → используй folderId из Google Drive URL этого оборудования
-- "Добавь запись о ремонте" → используй equipment_id="${equipmentContext.id}" в add_maintenance_entry
-- "Когда последнее обслуживание?" → сначала вызови get_maintenance_log с equipment_id="${equipmentContext.id}"
+- "Добавь запись о ремонте" → используй equipment_id="${equipmentContext.id}"${equipmentContext.maintenanceSheetId ? ` и maintenance_sheet_id="${equipmentContext.maintenanceSheetId}"` : ''} в add_maintenance_entry
+- "Когда последнее обслуживание?" → сначала вызови get_maintenance_log с equipment_id="${equipmentContext.id}"${equipmentContext.maintenanceSheetId ? ` и maintenance_sheet_id="${equipmentContext.maintenanceSheetId}"` : ''}
 
 НЕ спрашивай ID оборудования, если контекст уже установлен!`
       : '';
