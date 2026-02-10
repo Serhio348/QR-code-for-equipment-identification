@@ -21,12 +21,45 @@ interface ChatMessageProps {
 }
 
 export const ChatMessage: React.FC<ChatMessageProps> = ({ role, content }) => {
-  // Функция отображения текста с переносами строк
+  // Парсинг строки: разбивает на текст и markdown-ссылки [текст](url)
+  const renderLineWithLinks = (line: string, lineKey: number) => {
+    const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g;
+    const parts: React.ReactNode[] = [];
+    let lastIndex = 0;
+    let match;
+
+    while ((match = linkRegex.exec(line)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(line.slice(lastIndex, match.index));
+      }
+      parts.push(
+        <a
+          key={`link-${lineKey}-${match.index}`}
+          href={match[2]}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="ai-chat-file-btn"
+        >
+          {match[1]}
+        </a>
+      );
+      lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex < line.length) {
+      parts.push(line.slice(lastIndex));
+    }
+
+    return parts.length > 0 ? parts : line;
+  };
+
+  // Функция отображения текста с переносами строк и ссылками
   const renderText = (text: string) => {
-    return text.split('\n').map((line, index) => (
+    const lines = text.split('\n');
+    return lines.map((line, index) => (
       <React.Fragment key={index}>
-        {line}
-        {index < text.split('\n').length - 1 && <br />}
+        {renderLineWithLinks(line, index)}
+        {index < lines.length - 1 && <br />}
       </React.Fragment>
     ));
   };
