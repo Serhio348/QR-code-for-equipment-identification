@@ -20,7 +20,7 @@ export const config = {
 
   // DeepSeek API
   deepseekApiKey: process.env.DEEPSEEK_API_KEY || '',
-  deepseekModel: process.env.DEEPSEEK_MODEL || 'deepseek-reasoner',
+  deepseekModel: process.env.DEEPSEEK_MODEL || 'deepseek-chat',
 
   // Supabase (для проверки токенов)
   supabaseUrl: process.env.SUPABASE_URL || '',
