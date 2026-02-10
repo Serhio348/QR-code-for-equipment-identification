@@ -550,3 +550,24 @@
     right: 20px;
   }
 }
+
+/* Кнопка открытия файла в сообщении ИИ */
+.ai-chat-file-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  margin-top: 6px;
+  background: var(--ai-chat-primary);
+  color: #ffffff;
+  border-radius: 8px;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.2s ease;
+  cursor: pointer;
+}
+
+.ai-chat-file-btn:hover {
+  background: var(--ai-chat-primary-hover);
+}
