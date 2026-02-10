@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS user_activity_logs (
     'file_view',
     'login',
     'logout',
+    'user_register',
     'other'
   )),
   activity_description TEXT NOT NULL,
