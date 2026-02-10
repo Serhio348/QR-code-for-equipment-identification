@@ -12,9 +12,11 @@ export class DeepSeekProvider extends BaseAIProvider {
   readonly name = 'DeepSeek';
   private client: OpenAI;
   private model: string;
+  private apiKey: string;
 
-  constructor(apiKey: string, model: string = 'deepseek-reasoner') {
+  constructor(apiKey: string, model: string = 'deepseek-chat') {
     super();
+    this.apiKey = apiKey;
     // DeepSeek использует OpenAI SDK с кастомным baseURL
     this.client = new OpenAI({
       apiKey,
@@ -165,17 +167,7 @@ export class DeepSeekProvider extends BaseAIProvider {
   }
 
   async isAvailable(): Promise<boolean> {
-    try {
-      const response = await this.client.chat.completions.create({
-        model: this.model,
-        messages: [{ role: 'user', content: 'test' }],
-        max_tokens: 5,
-      });
-      return !!response.choices[0];
-    } catch (error) {
-      console.error('[DeepSeekProvider] Not available:', error instanceof Error ? error.message : error);
-      return false;
-    }
+    return !!this.apiKey;
   }
 
   /**
