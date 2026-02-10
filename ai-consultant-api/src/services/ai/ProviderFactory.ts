@@ -8,9 +8,10 @@
 import { AIProvider } from './AIProvider.js';
 import { ClaudeProvider } from './providers/ClaudeProvider.js';
 import { GeminiProvider } from './providers/GeminiProvider.js';
+import { DeepSeekProvider } from './providers/DeepSeekProvider.js';
 import { config } from '../../config/env.js';
 
-export type ProviderType = 'claude' | 'gemini' | 'openai';
+export type ProviderType = 'claude' | 'gemini' | 'deepseek';
 
 /**
  * Интерфейс конфигурации провайдера
@@ -36,8 +37,8 @@ export class ProviderFactory {
       case 'gemini':
         return new GeminiProvider(config.apiKey, config.model);
 
-      case 'openai':
-        throw new Error('OpenAI provider not implemented yet');
+      case 'deepseek':
+        return new DeepSeekProvider(config.apiKey, config.model);
 
       default:
         throw new Error(`Unknown provider type: ${config.type}`);
@@ -56,6 +57,10 @@ export class ProviderFactory {
 
     if (config.geminiApiKey) {
       available.push('gemini');
+    }
+
+    if (config.deepseekApiKey) {
+      available.push('deepseek');
     }
 
     return available;
@@ -80,7 +85,7 @@ export class ProviderFactory {
 
     if (available.length === 0) {
       throw new Error(
-        'No AI providers available. Please configure at least one API key (ANTHROPIC_API_KEY or GEMINI_API_KEY)'
+        'No AI providers available. Please configure at least one API key (ANTHROPIC_API_KEY, GEMINI_API_KEY or DEEPSEEK_API_KEY)'
       );
     }
 
@@ -139,8 +144,12 @@ export class ProviderFactory {
           model: config.geminiModel,
         });
 
-      case 'openai':
-        throw new Error('OpenAI provider not implemented yet');
+      case 'deepseek':
+        return this.createProvider({
+          type: 'deepseek',
+          apiKey: config.deepseekApiKey,
+          model: config.deepseekModel,
+        });
 
       default:
         throw new Error(`Unknown provider type: ${type}`);
