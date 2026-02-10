@@ -71,7 +71,7 @@ export const driveTools: Anthropic.Tool[] = [
     // - Перед чтением файла — чтобы узнать его ID
     {
         name: 'search_files_in_folder',
-        description: 'Поиск файлов в папке оборудования на Google Drive. Возвращает список файлов с названиями и ссылками.',
+        description: 'Поиск файлов и вложенных папок в папке оборудования на Google Drive. По умолчанию возвращает файлы. Для поиска вложенных папок (например, папка с фото) передай mime_type: "application/vnd.google-apps.folder". Чтобы показать всё содержимое, делай два запроса: один без mime_type (файлы), второй с mime_type="application/vnd.google-apps.folder" (папки).',
         input_schema: {
             type: 'object' as const,
             properties: {
@@ -88,14 +88,15 @@ export const driveTools: Anthropic.Tool[] = [
                 // Пример: "паспорт" найдёт "Паспорт_ОО_8400.pdf"
                 query: {
                     type: 'string',
-                    description: 'Поисковый запрос по названию файла',
+                    description: 'Поисковый запрос по названию файла или папки',
                 },
                 // Фильтрация по MIME-типу (необязательно)
-                // Полезно, если нужно найти только PDF или только изображения
-                // Примеры: "application/pdf", "image/jpeg", "application/vnd.google-apps.document"
+                // Для папок: "application/vnd.google-apps.folder"
+                // Для PDF: "application/pdf"
+                // Для изображений: "image/jpeg" или "image/png"
                 mime_type: {
                     type: 'string',
-                    description: 'Фильтр по типу файла (application/pdf, image/jpeg и т.д.)',
+                    description: 'Фильтр по типу: application/pdf, image/jpeg, application/vnd.google-apps.folder (для вложенных папок) и т.д.',
                 },
             },
             // folder_url обязателен — без него непонятно, где искать

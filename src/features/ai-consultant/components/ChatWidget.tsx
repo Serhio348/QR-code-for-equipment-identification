@@ -25,6 +25,7 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({ initialOpen = false }) =
     name: equipmentContext.name,
     type: equipmentContext.type,
     googleDriveUrl: equipmentContext.googleDriveUrl,
+    maintenanceSheetId: equipmentContext.maintenanceSheetId,
   } : null;
 
   const { messages, isLoading, error, sendMessage, clearMessages } = useChat(contextForChat);

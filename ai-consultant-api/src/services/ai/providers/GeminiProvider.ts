@@ -297,16 +297,16 @@ export class GeminiProvider extends BaseAIProvider {
 Пользователь отсканировал QR-код оборудования и работает с ним:
 - ID: ${equipmentContext.id}
 - Название: ${equipmentContext.name}
-- Тип: ${equipmentContext.type}${equipmentContext.googleDriveUrl ? `\n- Папка Google Drive: ${equipmentContext.googleDriveUrl}` : ''}
+- Тип: ${equipmentContext.type}${equipmentContext.googleDriveUrl ? `\n- Папка Google Drive: ${equipmentContext.googleDriveUrl}` : ''}${equipmentContext.maintenanceSheetId ? `\n- ID журнала обслуживания: ${equipmentContext.maintenanceSheetId}` : ''}
 
 🚨 КРИТИЧЕСКИ ВАЖНО:
 Когда пользователь запрашивает информацию БЕЗ указания конкретного оборудования, АВТОМАТИЧЕСКИ используй ID этого оборудования: ${equipmentContext.id}
 
 Примеры:
-- "Покажи журнал обслуживания" → используй equipment_id="${equipmentContext.id}" в get_maintenance_log
+- "Покажи журнал обслуживания" → используй equipment_id="${equipmentContext.id}"${equipmentContext.maintenanceSheetId ? ` и maintenance_sheet_id="${equipmentContext.maintenanceSheetId}"` : ''} в get_maintenance_log
 - "Покажи файлы" → используй folderId из Google Drive URL этого оборудования
-- "Добавь запись о ремонте" → используй equipment_id="${equipmentContext.id}" в add_maintenance_entry
-- "Когда последнее обслуживание?" → сначала вызови get_maintenance_log с equipment_id="${equipmentContext.id}"
+- "Добавь запись о ремонте" → используй equipment_id="${equipmentContext.id}"${equipmentContext.maintenanceSheetId ? ` и maintenance_sheet_id="${equipmentContext.maintenanceSheetId}"` : ''} в add_maintenance_entry
+- "Когда последнее обслуживание?" → сначала вызови get_maintenance_log с equipment_id="${equipmentContext.id}"${equipmentContext.maintenanceSheetId ? ` и maintenance_sheet_id="${equipmentContext.maintenanceSheetId}"` : ''}
 
 НЕ спрашивай ID оборудования, если контекст уже установлен!`
       : '';
@@ -326,8 +326,10 @@ export class GeminiProvider extends BaseAIProvider {
    - Просматривать список загруженных фото
    - Искать фото по описанию, дате или типу работ
 
-При работе с файлами:
+При работе с файлами и папками:
 - Если пользователь хочет ОТКРЫТЬ или ПРОСМОТРЕТЬ файл — найди его через search_files_in_folder, затем ответь в формате: 📄 [Название файла](url_файла)
+- Если пользователь хочет ОТКРЫТЬ ПАПКУ (например, папку с фото) — найди её через search_files_in_folder с mime_type="application/vnd.google-apps.folder", затем ответь: 📁 [Название папки](url_папки)
+- Если пользователь просит показать ВСЁ СОДЕРЖИМОЕ папки — делай ДВА запроса: 1) без mime_type (файлы), 2) с mime_type="application/vnd.google-apps.folder" (вложенные папки), затем покажи всё вместе
 - Если пользователь хочет ПРОЧИТАТЬ, ИЗУЧИТЬ содержимое или найти информацию в файле — используй read_file_content
 
 При работе с фото:
