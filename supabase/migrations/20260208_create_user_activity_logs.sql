@@ -2,6 +2,7 @@
 -- Миграция: Создание таблицы user_activity_logs
 -- Описание: Таблица для логирования активности пользователей в системе
 -- Дата: 2026-02-08
+-- Идемпотентная (можно запускать повторно)
 -- ============================================
 
 -- Создание таблицы user_activity_logs
@@ -9,22 +10,7 @@ CREATE TABLE IF NOT EXISTS user_activity_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   user_email TEXT,
-  activity_type TEXT NOT NULL CHECK (activity_type IN (
-    'chat_message',
-    'equipment_view',
-    'equipment_create',
-    'equipment_update',
-    'equipment_delete',
-    'maintenance_add',
-    'maintenance_update',
-    'maintenance_delete',
-    'file_upload',
-    'file_view',
-    'login',
-    'logout',
-    'user_register',
-    'other'
-  )),
+  activity_type TEXT NOT NULL,
   activity_description TEXT NOT NULL,
   entity_type TEXT CHECK (entity_type IN (
     'equipment',
@@ -39,6 +25,29 @@ CREATE TABLE IF NOT EXISTS user_activity_logs (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Обновляем CHECK constraint для activity_type (пересоздаём)
+ALTER TABLE user_activity_logs
+  DROP CONSTRAINT IF EXISTS user_activity_logs_activity_type_check;
+
+ALTER TABLE user_activity_logs
+  ADD CONSTRAINT user_activity_logs_activity_type_check
+  CHECK (activity_type IN (
+    'chat_message',
+    'equipment_view',
+    'equipment_create',
+    'equipment_update',
+    'equipment_delete',
+    'maintenance_add',
+    'maintenance_update',
+    'maintenance_delete',
+    'file_upload',
+    'file_view',
+    'login',
+    'logout',
+    'user_register',
+    'other'
+  ));
+
 -- Создание индексов для быстрого поиска
 CREATE INDEX IF NOT EXISTS idx_user_activity_logs_user_id ON user_activity_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_activity_logs_user_email ON user_activity_logs(user_email);
@@ -52,6 +61,12 @@ CREATE INDEX IF NOT EXISTS idx_user_activity_logs_user_type_date ON user_activit
 
 -- Включение Row Level Security (RLS)
 ALTER TABLE user_activity_logs ENABLE ROW LEVEL SECURITY;
+
+-- Пересоздаём политики (DROP IF EXISTS + CREATE)
+DROP POLICY IF EXISTS "Users can view their own activity logs" ON user_activity_logs;
+DROP POLICY IF EXISTS "Admins can view all activity logs" ON user_activity_logs;
+DROP POLICY IF EXISTS "Users can insert their own activity logs" ON user_activity_logs;
+DROP POLICY IF EXISTS "Admins can delete activity logs" ON user_activity_logs;
 
 -- Политика: Пользователи могут видеть только свои логи
 CREATE POLICY "Users can view their own activity logs"
@@ -71,7 +86,7 @@ CREATE POLICY "Admins can view all activity logs"
     )
   );
 
--- Политика: Система может вставлять логи от имени пользователей
+-- Политика: Пользователи могут вставлять свои логи
 CREATE POLICY "Users can insert their own activity logs"
   ON user_activity_logs
   FOR INSERT
