@@ -58,7 +58,7 @@ import helmet from 'helmet';
 
 // config — объект с конфигурацией из .env (порт, ключи API, CORS origins)
 // validateConfig — функция проверки обязательных переменных окружения
-import { config, validateConfig } from './config/env.js';
+import { config, validateConfig, logProviderConfig } from './config/env.js';
 
 // chatRouter — маршруты чата с Claude AI (POST /api/chat)
 import chatRouter from './routes/chat.js';
@@ -77,6 +77,7 @@ import healthRouter from './routes/health.js';
 // Если чего-то не хватает — приложение упадёт с понятной ошибкой
 // ДО запуска сервера, а не при первом запросе пользователя
 validateConfig();
+logProviderConfig();
 
 // ============================================
 // Создание Express приложения
