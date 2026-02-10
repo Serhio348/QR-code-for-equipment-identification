@@ -156,6 +156,10 @@ export const equipmentTools: Anthropic.Tool[] = [
                     type: 'number',
                     description: 'Максимальное количество записей (по умолчанию 10)',
                 },
+                maintenance_sheet_id: {
+                    type: 'string',
+                    description: 'ID листа журнала обслуживания (из контекста оборудования). Передавай если известен.',
+                },
             },
             required: ['equipment_id'],
         },
@@ -206,8 +210,12 @@ export const equipmentTools: Anthropic.Tool[] = [
                     enum: ['completed', 'planned', 'in_progress'],
                     description: 'Статус записи (по умолчанию completed)',
                 },
+                maintenance_sheet_id: {
+                    type: 'string',
+                    description: 'ID листа журнала обслуживания (из контекста оборудования). Передавай если известен.',
+                },
             },
-            // Все поля кроме status обязательны
+            // Все поля кроме status и maintenance_sheet_id обязательны
             required: ['equipment_id', 'date', 'type', 'description', 'performed_by'],
         },
     },
@@ -284,6 +292,7 @@ export async function executeEquipmentTool(
                 equipmentId: input.equipment_id as string,
                 status: input.status as string | undefined,
                 limit: input.limit ? String(input.limit) : undefined,
+                maintenanceSheetId: input.maintenance_sheet_id as string | undefined,
             });
 
         // ----------------------------------------
@@ -314,12 +323,13 @@ export async function executeEquipmentTool(
                 }
             }
             return await gasClient.post('addMaintenanceEntry', {
-                equipmentId: input.equipment_id,      // snake_case → camelCase
+                equipmentId: input.equipment_id,
                 date: input.date,
                 type: input.type,
                 description: input.description,
-                performedBy: input.performed_by,       // snake_case → camelCase
-                status: input.status || 'completed',   // Значение по умолчанию
+                performedBy: input.performed_by,
+                status: input.status || 'completed',
+                maintenanceSheetId: input.maintenance_sheet_id,
             });
 
         // ----------------------------------------
