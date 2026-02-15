@@ -674,7 +674,28 @@ function doPost(e) {
           return createErrorResponse('Название оборудования не указано');
         }
         return createJsonResponse(createDriveFolder(data.name, data.parentFolderId));
-      
+
+      case 'createDocument':
+        // Создать документ (Google Doc или Google Sheet) в Google Drive
+        Logger.log('📄 Обработка createDocument');
+        if (!data.name) {
+          return createErrorResponse('Название документа не указано');
+        }
+        if (!data.docType) {
+          return createErrorResponse('Тип документа не указан (doc или sheet)');
+        }
+        if (!data.content) {
+          return createErrorResponse('Содержимое документа не указано');
+        }
+        try {
+          const docResult = createDocument(data.name, data.docType, data.content, data.folderId || null);
+          Logger.log('✅ Документ создан: ' + JSON.stringify(docResult));
+          return createJsonResponse(docResult);
+        } catch (docError) {
+          Logger.log('❌ Ошибка createDocument: ' + docError.toString());
+          return createErrorResponse('Ошибка создания документа: ' + docError.toString());
+        }
+
       case 'addMaintenanceEntry':
         // Добавить запись в журнал обслуживания
         Logger.log('📝 Обработка addMaintenanceEntry');
