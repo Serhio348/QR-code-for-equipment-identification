@@ -57,6 +57,11 @@ import { driveTools, executeDriveTool } from './driveTools.js';
 // - executePhotoTool: функция выполнения — загружает фото через gasClient.post
 import { photoTools, executePhotoTool } from './photoTools.js';
 
+// Tools для создания документов (Google Doc, Google Sheet):
+// - documentTools: определение 1 инструмента (create_document)
+// - executeDocumentTool: функция выполнения — создаёт документ через gasClient.post
+import { documentTools, executeDocumentTool } from './documentTools.js';
+
 // ============================================
 // Объединённый массив tools
 // ============================================
@@ -78,11 +83,13 @@ import { photoTools, executePhotoTool } from './photoTools.js';
  * - upload_maintenance_photo  — загрузка фото обслуживания
  * - get_maintenance_photos    — получение списка фото
  * - search_maintenance_photos — поиск фото по запросу
+ * - create_document           — создание Google Doc или Google Sheet
  */
 export const tools: Anthropic.Tool[] = [
     ...equipmentTools,
     ...driveTools,
     ...photoTools,
+    ...documentTools,
 ];
 
 // ============================================
@@ -117,6 +124,9 @@ const toolExecutors: Record<string, (name: string, input: Record<string, unknown
     'upload_maintenance_photo': executePhotoTool,
     'get_maintenance_photos': executePhotoTool,
     'search_maintenance_photos': executePhotoTool,
+
+    // Document tools → executeDocumentTool (GAS: createDocument)
+    'create_document': executeDocumentTool,
 };
 
 // ============================================

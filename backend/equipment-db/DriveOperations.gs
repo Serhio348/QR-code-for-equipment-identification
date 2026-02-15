@@ -259,6 +259,151 @@ function deleteDriveFolder(folderUrl) {
 }
 
 /**
+ * Создать документ (Google Doc или Google Sheet) и поместить в указанную папку
+ *
+ * Универсальная функция для создания документов любого типа.
+ * ИИ-консультант формирует содержимое, а GAS создаёт файл в Google Drive.
+ *
+ * @param {string} name - Название документа
+ * @param {string} docType - Тип: 'doc' (Google Doc) или 'sheet' (Google Sheet)
+ * @param {string|Array} content - Содержимое:
+ *   Для 'doc': текст документа (строка, абзацы разделены \n)
+ *   Для 'sheet': JSON-строка или массив массивов [["Заголовок1","Заголовок2"],["значение1","значение2"]]
+ * @param {string} folderId - (Опционально) ID папки, куда поместить документ
+ * @returns {Object} {fileId, fileUrl, fileName, type}
+ */
+function createDocument(name, docType, content, folderId) {
+  try {
+    Logger.log('📄 createDocument вызвана');
+    Logger.log('  - name: ' + name);
+    Logger.log('  - docType: ' + docType);
+    Logger.log('  - folderId: ' + (folderId || 'не указан'));
+    Logger.log('  - content length: ' + (content ? String(content).length : 0));
+
+    if (!name) {
+      throw new Error('Название документа не указано');
+    }
+    if (!docType || (docType !== 'doc' && docType !== 'sheet')) {
+      throw new Error('Тип документа должен быть "doc" или "sheet"');
+    }
+    if (!content) {
+      throw new Error('Содержимое документа не указано');
+    }
+
+    var file;
+    var fileUrl;
+    var fileId;
+
+    if (docType === 'doc') {
+      // === Создание Google Doc ===
+      var doc = DocumentApp.create(name);
+      var body = doc.getBody();
+
+      // Очищаем документ (удаляем пустой абзац по умолчанию)
+      body.clear();
+
+      // Разбиваем содержимое на строки и добавляем абзацы
+      var lines = String(content).split('\n');
+      for (var i = 0; i < lines.length; i++) {
+        var line = lines[i];
+
+        // Заголовки: строки начинающиеся с # (markdown-стиль)
+        if (line.match(/^### /)) {
+          body.appendParagraph(line.replace(/^### /, '')).setHeading(DocumentApp.ParagraphHeading.HEADING3);
+        } else if (line.match(/^## /)) {
+          body.appendParagraph(line.replace(/^## /, '')).setHeading(DocumentApp.ParagraphHeading.HEADING2);
+        } else if (line.match(/^# /)) {
+          body.appendParagraph(line.replace(/^# /, '')).setHeading(DocumentApp.ParagraphHeading.HEADING1);
+        } else if (line.trim() === '') {
+          body.appendParagraph('');
+        } else {
+          body.appendParagraph(line);
+        }
+      }
+
+      doc.saveAndClose();
+
+      fileId = doc.getId();
+      fileUrl = doc.getUrl();
+      file = DriveApp.getFileById(fileId);
+
+      Logger.log('  - Google Doc создан: ' + fileId);
+
+    } else if (docType === 'sheet') {
+      // === Создание Google Sheet ===
+      var spreadsheet = SpreadsheetApp.create(name);
+      var sheet = spreadsheet.getActiveSheet();
+
+      // Парсим содержимое: ожидаем JSON массив массивов
+      var data;
+      if (typeof content === 'string') {
+        try {
+          data = JSON.parse(content);
+        } catch (e) {
+          throw new Error('Для типа "sheet" содержимое должно быть JSON массивом: ' + e.toString());
+        }
+      } else {
+        data = content;
+      }
+
+      if (!Array.isArray(data) || data.length === 0) {
+        throw new Error('Содержимое должно быть непустым массивом массивов');
+      }
+
+      // Записываем данные
+      var numRows = data.length;
+      var numCols = data[0].length;
+      sheet.getRange(1, 1, numRows, numCols).setValues(data);
+
+      // Форматируем заголовок (первая строка)
+      var headerRange = sheet.getRange(1, 1, 1, numCols);
+      headerRange.setFontWeight('bold');
+      headerRange.setBackground('#4285f4');
+      headerRange.setFontColor('#ffffff');
+
+      // Авторесайз колонок
+      for (var c = 1; c <= numCols; c++) {
+        sheet.autoResizeColumn(c);
+      }
+
+      fileId = spreadsheet.getId();
+      fileUrl = spreadsheet.getUrl();
+      file = DriveApp.getFileById(fileId);
+
+      Logger.log('  - Google Sheet создан: ' + fileId);
+    }
+
+    // Перемещаем в целевую папку (если указана)
+    if (folderId && file) {
+      try {
+        var targetFolder = DriveApp.getFolderById(folderId);
+        targetFolder.addFile(file);
+        // Удаляем из корня
+        DriveApp.getRootFolder().removeFile(file);
+        Logger.log('  - Перемещён в папку: ' + targetFolder.getName());
+      } catch (moveError) {
+        Logger.log('  ⚠️ Не удалось переместить в папку: ' + moveError);
+        // Файл остаётся в корне, но создан успешно
+      }
+    }
+
+    Logger.log('✅ Документ создан: ' + name + ' | URL: ' + fileUrl);
+
+    return {
+      fileId: fileId,
+      fileUrl: fileUrl,
+      fileName: name,
+      type: docType
+    };
+
+  } catch (error) {
+    Logger.log('❌ Ошибка createDocument: ' + error.toString());
+    Logger.log('  - Stack: ' + (error.stack || 'нет стека'));
+    throw error;
+  }
+}
+
+/**
  * Получить список файлов и/или подпапок из папки Google Drive
  *
  * @param {string} folderUrlOrId - URL папки или ID папки
