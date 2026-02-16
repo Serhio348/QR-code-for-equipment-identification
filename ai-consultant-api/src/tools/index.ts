@@ -115,6 +115,7 @@ const toolExecutors: Record<string, (name: string, input: Record<string, unknown
     'get_equipment_details': executeEquipmentTool,
     'get_maintenance_log': executeEquipmentTool,
     'add_maintenance_entry': executeEquipmentTool,
+    'attach_files_to_entry': executeEquipmentTool,
 
     // Drive tools → executeDriveTool (GAS: getFolderFiles, getFileContent)
     'search_files_in_folder': executeDriveTool,

@@ -132,6 +132,17 @@ export interface ApiResponse<T> {
 export type MaintenanceStatus = 'completed' | 'planned';
 
 /**
+ * Файл, прикреплённый к записи журнала обслуживания
+ */
+export interface MaintenanceFile {
+  id: string;
+  name: string;
+  url: string;
+  mimeType?: string;
+  size?: number;
+}
+
+/**
  * Интерфейс записи журнала обслуживания
  * Представляет одну запись в журнале обслуживания оборудования
  * Соответствует структуре данных в таблице "Журнал обслуживания"
@@ -160,6 +171,9 @@ export interface MaintenanceEntry {
   
   /** Дата и время создания записи (ISO 8601) */
   createdAt: string;
+
+  /** Прикреплённые файлы (документация, химия и т.д.) */
+  files?: MaintenanceFile[];
 }
 
 /**

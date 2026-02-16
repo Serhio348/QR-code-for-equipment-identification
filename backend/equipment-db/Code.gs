@@ -1105,9 +1105,60 @@ function doPost(e) {
           return createErrorResponse('Ошибка загрузки фото: ' + error.toString());
         }
 
+      case 'uploadMaintenanceDocument':
+        // Загрузить документ обслуживания (PDF, Word, Excel и др.)
+        Logger.log('📎 Обработка uploadMaintenanceDocument');
+
+        if (!data.equipmentId) {
+          return createErrorResponse('ID оборудования не указан');
+        }
+        if (!data.fileBase64) {
+          return createErrorResponse('Файл не предоставлен');
+        }
+        if (!data.entryId) {
+          return createErrorResponse('ID записи журнала не указан');
+        }
+
+        try {
+          const docUploadResult = uploadMaintenanceDocument(
+            data.equipmentId,
+            data.fileBase64,
+            data.mimeType || 'application/octet-stream',
+            data.originalFileName || 'document',
+            data.date || new Date().toISOString().split('T')[0],
+            data.entryId
+          );
+          Logger.log('✅ Документ успешно загружен');
+          return createJsonResponse(docUploadResult);
+        } catch (docUploadError) {
+          Logger.log('❌ Ошибка uploadMaintenanceDocument: ' + docUploadError.toString());
+          return createErrorResponse('Ошибка загрузки документа: ' + docUploadError.toString());
+        }
+
+      case 'attachFilesToEntry':
+        // Прикрепить ссылки на файлы к записи журнала обслуживания
+        Logger.log('📎 Обработка attachFilesToEntry');
+
+        if (!data.entryId) {
+          return createErrorResponse('ID записи не указан');
+        }
+        if (!data.files) {
+          return createErrorResponse('Файлы не указаны');
+        }
+
+        try {
+          var filesToAttach = typeof data.files === 'string' ? JSON.parse(data.files) : data.files;
+          const attachResult = _updateMaintenanceEntry(data.entryId, { files: filesToAttach });
+          Logger.log('✅ Файлы прикреплены к записи');
+          return createJsonResponse(attachResult);
+        } catch (attachError) {
+          Logger.log('❌ Ошибка attachFilesToEntry: ' + attachError.toString());
+          return createErrorResponse('Ошибка прикрепления файлов: ' + attachError.toString());
+        }
+
       default:
         // Если действие не распознано, возвращаем ошибку
-        return createErrorResponse('Неизвестное действие. Используйте: add, update, delete, createFolder, addMaintenanceEntry, updateMaintenanceEntry, deleteMaintenanceEntry, uploadMaintenancePhoto, register, login, logout, change-password, check-session, verify-admin, add-admin, remove-admin, getAllUserAccess, getUserAccess, updateUserAccess, saveBeliotDeviceOverride, saveBeliotDevicesOverrides, deleteBeliotDeviceOverride, addDeviceReading, deleteDeviceReadings');
+        return createErrorResponse('Неизвестное действие: ' + action);
     }
       } catch (error) {
     // Логируем ошибку для отладки

@@ -7,7 +7,7 @@
 
 import { apiRequest } from '@/shared/services/api/apiRequest';
 import { isCorsError, sendNoCorsRequest } from '@/shared/services/api/corsFallback';
-import { MaintenanceEntry, MaintenanceEntryInput } from '../types/equipment';
+import { MaintenanceEntry, MaintenanceEntryInput, MaintenanceFile } from '../types/equipment';
 import { API_CONFIG } from '@/shared/config/api';
 import { ApiResponse } from '@/shared/services/api/types';
 import { logUserActivity } from '../../user-activity/services/activityLogsApi';
@@ -569,5 +569,99 @@ export async function deleteMaintenanceEntry(
     console.error('Ошибка при удалении записи из журнала:', error);
     throw new Error(`Не удалось удалить запись: ${error.message || 'Неизвестная ошибка'}`);
   }
+}
+
+/**
+ * Конвертировать File в Base64 строку (без data:...;base64, префикса)
+ */
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      resolve(result.split(',')[1]);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Загрузить документ обслуживания в Google Drive
+ *
+ * @param equipmentId - ID оборудования
+ * @param entryId - ID записи журнала
+ * @param file - File объект для загрузки
+ * @param date - Дата обслуживания (YYYY-MM-DD)
+ * @returns Метаданные загруженного файла
+ */
+export async function uploadMaintenanceFile(
+  equipmentId: string,
+  entryId: string,
+  file: File,
+  date: string
+): Promise<MaintenanceFile> {
+  const base64 = await fileToBase64(file);
+
+  const response = await apiRequest<{
+    success: boolean;
+    fileId: string;
+    fileUrl: string;
+    fileName: string;
+    mimeType: string;
+    size: number;
+  }>(
+    'uploadMaintenanceDocument',
+    'POST',
+    {
+      action: 'uploadMaintenanceDocument',
+      equipmentId,
+      entryId,
+      fileBase64: base64,
+      mimeType: file.type || 'application/octet-stream',
+      originalFileName: file.name,
+      date,
+    }
+  );
+
+  if (!response.data) {
+    throw new Error('Не удалось загрузить файл');
+  }
+
+  return {
+    id: response.data.fileId,
+    name: response.data.fileName,
+    url: response.data.fileUrl,
+    mimeType: response.data.mimeType,
+    size: response.data.size,
+  };
+}
+
+/**
+ * Прикрепить файлы к записи журнала обслуживания
+ *
+ * @param entryId - ID записи
+ * @param files - Массив метаданных файлов
+ * @returns Обновлённая запись
+ */
+export async function attachFilesToEntry(
+  entryId: string,
+  files: MaintenanceFile[]
+): Promise<MaintenanceEntry> {
+  const response = await apiRequest<MaintenanceEntry>(
+    'attachFilesToEntry',
+    'POST',
+    {
+      action: 'attachFilesToEntry',
+      entryId,
+      files: JSON.stringify(files),
+    }
+  );
+
+  if (!response.data) {
+    throw new Error('Не удалось прикрепить файлы к записи');
+  }
+
+  return response.data;
 }
 

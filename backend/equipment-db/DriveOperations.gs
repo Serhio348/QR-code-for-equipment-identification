@@ -1351,6 +1351,115 @@ function uploadMaintenancePhoto(equipmentId, photoBase64, mimeType, description,
 }
 
 /**
+ * Загрузить документ обслуживания в Google Drive
+ *
+ * Загружает файл (PDF, Word, Excel, изображение и т.д.) в подпапку
+ * "Документы обслуживания" внутри папки оборудования.
+ * Файлы привязываются к конкретной записи журнала через entryId в имени файла.
+ *
+ * @param {string} equipmentId - ID оборудования
+ * @param {string} fileBase64 - Base64-кодированное содержимое файла
+ * @param {string} mimeType - MIME-тип файла
+ * @param {string} originalFileName - Оригинальное имя файла
+ * @param {string} date - Дата обслуживания (YYYY-MM-DD)
+ * @param {string} entryId - ID записи журнала обслуживания
+ * @returns {Object} {success, fileId, fileUrl, fileName, mimeType, size}
+ */
+function uploadMaintenanceDocument(equipmentId, fileBase64, mimeType, originalFileName, date, entryId) {
+  try {
+    Logger.log('📎 uploadMaintenanceDocument');
+    Logger.log('  - equipmentId: ' + equipmentId);
+    Logger.log('  - mimeType: ' + mimeType);
+    Logger.log('  - originalFileName: ' + originalFileName);
+    Logger.log('  - date: ' + date);
+    Logger.log('  - entryId: ' + entryId);
+    Logger.log('  - fileBase64 length: ' + (fileBase64 ? fileBase64.length : 0));
+
+    if (!equipmentId) {
+      throw new Error('ID оборудования не указан');
+    }
+    if (!fileBase64) {
+      throw new Error('Файл не предоставлен');
+    }
+    if (!entryId) {
+      throw new Error('ID записи журнала не указан');
+    }
+
+    mimeType = mimeType || 'application/octet-stream';
+
+    // Получаем оборудование для доступа к папке
+    var equipment = getEquipmentById(equipmentId);
+    if (!equipment) {
+      throw new Error('Оборудование с ID ' + equipmentId + ' не найдено');
+    }
+
+    if (!equipment.googleDriveUrl) {
+      throw new Error('У оборудования нет папки Google Drive');
+    }
+
+    // Получаем папку оборудования
+    var equipmentFolderId = extractDriveIdFromUrl(equipment.googleDriveUrl);
+    var equipmentFolder = DriveApp.getFolderById(equipmentFolderId);
+
+    // Ищем или создаем подпапку "Документы обслуживания"
+    var docsFolderName = 'Документы обслуживания';
+    var docsFolder = null;
+
+    var subFolders = equipmentFolder.getFoldersByName(docsFolderName);
+    if (subFolders.hasNext()) {
+      docsFolder = subFolders.next();
+    } else {
+      docsFolder = equipmentFolder.createFolder(docsFolderName);
+      Logger.log('  - Создана подпапка: "' + docsFolderName + '"');
+    }
+
+    // Формируем имя файла: YYYY-MM-DD_entryId_originalName
+    var safeDate = date ? date.replace(/[/\\:*?"<>|]/g, '-') : new Date().toISOString().split('T')[0];
+    var safeName = originalFileName ? originalFileName.replace(/[/\\:*?"<>|]/g, '_') : 'document';
+    // Укорачиваем entryId до первых 8 символов для читабельности
+    var shortEntryId = entryId ? entryId.substring(0, 8) : '';
+    var fileName = safeDate + '_' + shortEntryId + '_' + safeName;
+
+    // Ограничиваем длину имени файла
+    if (fileName.length > 150) {
+      fileName = fileName.substring(0, 150);
+    }
+
+    Logger.log('  - Имя файла: "' + fileName + '"');
+
+    // Декодируем Base64 в Blob
+    var fileBlob = Utilities.newBlob(
+      Utilities.base64Decode(fileBase64),
+      mimeType,
+      fileName
+    );
+
+    // Создаем файл в папке
+    var file = docsFolder.createFile(fileBlob);
+    var fileUrl = file.getUrl();
+    var fileSize = file.getSize();
+
+    Logger.log('✅ Документ загружен');
+    Logger.log('  - File ID: ' + file.getId());
+    Logger.log('  - File URL: ' + fileUrl);
+    Logger.log('  - Size: ' + fileSize);
+
+    return {
+      success: true,
+      fileId: file.getId(),
+      fileUrl: fileUrl,
+      fileName: fileName,
+      mimeType: mimeType,
+      size: fileSize
+    };
+
+  } catch (error) {
+    Logger.log('❌ Ошибка uploadMaintenanceDocument: ' + error.toString());
+    throw error;
+  }
+}
+
+/**
  * Получить список всех фото обслуживания для оборудования
  *
  * Ищет подпапку "Фото обслуживания" в папке оборудования и возвращает
