@@ -199,6 +199,66 @@
   font-style: italic;
 }
 
+/* Превью выбранных файлов */
+.selected-files-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.selected-file-chip {
+  background: #e3f2fd;
+  border: 1px solid #90caf9;
+  border-radius: 12px;
+  padding: 4px 10px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.selected-file-chip button {
+  background: none;
+  border: none;
+  color: #1565c0;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0;
+  line-height: 1;
+}
+
+/* Файлы в карточке записи */
+.entry-files {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.entry-files-label {
+  font-size: 12px;
+  color: #888;
+  font-style: italic;
+  margin-right: 4px;
+}
+
+.entry-file-link {
+  font-size: 12px;
+  color: #007bff;
+  text-decoration: none;
+  background: #f0f7ff;
+  border: 1px solid #b3d4ff;
+  border-radius: 4px;
+  padding: 2px 8px;
+}
+
+.entry-file-link:hover {
+  background: #d0e8ff;
+  text-decoration: underline;
+}
+
 .entry-status-planned {
   background: #ffc107;
   color: #333;
