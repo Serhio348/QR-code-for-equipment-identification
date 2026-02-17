@@ -436,8 +436,12 @@ function getFolderFiles(folderUrlOrId, mimeType, query) {
     var resultList = [];
     var queryLower = query ? query.toLowerCase() : null;
 
-    if (mimeType === 'application/vnd.google-apps.folder') {
-      // Ищем только подпапки
+    // Определяем, что нужно загружать
+    var needFolders = !mimeType || mimeType === 'application/vnd.google-apps.folder';
+    var needFiles = !mimeType || mimeType !== 'application/vnd.google-apps.folder';
+
+    // Подпапки
+    if (needFolders) {
       var subFolders = folder.getFolders();
       while (subFolders.hasNext()) {
         var sub = subFolders.next();
@@ -452,8 +456,10 @@ function getFolderFiles(folderUrlOrId, mimeType, query) {
           isFolder: true
         });
       }
-    } else {
-      // Ищем файлы
+    }
+
+    // Файлы
+    if (needFiles) {
       var files = folder.getFiles();
       while (files.hasNext()) {
         var file = files.next();
