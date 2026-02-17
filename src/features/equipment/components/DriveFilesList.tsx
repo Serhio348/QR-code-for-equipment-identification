@@ -159,6 +159,7 @@ const DriveFilesList: React.FC<DriveFilesListProps> = ({ folderUrl, equipmentNam
   };
 
   const getFileIcon = (mimeType: string): string => {
+    if (mimeType === 'application/vnd.google-apps.folder') return '📁';
     if (mimeType.includes('pdf')) return '📄';
     if (mimeType.includes('image')) return '🖼️';
     if (mimeType.includes('video')) return '🎥';
@@ -276,25 +277,33 @@ const DriveFilesList: React.FC<DriveFilesListProps> = ({ folderUrl, equipmentNam
         </div>
       ) : (
         <div className="files-grid">
-          {files.map((file) => (
-            <div
-              key={file.id}
-              className="file-card"
-              onClick={() => handleOpenFile(file)}
-              title="Открыть файл"
-            >
-              <div className="file-icon">{getFileIcon(file.mimeType)}</div>
-              <div className="file-info">
-                <div className="file-name" title={file.name}>
-                  {file.name}
-                </div>
-                <div className="file-meta">
-                  <span className="file-size">{formatFileSize(file.size)}</span>
-                  <span className="file-date">{formatDate(file.modifiedTime)}</span>
+          {/* Папки сверху, потом файлы */}
+          {[...files].sort((a, b) => {
+            const aIsFolder = a.mimeType === 'application/vnd.google-apps.folder' ? 0 : 1;
+            const bIsFolder = b.mimeType === 'application/vnd.google-apps.folder' ? 0 : 1;
+            return aIsFolder - bIsFolder;
+          }).map((file) => {
+            const isFolder = file.mimeType === 'application/vnd.google-apps.folder';
+            return (
+              <div
+                key={file.id}
+                className={`file-card${isFolder ? ' file-card-folder' : ''}`}
+                onClick={() => handleOpenFile(file)}
+                title={isFolder ? 'Открыть папку' : 'Открыть файл'}
+              >
+                <div className="file-icon">{getFileIcon(file.mimeType)}</div>
+                <div className="file-info">
+                  <div className="file-name" title={file.name}>
+                    {file.name}
+                  </div>
+                  <div className="file-meta">
+                    {!isFolder && <span className="file-size">{formatFileSize(file.size)}</span>}
+                    <span className="file-date">{formatDate(file.modifiedTime)}</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
