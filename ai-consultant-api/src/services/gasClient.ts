@@ -122,10 +122,28 @@ class GasClient {
 
         for (let attempt = 0; attempt <= this.retryCount; attempt++) {
             try {
-                const response = await fetch(url, {
+                // GAS возвращает 302 redirect на POST-запросы.
+                // Node.js fetch при redirect меняет POST→GET и теряет body.
+                // Поэтому используем redirect: 'manual' и вручную следуем за redirect.
+                let response = await fetch(url, {
                     ...options,
+                    redirect: 'manual',
                     signal: AbortSignal.timeout(this.timeout),
                 });
+
+                // Обработка redirect (302) — GAS всегда делает redirect
+                if (response.status >= 300 && response.status < 400) {
+                    const redirectUrl = response.headers.get('location');
+                    if (redirectUrl) {
+                        // Следуем за redirect обычным GET (GAS уже обработал POST,
+                        // redirect ведёт на страницу с результатом)
+                        response = await fetch(redirectUrl, {
+                            method: 'GET',
+                            headers: { 'Accept': 'application/json' },
+                            signal: AbortSignal.timeout(this.timeout),
+                        });
+                    }
+                }
 
                 // 5xx — серверная ошибка GAS, можно попробовать ещё раз
                 if (!response.ok && response.status >= 500 && attempt < this.retryCount) {

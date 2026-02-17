@@ -49,6 +49,9 @@ const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanc
 
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadingFiles, setUploadingFiles] = useState<boolean>(false);
+  const [uploadStep, setUploadStep] = useState<string>('');
+  const [uploadFileIndex, setUploadFileIndex] = useState<number>(0);
+  const [uploadTotalFiles, setUploadTotalFiles] = useState<number>(0);
 
   const [formData, setFormData] = useState<MaintenanceEntryInput>({
     date: new Date().toISOString().split('T')[0],
@@ -159,19 +162,24 @@ const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanc
 
     setSaving(true);
     setError(null);
+    setUploadStep('Сохранение записи...');
 
     try {
       const newEntry = await addMaintenanceEntry(equipmentId, formData, maintenanceSheetId);
-      
+
       // Проверяем, является ли это временной записью
       const isTempEntry = newEntry.id.startsWith('temp-');
-      
+
       // Загружаем файлы, если выбраны и запись создана с реальным ID
       if (selectedFiles.length > 0 && !newEntry.id.startsWith('temp-')) {
         setUploadingFiles(true);
+        setUploadTotalFiles(selectedFiles.length);
         const uploadedFiles: MaintenanceFile[] = [];
 
-        for (const file of selectedFiles) {
+        for (let fi = 0; fi < selectedFiles.length; fi++) {
+          const file = selectedFiles[fi];
+          setUploadFileIndex(fi + 1);
+          setUploadStep(`Загрузка файла ${fi + 1} из ${selectedFiles.length}: ${file.name}`);
           try {
             const uploaded = await uploadMaintenanceFile(
               equipmentId,
@@ -186,6 +194,7 @@ const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanc
         }
 
         if (uploadedFiles.length > 0) {
+          setUploadStep('Прикрепление файлов к записи...');
           try {
             await attachFilesToEntry(newEntry.id, uploadedFiles);
             newEntry.files = uploadedFiles;
@@ -194,6 +203,8 @@ const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanc
           }
         }
         setUploadingFiles(false);
+        setUploadFileIndex(0);
+        setUploadTotalFiles(0);
       }
 
       if (isTempEntry) {
@@ -250,6 +261,7 @@ const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanc
       }, 3000);
     } finally {
       setSaving(false);
+      setUploadStep('');
     }
   };
 
@@ -526,8 +538,25 @@ ${data.notes ? `Примечания: ${data.notes}` : ''}`;
           )}
         </div>
 
+        {(saving || uploadingFiles) && (
+          <div className="upload-progress-container">
+            <div className="upload-progress-text">{uploadStep}</div>
+            <div className="upload-progress-bar">
+              <div
+                className="upload-progress-fill"
+                style={{
+                  width: uploadTotalFiles > 0
+                    ? `${(uploadFileIndex / (uploadTotalFiles + 1)) * 100}%`
+                    : '100%',
+                  animationDuration: uploadTotalFiles > 0 ? 'none' : undefined,
+                }}
+              />
+            </div>
+          </div>
+        )}
+
         <button type="submit" className="submit-button" disabled={saving || uploadingFiles}>
-          {uploadingFiles ? 'Загрузка файлов...' : saving ? 'Добавление...' : 'Добавить запись'}
+          {uploadingFiles ? 'Загрузка файлов...' : saving ? 'Сохранение...' : 'Добавить запись'}
         </button>
       </form>
 

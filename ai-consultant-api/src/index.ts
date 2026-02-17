@@ -66,6 +66,9 @@ import chatRouter from './routes/chat.js';
 // healthRouter — health-check эндпоинт (GET /health)
 import healthRouter from './routes/health.js';
 
+// equipmentRouter — прокси для загрузки файлов в Google Drive (POST /api/equipment/*)
+import equipmentRouter from './routes/equipment.js';
+
 // ============================================
 // Валидация конфигурации
 // ============================================
@@ -136,7 +139,7 @@ app.use(helmet({
 // Автоматически парсит тело запроса с Content-Type: application/json.
 // limit: '1mb' — максимальный размер тела запроса.
 // Защита от слишком больших запросов (по умолчанию Express разрешает 100kb)
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '15mb' }));
 
 // --- Логирование запросов ---
 // Простой request logger — записывает каждый входящий запрос.
@@ -159,6 +162,11 @@ app.use('/health', healthRouter);
 // Защищён authMiddleware внутри chatRouter.
 // Принимает историю сообщений, возвращает ответ Claude
 app.use('/api/chat', chatRouter);
+
+// Прокси для загрузки файлов — POST /api/equipment/*
+// Фронтенд не может напрямую отправлять POST на GAS (CORS preflight блокируется).
+// Этот роутер проксирует запросы через Node.js бэкенд.
+app.use('/api/equipment', equipmentRouter);
 
 // ============================================
 // Обработка 404 (Not Found)

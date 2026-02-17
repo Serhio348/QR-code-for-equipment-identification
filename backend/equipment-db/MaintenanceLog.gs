@@ -462,19 +462,36 @@ function _deleteMaintenanceEntry(entryId) {
     if (!entryId) {
       throw new Error('ID записи не указан');
     }
-    
+
     const sheet = getMaintenanceLogSheet();
     const data = sheet.getDataRange().getValues();
-    
+
     // Ищем запись по ID
     for (let i = 1; i < data.length; i++) {
       if (data[i][1] === entryId) {
-        // Удаляем строку
+        // Запоминаем equipmentId перед удалением, чтобы найти отдельный файл журнала
+        var equipmentId = data[i][0] ? String(data[i][0]).trim() : '';
+
+        // Удаляем строку из основного листа
         sheet.deleteRow(i + 1);
+        Logger.log('✅ Запись ' + entryId + ' удалена из основного листа');
+
+        // Удаляем запись из отдельного файла журнала оборудования
+        if (equipmentId) {
+          try {
+            var equipment = getEquipmentById(equipmentId);
+            if (equipment && equipment.maintenanceSheetId) {
+              deleteEntryFromEquipmentMaintenanceSheet(equipment.maintenanceSheetId, entryId);
+            }
+          } catch (syncError) {
+            Logger.log('⚠️ Не удалось удалить запись из файла журнала оборудования: ' + syncError);
+          }
+        }
+
         return { success: true, message: 'Запись удалена' };
       }
     }
-    
+
     throw new Error('Запись с ID ' + entryId + ' не найдена');
   } catch (error) {
     Logger.log('❌ Ошибка в deleteMaintenanceEntry: ' + error.toString());
@@ -678,6 +695,41 @@ function appendEntryToEquipmentMaintenanceSheet(sheet, entry) {
   ];
 
   sheet.appendRow(row);
+}
+
+/**
+ * Удаляет запись из отдельного файла журнала обслуживания оборудования по ID записи.
+ *
+ * Структура отдельного файла:
+ * Колонка G (индекс 6): ID записи
+ *
+ * @param {string} maintenanceSheetId - ID Google Spreadsheet файла журнала
+ * @param {string} entryId - ID записи для удаления
+ */
+function deleteEntryFromEquipmentMaintenanceSheet(maintenanceSheetId, entryId) {
+  if (!maintenanceSheetId || !entryId) {
+    return;
+  }
+
+  try {
+    var spreadsheet = SpreadsheetApp.openById(maintenanceSheetId);
+    var sheet = spreadsheet.getSheets()[0];
+    var data = sheet.getDataRange().getValues();
+
+    // Колонка G (индекс 6) содержит ID записи
+    for (var i = 1; i < data.length; i++) {
+      var rowEntryId = data[i][6] ? String(data[i][6]).trim() : '';
+      if (rowEntryId === entryId) {
+        sheet.deleteRow(i + 1);
+        Logger.log('✅ Запись ' + entryId + ' удалена из отдельного файла журнала (' + maintenanceSheetId + ')');
+        return;
+      }
+    }
+
+    Logger.log('ℹ️ Запись ' + entryId + ' не найдена в отдельном файле журнала (' + maintenanceSheetId + ')');
+  } catch (error) {
+    Logger.log('⚠️ Ошибка при удалении из отдельного файла журнала: ' + error);
+  }
 }
 
 /**
