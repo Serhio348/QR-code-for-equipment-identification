@@ -40,17 +40,39 @@ const supabase = createClient(config.supabaseUrl, config.supabaseServiceKey);
 export const waterTools: Anthropic.Tool[] = [
 
     // ----------------------------------------
+    // Tool 0: Список устройств с названиями
+    // ----------------------------------------
+    {
+        name: 'get_water_devices',
+        description: 'Получить список всех зарегистрированных счётчиков воды с их названиями и объектами установки. Используй ПЕРВЫМ, когда пользователь упоминает название объекта или счётчика, чтобы найти нужный device_id.',
+        input_schema: {
+            type: 'object' as const,
+            properties: {
+                search: {
+                    type: 'string',
+                    description: 'Поиск по названию счётчика или объекту установки (нечёткий поиск). Например: "насосная", "котельная", "корпус 2".',
+                },
+            },
+            required: [],
+        },
+    },
+
+    // ----------------------------------------
     // Tool 1: Показания счётчиков воды (Beliot)
     // ----------------------------------------
     {
         name: 'get_water_readings',
-        description: 'Получить показания счётчиков воды из базы данных. Можно фильтровать по ID устройства, периоду и типу показания.',
+        description: 'Получить показания счётчиков воды из базы данных. Можно искать по названию объекта/счётчика (device_name) или по ID устройства (device_id).',
         input_schema: {
             type: 'object' as const,
             properties: {
                 device_id: {
                     type: 'string',
                     description: 'ID устройства/счётчика Beliot. Если не указан — возвращаются данные по всем устройствам.',
+                },
+                device_name: {
+                    type: 'string',
+                    description: 'Название счётчика или объекта установки для поиска (альтернатива device_id). Например: "насосная станция", "котельная". Агент автоматически найдёт нужный device_id.',
                 },
                 date_from: {
                     type: 'string',
@@ -79,13 +101,17 @@ export const waterTools: Anthropic.Tool[] = [
     // ----------------------------------------
     {
         name: 'analyze_water_consumption',
-        description: 'Проанализировать потребление воды за период: итого, среднее, мин/макс, тренд. Используй для вопросов типа "сколько воды потрачено за месяц?" или "есть ли аномалии в потреблении?".',
+        description: 'Проанализировать потребление воды за период: итого, среднее, мин/макс, тренд. Можно искать по названию объекта/счётчика (device_name). Используй для вопросов типа "сколько воды потрачено за месяц?" или "есть ли аномалии в потреблении?".',
         input_schema: {
             type: 'object' as const,
             properties: {
                 device_id: {
                     type: 'string',
                     description: 'ID устройства/счётчика. Если не указан — анализируются все устройства.',
+                },
+                device_name: {
+                    type: 'string',
+                    description: 'Название счётчика или объекта установки (альтернатива device_id). Агент автоматически найдёт нужный device_id.',
                 },
                 period: {
                     type: 'string',
@@ -262,8 +288,42 @@ export const waterTools: Anthropic.Tool[] = [
 ];
 
 // ============================================
-// Вспомогательные функции для дат
+// Вспомогательные функции
 // ============================================
+
+/**
+ * Ищет device_id по названию счётчика или объекта установки
+ * в таблице beliot_device_overrides.
+ * Возвращает массив подходящих device_id (может быть несколько).
+ */
+async function resolveDeviceIdsByName(deviceName: string): Promise<{
+    device_ids: string[];
+    matches: Array<{ device_id: string; name: string | null; object_name: string | null }>;
+}> {
+    const search = `%${deviceName}%`;
+
+    const { data, error } = await supabase
+        .from('beliot_device_overrides')
+        .select('device_id, name, object_name')
+        .or(`name.ilike.${search},object_name.ilike.${search}`)
+        .limit(10);
+
+    if (error) {
+        console.error('[waterTools] resolveDeviceIdsByName error:', error.message);
+        return { device_ids: [], matches: [] };
+    }
+
+    const matches = (data || []).map(r => ({
+        device_id: r.device_id,
+        name: r.name ?? null,
+        object_name: r.object_name ?? null,
+    }));
+
+    return {
+        device_ids: matches.map(m => m.device_id),
+        matches,
+    };
+}
 
 /**
  * Возвращает начало и конец периода для фильтрации.
@@ -313,10 +373,58 @@ export async function executeWaterTool(
     switch (name) {
 
         // ----------------------------------------
+        // Список устройств с названиями
+        // ----------------------------------------
+        case 'get_water_devices': {
+            let query = supabase
+                .from('beliot_device_overrides')
+                .select('device_id, name, object_name, address, serial_number, device_group')
+                .order('name', { ascending: true });
+
+            if (input.search) {
+                const search = `%${input.search}%`;
+                query = query.or(`name.ilike.${search},object_name.ilike.${search},address.ilike.${search}`);
+            }
+
+            const { data, error } = await query;
+            if (error) throw new Error(`Ошибка получения списка устройств: ${error.message}`);
+
+            return {
+                count: data?.length || 0,
+                devices: (data || []).map(d => ({
+                    device_id: d.device_id,
+                    name: d.name || '(без названия)',
+                    object_name: d.object_name || null,
+                    address: d.address || null,
+                    serial_number: d.serial_number || null,
+                    device_group: d.device_group || null,
+                })),
+            };
+        }
+
+        // ----------------------------------------
         // Показания счётчиков
         // ----------------------------------------
         case 'get_water_readings': {
             const limit = Math.min(Number(input.limit) || 50, 500);
+
+            // Разрешаем device_name → device_id через таблицу overrides
+            let resolvedDeviceIds: string[] = [];
+            let resolvedMatches: Array<{ device_id: string; name: string | null; object_name: string | null }> = [];
+
+            if (input.device_name && !input.device_id) {
+                const resolved = await resolveDeviceIdsByName(input.device_name as string);
+                resolvedDeviceIds = resolved.device_ids;
+                resolvedMatches = resolved.matches;
+
+                if (resolvedDeviceIds.length === 0) {
+                    return {
+                        count: 0,
+                        readings: [],
+                        message: `Счётчик с названием "${input.device_name}" не найден. Используй get_water_devices для просмотра списка устройств.`,
+                    };
+                }
+            }
 
             let query = supabase
                 .from('beliot_device_readings')
@@ -326,7 +434,12 @@ export async function executeWaterTool(
 
             if (input.device_id) {
                 query = query.eq('device_id', input.device_id as string);
+            } else if (resolvedDeviceIds.length === 1) {
+                query = query.eq('device_id', resolvedDeviceIds[0]);
+            } else if (resolvedDeviceIds.length > 1) {
+                query = query.in('device_id', resolvedDeviceIds);
             }
+
             if (input.date_from) {
                 query = query.gte('reading_date', input.date_from as string);
             }
@@ -342,6 +455,7 @@ export async function executeWaterTool(
 
             return {
                 count: data?.length || 0,
+                ...(resolvedMatches.length > 0 && { resolved_devices: resolvedMatches }),
                 readings: data || [],
             };
         }
@@ -363,6 +477,24 @@ export async function executeWaterTool(
                 dateTo = period.to;
             }
 
+            // Разрешаем device_name → device_id через таблицу overrides
+            let resolvedDeviceIds: string[] = [];
+            let resolvedMatches: Array<{ device_id: string; name: string | null; object_name: string | null }> = [];
+
+            if (input.device_name && !input.device_id) {
+                const resolved = await resolveDeviceIdsByName(input.device_name as string);
+                resolvedDeviceIds = resolved.device_ids;
+                resolvedMatches = resolved.matches;
+
+                if (resolvedDeviceIds.length === 0) {
+                    return {
+                        period: { from: dateFrom, to: dateTo },
+                        count: 0,
+                        message: `Счётчик с названием "${input.device_name}" не найден. Используй get_water_devices для просмотра списка устройств.`,
+                    };
+                }
+            }
+
             let query = supabase
                 .from('beliot_device_readings')
                 .select('device_id, reading_date, reading_value, unit')
@@ -372,16 +504,25 @@ export async function executeWaterTool(
 
             if (input.device_id) {
                 query = query.eq('device_id', input.device_id as string);
+            } else if (resolvedDeviceIds.length === 1) {
+                query = query.eq('device_id', resolvedDeviceIds[0]);
+            } else if (resolvedDeviceIds.length > 1) {
+                query = query.in('device_id', resolvedDeviceIds);
             }
 
             const { data, error } = await query;
             if (error) throw new Error(`Ошибка анализа потребления: ${error.message}`);
 
             const readings = data || [];
+            const deviceLabel = (input.device_name as string)
+                || (input.device_id as string)
+                || 'все устройства';
+
             if (readings.length === 0) {
                 return {
                     period: { from: dateFrom, to: dateTo },
-                    device_id: input.device_id || 'все устройства',
+                    device: deviceLabel,
+                    ...(resolvedMatches.length > 0 && { resolved_devices: resolvedMatches }),
                     count: 0,
                     message: 'Данные за указанный период отсутствуют',
                 };
@@ -397,6 +538,12 @@ export async function executeWaterTool(
             }
 
             // Статистика по каждому устройству
+            // Строим карту device_id → человекочитаемое название из resolved_matches
+            const nameMap: Record<string, string> = {};
+            for (const m of resolvedMatches) {
+                nameMap[m.device_id] = m.name || m.object_name || m.device_id;
+            }
+
             const deviceStats = Object.entries(byDevice).map(([deviceId, { values, unit }]) => {
                 const sum = values.reduce((a, b) => a + b, 0);
                 const avg = sum / values.length;
@@ -407,6 +554,7 @@ export async function executeWaterTool(
 
                 return {
                     device_id: deviceId,
+                    device_name: nameMap[deviceId] || deviceId,
                     unit,
                     count: values.length,
                     total: parseFloat(sum.toFixed(4)),
@@ -420,7 +568,7 @@ export async function executeWaterTool(
 
             return {
                 period: { from: dateFrom, to: dateTo },
-                device_id: input.device_id || 'все устройства',
+                device: deviceLabel,
                 total_readings: readings.length,
                 devices: deviceStats,
             };
