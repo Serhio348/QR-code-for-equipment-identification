@@ -528,7 +528,7 @@ export async function executeWaterTool(
                 };
             }
 
-            // Группируем по устройствам, сохраняем показания с датами (отсортированы по возрастанию)
+            // Группируем по устройствам (отсортированы по возрастанию)
             const byDevice: Record<string, {
                 readings: Array<{ value: number; date: string }>;
                 unit: string;
@@ -549,30 +549,63 @@ export async function executeWaterTool(
                 nameMap[m.device_id] = m.name || m.object_name || m.device_id;
             }
 
+            // Получаем базовое показание (последнее ДО начала периода) для каждого устройства.
+            // Это обеспечивает точный расчёт расхода с первой секунды периода.
+            // Пример: неделя начинается в пн 00:00, первое показание внутри — пн 01:00.
+            // Без базы мы пропустим потребление за первый час. База (вс ~23:xx) это исправляет.
+            const deviceIds = Object.keys(byDevice);
+            const baselineMap: Record<string, { value: number; date: string }> = {};
+
+            const baselineResults = await Promise.all(
+                deviceIds.map(deviceId =>
+                    supabase
+                        .from('beliot_device_readings')
+                        .select('device_id, reading_date, reading_value')
+                        .eq('device_id', deviceId)
+                        .lt('reading_date', dateFrom)
+                        .order('reading_date', { ascending: false })
+                        .limit(1)
+                        .maybeSingle()
+                )
+            );
+
+            for (let i = 0; i < deviceIds.length; i++) {
+                const result = baselineResults[i];
+                if (result.data) {
+                    baselineMap[deviceIds[i]] = {
+                        value: Number(result.data.reading_value),
+                        date: result.data.reading_date,
+                    };
+                }
+            }
+
             /**
              * ВАЖНО: Счётчики воды фиксируют НАКОПИТЕЛЬНЫЕ показания (нарастающий итог
-             * с момента установки). Расход за период = последнее показание − первое.
+             * с момента установки). Расход за период = конечное − базовое показание.
              *
-             * Например: первое показание = 12 300 м³, последнее = 12 345 м³
-             *   → расход = 45 м³, а НЕ сумма всех показаний.
+             * Базовое = последнее показание ДО начала периода (точный расчёт).
+             * Если базового нет (счётчик установлен внутри периода) — берём первое в периоде.
              */
             const deviceStats = Object.entries(byDevice).map(([deviceId, { readings: deviceReadings, unit }]) => {
-                const firstEntry = deviceReadings[0];
+                const baseline = baselineMap[deviceId];
+                const firstInPeriod = deviceReadings[0];
                 const lastEntry = deviceReadings[deviceReadings.length - 1];
 
-                const firstReading = firstEntry.value;
-                const lastReading = lastEntry.value;
+                // Начальная точка: последнее показание ДО периода (точно) или первое в периоде (запасное)
+                const startValue = baseline?.value ?? firstInPeriod.value;
+                const startDate = baseline?.date ?? firstInPeriod.date;
+                const endValue = lastEntry.value;
+                const endDate = lastEntry.date;
 
-                // Расход = разница показаний (накопительный счётчик)
-                const consumption = parseFloat((lastReading - firstReading).toFixed(4));
+                // Расход = конечное − начальное (накопительный счётчик)
+                const consumption = parseFloat((endValue - startValue).toFixed(4));
 
-                // Длительность периода в часах и сутках по реальным датам показаний
-                const firstDateMs = new Date(firstEntry.date).getTime();
-                const lastDateMs = new Date(lastEntry.date).getTime();
-                const hoursElapsed = Math.max(1, (lastDateMs - firstDateMs) / (1000 * 60 * 60));
+                // Длительность по реальным датам
+                const startDateMs = new Date(startDate).getTime();
+                const endDateMs = new Date(endDate).getTime();
+                const hoursElapsed = Math.max(1, (endDateMs - startDateMs) / (1000 * 60 * 60));
                 const daysElapsed = parseFloat((hoursElapsed / 24).toFixed(2));
 
-                // Среднесуточный и среднечасовой расход
                 const avgDailyConsumption = parseFloat((consumption / daysElapsed).toFixed(4));
                 const avgHourlyConsumption = parseFloat((consumption / hoursElapsed).toFixed(4));
 
@@ -581,14 +614,17 @@ export async function executeWaterTool(
                     device_name: nameMap[deviceId] || deviceId,
                     unit,
                     readings_count: deviceReadings.length,
-                    // Показания (абсолютные значения на счётчике)
-                    first_reading: parseFloat(firstReading.toFixed(4)),
-                    last_reading: parseFloat(lastReading.toFixed(4)),
-                    first_reading_date: firstEntry.date,
-                    last_reading_date: lastEntry.date,
+                    // Базовое показание (последнее ДО периода, null если счётчик новый)
+                    baseline_reading: baseline ? parseFloat(startValue.toFixed(4)) : null,
+                    baseline_date: baseline?.date ?? null,
+                    // Первое показание внутри периода
+                    first_reading_in_period: parseFloat(firstInPeriod.value.toFixed(4)),
+                    first_reading_in_period_date: firstInPeriod.date,
+                    // Последнее показание (конец периода)
+                    last_reading: parseFloat(endValue.toFixed(4)),
+                    last_reading_date: endDate,
                     // Расход за период (ключевая метрика)
                     consumption,
-                    // Средние значения расхода
                     avg_daily_consumption: avgDailyConsumption,
                     avg_hourly_consumption: avgHourlyConsumption,
                     // Аномалия: отрицательный расход = возможно, замена счётчика
@@ -597,7 +633,7 @@ export async function executeWaterTool(
             });
 
             return {
-                note: 'РАСХОД = последнее показание − первое показание. Счётчик накопительный.',
+                note: 'РАСХОД = последнее показание − базовое (последнее перед периодом). Счётчик накопительный.',
                 period: { from: dateFrom, to: dateTo },
                 device: deviceLabel,
                 total_readings: readings.length,
