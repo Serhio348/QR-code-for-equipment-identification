@@ -219,6 +219,37 @@ export const equipmentTools: Anthropic.Tool[] = [
             required: ['equipment_id', 'date', 'type', 'description', 'performed_by'],
         },
     },
+
+    // ----------------------------------------
+    // Tool 5: Прикрепить файлы к записи журнала
+    // ----------------------------------------
+    {
+        name: 'attach_files_to_entry',
+        description: 'Прикрепить файлы (ссылки на Google Drive) к существующей записи журнала обслуживания. Используй когда пользователь хочет привязать документацию или файлы к записи.',
+        input_schema: {
+            type: 'object' as const,
+            properties: {
+                entry_id: {
+                    type: 'string',
+                    description: 'ID записи журнала обслуживания',
+                },
+                files: {
+                    type: 'array',
+                    description: 'Массив файлов для прикрепления',
+                    items: {
+                        type: 'object',
+                        properties: {
+                            id: { type: 'string', description: 'ID файла в Google Drive' },
+                            name: { type: 'string', description: 'Название файла' },
+                            url: { type: 'string', description: 'URL файла в Google Drive' },
+                        },
+                        required: ['id', 'name', 'url'],
+                    },
+                },
+            },
+            required: ['entry_id', 'files'],
+        },
+    },
 ];
 
 // ============================================
@@ -333,11 +364,14 @@ export async function executeEquipmentTool(
             });
 
         // ----------------------------------------
-        // Неизвестный tool
+        // Прикрепить файлы к записи журнала
         // ----------------------------------------
-        // Если Claude вызвал tool, которого нет в списке —
-        // выбрасываем ошибку. Claude получит её как tool_result
-        // с is_error: true и сообщит пользователю о проблеме.
+        case 'attach_files_to_entry':
+            return await gasClient.post('attachFilesToEntry', {
+                entryId: input.entry_id,
+                files: JSON.stringify(input.files),
+            });
+
         default:
             throw new Error(`Unknown equipment tool: ${name}`);
     }

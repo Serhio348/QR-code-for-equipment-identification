@@ -185,6 +185,16 @@
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
+.file-card-folder {
+  background: #fff8e1;
+  border-color: #ffe082;
+}
+
+.file-card-folder:hover {
+  border-color: #ffa000;
+  background: #fff3c4;
+}
+
 .file-icon {
   font-size: 32px;
   flex-shrink: 0;
