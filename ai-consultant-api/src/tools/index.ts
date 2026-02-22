@@ -78,7 +78,7 @@ import { waterTools, executeWaterTool } from './waterTools.js';
  * через параметр `tools` в anthropic.messages.create().
  * Claude видит все инструменты и решает, какие вызвать.
  *
- * Текущий состав (15 tools):
+ * Текущий состав (16 tools):
  * - get_all_equipment              — поиск/список оборудования
  * - get_equipment_details          — детали одного оборудования
  * - get_maintenance_log            — журнал обслуживания
@@ -89,6 +89,7 @@ import { waterTools, executeWaterTool } from './waterTools.js';
  * - get_maintenance_photos         — получение списка фото
  * - search_maintenance_photos      — поиск фото по запросу
  * - create_document                — создание Google Doc или Google Sheet
+ * - get_water_devices              — список счётчиков с названиями и объектами
  * - get_water_readings             — показания счётчиков воды из Supabase
  * - analyze_water_consumption      — анализ потребления воды за период
  * - save_manual_meter_reading      — сохранение показания с фото счётчика
@@ -142,6 +143,7 @@ const toolExecutors: Record<string, (name: string, input: Record<string, unknown
     'create_document': executeDocumentTool,
 
     // Water tools → executeWaterTool (Supabase: beliot_device_readings, water_analysis, etc.)
+    'get_water_devices': executeWaterTool,
     'get_water_readings': executeWaterTool,
     'analyze_water_consumption': executeWaterTool,
     'save_manual_meter_reading': executeWaterTool,
