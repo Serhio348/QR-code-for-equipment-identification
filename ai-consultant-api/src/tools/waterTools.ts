@@ -62,7 +62,7 @@ export const waterTools: Anthropic.Tool[] = [
     // ----------------------------------------
     {
         name: 'get_water_readings',
-        description: 'Получить показания счётчиков воды из базы данных. Можно искать по названию объекта/счётчика (device_name) или по ID устройства (device_id).',
+        description: 'Получить ПОКАЗАНИЯ счётчиков воды (абсолютные значения на циферблате, нарастающий итог с момента установки). Используй когда нужно увидеть сами показания, а не расход. Для расчёта РАСХОДА (сколько воды потрачено за период) используй analyze_water_consumption.',
         input_schema: {
             type: 'object' as const,
             properties: {
@@ -101,7 +101,7 @@ export const waterTools: Anthropic.Tool[] = [
     // ----------------------------------------
     {
         name: 'analyze_water_consumption',
-        description: 'Проанализировать потребление воды за период: итого, среднее, мин/макс, тренд. Можно искать по названию объекта/счётчика (device_name). Используй для вопросов типа "сколько воды потрачено за месяц?" или "есть ли аномалии в потреблении?".',
+        description: 'Рассчитать РАСХОД воды за период (= последнее показание − первое показание счётчика). Счётчики накопительные, поэтому расход ≠ сумме показаний. Возвращает: расход м³, среднесуточный и среднечасовой расход, начальное и конечное показания. Используй для вопросов "сколько воды потрачено?", "какой расход за месяц?", "средний расход в сутки?".',
         input_schema: {
             type: 'object' as const,
             properties: {
@@ -528,45 +528,76 @@ export async function executeWaterTool(
                 };
             }
 
-            // Группируем по устройствам
-            const byDevice: Record<string, { values: number[]; unit: string }> = {};
+            // Группируем по устройствам, сохраняем показания с датами (отсортированы по возрастанию)
+            const byDevice: Record<string, {
+                readings: Array<{ value: number; date: string }>;
+                unit: string;
+            }> = {};
             for (const r of readings) {
                 if (!byDevice[r.device_id]) {
-                    byDevice[r.device_id] = { values: [], unit: r.unit || 'м³' };
+                    byDevice[r.device_id] = { readings: [], unit: r.unit || 'м³' };
                 }
-                byDevice[r.device_id].values.push(Number(r.reading_value));
+                byDevice[r.device_id].readings.push({
+                    value: Number(r.reading_value),
+                    date: r.reading_date,
+                });
             }
 
-            // Статистика по каждому устройству
-            // Строим карту device_id → человекочитаемое название из resolved_matches
+            // Строим карту device_id → человекочитаемое название
             const nameMap: Record<string, string> = {};
             for (const m of resolvedMatches) {
                 nameMap[m.device_id] = m.name || m.object_name || m.device_id;
             }
 
-            const deviceStats = Object.entries(byDevice).map(([deviceId, { values, unit }]) => {
-                const sum = values.reduce((a, b) => a + b, 0);
-                const avg = sum / values.length;
-                const min = Math.min(...values);
-                const max = Math.max(...values);
-                // Тренд: разница последнего и первого показания
-                const trend = values[values.length - 1] - values[0];
+            /**
+             * ВАЖНО: Счётчики воды фиксируют НАКОПИТЕЛЬНЫЕ показания (нарастающий итог
+             * с момента установки). Расход за период = последнее показание − первое.
+             *
+             * Например: первое показание = 12 300 м³, последнее = 12 345 м³
+             *   → расход = 45 м³, а НЕ сумма всех показаний.
+             */
+            const deviceStats = Object.entries(byDevice).map(([deviceId, { readings: deviceReadings, unit }]) => {
+                const firstEntry = deviceReadings[0];
+                const lastEntry = deviceReadings[deviceReadings.length - 1];
+
+                const firstReading = firstEntry.value;
+                const lastReading = lastEntry.value;
+
+                // Расход = разница показаний (накопительный счётчик)
+                const consumption = parseFloat((lastReading - firstReading).toFixed(4));
+
+                // Длительность периода в часах и сутках по реальным датам показаний
+                const firstDateMs = new Date(firstEntry.date).getTime();
+                const lastDateMs = new Date(lastEntry.date).getTime();
+                const hoursElapsed = Math.max(1, (lastDateMs - firstDateMs) / (1000 * 60 * 60));
+                const daysElapsed = parseFloat((hoursElapsed / 24).toFixed(2));
+
+                // Среднесуточный и среднечасовой расход
+                const avgDailyConsumption = parseFloat((consumption / daysElapsed).toFixed(4));
+                const avgHourlyConsumption = parseFloat((consumption / hoursElapsed).toFixed(4));
 
                 return {
                     device_id: deviceId,
                     device_name: nameMap[deviceId] || deviceId,
                     unit,
-                    count: values.length,
-                    total: parseFloat(sum.toFixed(4)),
-                    average: parseFloat(avg.toFixed(4)),
-                    min: parseFloat(min.toFixed(4)),
-                    max: parseFloat(max.toFixed(4)),
-                    trend: parseFloat(trend.toFixed(4)),
-                    trend_direction: trend > 0 ? 'рост' : trend < 0 ? 'снижение' : 'стабильно',
+                    readings_count: deviceReadings.length,
+                    // Показания (абсолютные значения на счётчике)
+                    first_reading: parseFloat(firstReading.toFixed(4)),
+                    last_reading: parseFloat(lastReading.toFixed(4)),
+                    first_reading_date: firstEntry.date,
+                    last_reading_date: lastEntry.date,
+                    // Расход за период (ключевая метрика)
+                    consumption,
+                    // Средние значения расхода
+                    avg_daily_consumption: avgDailyConsumption,
+                    avg_hourly_consumption: avgHourlyConsumption,
+                    // Аномалия: отрицательный расход = возможно, замена счётчика
+                    anomaly: consumption < 0 ? 'Отрицательный расход — возможна замена счётчика или ошибка данных' : null,
                 };
             });
 
             return {
+                note: 'РАСХОД = последнее показание − первое показание. Счётчик накопительный.',
                 period: { from: dateFrom, to: dateTo },
                 device: deviceLabel,
                 total_readings: readings.length,
