@@ -62,6 +62,11 @@ import { photoTools, executePhotoTool } from './photoTools.js';
 // - executeDocumentTool: функция выполнения — создаёт документ через gasClient.post
 import { documentTools, executeDocumentTool } from './documentTools.js';
 
+// Tools для работы с водными данными (Supabase):
+// - waterTools: 6 инструментов (показания счётчиков, анализ потребления, качество воды, алерты)
+// - executeWaterTool: функция выполнения — запросы к Supabase напрямую
+import { waterTools, executeWaterTool } from './waterTools.js';
+
 // ============================================
 // Объединённый массив tools
 // ============================================
@@ -73,23 +78,30 @@ import { documentTools, executeDocumentTool } from './documentTools.js';
  * через параметр `tools` в anthropic.messages.create().
  * Claude видит все инструменты и решает, какие вызвать.
  *
- * Текущий состав (9 tools):
- * - get_all_equipment         — поиск/список оборудования
- * - get_equipment_details     — детали одного оборудования
- * - get_maintenance_log       — журнал обслуживания
- * - add_maintenance_entry     — добавление записи в журнал
- * - search_files_in_folder    — поиск файлов в папке Drive
- * - read_file_content         — чтение содержимого файла
- * - upload_maintenance_photo  — загрузка фото обслуживания
- * - get_maintenance_photos    — получение списка фото
- * - search_maintenance_photos — поиск фото по запросу
- * - create_document           — создание Google Doc или Google Sheet
+ * Текущий состав (15 tools):
+ * - get_all_equipment              — поиск/список оборудования
+ * - get_equipment_details          — детали одного оборудования
+ * - get_maintenance_log            — журнал обслуживания
+ * - add_maintenance_entry          — добавление записи в журнал
+ * - search_files_in_folder         — поиск файлов в папке Drive
+ * - read_file_content              — чтение содержимого файла
+ * - upload_maintenance_photo       — загрузка фото обслуживания
+ * - get_maintenance_photos         — получение списка фото
+ * - search_maintenance_photos      — поиск фото по запросу
+ * - create_document                — создание Google Doc или Google Sheet
+ * - get_water_readings             — показания счётчиков воды из Supabase
+ * - analyze_water_consumption      — анализ потребления воды за период
+ * - save_manual_meter_reading      — сохранение показания с фото счётчика
+ * - get_water_quality_analyses     — журнал анализов качества воды
+ * - get_water_quality_alerts       — превышения норм качества воды
+ * - add_water_quality_analysis     — создание записи анализа
  */
 export const tools: Anthropic.Tool[] = [
     ...equipmentTools,
     ...driveTools,
     ...photoTools,
     ...documentTools,
+    ...waterTools,
 ];
 
 // ============================================
@@ -128,6 +140,14 @@ const toolExecutors: Record<string, (name: string, input: Record<string, unknown
 
     // Document tools → executeDocumentTool (GAS: createDocument)
     'create_document': executeDocumentTool,
+
+    // Water tools → executeWaterTool (Supabase: beliot_device_readings, water_analysis, etc.)
+    'get_water_readings': executeWaterTool,
+    'analyze_water_consumption': executeWaterTool,
+    'save_manual_meter_reading': executeWaterTool,
+    'get_water_quality_analyses': executeWaterTool,
+    'get_water_quality_alerts': executeWaterTool,
+    'add_water_quality_analysis': executeWaterTool,
 };
 
 // ============================================
