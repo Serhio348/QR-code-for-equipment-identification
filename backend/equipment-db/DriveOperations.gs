@@ -133,24 +133,16 @@ function createDriveFolder(equipmentName, parentFolderId) {
     const folderUrl = folder.getUrl();
     const folderId = folder.getId();
 
-    // Добавляем доступ для пользователей с разрешением на "Оборудование"
+    // Открываем папку по ссылке: любой пользователь, имеющий ссылку, может просматривать.
+    // Это надёжнее, чем addViewer(email), который требует наличия Google-аккаунта с точным
+    // совпадением email и может тихо падать при корпоративных ограничениях Workspace.
+    // Безопасность обеспечивается приложением — ссылка видна только авторизованным пользователям.
     try {
-      const usersWithAccess = getUsersWithEquipmentAccess();
-      Logger.log('📋 Пользователей с доступом к оборудованию: ' + usersWithAccess.length);
-
-      for (let i = 0; i < usersWithAccess.length; i++) {
-        try {
-          folder.addViewer(usersWithAccess[i]);
-          Logger.log('  ✅ Добавлен viewer: ' + usersWithAccess[i]);
-        } catch (viewerError) {
-          Logger.log('  ⚠️ Не удалось добавить viewer ' + usersWithAccess[i] + ': ' + viewerError);
-        }
-      }
-
-      Logger.log('✅ Настроен доступ к папке для пользователей с разрешением на оборудование');
+      folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      Logger.log('✅ Папка открыта для просмотра по ссылке (ANYONE_WITH_LINK)');
     } catch (sharingError) {
-      Logger.log('⚠️ Не удалось настроить доступ: ' + sharingError);
-      // Продолжаем выполнение, папка создана, просто без настроенного доступа
+      Logger.log('⚠️ Не удалось настроить доступ по ссылке: ' + sharingError);
+      // Продолжаем выполнение, папка создана
     }
 
     // Логируем для отладки
@@ -791,6 +783,67 @@ function syncAllEquipmentFoldersAccess() {
       processedCount: 0,
       errorCount: 0
     };
+  }
+}
+
+/**
+ * Установить доступ "по ссылке" (ANYONE_WITH_LINK) для всех папок оборудования.
+ *
+ * Запускается один раз вручную из редактора GAS для исправления существующих папок,
+ * созданных до изменения политики доступа.
+ *
+ * @returns {Object} {success, processedCount, errorCount, message}
+ */
+function setAllFoldersPublicLink() {
+  try {
+    Logger.log('🔓 Установка доступа по ссылке для всех папок оборудования...');
+
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    const equipmentSheet = spreadsheet.getSheetByName('Оборудование');
+
+    if (!equipmentSheet) {
+      return { success: false, message: 'Лист "Оборудование" не найден', processedCount: 0, errorCount: 0 };
+    }
+
+    const data = equipmentSheet.getDataRange().getValues();
+    if (data.length < 2) {
+      return { success: true, message: 'Нет записей оборудования', processedCount: 0, errorCount: 0 };
+    }
+
+    const headers = data[0];
+    const driveUrlIndex = headers.indexOf('Google Drive URL');
+    if (driveUrlIndex === -1) {
+      return { success: false, message: 'Колонка "Google Drive URL" не найдена', processedCount: 0, errorCount: 0 };
+    }
+
+    let processedCount = 0;
+    let errorCount = 0;
+
+    for (let i = 1; i < data.length; i++) {
+      const driveUrl = data[i][driveUrlIndex];
+      if (!driveUrl || !driveUrl.toString().trim()) continue;
+
+      try {
+        const folderId = extractDriveIdFromUrl(driveUrl.toString().trim());
+        if (!folderId) { errorCount++; continue; }
+
+        const folder = DriveApp.getFolderById(folderId);
+        folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+        Logger.log('  ✅ [' + (i) + '] ' + folder.getName());
+        processedCount++;
+      } catch (err) {
+        Logger.log('  ⚠️ [' + (i) + '] Ошибка: ' + err.toString());
+        errorCount++;
+      }
+    }
+
+    const message = 'Готово: обработано ' + processedCount + ' папок, ошибок: ' + errorCount;
+    Logger.log('✅ ' + message);
+    return { success: true, message: message, processedCount: processedCount, errorCount: errorCount };
+
+  } catch (error) {
+    Logger.log('❌ setAllFoldersPublicLink: ' + error.toString());
+    return { success: false, message: 'Ошибка: ' + error.toString(), processedCount: 0, errorCount: 0 };
   }
 }
 

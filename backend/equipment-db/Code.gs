@@ -323,6 +323,11 @@ function doGet(e) {
         const syncFolderUrl = e.parameter.folderUrl || null;
         return handleSyncFolderAccess({ folderUrl: syncFolderUrl });
 
+      case 'setAllFoldersPublicLink':
+        // Открыть все папки оборудования для просмотра по ссылке (ANYONE_WITH_LINK)
+        Logger.log('🔓 [doGet] Обработка setAllFoldersPublicLink');
+        return createJsonResponse(setAllFoldersPublicLink());
+
       // ========================================================================
       // ДЕЙСТВИЯ ДЛЯ СЧЕТЧИКОВ BELIOT (GET)
       // ========================================================================
