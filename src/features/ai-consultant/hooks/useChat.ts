@@ -40,7 +40,6 @@ import {
   TextContentBlock,
   ImageContentBlock,
   EquipmentContext,
-  WaterDashboardContext,
 } from '../services/consultantApi';
 import type { ChatInputMessage } from '../components/ChatInput';
 import { logUserActivity } from '../../user-activity/services/activityLogsApi';
@@ -164,7 +163,7 @@ const createMessage = (
  * @example
  * const { messages, isLoading, error, canRetry, sendMessage, retryLastMessage } = useChat(equipmentContext);
  */
-export function useChat(equipmentContext?: EquipmentContext | null, waterContext?: WaterDashboardContext | null): UseChatReturn {
+export function useChat(equipmentContext?: EquipmentContext | null): UseChatReturn {
   // --- Состояние ---
   const [messages, setMessages] = useState<ChatMessageWithMeta[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -245,8 +244,7 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
       const response = await sendChatMessage(
         apiMessages,
         controller.signal,
-        equipmentContext || undefined,
-        waterContext || undefined
+        equipmentContext || undefined
       );
       const duration = Date.now() - startTime;
 
@@ -343,8 +341,7 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
       const response = await sendChatMessage(
         lastFailed.messagesSnapshot,
         controller.signal,
-        equipmentContext || undefined,
-        waterContext || undefined
+        equipmentContext || undefined
       );
       const duration = Date.now() - startTime;
 

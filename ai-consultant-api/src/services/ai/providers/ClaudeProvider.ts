@@ -10,7 +10,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { BaseAIProvider } from '../AIProvider.js';
-import { ChatMessage, ChatResponse, ToolDefinition, EquipmentContext, WaterDashboardContext } from '../types.js';
+import { ChatMessage, ChatResponse, ToolDefinition, EquipmentContext } from '../types.js';
 import {
   convertToClaudeTools,
   extractClaudeToolCalls,
@@ -39,8 +39,7 @@ export class ClaudeProvider extends BaseAIProvider {
     messages: ChatMessage[],
     tools: ToolDefinition[],
     userId: string,
-    equipmentContext?: EquipmentContext,
-    waterContext?: WaterDashboardContext
+    equipmentContext?: EquipmentContext
   ): Promise<ChatResponse> {
     try {
       // Защита от бесконечного цикла
@@ -62,8 +61,8 @@ export class ClaudeProvider extends BaseAIProvider {
       // Конвертируем tools в формат Claude
       const claudeTools = convertToClaudeTools(tools);
 
-      // Системный промпт с учётом контекста оборудования и дашборда воды
-      const systemPrompt = this.getSystemPrompt(equipmentContext, waterContext);
+      // Системный промпт с учётом контекста оборудования
+      const systemPrompt = this.getSystemPrompt(equipmentContext);
 
       // ----------------------------------------
       // Шаг 2: Первый запрос к Claude
@@ -302,22 +301,7 @@ export class ClaudeProvider extends BaseAIProvider {
   /**
    * Системный промпт для Claude
    */
-  private getSystemPrompt(equipmentContext?: EquipmentContext, waterContext?: WaterDashboardContext): string {
-    const waterInfo = waterContext
-      ? `\n\nТЕКУЩИЙ КОНТЕКСТ ВОДНОГО ДАШБОРДА (${waterContext.monthLabel}):
-• Скважина (вход): ${waterContext.sourceMonth.toLocaleString('ru')} м³
-• Производство: ${waterContext.productionMonth.toLocaleString('ru')} м³
-• Хоз-питьевое водоснабжение: ${waterContext.domesticMonth.toLocaleString('ru')} м³
-• Потери: ${waterContext.lossesMonth.toLocaleString('ru')} м³ (${waterContext.lossesPct}%)
-  - Промывка фильтров обезжелезивания: ~${waterContext.filterLoss} м³
-  - Осмос: ~${waterContext.osmosisLoss} м³
-• Активных превышений норм: ${waterContext.activeAlerts}
-
-Пользователь сейчас просматривает дашборд воды за ${waterContext.monthLabel}.
-Если вопрос касается баланса/потерь/потребления за этот период — используй эти данные как контекст, не вызывая лишних инструментов.
-Для детального анализа, сравнения или другого периода — вызывай инструменты get_water_readings / analyze_water_consumption.`
-      : '';
-
+  private getSystemPrompt(equipmentContext?: EquipmentContext): string {
     const contextInfo = equipmentContext
       ? `\n\nКОНТЕКСТ ОБОРУДОВАНИЯ:
 Пользователь отсканировал QR-код оборудования и работает с ним:
@@ -338,7 +322,7 @@ export class ClaudeProvider extends BaseAIProvider {
       : '';
 
     return `Ты — AI-консультант по обслуживанию оборудования на производстве.
-Твоя задача — помогать сотрудникам работать с оборудованием.${contextInfo}${waterInfo}
+Твоя задача — помогать сотрудникам работать с оборудованием.${contextInfo}
 
 Ты можешь:
 1. Искать оборудование по названию или характеристикам

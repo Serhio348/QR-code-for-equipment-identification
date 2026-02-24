@@ -33,7 +33,6 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { supabase } from '@/shared/config/supabase';
-import { setAIChatWaterContext } from '@/features/ai-consultant/events/chatEvents';
 import './WaterDashboard.css';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -474,26 +473,6 @@ const WaterDashboard: React.FC = () => {
   const theoreticalFilterLoss = parseFloat((kpi.sourceMonth * FILTER_LOSS_PER_M3).toFixed(2));
   const remainingLoss = parseFloat(Math.max(0, kpi.lossesMonth - theoreticalFilterLoss).toFixed(2));
 
-  // ── Передаём KPI-контекст в AI-чат при изменении данных ──────────────────
-  useEffect(() => {
-    if (loading) return;
-    const monthLabel = new Date(selectedMonth.year, selectedMonth.month)
-      .toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
-    setAIChatWaterContext({
-      monthLabel,
-      sourceMonth: kpi.sourceMonth,
-      productionMonth: kpi.productionMonth,
-      domesticMonth: kpi.domesticMonth,
-      lossesMonth: kpi.lossesMonth,
-      lossesPct: kpi.lossesPct,
-      filterLoss: theoreticalFilterLoss,
-      osmosisLoss: remainingLoss,
-      activeAlerts: kpi.activeAlerts,
-    });
-    // Очищаем контекст при уходе с дашборда
-    return () => setAIChatWaterContext(null);
-  }, [kpi, selectedMonth, loading, theoreticalFilterLoss, remainingLoss]);
-
   // ── Domestic consumption by device name ───────────────────────────────────
   const domesticConsumptionByDevice = useMemo(() =>
     domesticDeviceNames
@@ -589,7 +568,6 @@ const WaterDashboard: React.FC = () => {
           </div>
         </div>
       </div>
-
 
       {/* ── Charts Row ─────────────────────────────────────────────────── */}
       <div className="wd-charts-row">
