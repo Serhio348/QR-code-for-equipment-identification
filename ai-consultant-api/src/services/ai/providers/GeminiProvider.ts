@@ -7,7 +7,7 @@
 
 import { GoogleGenerativeAI, Content } from '@google/generative-ai';
 import { BaseAIProvider } from '../AIProvider.js';
-import { ChatMessage, ChatResponse, ToolDefinition, EquipmentContext } from '../types.js';
+import { ChatMessage, ChatResponse, ToolDefinition, EquipmentContext, WaterDashboardContext } from '../types.js';
 import {
   convertToGeminiTools,
   extractGeminiFunctionCalls,
@@ -36,7 +36,8 @@ export class GeminiProvider extends BaseAIProvider {
     messages: ChatMessage[],
     tools: ToolDefinition[],
     userId: string,
-    equipmentContext?: EquipmentContext
+    equipmentContext?: EquipmentContext,
+    waterContext?: WaterDashboardContext
   ): Promise<ChatResponse> {
     try {
       // Защита от бесконечного цикла
@@ -52,7 +53,7 @@ export class GeminiProvider extends BaseAIProvider {
       // Создаём модель с системным промптом и tools (с учётом контекста оборудования)
       const genAI = this.client.getGenerativeModel({
         model: this.model,
-        systemInstruction: this.getSystemPrompt(equipmentContext),
+        systemInstruction: this.getSystemPrompt(equipmentContext, waterContext),
       });
 
       // Конвертируем tools в формат Gemini
@@ -291,7 +292,22 @@ export class GeminiProvider extends BaseAIProvider {
   /**
    * Системный промпт для Gemini
    */
-  private getSystemPrompt(equipmentContext?: EquipmentContext): string {
+  private getSystemPrompt(equipmentContext?: EquipmentContext, waterContext?: WaterDashboardContext): string {
+    const waterInfo = waterContext
+      ? `\n\nТЕКУЩИЙ КОНТЕКСТ ВОДНОГО ДАШБОРДА (${waterContext.monthLabel}):
+• Скважина (вход): ${waterContext.sourceMonth.toLocaleString('ru')} м³
+• Производство: ${waterContext.productionMonth.toLocaleString('ru')} м³
+• Хоз-питьевое водоснабжение: ${waterContext.domesticMonth.toLocaleString('ru')} м³
+• Потери: ${waterContext.lossesMonth.toLocaleString('ru')} м³ (${waterContext.lossesPct}%)
+  - Промывка фильтров обезжелезивания: ~${waterContext.filterLoss} м³
+  - Осмос: ~${waterContext.osmosisLoss} м³
+• Активных превышений норм: ${waterContext.activeAlerts}
+
+Пользователь сейчас просматривает дашборд воды за ${waterContext.monthLabel}.
+Если вопрос касается баланса/потерь/потребления за этот период — используй эти данные как контекст, не вызывая лишних инструментов.
+Для детального анализа, сравнения или другого периода — вызывай инструменты get_water_readings / analyze_water_consumption.`
+      : '';
+
     const contextInfo = equipmentContext
       ? `\n\nКОНТЕКСТ ОБОРУДОВАНИЯ:
 Пользователь отсканировал QR-код оборудования и работает с ним:
@@ -312,7 +328,7 @@ export class GeminiProvider extends BaseAIProvider {
       : '';
 
     return `Ты — AI-консультант по обслуживанию оборудования на производстве.
-Твоя задача — помогать сотрудникам работать с оборудованием.${contextInfo}
+Твоя задача — помогать сотрудникам работать с оборудованием.${contextInfo}${waterInfo}
 
 Ты можешь:
 1. Искать оборудование по названию или характеристикам
