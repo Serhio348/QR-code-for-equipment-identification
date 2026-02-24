@@ -6,7 +6,6 @@ import { ChatInput } from './ChatInput';
 import QRScanner from '../../common/components/QRScanner/QRScanner';
 import { useEquipmentData } from '../../equipment/hooks/useEquipmentData';
 import { logUserActivity } from '../../user-activity/services/activityLogsApi';
-import { SET_WATER_CONTEXT_EVENT, type WaterDashboardContext } from '../events/chatEvents';
 import type { Equipment } from '../../equipment/types/equipment';
 import './ChatWidget.css';
 
@@ -18,7 +17,6 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({ initialOpen = false }) =
   const [isOpen, setIsOpen] = useState(initialOpen);
   const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
   const [equipmentContext, setEquipmentContext] = useState<Equipment | null>(null);
-  const [waterContext, setWaterContext] = useState<WaterDashboardContext | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Преобразуем Equipment в EquipmentContext для передачи в хук
@@ -30,19 +28,9 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({ initialOpen = false }) =
     maintenanceSheetId: equipmentContext.maintenanceSheetId,
   } : null;
 
-  const { messages, isLoading, error, sendMessage, clearMessages } = useChat(contextForChat, waterContext);
+  const { messages, isLoading, error, sendMessage, clearMessages } = useChat(contextForChat);
   const { transcript, resetTranscript } = useSpeechRecognition();
   const { data: equipmentListData } = useEquipmentData();
-
-  // Слушаем событие установки контекста водного дашборда
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const ctx = (e as CustomEvent<WaterDashboardContext | null>).detail;
-      setWaterContext(ctx);
-    };
-    window.addEventListener(SET_WATER_CONTEXT_EVENT, handler);
-    return () => window.removeEventListener(SET_WATER_CONTEXT_EVENT, handler);
-  }, []);
 
   // Автопрокрутка к последнему сообщению
   useEffect(() => {

@@ -43,21 +43,6 @@ export interface EquipmentContext {
   googleDriveUrl?: string;
 }
 
-/**
- * Контекст дашборда воды — текущие KPI, передаётся в системный промпт AI.
- */
-export interface WaterDashboardContext {
-  monthLabel: string;
-  sourceMonth: number;
-  productionMonth: number;
-  domesticMonth: number;
-  lossesMonth: number;
-  lossesPct: number;
-  filterLoss: number;
-  osmosisLoss: number;
-  activeAlerts: number;
-}
-
 export interface ChatResponse {
   success: boolean;
   data?: {
@@ -76,8 +61,7 @@ export interface ChatResponse {
 export async function sendChatMessage(
   messages: ChatMessage[],
   signal?: AbortSignal,
-  equipmentContext?: EquipmentContext,
-  waterContext?: WaterDashboardContext
+  equipmentContext?: EquipmentContext
 ): Promise<ChatResponse> {
   // Получаем текущий токен сессии
   const { data: { session } } = await supabase.auth.getSession();
@@ -95,7 +79,6 @@ export async function sendChatMessage(
     body: JSON.stringify({
       messages,
       equipmentContext,
-      waterContext,
     }),
     signal,
   });

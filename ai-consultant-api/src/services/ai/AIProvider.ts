@@ -3,7 +3,6 @@ import {
   ChatResponse,
   ToolDefinition,
   EquipmentContext,
-  WaterDashboardContext,
 } from './types.js';
 
 /**
@@ -31,8 +30,7 @@ export interface AIProvider {
     messages: ChatMessage[],
     tools: ToolDefinition[],
     userId: string,
-    equipmentContext?: EquipmentContext,
-    waterContext?: WaterDashboardContext
+    equipmentContext?: EquipmentContext
   ): Promise<ChatResponse>;
 
   /**
