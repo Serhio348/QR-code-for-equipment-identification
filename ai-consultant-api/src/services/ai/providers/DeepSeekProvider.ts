@@ -171,34 +171,41 @@ export class DeepSeekProvider extends BaseAIProvider {
   }
 
   /**
-   * Преобразует ChatMessage[] в формат OpenAI
+   * Преобразует ChatMessage[] в формат OpenAI.
+   * DeepSeek НЕ поддерживает vision: изображения заменяются текстовым уведомлением.
    */
   private convertMessages(messages: ChatMessage[]): OpenAI.ChatCompletionMessageParam[] {
     return messages.map(msg => {
       if (typeof msg.content === 'string') {
-        // Явно указываем роль как const чтобы TypeScript сузил тип
         if (msg.role === 'assistant') {
           return { role: 'assistant' as const, content: msg.content };
         }
         return { role: 'user' as const, content: msg.content };
       }
 
-      // Мультимодальный контент (текст + изображения) — только для user
-      const content: OpenAI.ChatCompletionContentPart[] = msg.content.map(block => {
-        if (block.type === 'text') {
-          return { type: 'text' as const, text: block.text };
-        } else {
-          // Изображение в формате base64
-          return {
-            type: 'image_url' as const,
-            image_url: {
-              url: `data:${block.source.media_type};base64,${block.source.data}`,
-            },
-          };
-        }
-      });
+      // Мультимодальный контент: DeepSeek не поддерживает image_url —
+      // извлекаем только текстовые блоки, изображения заменяем описанием.
+      const textParts: string[] = [];
+      let imageCount = 0;
 
-      return { role: 'user' as const, content };
+      for (const block of msg.content) {
+        if (block.type === 'text') {
+          textParts.push(block.text);
+        } else {
+          imageCount++;
+        }
+      }
+
+      if (imageCount > 0) {
+        textParts.push(
+          `\n[⚠️ Пользователь прикрепил ${imageCount} изображение(й), но DeepSeek не поддерживает анализ фото. ` +
+          `Сообщи пользователю об этом ограничении и предложи описать содержимое изображения текстом, ` +
+          `либо переключиться на Claude или Gemini для работы с фотографиями.]`
+        );
+      }
+
+      const text = textParts.join('\n').trim();
+      return { role: 'user' as const, content: text };
     });
   }
 
