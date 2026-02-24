@@ -325,40 +325,86 @@ async function resolveDeviceIdsByName(deviceName: string): Promise<{
     };
 }
 
+// Часовой пояс Беларуси (UTC+3, без перехода на летнее время с 2011 г.)
+const MINSK_TZ = 'Europe/Minsk';
+const MINSK_OFFSET = '+03:00';
+
+/**
+ * Получить текущую дату в часовом поясе Минска (UTC+3).
+ * Используем Intl.DateTimeFormat чтобы не зависеть от системного TZ сервера
+ * (Railway разворачивает в UTC, а данные Beliot хранятся как UTC, но суточные
+ * границы должны совпадать с местным полуночью — иначе первые 3 часа пропадают).
+ */
+function getTodayMinsk(): string {
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: MINSK_TZ,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).format(new Date()); // 'YYYY-MM-DD' в Минском времени
+}
+
+/**
+ * Если строка содержит только дату (YYYY-MM-DD), добавить время и смещение +03:00.
+ * Это нужно когда AI передаёт date_from/date_to без времени.
+ */
+function ensureDateTimeTZ(dateStr: string, endOfDay = false): string {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+        return `${dateStr}T${endOfDay ? '23:59:59' : '00:00:00'}${MINSK_OFFSET}`;
+    }
+    // Если время уже есть но нет смещения — добавляем +03:00
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(dateStr)) {
+        return `${dateStr}${MINSK_OFFSET}`;
+    }
+    return dateStr;
+}
+
 /**
  * Возвращает начало и конец периода для фильтрации.
+ * Даты формируются в часовом поясе Минска (UTC+3) и содержат явное смещение,
+ * чтобы Supabase (TIMESTAMPTZ) корректно сравнивал с UTC-данными Beliot.
  */
 function getPeriodDates(period: string): { from: string; to: string } {
-    const now = new Date();
-    const today = now.toISOString().split('T')[0];
+    const today = getTodayMinsk(); // 'YYYY-MM-DD' в Минске
 
     switch (period) {
         case 'day':
-            return { from: `${today}T00:00:00`, to: `${today}T23:59:59` };
-        case 'week': {
-            const weekStart = new Date(now);
-            weekStart.setDate(now.getDate() - now.getDay() + 1);
             return {
-                from: weekStart.toISOString().split('T')[0] + 'T00:00:00',
-                to: `${today}T23:59:59`,
+                from: `${today}T00:00:00${MINSK_OFFSET}`,
+                to:   `${today}T23:59:59${MINSK_OFFSET}`,
+            };
+        case 'week': {
+            // Понедельник текущей недели (Минское время)
+            const nowMinsk = new Date(new Date().toLocaleString('en-US', { timeZone: MINSK_TZ }));
+            const dayOfWeek = nowMinsk.getDay(); // 0=Sun
+            const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+            nowMinsk.setDate(nowMinsk.getDate() + diff);
+            const pad = (n: number) => String(n).padStart(2, '0');
+            const weekStart = `${nowMinsk.getFullYear()}-${pad(nowMinsk.getMonth() + 1)}-${pad(nowMinsk.getDate())}`;
+            return {
+                from: `${weekStart}T00:00:00${MINSK_OFFSET}`,
+                to:   `${today}T23:59:59${MINSK_OFFSET}`,
             };
         }
         case 'month': {
-            const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+            const monthStart = today.substring(0, 7) + '-01'; // 'YYYY-MM-01'
             return {
-                from: monthStart.toISOString().split('T')[0] + 'T00:00:00',
-                to: `${today}T23:59:59`,
+                from: `${monthStart}T00:00:00${MINSK_OFFSET}`,
+                to:   `${today}T23:59:59${MINSK_OFFSET}`,
             };
         }
         case 'year': {
-            const yearStart = new Date(now.getFullYear(), 0, 1);
+            const yearStart = today.substring(0, 4) + '-01-01'; // 'YYYY-01-01'
             return {
-                from: yearStart.toISOString().split('T')[0] + 'T00:00:00',
-                to: `${today}T23:59:59`,
+                from: `${yearStart}T00:00:00${MINSK_OFFSET}`,
+                to:   `${today}T23:59:59${MINSK_OFFSET}`,
             };
         }
         default:
-            return { from: `${today}T00:00:00`, to: `${today}T23:59:59` };
+            return {
+                from: `${today}T00:00:00${MINSK_OFFSET}`,
+                to:   `${today}T23:59:59${MINSK_OFFSET}`,
+            };
     }
 }
 
@@ -441,10 +487,10 @@ export async function executeWaterTool(
             }
 
             if (input.date_from) {
-                query = query.gte('reading_date', input.date_from as string);
+                query = query.gte('reading_date', ensureDateTimeTZ(input.date_from as string, false));
             }
             if (input.date_to) {
-                query = query.lte('reading_date', input.date_to as string);
+                query = query.lte('reading_date', ensureDateTimeTZ(input.date_to as string, true));
             }
             if (input.reading_type) {
                 query = query.eq('reading_type', input.reading_type as string);
@@ -469,8 +515,8 @@ export async function executeWaterTool(
             let dateTo: string;
 
             if (input.date_from && input.date_to) {
-                dateFrom = input.date_from as string;
-                dateTo = input.date_to as string;
+                dateFrom = ensureDateTimeTZ(input.date_from as string, false);
+                dateTo = ensureDateTimeTZ(input.date_to as string, true);
             } else {
                 const period = getPeriodDates((input.period as string) || 'month');
                 dateFrom = period.from;
