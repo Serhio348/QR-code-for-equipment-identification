@@ -60,7 +60,7 @@ const WaterQualityJournalPage: React.FC = () => {
   const getStatusLabel = (status: AnalysisStatus): string => {
     const labels: Record<AnalysisStatus, string> = {
       in_progress: 'В работе',
-      completed: 'Завершен',
+      completed: 'Норма',
       deviation: 'Отклонение',
       cancelled: 'Отменен',
     };
@@ -135,10 +135,8 @@ const WaterQualityJournalPage: React.FC = () => {
               onChange={(e) => setStatusFilter(e.target.value as AnalysisStatus | 'all')}
             >
               <option value="all">Все статусы</option>
-              <option value="in_progress">В работе</option>
-              <option value="completed">Завершен</option>
+              <option value="completed">Норма</option>
               <option value="deviation">Отклонение</option>
-              <option value="cancelled">Отменен</option>
             </select>
           </div>
 
