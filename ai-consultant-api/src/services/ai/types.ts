@@ -39,6 +39,19 @@ export interface EquipmentContext {
   maintenanceSheetId?: string;
 }
 
+// Контекст дашборда воды — текущие KPI, передаётся в системный промпт
+export interface WaterDashboardContext {
+  monthLabel: string;       // Например: "февраль 2026"
+  sourceMonth: number;      // м³ — скважина
+  productionMonth: number;  // м³ — производство
+  domesticMonth: number;    // м³ — хоз-питьевое
+  lossesMonth: number;      // м³ — потери
+  lossesPct: number;        // % потерь
+  filterLoss: number;       // м³ — промывка фильтров (теоретическая)
+  osmosisLoss: number;      // м³ — осмос (остаток потерь)
+  activeAlerts: number;     // кол-во активных превышений норм
+}
+
 // Ответ от AI
 export interface ChatResponse {
   message: string;
