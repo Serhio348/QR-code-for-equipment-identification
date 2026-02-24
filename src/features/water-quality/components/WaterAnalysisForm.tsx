@@ -39,7 +39,7 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
   const [samplingPointId, setSamplingPointId] = useState<string>('');
   const [equipmentId, setEquipmentId] = useState<string>('');
   const [sampleDate, setSampleDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [status, setStatus] = useState<AnalysisStatus>('in_progress');
+  const [status, setStatus] = useState<AnalysisStatus>('completed');
   const [notes, setNotes] = useState<string>('');
   const [sampleCondition, setSampleCondition] = useState<SampleCondition>('normal');
   const [externalLab, setExternalLab] = useState<boolean>(false);
@@ -396,10 +396,8 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
             <div className="form-group">
               <label>Статус *</label>
               <select value={status} onChange={(e) => setStatus(e.target.value as AnalysisStatus)} required>
-                <option value="in_progress">В работе</option>
-                <option value="completed">Завершен</option>
+                <option value="completed">Норма</option>
                 <option value="deviation">Отклонение</option>
-                <option value="cancelled">Отменен</option>
               </select>
             </div>
 

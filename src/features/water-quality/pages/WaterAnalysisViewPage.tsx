@@ -40,7 +40,7 @@ const WaterAnalysisViewPage: React.FC = () => {
   const getStatusLabel = (status: AnalysisStatus): string => {
     const labels: Record<AnalysisStatus, string> = {
       in_progress: 'В работе',
-      completed: 'Завершен',
+      completed: 'Норма',
       deviation: 'Отклонение',
       cancelled: 'Отменен',
     };

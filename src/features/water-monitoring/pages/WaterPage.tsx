@@ -1,38 +1,42 @@
 /**
  * Страница приложения "Вода"
  * Содержит навигацию между разделами:
+ * - Дашборд (сводка по потреблению и качеству)
  * - Счётчики воды
  * - Анализы качества воды
  */
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import WaterDashboard from '../components/WaterDashboard';
 import BeliotDevicesTest from '../components/BeliotDevicesTest';
 import WaterQualityJournalPage from '../../water-quality/pages/WaterQualityJournalPage';
 import { ROUTES } from '@/shared/utils/routes';
 import './WaterPage.css';
 
-type WaterTab = 'counters' | 'quality';
+type WaterTab = 'dashboard' | 'counters' | 'quality';
 
 const WaterPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [activeTab, setActiveTab] = useState<WaterTab>('counters');
+  const [activeTab, setActiveTab] = useState<WaterTab>('dashboard');
 
-  // Определяем активную вкладку на основе текущего маршрута
+  // Определяем активную вкладку на основе маршрута и search-параметра ?tab=
   useEffect(() => {
     if (location.pathname.startsWith('/water-quality')) {
       setActiveTab('quality');
     } else if (location.pathname === ROUTES.WATER) {
-      setActiveTab('counters');
+      const params = new URLSearchParams(location.search);
+      setActiveTab(params.get('tab') === 'counters' ? 'counters' : 'dashboard');
     }
-  }, [location.pathname]);
+  }, [location.pathname, location.search]);
 
   const handleTabChange = (tab: WaterTab) => {
-    setActiveTab(tab);
     if (tab === 'counters') {
+      navigate(`${ROUTES.WATER}?tab=counters`);
+    } else if (tab === 'dashboard') {
       navigate(ROUTES.WATER);
-    } else if (tab === 'quality') {
+    } else {
       navigate(ROUTES.WATER_QUALITY_JOURNAL);
     }
   };
@@ -41,6 +45,15 @@ const WaterPage: React.FC = () => {
     <div className="water-page">
       <div className="water-page-header">
         <div className="water-page-tabs">
+          <button
+            className={`water-tab ${activeTab === 'dashboard' ? 'active' : ''}`}
+            onClick={() => handleTabChange('dashboard')}
+            type="button"
+            aria-label="Dashboard"
+          >
+            <span className="water-tab-icon">📊</span>
+            <span className="water-tab-text">Dashboard</span>
+          </button>
           <button
             className={`water-tab ${activeTab === 'counters' ? 'active' : ''}`}
             onClick={() => handleTabChange('counters')}
@@ -63,6 +76,7 @@ const WaterPage: React.FC = () => {
       </div>
 
       <div className="water-page-content">
+        {activeTab === 'dashboard' && <WaterDashboard />}
         {activeTab === 'counters' && <BeliotDevicesTest />}
         {activeTab === 'quality' && <WaterQualityJournalPage />}
       </div>
