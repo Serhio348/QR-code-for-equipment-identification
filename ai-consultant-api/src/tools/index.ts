@@ -67,6 +67,11 @@ import { documentTools, executeDocumentTool } from './documentTools.js';
 // - executeWaterTool: функция выполнения — запросы к Supabase напрямую
 import { waterTools, executeWaterTool } from './waterTools.js';
 
+// Tools для работы с порталом bvod.by (Playwright):
+// - browserTools: 5 инструментов (вход, список счетов, скачивание, чтение, список файлов)
+// - executeBrowserTool: функция выполнения — автоматизация браузера
+import { browserTools, executeBrowserTool } from './browserTools.js';
+
 // ============================================
 // Объединённый массив tools
 // ============================================
@@ -97,6 +102,11 @@ import { waterTools, executeWaterTool } from './waterTools.js';
  * - get_water_quality_alerts       — превышения норм качества воды
  * - add_water_quality_analysis     — создание записи анализа
  * - get_water_meter_passport       — паспорт счётчика (производитель, поверка, серийный номер)
+ * - portal_login                  — вход на портал bvod.by
+ * - portal_list_invoices          — список счетов в личном кабинете
+ * - portal_download_invoice       — скачать счёт в папку downloads/
+ * - portal_read_invoice           — прочитать PDF/Excel/CSV/TXT счёт
+ * - portal_list_downloaded        — список уже скачанных файлов
  */
 export const tools: Anthropic.Tool[] = [
     ...equipmentTools,
@@ -104,6 +114,7 @@ export const tools: Anthropic.Tool[] = [
     ...photoTools,
     ...documentTools,
     ...waterTools,
+    ...browserTools,
 ];
 
 // ============================================
@@ -152,6 +163,13 @@ const toolExecutors: Record<string, (name: string, input: Record<string, unknown
     'get_water_quality_alerts': executeWaterTool,
     'add_water_quality_analysis': executeWaterTool,
     'get_water_meter_passport': executeWaterTool,
+
+    // Browser tools → executeBrowserTool (Playwright: bvod.by portal)
+    'portal_login': executeBrowserTool,
+    'portal_list_invoices': executeBrowserTool,
+    'portal_download_invoice': executeBrowserTool,
+    'portal_read_invoice': executeBrowserTool,
+    'portal_list_downloaded': executeBrowserTool,
 };
 
 // ============================================
