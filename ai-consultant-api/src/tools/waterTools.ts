@@ -229,7 +229,29 @@ export const waterTools: Anthropic.Tool[] = [
     },
 
     // ----------------------------------------
-    // Tool 6: Создание записи анализа
+    // Tool 6: Паспорт счётчика воды
+    // ----------------------------------------
+    {
+        name: 'get_water_meter_passport',
+        description: 'Получить паспортные данные счётчика воды: производитель, серийный номер, дата изготовления, дата поверки, следующая поверка, адрес установки, объект. Используй когда пользователь спрашивает про характеристики счётчика, срок поверки, производителя или паспорт прибора.',
+        input_schema: {
+            type: 'object' as const,
+            properties: {
+                device_id: {
+                    type: 'string',
+                    description: 'ID устройства/счётчика. Если не указан — вернёт паспорта всех счётчиков.',
+                },
+                device_name: {
+                    type: 'string',
+                    description: 'Название счётчика или объекта установки (альтернатива device_id). Агент автоматически найдёт нужный device_id.',
+                },
+            },
+            required: [],
+        },
+    },
+
+    // ----------------------------------------
+    // Tool 7: Создание записи анализа
     // ----------------------------------------
     {
         name: 'add_water_quality_analysis',
@@ -893,6 +915,139 @@ export async function executeWaterTool(
                 },
                 results_saved: savedResults.length,
                 results: savedResults,
+            };
+        }
+
+        // ----------------------------------------
+        // Паспорт счётчика воды
+        // ----------------------------------------
+        case 'get_water_meter_passport': {
+            // Определяем device_id — напрямую или через поиск по названию
+            let targetIds: string[] = [];
+
+            if (input.device_id) {
+                targetIds = [input.device_id as string];
+            } else if (input.device_name) {
+                const resolved = await resolveDeviceIdsByName(input.device_name as string);
+                if (resolved.device_ids.length === 0) {
+                    return {
+                        found: false,
+                        message: `Счётчик с названием "${input.device_name}" не найден. Используй get_water_devices для поиска.`,
+                    };
+                }
+                targetIds = resolved.device_ids;
+            }
+
+            // Запрос паспортных данных из beliot_device_overrides
+            let query = supabase
+                .from('beliot_device_overrides')
+                .select(`
+                    device_id,
+                    name,
+                    address,
+                    serial_number,
+                    object_name,
+                    device_group,
+                    device_role,
+                    manufacturer,
+                    manufacture_date,
+                    verification_date,
+                    next_verification_date,
+                    last_modified,
+                    modified_by
+                `);
+
+            if (targetIds.length > 0) {
+                query = query.in('device_id', targetIds);
+            }
+
+            const { data, error } = await query.order('name');
+            if (error) throw new Error(`Ошибка получения паспорта: ${error.message}`);
+
+            if (!data || data.length === 0) {
+                return {
+                    found: false,
+                    message: 'Паспортные данные не найдены. Возможно, данные ещё не заполнены.',
+                };
+            }
+
+            // Форматируем и добавляем статус поверки для каждого счётчика
+            const today = new Date();
+            const passports = data.map(d => {
+                let verificationStatus = 'неизвестно';
+                let daysUntilVerification: number | null = null;
+
+                if (d.next_verification_date) {
+                    const nextDate = new Date(d.next_verification_date);
+                    daysUntilVerification = Math.ceil(
+                        (nextDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+                    );
+
+                    if (daysUntilVerification < 0) {
+                        verificationStatus = `просрочена (${Math.abs(daysUntilVerification)} дней назад)`;
+                    } else if (daysUntilVerification <= 30) {
+                        verificationStatus = `истекает через ${daysUntilVerification} дней`;
+                    } else {
+                        verificationStatus = `действительна (осталось ${daysUntilVerification} дней)`;
+                    }
+                }
+
+                const roleLabels: Record<string, string> = {
+                    source: 'Источник (скважина)',
+                    production: 'Производство',
+                    domestic: 'Хоз-питьевое',
+                };
+
+                return {
+                    device_id: d.device_id,
+                    name: d.name || '(без названия)',
+                    object_name: d.object_name || null,
+                    address: d.address || null,
+                    device_group: d.device_group || null,
+                    role: d.device_role ? (roleLabels[d.device_role] || d.device_role) : null,
+                    passport: {
+                        serial_number: d.serial_number || null,
+                        manufacturer: d.manufacturer || null,
+                        manufacture_date: d.manufacture_date
+                            ? new Date(d.manufacture_date).toLocaleDateString('ru-RU')
+                            : null,
+                        verification_date: d.verification_date
+                            ? new Date(d.verification_date).toLocaleDateString('ru-RU')
+                            : null,
+                        next_verification_date: d.next_verification_date
+                            ? new Date(d.next_verification_date).toLocaleDateString('ru-RU')
+                            : null,
+                        verification_status: verificationStatus,
+                        days_until_verification: daysUntilVerification,
+                    },
+                    last_modified: d.last_modified
+                        ? new Date(d.last_modified).toLocaleDateString('ru-RU')
+                        : null,
+                    modified_by: d.modified_by || null,
+                };
+            });
+
+            // Предупреждения о просроченных или истекающих поверках
+            const overdue = passports.filter(p =>
+                p.passport.days_until_verification !== null &&
+                p.passport.days_until_verification < 0
+            );
+            const expiringSoon = passports.filter(p =>
+                p.passport.days_until_verification !== null &&
+                p.passport.days_until_verification >= 0 &&
+                p.passport.days_until_verification <= 30
+            );
+
+            return {
+                found: true,
+                count: passports.length,
+                passports,
+                alerts: {
+                    overdue_count: overdue.length,
+                    overdue_meters: overdue.map(p => p.name),
+                    expiring_soon_count: expiringSoon.length,
+                    expiring_soon_meters: expiringSoon.map(p => p.name),
+                },
             };
         }
 

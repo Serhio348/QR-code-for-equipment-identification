@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useChat } from '../hooks/useChat';
+import { useAlerts } from '../hooks/useAlerts';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
@@ -19,6 +20,7 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({ initialOpen = false }) =
   const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
   const [equipmentContext, setEquipmentContext] = useState<Equipment | null>(null);
   const [waterContext, setWaterContext] = useState<WaterDashboardContext | null>(null);
+  const [alertsBannerDismissed, setAlertsBannerDismissed] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Преобразуем Equipment в EquipmentContext для передачи в хук
@@ -31,6 +33,7 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({ initialOpen = false }) =
   } : null;
 
   const { messages, isLoading, error, sendMessage, clearMessages } = useChat(contextForChat, waterContext);
+  const { alerts } = useAlerts();
   const { transcript, resetTranscript } = useSpeechRecognition();
   const { data: equipmentListData } = useEquipmentData();
 
@@ -152,6 +155,11 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({ initialOpen = false }) =
         title={isOpen ? 'Закрыть консультанта' : 'AI Консультант'}
       >
         {isOpen ? '✕' : '💬'}
+        {!isOpen && alerts.total > 0 && (
+          <span className={`ai-chat-widget__badge ${alerts.critical > 0 ? 'ai-chat-widget__badge--critical' : 'ai-chat-widget__badge--warning'}`}>
+            {alerts.total}
+          </span>
+        )}
       </button>
 
       {/* Окно чата */}
@@ -170,6 +178,41 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({ initialOpen = false }) =
               🗑️
             </button>
           </div>
+
+          {/* Баннер алертов по воде */}
+          {alerts.total > 0 && !alertsBannerDismissed && (
+            <div className={`ai-chat-widget__alerts-banner ${alerts.critical > 0 ? 'ai-chat-widget__alerts-banner--critical' : 'ai-chat-widget__alerts-banner--warning'}`}>
+              <div className="ai-chat-widget__alerts-banner-body">
+                <span className="ai-chat-widget__alerts-banner-icon">
+                  {alerts.critical > 0 ? '🔴' : '🟡'}
+                </span>
+                <span className="ai-chat-widget__alerts-banner-text">
+                  {alerts.critical > 0 && <strong>{alerts.critical} критич.</strong>}
+                  {alerts.critical > 0 && alerts.warnings > 0 && ' · '}
+                  {alerts.warnings > 0 && <span>{alerts.warnings} предупр.</span>}
+                  {' — '}
+                  {alerts.items[0]?.title}
+                  {alerts.total > 1 && ` (+${alerts.total - 1})`}
+                </span>
+              </div>
+              <div className="ai-chat-widget__alerts-banner-actions">
+                <button
+                  className="ai-chat-widget__alerts-banner-ask"
+                  onClick={() => sendMessage({ text: 'Покажи все активные алерты по воде', photos: [] })}
+                  title="Спросить AI об алертах"
+                >
+                  Подробнее
+                </button>
+                <button
+                  className="ai-chat-widget__alerts-banner-close"
+                  onClick={() => setAlertsBannerDismissed(true)}
+                  title="Скрыть"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Контекст оборудования */}
           {equipmentContext && (

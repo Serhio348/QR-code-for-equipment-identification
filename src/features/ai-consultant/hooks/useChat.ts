@@ -37,6 +37,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   ChatMessage,
   sendChatMessage,
+  fetchChatHistory,
   TextContentBlock,
   ImageContentBlock,
   EquipmentContext,
@@ -181,6 +182,35 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
   // useRef вместо useState — не нужен ре-рендер при смене контроллера.
   // Хранит текущий AbortController для отмены запроса при размонтировании
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Флаг: история уже загружена, не загружать повторно
+  const historyLoadedRef = useRef(false);
+
+  // ----------------------------------------
+  // Загрузка истории при открытии чата
+  // ----------------------------------------
+  // Срабатывает один раз при монтировании компонента.
+  // Загружает последние 20 сообщений из БД и показывает их в чате.
+  // Пользователь видит прошлые разговоры как будто чат не закрывался.
+  useEffect(() => {
+    if (historyLoadedRef.current) return;
+    historyLoadedRef.current = true;
+
+    fetchChatHistory(20).then(history => {
+      if (history.length === 0) return;
+
+      // Превращаем ChatMessage[] → ChatMessageWithMeta[] (добавляем id и timestamp)
+      const historyWithMeta: ChatMessageWithMeta[] = history.map((msg, index) => ({
+        ...msg,
+        id: `history-${index}-${Date.now()}`,
+        timestamp: Date.now() - (history.length - index) * 1000,
+      }));
+
+      setMessages(historyWithMeta);
+    }).catch(() => {
+      // Тихая ошибка — чат работает без истории
+    });
+  }, []);
 
   // Отмена текущего запроса при размонтировании компонента.
   // Предотвращает setState на размонтированном компоненте
