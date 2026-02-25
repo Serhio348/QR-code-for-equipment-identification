@@ -29,6 +29,10 @@ export const config = {
   // GAS API (для работы с оборудованием)
   gasApiUrl: process.env.GAS_API_URL || '',
 
+  // Портал bvod.by (скачивание счетов)
+  bvodLogin: process.env.BVOD_LOGIN || '',
+  bvodPassword: process.env.BVOD_PASSWORD || '',
+
 
   // CORS
   allowedOrigins: (process.env.ALLOWED_ORIGINS || 'http://localhost:5173').split(','),
