@@ -56,7 +56,10 @@ let browserInstance: Browser | null = null;
 async function getBrowser(): Promise<Browser> {
     if (!browserInstance || !browserInstance.isConnected()) {
         browserInstance = await chromium.launch({
-            headless: true,         // true = без GUI (для сервера)
+            headless: true,
+            // В Docker (Alpine) используем системный Chromium через env-переменную.
+            // В dev-режиме (env не задан) Playwright использует свой бандлированный браузер.
+            executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
             args: ['--no-sandbox', '--disable-setuid-sandbox'],
         });
     }
