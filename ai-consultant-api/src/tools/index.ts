@@ -63,7 +63,7 @@ import { photoTools, executePhotoTool } from './photoTools.js';
 import { documentTools, executeDocumentTool } from './documentTools.js';
 
 // Tools для работы с водными данными (Supabase):
-// - waterTools: 6 инструментов (показания счётчиков, анализ потребления, качество воды, алерты)
+// - waterTools: 7 инструментов (показания счётчиков, анализ потребления, качество воды, алерты, паспорт)
 // - executeWaterTool: функция выполнения — запросы к Supabase напрямую
 import { waterTools, executeWaterTool } from './waterTools.js';
 
@@ -96,6 +96,7 @@ import { waterTools, executeWaterTool } from './waterTools.js';
  * - get_water_quality_analyses     — журнал анализов качества воды
  * - get_water_quality_alerts       — превышения норм качества воды
  * - add_water_quality_analysis     — создание записи анализа
+ * - get_water_meter_passport       — паспорт счётчика (производитель, поверка, серийный номер)
  */
 export const tools: Anthropic.Tool[] = [
     ...equipmentTools,
@@ -150,6 +151,7 @@ const toolExecutors: Record<string, (name: string, input: Record<string, unknown
     'get_water_quality_analyses': executeWaterTool,
     'get_water_quality_alerts': executeWaterTool,
     'add_water_quality_analysis': executeWaterTool,
+    'get_water_meter_passport': executeWaterTool,
 };
 
 // ============================================
