@@ -69,6 +69,9 @@ import healthRouter from './routes/health.js';
 // equipmentRouter — прокси для загрузки файлов в Google Drive (POST /api/equipment/*)
 import equipmentRouter from './routes/equipment.js';
 
+// alertsRouter — проактивные алерты по воде (GET /api/alerts)
+import alertsRouter from './routes/alerts.js';
+
 // ============================================
 // Валидация конфигурации
 // ============================================
@@ -167,6 +170,10 @@ app.use('/api/chat', chatRouter);
 // Фронтенд не может напрямую отправлять POST на GAS (CORS preflight блокируется).
 // Этот роутер проксирует запросы через Node.js бэкенд.
 app.use('/api/equipment', equipmentRouter);
+
+// Проактивные алерты по воде — GET /api/alerts
+// Возвращает активные превышения качества воды и просроченные поверки счётчиков.
+app.use('/api/alerts', alertsRouter);
 
 // ============================================
 // Обработка 404 (Not Found)
