@@ -67,6 +67,14 @@ export interface ChatResponse {
   error?: string;
 }
 
+export interface HistoryResponse {
+  success: boolean;
+  data?: {
+    messages: ChatMessage[];
+  };
+  error?: string;
+}
+
 /**
  * Отправить сообщение в AI-консультант
  * @param messages - История сообщений
@@ -106,4 +114,27 @@ export async function sendChatMessage(
   }
 
   return await response.json();
+}
+
+/**
+ * Загрузить историю чата из прошлых сессий.
+ * Вызывается при открытии чата — показывает прошлые сообщения.
+ *
+ * @param limit - сколько сообщений загрузить (по умолчанию 20)
+ */
+export async function fetchChatHistory(limit = 20): Promise<ChatMessage[]> {
+  const { data: { session } } = await supabase.auth.getSession();
+
+  if (!session?.access_token) return [];
+
+  const response = await fetch(`${API_URL}/api/chat/history?limit=${limit}`, {
+    headers: {
+      'Authorization': `Bearer ${session.access_token}`,
+    },
+  });
+
+  if (!response.ok) return [];
+
+  const data: HistoryResponse = await response.json();
+  return data.data?.messages || [];
 }
