@@ -310,9 +310,10 @@ export async function downloadInvoice(
     const { context, page } = await loginToPortal();
 
     try {
-        // Начинаем ожидание скачивания
+        // Начинаем ожидание скачивания.
+        // page.waitForEvent (не context) — у BrowserContext нет 'download' в типах
         const [download] = await Promise.all([
-            context.waitForEvent('download', { timeout: 30000 }),
+            page.waitForEvent('download', { timeout: 30000 }),
             page.goto(downloadUrl, { waitUntil: 'domcontentloaded', timeout: 30000 }),
         ]);
 
@@ -370,8 +371,10 @@ export async function readInvoiceFile(filePath: string): Promise<string> {
 
     switch (ext) {
         case '.pdf': {
-            // Динамический импорт pdf-parse
-            const pdfParse = (await import('pdf-parse')).default;
+            // pdf-parse v2 может экспортировать как default (ESM) или как module.exports (CJS)
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const pdfModule = await import('pdf-parse') as any;
+            const pdfParse = pdfModule.default ?? pdfModule;
             const data = await pdfParse(buffer);
             return data.text;
         }
