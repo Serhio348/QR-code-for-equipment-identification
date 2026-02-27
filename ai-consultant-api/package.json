@@ -16,7 +16,7 @@
     "express": "^4.21.0",
     "helmet": "^7.1.0",
     "openai": "^6.19.0",
-    "pdf-parse": "^2.4.5",
+    "pdf-parse": "^1.1.1",
     "playwright": "^1.58.2",
     "xlsx": "^0.18.5"
   },

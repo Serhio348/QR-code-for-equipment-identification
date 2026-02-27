@@ -99,13 +99,16 @@ router.get('/', authMiddleware, async (_req: AuthenticatedRequest, res) => {
         const todayStr = today.toISOString().split('T')[0];
         const in30DaysStr = in30Days.toISOString().split('T')[0];
 
+        // Колонка next_verification_date появится в таблице после добавления миграции.
+        // Пока что запрос может вернуть ошибку — она обрабатывается как предупреждение.
         const { data: meters, error: metersError } = await supabase
             .from('beliot_device_overrides')
-            .select('device_id, device_name, next_verification_date')
+            .select('device_id, name, next_verification_date')
             .not('next_verification_date', 'is', null)
             .lte('next_verification_date', in30DaysStr);
 
         if (metersError) {
+            // Таблица может не иметь колонки next_verification_date — игнорируем
             console.warn('[Alerts] beliot_device_overrides error:', metersError.message);
         }
 
@@ -116,15 +119,15 @@ router.get('/', authMiddleware, async (_req: AuthenticatedRequest, res) => {
                 const daysLeft = Math.ceil(
                     (new Date(verDate).getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
                 );
-                const name = meter.device_name || meter.device_id;
+                const label = (meter.name as string | null) || meter.device_id;
 
                 items.push({
                     id: `mv-${meter.device_id}`,
                     type: 'meter_verification',
                     severity: isExpired ? 'critical' : 'warning',
                     title: isExpired
-                        ? `Поверка просрочена: ${name}`
-                        : `Поверка истекает: ${name}`,
+                        ? `Поверка просрочена: ${label}`
+                        : `Поверка истекает: ${label}`,
                     description: isExpired
                         ? `Просрочено ${Math.abs(daysLeft)} дн. назад (дата: ${verDate})`
                         : `Осталось ${daysLeft} дн. (дата: ${verDate})`,

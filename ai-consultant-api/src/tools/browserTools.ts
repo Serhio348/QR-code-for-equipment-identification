@@ -40,7 +40,7 @@ export const browserTools: Anthropic.Tool[] = [
     // ----------------------------------------
     {
         name: 'portal_login',
-        description: 'Войти на портал bvod.by используя сохранённые учётные данные. Сессия кэшируется — повторный вход нужен только если сессия истекла. Вызывай перед другими portal_ инструментами.',
+        description: 'Войти на портал bvod.by. ОБЯЗАТЕЛЬНО вызывай ПЕРВЫМ при каждом запросе о счетах bvod.by — даже если ранее уже входил. Автоматически проверяет сессию: если активна — возвращает сразу; если истекла — выполняет новый вход и сохраняет сессию. Без этого вызова другие portal_* инструменты упадут с ошибкой "сессия истекла".',
         input_schema: {
             type: 'object' as const,
             properties: {},
@@ -145,26 +145,31 @@ export async function executeBrowserTool(
         // Список счетов
         // ----------------------------------------
         case 'portal_list_invoices': {
-            const invoices = await getInvoicesList();
+            const result = await getInvoicesList();
 
-            if (invoices.length === 0) {
+            if (result.invoices.length === 0) {
                 return {
                     found: false,
-                    message: 'Счета не найдены. Возможно, нужно перейти в нужный раздел личного кабинета.',
+                    current_url: result.pageUrl,
+                    page_text: result.pageText,
+                    all_links: result.otherLinks,
+                    message: 'Файловых ссылок не найдено. Изучи page_text и all_links — там видно что реально в браузере. Возможно нужная ссылка в all_links.',
                 };
             }
 
             return {
                 found: true,
-                count: invoices.length,
-                invoices: invoices.map((inv, i) => ({
+                count: result.invoices.length,
+                current_url: result.pageUrl,
+                page_text: result.pageText,
+                invoices: result.invoices.map((inv, i) => ({
                     index: i + 1,
                     title: inv.title,
-                    date: inv.date || 'не указана',
-                    amount: inv.amount || 'не указана',
                     file_type: inv.fileType,
                     download_url: inv.downloadUrl,
                 })),
+                // Остальные ссылки на случай если AI захочет проверить другие разделы
+                other_links: result.otherLinks.slice(0, 20),
             };
         }
 
