@@ -69,6 +69,17 @@ export class ClaudeProvider extends BaseAIProvider {
       // Шаг 2: Первый запрос к Claude
       // ----------------------------------------
 
+      // Проверяем, связан ли запрос с порталом bvod.by.
+      // Если да — принудительно вызываем portal_login через tool_choice.
+      // Это критично: без этого Claude отвечает из памяти ("не могу открыть сайт"),
+      // игнорируя системный промпт и не вызывая инструменты вовсе.
+      const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+      const lastContent = typeof lastUserMsg?.content === 'string'
+        ? lastUserMsg.content
+        : '';
+      const isBvodQuery = /bvod|брестводоканал/i.test(lastContent);
+      const hasPortalLogin = claudeTools.some(t => t.name === 'portal_login');
+
       // Отправляем всю историю переписки + системный промпт + определения tools.
       // Claude проанализирует контекст и либо:
       // а) Сразу ответит текстом (stop_reason: "end_turn")
@@ -79,6 +90,12 @@ export class ClaudeProvider extends BaseAIProvider {
         system: systemPrompt,
         tools: claudeTools,
         messages: claudeMessages,
+        // При запросах о bvod.by принудительно вызываем portal_login первым.
+        // Без этого Claude галлюцинирует "сайт недоступен" вместо вызова инструментов.
+        // Последующие итерации цикла используют auto (tool_choice не задан).
+        ...(isBvodQuery && hasPortalLogin
+          ? { tool_choice: { type: 'tool' as const, name: 'portal_login' } }
+          : {}),
       });
 
       // ----------------------------------------
@@ -423,7 +440,12 @@ export class ClaudeProvider extends BaseAIProvider {
     - Прочитать текст скачанного файла: portal_read_invoice
     - Список уже скачанных ранее файлов: portal_list_downloaded
     Стандартная цепочка: portal_login → portal_list_invoices → portal_download_invoice → portal_read_invoice
-    Используй эти инструменты когда пользователь спрашивает про счета водоканала, суммы оплаты, задолженность, скачать или посмотреть счёт.
+
+    КРИТИЧЕСКИ ВАЖНО для bvod.by:
+    1. ВСЕГДА вызывай portal_login ПЕРВЫМ — при каждом запросе о счетах, КАЖДЫЙ РАЗ. Не пропускай даже если раньше уже входил. Сессия могла истечь.
+    2. Если portal_list_invoices вернул ошибку "сессия истекла" — вызови portal_login снова, затем portal_list_invoices.
+    3. НИКОГДА не отвечай по памяти о содержимом сайта — только из результатов инструментов.
+    4. Если portal_list_invoices вернул page_text без файлов — сообщи что видит браузер и спроси как продолжить.
 
 Отвечай кратко и по делу. Используй эмодзи для наглядности.
 Язык общения: русский.
