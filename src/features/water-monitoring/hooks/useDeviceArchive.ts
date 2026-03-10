@@ -61,15 +61,9 @@ export function useDeviceArchive(deviceId: string | null) {
   const [isArchiveSettingsCollapsed, setIsArchiveSettingsCollapsed] = useState(false);
 
   // ─── Загрузка данных ──────────────────────────────────────────────────────
-
-  const activeDeviceId = isArchiveOpen && archiveDataLoaded ? deviceId : null;
-
-  const endDatePlusOne = useMemo(() => {
-    if (!archiveEndDate) return undefined;
-    const d = new Date(`${archiveEndDate}T23:59:59.999Z`);
-    d.setDate(d.getDate() + 1);
-    return d.toISOString();
-  }, [archiveEndDate]);
+  // ВАЖНО: передаём deviceId напрямую (не через условие), чтобы loadByPeriod
+  // всегда замыкался над реальным deviceId, а не null.
+  // autoLoad: false гарантирует, что данные не загружаются автоматически.
 
   const {
     readings: archiveReadingsRaw,
@@ -77,11 +71,9 @@ export function useDeviceArchive(deviceId: string | null) {
     error: archiveError,
     refresh: refreshArchive,
     loadByPeriod,
-  } = useBeliotDeviceReadings(activeDeviceId, {
+  } = useBeliotDeviceReadings(deviceId, {
     reading_type: 'hourly',
     limit: ARCHIVE_DATA_LIMIT,
-    start_date: archiveStartDate ? `${archiveStartDate}T00:00:00.000Z` : undefined,
-    end_date: endDatePlusOne,
     autoLoad: false,
   });
 
