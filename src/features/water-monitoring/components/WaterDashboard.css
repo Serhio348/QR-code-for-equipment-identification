@@ -1,0 +1,630 @@
+/* ============================================================
+   WaterDashboard — стили главного дашборда раздела «Вода»
+   ============================================================ */
+
+/* ── Root container ──────────────────────────────────────────── */
+.wd {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ── Loading ─────────────────────────────────────────────────── */
+.wd-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 60px 20px;
+  color: #667eea;
+  font-size: 14px;
+}
+
+.wd-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid rgba(102, 126, 234, 0.2);
+  border-top-color: #667eea;
+  border-radius: 50%;
+  animation: wd-spin 0.8s linear infinite;
+}
+
+@keyframes wd-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Warning banner ──────────────────────────────────────────── */
+.wd-warning {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 13px;
+  color: #92400e;
+  line-height: 1.5;
+}
+
+/* ── KPI Row ─────────────────────────────────────────────────── */
+.wd-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.wd-kpi {
+  background: white;
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.07);
+  border-left: 4px solid transparent;
+}
+
+.wd-kpi--blue   { border-left-color: #1e40af; }
+.wd-kpi--green  { border-left-color: #22c55e; }
+.wd-kpi--orange { border-left-color: #f97316; }
+.wd-kpi--red    { border-left-color: #ef4444; }
+.wd-kpi--purple { border-left-color: #a855f7; }
+.wd-kpi--teal   { border-left-color: #14b8a6; }
+
+.wd-kpi__icon {
+  font-size: 26px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.wd-kpi__value {
+  font-size: 17px;
+  font-weight: 700;
+  color: #1f2937;
+  line-height: 1.2;
+}
+
+.wd-kpi__pct {
+  font-size: 13px;
+  font-weight: 500;
+  color: #6b7280;
+  margin-left: 4px;
+}
+
+.wd-kpi__label {
+  font-size: 11px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+.wd-kpi__sub {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+/* ── Charts Row ──────────────────────────────────────────────── */
+.wd-charts-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* ── Cards ───────────────────────────────────────────────────── */
+.wd-card {
+  background: white;
+  border-radius: 10px;
+  padding: 14px 16px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.07);
+}
+
+.wd-card__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.wd-card__header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  flex: 1;
+}
+
+.wd-card__hint {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+/* ── No-data placeholder ─────────────────────────────────────── */
+.wd-no-data {
+  padding: 40px 20px;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 13px;
+}
+
+/* ── Balance chart wrapper (chart + right filter panel) ──────── */
+.wd-balance-wrap {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.wd-balance-chart {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── Device filter panel (right side of balance chart) ───────── */
+.wd-device-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 120px;
+  width: 160px;
+  flex-shrink: 0;
+  padding-top: 8px;
+}
+
+
+.wd-device-filter__item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  color: #374151;
+  text-align: left;
+  transition: opacity 0.15s, background 0.1s;
+  width: 100%;
+}
+
+.wd-device-filter__item:hover {
+  background: #f3f4f6;
+}
+
+.wd-device-filter__item--hidden {
+  opacity: 0.35;
+  font-weight: 400;
+  text-decoration: line-through;
+}
+
+.wd-device-filter__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+/* Скважина — линия-индикатор вместо квадрата */
+.wd-device-filter__dot--line {
+  height: 3px;
+  width: 14px;
+  border-radius: 2px;
+}
+
+.wd-device-filter__name {
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+/* ── Period selector (balance chart) ────────────────────────── */
+.wd-period-select {
+  padding: 3px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #374151;
+  background: white;
+  cursor: pointer;
+}
+
+.wd-period-select:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+/* ── Sampling point selector ─────────────────────────────────── */
+.wd-point-select {
+  padding: 4px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #374151;
+  background: white;
+  cursor: pointer;
+  max-width: 160px;
+}
+
+.wd-point-select:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+/* ── Production donut chart ──────────────────────────────────── */
+.wd-prod-donut {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wd-prod-donut__legend {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.wd-prod-donut__total {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1f2937;
+  line-height: 1.1;
+}
+
+.wd-prod-donut__total-label {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-bottom: 4px;
+}
+
+.wd-prod-donut__item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #374151;
+}
+
+.wd-prod-donut__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.wd-prod-donut__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.wd-prod-donut__val {
+  font-weight: 600;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+/* ── Radar legend ────────────────────────────────────────────── */
+.wd-radar-legend {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.wd-radar-legend__item        { font-size: 10px; color: #6b7280; }
+.wd-radar-legend__item--ok    { color: #667eea; }
+.wd-radar-legend__item--warn  { color: #f97316; }
+.wd-radar-legend__item--bad   { color: #ef4444; }
+
+/* ── KPI split rows (losses breakdown) ──────────────────────── */
+.wd-kpi__split-row {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 12px;
+  color: #374151;
+  margin-top: 3px;
+}
+
+.wd-kpi__split-row span:first-child {
+  color: #6b7280;
+  min-width: 60px;
+}
+
+.wd-kpi__split-row strong {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* ── Domestic distribution card ──────────────────────────────── */
+.wd-card--domestic-dist {
+  width: 100%;
+}
+
+.wd-domestic-dist {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.wd-domestic-dist__item {
+  display: grid;
+  grid-template-columns: 160px 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.wd-domestic-dist__name {
+  font-size: 13px;
+  color: #374151;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wd-domestic-dist__track {
+  height: 10px;
+  background: #f3f4f6;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.wd-domestic-dist__bar {
+  height: 100%;
+  border-radius: 5px;
+  transition: width 0.4s ease;
+  min-width: 4px;
+}
+
+.wd-domestic-dist__val {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f2937;
+  white-space: nowrap;
+}
+
+.wd-domestic-dist__pct {
+  font-size: 12px;
+  color: #6b7280;
+  min-width: 42px;
+  text-align: right;
+}
+
+@media (max-width: 600px) {
+  .wd-domestic-dist__item {
+    grid-template-columns: 120px 1fr auto auto;
+  }
+}
+
+/* ── Theoretical losses card ─────────────────────────────────── */
+.wd-card--theory {
+  width: 100%;
+}
+
+.wd-theory-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.wd-theory-item {
+  background: #f9fafb;
+  border-radius: 8px;
+  padding: 10px 14px;
+  border-left: 3px solid #e5e7eb;
+}
+
+.wd-theory-item--highlight {
+  border-left-color: #f97316;
+  background: #fff7ed;
+}
+
+.wd-theory-item__label {
+  font-size: 11px;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.wd-theory-hint {
+  font-size: 10px;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+.wd-theory-item__value {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.wd-theory-item__value--blue   { color: #1e40af; }
+.wd-theory-item__value--teal   { color: #0f766e; }
+.wd-theory-item__value--green  { color: #166534; }
+.wd-theory-item__value--orange { color: #c2410c; }
+.wd-theory-item__value--red    { color: #b91c1c; }
+.wd-theory-item__value--gray   { color: #6b7280; }
+
+.wd-theory-pct {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  margin-left: 6px;
+}
+
+/* ── Alerts card ─────────────────────────────────────────────── */
+.wd-card--alerts {
+  width: 100%;
+}
+
+.wd-alerts-count {
+  background: #ef4444;
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 10px;
+}
+
+.wd-alerts-table-wrap {
+  overflow-x: auto;
+}
+
+.wd-alerts-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.wd-alerts-table th {
+  background: #f9fafb;
+  color: #6b7280;
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.wd-alerts-table td {
+  padding: 9px 10px;
+  border-bottom: 1px solid #f3f4f6;
+  vertical-align: middle;
+}
+
+.wd-alert-row:last-child td { border-bottom: none; }
+
+.wd-alert-row--critical td { background: rgba(239, 68, 68, 0.04); }
+.wd-alert-row--high     td { background: rgba(249, 115, 22, 0.04); }
+.wd-alert-row--medium   td { background: rgba(234, 179, 8, 0.04); }
+
+.wd-alert-priority {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+}
+
+.wd-alert-priority__label {
+  color: #6b7280;
+  font-size: 11px;
+}
+
+.wd-alert-value {
+  font-weight: 600;
+  color: #1f2937;
+  white-space: nowrap;
+}
+
+.wd-alert-deviation {
+  display: inline-block;
+  background: #fee2e2;
+  color: #b91c1c;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.wd-alert-msg {
+  color: #374151;
+  max-width: 280px;
+}
+
+.wd-alert-date {
+  white-space: nowrap;
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+.wd-no-alerts {
+  padding: 20px;
+  text-align: center;
+  color: #22c55e;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* ── Info row ────────────────────────────────────────────────── */
+.wd-info-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  align-items: center;
+  background: white;
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-size: 12px;
+  color: #6b7280;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.07);
+}
+
+.wd-info-item strong {
+  color: #374151;
+}
+
+.wd-info-devices {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.wd-device-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.wd-device-tag--source     { background: #dbeafe; color: #1e40af; }
+.wd-device-tag--production { background: #e0e7ff; color: #3730a3; }
+.wd-device-tag--domestic   { background: #fef3c7; color: #92400e; }
+.wd-device-tag--none       { background: #f3f4f6; color: #6b7280; }
+
+/* ── Responsive ──────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .wd-kpi-row {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .wd-charts-row {
+    grid-template-columns: 1fr;
+  }
+
+  .wd-theory-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .wd-kpi-row {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  .wd-kpi {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .wd-kpi__icon  { font-size: 20px; }
+  .wd-kpi__value { font-size: 14px; }
+
+  .wd-theory-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .wd-alerts-table th,
+  .wd-alerts-table td {
+    padding: 6px 7px;
+    font-size: 12px;
+  }
+}

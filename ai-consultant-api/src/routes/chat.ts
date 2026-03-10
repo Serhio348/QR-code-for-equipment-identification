@@ -40,7 +40,7 @@ import { Router, Response } from 'express';
 // ChatMessage — тип сообщения { role: 'user' | 'assistant', content: string }
 // ToolDefinition — универсальный формат определения tool
 // EquipmentContext — контекст оборудования для поиска в конкретной папке
-import { ProviderFactory, type ChatMessage, type ToolDefinition, type EquipmentContext } from '../services/ai/index.js';
+import { ProviderFactory, type ChatMessage, type ToolDefinition, type EquipmentContext, type WaterDashboardContext } from '../services/ai/index.js';
 
 // tools — определения всех доступных инструментов для AI
 import { tools } from '../tools/index.js';
@@ -95,6 +95,7 @@ router.options('/', (req, res) => {
 interface ChatRequestBody {
     messages: ChatMessage[];
     equipmentContext?: EquipmentContext;
+    waterContext?: WaterDashboardContext;
 }
 
 // ============================================
@@ -121,7 +122,7 @@ interface ChatRequestBody {
  */
 router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const { messages, equipmentContext } = req.body as ChatRequestBody;
+        const { messages, equipmentContext, waterContext } = req.body as ChatRequestBody;
 
         // ----------------------------------------
         // Валидация: messages обязателен и не пуст
@@ -174,7 +175,8 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
             messages,
             tools as ToolDefinition[], // Type assertion для совместимости Anthropic.Tool с ToolDefinition
             req.user?.id || '',
-            equipmentContext
+            equipmentContext,
+            waterContext
         );
 
         // Успешный ответ — оборачиваем в { success, data }

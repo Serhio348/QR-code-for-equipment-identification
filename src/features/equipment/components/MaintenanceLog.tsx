@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { MaintenanceEntry, MaintenanceEntryInput, Equipment } from '../types/equipment';
+import { MaintenanceEntry, MaintenanceEntryInput, MaintenanceFile, Equipment } from '../types/equipment';
 import { TechnicalInspectionData } from '../types/technicalInspection';
 import {
   getMaintenanceLog,
@@ -15,6 +15,7 @@ import {
   updateEquipment,
   getEquipmentById
 } from '../services/equipmentApi';
+import { uploadMaintenanceFile, attachFilesToEntry } from '../services/maintenanceApi';
 import { formatDate } from '@/shared/utils/dateFormatting';
 import { exportToPDF } from '@/shared/utils/pdfExport';
 import { InspectionExportSettings } from '@/shared/types/inspectionExport';
@@ -45,6 +46,12 @@ const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanc
   const [showInspectionPDF, setShowInspectionPDF] = useState<boolean>(false);
   const [showInspectionExportSettings, setShowInspectionExportSettings] = useState<boolean>(false);
   const [inspectionData, setInspectionData] = useState<TechnicalInspectionData | null>(null);
+
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploadingFiles, setUploadingFiles] = useState<boolean>(false);
+  const [uploadStep, setUploadStep] = useState<string>('');
+  const [uploadFileIndex, setUploadFileIndex] = useState<number>(0);
+  const [uploadTotalFiles, setUploadTotalFiles] = useState<number>(0);
 
   const [formData, setFormData] = useState<MaintenanceEntryInput>({
     date: new Date().toISOString().split('T')[0],
@@ -155,18 +162,54 @@ const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanc
 
     setSaving(true);
     setError(null);
+    setUploadStep('Сохранение записи...');
 
     try {
       const newEntry = await addMaintenanceEntry(equipmentId, formData, maintenanceSheetId);
-      
+
       // Проверяем, является ли это временной записью
       const isTempEntry = newEntry.id.startsWith('temp-');
-      
+
+      // Загружаем файлы, если выбраны и запись создана с реальным ID
+      if (selectedFiles.length > 0 && !newEntry.id.startsWith('temp-')) {
+        setUploadingFiles(true);
+        setUploadTotalFiles(selectedFiles.length);
+        const uploadedFiles: MaintenanceFile[] = [];
+
+        for (let fi = 0; fi < selectedFiles.length; fi++) {
+          const file = selectedFiles[fi];
+          setUploadFileIndex(fi + 1);
+          setUploadStep(`Загрузка файла ${fi + 1} из ${selectedFiles.length}: ${file.name}`);
+          try {
+            const uploaded = await uploadMaintenanceFile(
+              equipmentId,
+              newEntry.id,
+              file,
+              formData.date
+            );
+            uploadedFiles.push(uploaded);
+          } catch (fileError) {
+            console.warn('Не удалось загрузить файл:', file.name, fileError);
+          }
+        }
+
+        if (uploadedFiles.length > 0) {
+          setUploadStep('Прикрепление файлов к записи...');
+          try {
+            await attachFilesToEntry(newEntry.id, uploadedFiles);
+            newEntry.files = uploadedFiles;
+          } catch (attachError) {
+            console.warn('Не удалось прикрепить файлы к записи:', attachError);
+          }
+        }
+        setUploadingFiles(false);
+        setUploadFileIndex(0);
+        setUploadTotalFiles(0);
+      }
+
       if (isTempEntry) {
-        // Если это временная запись, добавляем её в список и обновляем журнал через задержку
         setEntries([newEntry, ...entries]);
         setError(null);
-        // Очищаем форму сразу
         setFormData({
           date: new Date().toISOString().split('T')[0],
           type: '',
@@ -174,35 +217,30 @@ const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanc
           performedBy: '',
           status: 'completed'
         });
-        // Обновляем журнал через задержку, чтобы получить реальную запись
+        setSelectedFiles([]);
         setTimeout(() => {
           loadMaintenanceLog();
         }, 3000);
       } else {
-        // Если это реальная запись, просто добавляем её
         setEntries([newEntry, ...entries]);
         setError(null);
-        
-        // Обновляем дату последнего обслуживания оборудования из последней записи
-        // Берем самую позднюю дату из всех записей (включая новую)
+
         const allEntries = [newEntry, ...entries];
         const sortedEntries = allEntries
           .filter(e => e.status === 'completed' && e.date)
           .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        
+
         if (sortedEntries.length > 0) {
           const lastMaintenanceDate = sortedEntries[0].date;
           try {
             await updateEquipment(equipmentId, {
               lastMaintenanceDate: lastMaintenanceDate
             });
-            console.log('✅ Дата последнего обслуживания обновлена:', lastMaintenanceDate);
           } catch (updateError) {
-            console.warn('⚠️ Не удалось обновить дату последнего обслуживания:', updateError);
+            console.warn('Не удалось обновить дату последнего обслуживания:', updateError);
           }
         }
-        
-        // Очищаем форму
+
         setFormData({
           date: new Date().toISOString().split('T')[0],
           type: '',
@@ -210,6 +248,7 @@ const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanc
           performedBy: '',
           status: 'completed'
         });
+        setSelectedFiles([]);
       }
     } catch (err: any) {
       console.error('Ошибка добавления записи:', err);
@@ -222,6 +261,7 @@ const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanc
       }, 3000);
     } finally {
       setSaving(false);
+      setUploadStep('');
     }
   };
 
@@ -477,8 +517,46 @@ ${data.notes ? `Примечания: ${data.notes}` : ''}`;
           />
         </div>
 
-        <button type="submit" className="submit-button" disabled={saving}>
-          {saving ? 'Добавление...' : 'Добавить запись'}
+        <div className="form-group">
+          <label>Документы (PDF, Word, Excel и др.):</label>
+          <input
+            type="file"
+            multiple
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.png,.jpg,.jpeg"
+            onChange={(e) => setSelectedFiles(Array.from(e.target.files || []))}
+            disabled={saving || uploadingFiles}
+          />
+          {selectedFiles.length > 0 && (
+            <div className="selected-files-preview">
+              {selectedFiles.map((f, i) => (
+                <span key={i} className="selected-file-chip">
+                  {f.name} ({(f.size / 1024).toFixed(0)} KB)
+                  <button type="button" onClick={() => setSelectedFiles(files => files.filter((_, idx) => idx !== i))}>×</button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {(saving || uploadingFiles) && (
+          <div className="upload-progress-container">
+            <div className="upload-progress-text">{uploadStep}</div>
+            <div className="upload-progress-bar">
+              <div
+                className="upload-progress-fill"
+                style={{
+                  width: uploadTotalFiles > 0
+                    ? `${(uploadFileIndex / (uploadTotalFiles + 1)) * 100}%`
+                    : '100%',
+                  animationDuration: uploadTotalFiles > 0 ? 'none' : undefined,
+                }}
+              />
+            </div>
+          </div>
+        )}
+
+        <button type="submit" className="submit-button" disabled={saving || uploadingFiles}>
+          {uploadingFiles ? 'Загрузка файлов...' : saving ? 'Сохранение...' : 'Добавить запись'}
         </button>
       </form>
 
@@ -559,6 +637,22 @@ ${data.notes ? `Примечания: ${data.notes}` : ''}`;
                 <div className="entry-footer">
                   Выполнил: {entry.performedBy}
                 </div>
+                {entry.files && entry.files.length > 0 && (
+                  <div className="entry-files">
+                    <span className="entry-files-label">Документы:</span>
+                    {entry.files.map(file => (
+                      <a
+                        key={file.id}
+                        href={file.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="entry-file-link"
+                      >
+                        {file.name}
+                      </a>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>

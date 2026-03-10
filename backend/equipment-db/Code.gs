@@ -211,17 +211,21 @@ function doGet(e) {
         return createJsonResponse(getEquipmentByType(type));
       
       case 'getFolderFiles':
-        // Получить список файлов из папки Google Drive
+        // Получить список файлов/папок из папки Google Drive
         Logger.log('📁 Обработка getFolderFiles');
         const folderUrl = e.parameter.folderUrl || e.parameter.folderId;
+        const folderMimeType = e.parameter.mimeType || null;
+        const folderQuery = e.parameter.query || null;
         Logger.log('  - folderUrl: ' + folderUrl);
+        Logger.log('  - mimeType: ' + folderMimeType);
+        Logger.log('  - query: ' + folderQuery);
         if (!folderUrl) {
           Logger.log('❌ URL папки не указан');
           return createErrorResponse('URL или ID папки не указан');
         }
-        Logger.log('✅ Вызов getFolderFiles с URL: ' + folderUrl);
-        const files = getFolderFiles(folderUrl);
-        Logger.log('✅ getFolderFiles вернул ' + files.length + ' файлов');
+        Logger.log('✅ Вызов getFolderFiles');
+        const files = getFolderFiles(folderUrl, folderMimeType, folderQuery);
+        Logger.log('✅ getFolderFiles вернул ' + files.length + ' элементов');
         return createJsonResponse(files);
       
       case 'getMaintenanceLog':
@@ -318,6 +322,11 @@ function doGet(e) {
         Logger.log('🔄 [doGet] Обработка syncFolderAccess (GET)');
         const syncFolderUrl = e.parameter.folderUrl || null;
         return handleSyncFolderAccess({ folderUrl: syncFolderUrl });
+
+      case 'setAllFoldersPublicLink':
+        // Открыть все папки оборудования для просмотра по ссылке (ANYONE_WITH_LINK)
+        Logger.log('🔓 [doGet] Обработка setAllFoldersPublicLink');
+        return createJsonResponse(setAllFoldersPublicLink());
 
       // ========================================================================
       // ДЕЙСТВИЯ ДЛЯ СЧЕТЧИКОВ BELIOT (GET)
@@ -670,7 +679,28 @@ function doPost(e) {
           return createErrorResponse('Название оборудования не указано');
         }
         return createJsonResponse(createDriveFolder(data.name, data.parentFolderId));
-      
+
+      case 'createDocument':
+        // Создать документ (Google Doc или Google Sheet) в Google Drive
+        Logger.log('📄 Обработка createDocument');
+        if (!data.name) {
+          return createErrorResponse('Название документа не указано');
+        }
+        if (!data.docType) {
+          return createErrorResponse('Тип документа не указан (doc или sheet)');
+        }
+        if (!data.content) {
+          return createErrorResponse('Содержимое документа не указано');
+        }
+        try {
+          const docResult = createDocument(data.name, data.docType, data.content, data.folderId || null);
+          Logger.log('✅ Документ создан: ' + JSON.stringify(docResult));
+          return createJsonResponse(docResult);
+        } catch (docError) {
+          Logger.log('❌ Ошибка createDocument: ' + docError.toString());
+          return createErrorResponse('Ошибка создания документа: ' + docError.toString());
+        }
+
       case 'addMaintenanceEntry':
         // Добавить запись в журнал обслуживания
         Logger.log('📝 Обработка addMaintenanceEntry');
@@ -1080,9 +1110,60 @@ function doPost(e) {
           return createErrorResponse('Ошибка загрузки фото: ' + error.toString());
         }
 
+      case 'uploadMaintenanceDocument':
+        // Загрузить документ обслуживания (PDF, Word, Excel и др.)
+        Logger.log('📎 Обработка uploadMaintenanceDocument');
+
+        if (!data.equipmentId) {
+          return createErrorResponse('ID оборудования не указан');
+        }
+        if (!data.fileBase64) {
+          return createErrorResponse('Файл не предоставлен');
+        }
+        if (!data.entryId) {
+          return createErrorResponse('ID записи журнала не указан');
+        }
+
+        try {
+          const docUploadResult = uploadMaintenanceDocument(
+            data.equipmentId,
+            data.fileBase64,
+            data.mimeType || 'application/octet-stream',
+            data.originalFileName || 'document',
+            data.date || new Date().toISOString().split('T')[0],
+            data.entryId
+          );
+          Logger.log('✅ Документ успешно загружен');
+          return createJsonResponse(docUploadResult);
+        } catch (docUploadError) {
+          Logger.log('❌ Ошибка uploadMaintenanceDocument: ' + docUploadError.toString());
+          return createErrorResponse('Ошибка загрузки документа: ' + docUploadError.toString());
+        }
+
+      case 'attachFilesToEntry':
+        // Прикрепить ссылки на файлы к записи журнала обслуживания
+        Logger.log('📎 Обработка attachFilesToEntry');
+
+        if (!data.entryId) {
+          return createErrorResponse('ID записи не указан');
+        }
+        if (!data.files) {
+          return createErrorResponse('Файлы не указаны');
+        }
+
+        try {
+          var filesToAttach = typeof data.files === 'string' ? JSON.parse(data.files) : data.files;
+          const attachResult = _updateMaintenanceEntry(data.entryId, { files: filesToAttach });
+          Logger.log('✅ Файлы прикреплены к записи');
+          return createJsonResponse(attachResult);
+        } catch (attachError) {
+          Logger.log('❌ Ошибка attachFilesToEntry: ' + attachError.toString());
+          return createErrorResponse('Ошибка прикрепления файлов: ' + attachError.toString());
+        }
+
       default:
         // Если действие не распознано, возвращаем ошибку
-        return createErrorResponse('Неизвестное действие. Используйте: add, update, delete, createFolder, addMaintenanceEntry, updateMaintenanceEntry, deleteMaintenanceEntry, uploadMaintenancePhoto, register, login, logout, change-password, check-session, verify-admin, add-admin, remove-admin, getAllUserAccess, getUserAccess, updateUserAccess, saveBeliotDeviceOverride, saveBeliotDevicesOverrides, deleteBeliotDeviceOverride, addDeviceReading, deleteDeviceReadings');
+        return createErrorResponse('Неизвестное действие: ' + action);
     }
       } catch (error) {
     // Логируем ошибку для отладки

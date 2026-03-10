@@ -9,7 +9,9 @@ import {
   getActivityLogs,
   getActivityStatistics,
   exportActivityLogsToCSV,
-  cleanupOldActivityLogs,
+  deleteLogsForToday,
+  deleteLogsForMonth,
+  deleteAllLogs,
   testActivityLogging,
 } from '../services/activityLogsApi';
 import {
@@ -163,32 +165,52 @@ const ActivityLogsPage: React.FC = () => {
     }
   };
 
-  // Очистка старых логов
-  const handleCleanup = async () => {
-    const daysToKeep = prompt('Сколько дней логов оставить? (остальные будут удалены)', '90');
-    if (!daysToKeep) return;
+  // Состояние для выпадающего меню очистки
+  const [showCleanupMenu, setShowCleanupMenu] = useState(false);
 
-    const days = parseInt(daysToKeep, 10);
-    if (isNaN(days) || days < 1) {
-      alert('Некорректное значение');
-      return;
-    }
-
-    if (
-      !confirm(
-        `Вы уверены, что хотите удалить логи старше ${days} дней? Это действие необратимо.`
-      )
-    ) {
-      return;
-    }
+  // Удаление логов за сегодня
+  const handleDeleteToday = async () => {
+    setShowCleanupMenu(false);
+    if (!confirm('Удалить все логи за сегодняшний день? Это действие необратимо.')) return;
 
     try {
-      const deletedCount = await cleanupOldActivityLogs(days);
+      const deletedCount = await deleteLogsForToday();
+      alert(`Удалено ${deletedCount} записей за сегодня`);
+      loadData();
+    } catch (err) {
+      console.error('Failed to delete today logs:', err);
+      alert('Не удалось удалить логи');
+    }
+  };
+
+  // Удаление логов за месяц
+  const handleDeleteMonth = async () => {
+    setShowCleanupMenu(false);
+    if (!confirm('Удалить все логи за текущий месяц? Это действие необратимо.')) return;
+
+    try {
+      const deletedCount = await deleteLogsForMonth();
+      alert(`Удалено ${deletedCount} записей за текущий месяц`);
+      loadData();
+    } catch (err) {
+      console.error('Failed to delete month logs:', err);
+      alert('Не удалось удалить логи');
+    }
+  };
+
+  // Удаление всех логов
+  const handleDeleteAll = async () => {
+    setShowCleanupMenu(false);
+    if (!confirm('Удалить ВСЕ логи активности? Это действие необратимо!')) return;
+    if (!confirm('Вы точно уверены? Все данные будут потеряны безвозвратно.')) return;
+
+    try {
+      const deletedCount = await deleteAllLogs();
       alert(`Удалено ${deletedCount} записей`);
       loadData();
     } catch (err) {
-      console.error('Failed to cleanup logs:', err);
-      alert('Не удалось очистить логи');
+      console.error('Failed to delete all logs:', err);
+      alert('Не удалось удалить логи');
     }
   };
 
@@ -266,9 +288,27 @@ const ActivityLogsPage: React.FC = () => {
           <button onClick={handleExport} className="button button-secondary">
             📊 Экспортировать CSV
           </button>
-          <button onClick={handleCleanup} className="button button-danger">
-            🗑️ Очистить старые
-          </button>
+          <div className="cleanup-dropdown">
+            <button
+              onClick={() => setShowCleanupMenu(!showCleanupMenu)}
+              className="button button-danger"
+            >
+              🗑️ Очистить логи ▾
+            </button>
+            {showCleanupMenu && (
+              <div className="cleanup-dropdown__menu">
+                <button onClick={handleDeleteToday} className="cleanup-dropdown__item">
+                  Удалить за сегодня
+                </button>
+                <button onClick={handleDeleteMonth} className="cleanup-dropdown__item">
+                  Удалить за месяц
+                </button>
+                <button onClick={handleDeleteAll} className="cleanup-dropdown__item cleanup-dropdown__item--danger">
+                  Удалить все логи
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

@@ -8,7 +8,7 @@ export const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
 
   // AI Provider Configuration
-  aiProvider: process.env.AI_PROVIDER || 'gemini', // 'claude' | 'gemini' | 'openai'
+  aiProvider: process.env.AI_PROVIDER || 'gemini', // 'claude' | 'gemini' | 'deepseek'
 
   // Anthropic Claude API
   anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
@@ -17,6 +17,10 @@ export const config = {
   // Google Gemini API
   geminiApiKey: process.env.GEMINI_API_KEY || '',
   geminiModel: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+
+  // DeepSeek API
+  deepseekApiKey: process.env.DEEPSEEK_API_KEY || '',
+  deepseekModel: process.env.DEEPSEEK_MODEL || 'deepseek-chat',
 
   // Supabase (для проверки токенов)
   supabaseUrl: process.env.SUPABASE_URL || '',
@@ -51,6 +55,16 @@ export const config = {
   maxAgentIterations: parseInt(process.env.MAX_AGENT_ITERATIONS || '15', 15),
 };
 
+// Диагностическое логирование при старте
+export function logProviderConfig(): void {
+  console.log('[Config] AI provider configuration:');
+  console.log(`  AI_PROVIDER = "${process.env.AI_PROVIDER || '(not set)'}"`);
+  console.log(`  ANTHROPIC_API_KEY = ${process.env.ANTHROPIC_API_KEY ? `"sk-...${process.env.ANTHROPIC_API_KEY.slice(-4)}"` : '(not set)'}`);
+  console.log(`  GEMINI_API_KEY = ${process.env.GEMINI_API_KEY ? `"...${process.env.GEMINI_API_KEY.slice(-4)}"` : '(not set)'}`);
+  console.log(`  DEEPSEEK_API_KEY = ${process.env.DEEPSEEK_API_KEY ? `"sk-...${process.env.DEEPSEEK_API_KEY.slice(-4)}"` : '(not set)'}`);
+  console.log(`  DEEPSEEK_MODEL = "${process.env.DEEPSEEK_MODEL || '(not set)'}"`);
+}
+
 // Проверка обязательных переменных
 export function validateConfig(): void {
   const required = [
@@ -66,8 +80,8 @@ export function validateConfig(): void {
   }
 
   // Проверка наличия хотя бы одного AI провайдера
-  const hasAnyProvider = config.anthropicApiKey || config.geminiApiKey;
+  const hasAnyProvider = config.anthropicApiKey || config.geminiApiKey || config.deepseekApiKey;
   if (!hasAnyProvider) {
-    throw new Error('At least one AI provider API key must be configured (ANTHROPIC_API_KEY or GEMINI_API_KEY)');
+    throw new Error('At least one AI provider API key must be configured (ANTHROPIC_API_KEY, GEMINI_API_KEY or DEEPSEEK_API_KEY)');
   }
 }

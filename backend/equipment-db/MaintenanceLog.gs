@@ -37,7 +37,8 @@
  * Колонка F: Выполнил
  * Колонка G: Статус
  * Колонка H: Дата создания записи
- * 
+ * Колонка I: Файлы (JSON массив ссылок на файлы)
+ *
  * @returns {Sheet} Лист "Журнал обслуживания"
  */
 function getMaintenanceLogSheet() {
@@ -59,7 +60,8 @@ function getMaintenanceLogSheet() {
       'Описание',           // Колонка E
       'Выполнил',           // Колонка F
       'Статус',             // Колонка G
-      'Дата создания'       // Колонка H
+      'Дата создания',      // Колонка H
+      'Файлы'              // Колонка I (JSON массив ссылок на файлы)
     ];
     
     // Записываем заголовки в первую строку
@@ -193,7 +195,8 @@ function getMaintenanceLog(equipmentId, maintenanceSheetId) {
             description: row[4] ? String(row[4]).trim() : '',             // E: Описание
             performedBy: row[5] ? String(row[5]).trim() : '',             // F: Выполнил
             status: row[6] ? String(row[6]).trim() : 'completed',         // G: Статус
-            createdAt: row[7] ? formatDate(row[7]) : '' // H: Дата создания
+            createdAt: row[7] ? formatDate(row[7]) : '', // H: Дата создания
+            files: row[8] ? (function() { try { return JSON.parse(row[8]); } catch(e) { return []; } })() : [] // I: Файлы
           });
           matchedRows++;
         }
@@ -328,7 +331,8 @@ function _addMaintenanceEntry(equipmentId, entry) {
       entry.description || '',               // E: Описание
       entry.performedBy || '',               // F: Выполнил
       entry.status || 'completed',           // G: Статус
-      now                                    // H: Дата создания
+      now,                                   // H: Дата создания
+      entry.files ? JSON.stringify(entry.files) : '' // I: Файлы
     ];
     
     // Добавляем строку в конец таблицы
@@ -346,9 +350,10 @@ function _addMaintenanceEntry(equipmentId, entry) {
       description: entry.description || '',
       performedBy: entry.performedBy || '',
       status: entry.status || 'completed',
-      createdAt: now.toISOString()
+      createdAt: now.toISOString(),
+      files: entry.files || []
     };
-    
+
     Logger.log('✅ Запись создана: ' + JSON.stringify(result));
 
     // Пытаемся создать/обновить файл журнала в папке оборудования
@@ -414,9 +419,13 @@ function _updateMaintenanceEntry(entryId, entry) {
         if (entry.status !== undefined) {
           sheet.getRange(row, 7).setValue(entry.status); // G: Статус
         }
-        
+
+        if (entry.files !== undefined) {
+          sheet.getRange(row, 9).setValue(JSON.stringify(entry.files)); // I: Файлы
+        }
+
         // Возвращаем обновленную запись
-        const updatedRow = sheet.getRange(row, 1, 1, 8).getValues()[0];
+        const updatedRow = sheet.getRange(row, 1, 1, 9).getValues()[0];
         return {
           id: updatedRow[1],
           equipmentId: updatedRow[0],
@@ -425,7 +434,8 @@ function _updateMaintenanceEntry(entryId, entry) {
           description: updatedRow[4] || '',
           performedBy: updatedRow[5] || '',
           status: updatedRow[6] || 'completed',
-          createdAt: updatedRow[7] ? formatDate(updatedRow[7]) : ''
+          createdAt: updatedRow[7] ? formatDate(updatedRow[7]) : '',
+          files: updatedRow[8] ? (function() { try { return JSON.parse(updatedRow[8]); } catch(e) { return []; } })() : []
         };
       }
     }
@@ -452,19 +462,36 @@ function _deleteMaintenanceEntry(entryId) {
     if (!entryId) {
       throw new Error('ID записи не указан');
     }
-    
+
     const sheet = getMaintenanceLogSheet();
     const data = sheet.getDataRange().getValues();
-    
+
     // Ищем запись по ID
     for (let i = 1; i < data.length; i++) {
       if (data[i][1] === entryId) {
-        // Удаляем строку
+        // Запоминаем equipmentId перед удалением, чтобы найти отдельный файл журнала
+        var equipmentId = data[i][0] ? String(data[i][0]).trim() : '';
+
+        // Удаляем строку из основного листа
         sheet.deleteRow(i + 1);
+        Logger.log('✅ Запись ' + entryId + ' удалена из основного листа');
+
+        // Удаляем запись из отдельного файла журнала оборудования
+        if (equipmentId) {
+          try {
+            var equipment = getEquipmentById(equipmentId);
+            if (equipment && equipment.maintenanceSheetId) {
+              deleteEntryFromEquipmentMaintenanceSheet(equipment.maintenanceSheetId, entryId);
+            }
+          } catch (syncError) {
+            Logger.log('⚠️ Не удалось удалить запись из файла журнала оборудования: ' + syncError);
+          }
+        }
+
         return { success: true, message: 'Запись удалена' };
       }
     }
-    
+
     throw new Error('Запись с ID ' + entryId + ' не найдена');
   } catch (error) {
     Logger.log('❌ Ошибка в deleteMaintenanceEntry: ' + error.toString());
@@ -668,6 +695,41 @@ function appendEntryToEquipmentMaintenanceSheet(sheet, entry) {
   ];
 
   sheet.appendRow(row);
+}
+
+/**
+ * Удаляет запись из отдельного файла журнала обслуживания оборудования по ID записи.
+ *
+ * Структура отдельного файла:
+ * Колонка G (индекс 6): ID записи
+ *
+ * @param {string} maintenanceSheetId - ID Google Spreadsheet файла журнала
+ * @param {string} entryId - ID записи для удаления
+ */
+function deleteEntryFromEquipmentMaintenanceSheet(maintenanceSheetId, entryId) {
+  if (!maintenanceSheetId || !entryId) {
+    return;
+  }
+
+  try {
+    var spreadsheet = SpreadsheetApp.openById(maintenanceSheetId);
+    var sheet = spreadsheet.getSheets()[0];
+    var data = sheet.getDataRange().getValues();
+
+    // Колонка G (индекс 6) содержит ID записи
+    for (var i = 1; i < data.length; i++) {
+      var rowEntryId = data[i][6] ? String(data[i][6]).trim() : '';
+      if (rowEntryId === entryId) {
+        sheet.deleteRow(i + 1);
+        Logger.log('✅ Запись ' + entryId + ' удалена из отдельного файла журнала (' + maintenanceSheetId + ')');
+        return;
+      }
+    }
+
+    Logger.log('ℹ️ Запись ' + entryId + ' не найдена в отдельном файле журнала (' + maintenanceSheetId + ')');
+  } catch (error) {
+    Logger.log('⚠️ Ошибка при удалении из отдельного файла журнала: ' + error);
+  }
 }
 
 /**

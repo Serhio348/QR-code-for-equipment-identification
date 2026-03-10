@@ -133,24 +133,16 @@ function createDriveFolder(equipmentName, parentFolderId) {
     const folderUrl = folder.getUrl();
     const folderId = folder.getId();
 
-    // Добавляем доступ для пользователей с разрешением на "Оборудование"
+    // Открываем папку по ссылке: любой пользователь, имеющий ссылку, может просматривать.
+    // Это надёжнее, чем addViewer(email), который требует наличия Google-аккаунта с точным
+    // совпадением email и может тихо падать при корпоративных ограничениях Workspace.
+    // Безопасность обеспечивается приложением — ссылка видна только авторизованным пользователям.
     try {
-      const usersWithAccess = getUsersWithEquipmentAccess();
-      Logger.log('📋 Пользователей с доступом к оборудованию: ' + usersWithAccess.length);
-
-      for (let i = 0; i < usersWithAccess.length; i++) {
-        try {
-          folder.addViewer(usersWithAccess[i]);
-          Logger.log('  ✅ Добавлен viewer: ' + usersWithAccess[i]);
-        } catch (viewerError) {
-          Logger.log('  ⚠️ Не удалось добавить viewer ' + usersWithAccess[i] + ': ' + viewerError);
-        }
-      }
-
-      Logger.log('✅ Настроен доступ к папке для пользователей с разрешением на оборудование');
+      folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      Logger.log('✅ Папка открыта для просмотра по ссылке (ANYONE_WITH_LINK)');
     } catch (sharingError) {
-      Logger.log('⚠️ Не удалось настроить доступ: ' + sharingError);
-      // Продолжаем выполнение, папка создана, просто без настроенного доступа
+      Logger.log('⚠️ Не удалось настроить доступ по ссылке: ' + sharingError);
+      // Продолжаем выполнение, папка создана
     }
 
     // Логируем для отладки
@@ -259,78 +251,235 @@ function deleteDriveFolder(folderUrl) {
 }
 
 /**
- * Получить список файлов из папки Google Drive
- * 
- * Извлекает ID папки из URL и возвращает список всех файлов в папке
- * 
- * @param {string} folderUrlOrId - URL папки или ID папки
- * @returns {Array} Массив объектов с информацией о файлах
- * 
- * Формат возвращаемого объекта:
- * {
- *   id: "file_id",
- *   name: "Название файла.pdf",
- *   url: "https://drive.google.com/file/d/...",
- *   size: 12345, // размер в байтах
- *   mimeType: "application/pdf",
- *   modifiedTime: "2024-01-15T10:30:00.000Z"
- * }
- * 
- * @throws {Error} Если папка не найдена или произошла ошибка
- * 
- * Зависимости:
- * - extractDriveIdFromUrl() - для извлечения ID из URL
+ * Создать документ (Google Doc или Google Sheet) и поместить в указанную папку
+ *
+ * Универсальная функция для создания документов любого типа.
+ * ИИ-консультант формирует содержимое, а GAS создаёт файл в Google Drive.
+ *
+ * @param {string} name - Название документа
+ * @param {string} docType - Тип: 'doc' (Google Doc) или 'sheet' (Google Sheet)
+ * @param {string|Array} content - Содержимое:
+ *   Для 'doc': текст документа (строка, абзацы разделены \n)
+ *   Для 'sheet': JSON-строка или массив массивов [["Заголовок1","Заголовок2"],["значение1","значение2"]]
+ * @param {string} folderId - (Опционально) ID папки, куда поместить документ
+ * @returns {Object} {fileId, fileUrl, fileName, type}
  */
-function getFolderFiles(folderUrlOrId) {
+function createDocument(name, docType, content, folderId) {
   try {
-    Logger.log('📁 Получение списка файлов из папки');
+    Logger.log('📄 createDocument вызвана');
+    Logger.log('  - name: ' + name);
+    Logger.log('  - docType: ' + docType);
+    Logger.log('  - folderId: ' + (folderId || 'не указан'));
+    Logger.log('  - content length: ' + (content ? String(content).length : 0));
+
+    if (!name) {
+      throw new Error('Название документа не указано');
+    }
+    if (!docType || (docType !== 'doc' && docType !== 'sheet')) {
+      throw new Error('Тип документа должен быть "doc" или "sheet"');
+    }
+    if (!content) {
+      throw new Error('Содержимое документа не указано');
+    }
+
+    var file;
+    var fileUrl;
+    var fileId;
+
+    if (docType === 'doc') {
+      // === Создание Google Doc ===
+      var doc = DocumentApp.create(name);
+      var body = doc.getBody();
+
+      // Очищаем документ (удаляем пустой абзац по умолчанию)
+      body.clear();
+
+      // Разбиваем содержимое на строки и добавляем абзацы
+      var lines = String(content).split('\n');
+      for (var i = 0; i < lines.length; i++) {
+        var line = lines[i];
+
+        // Заголовки: строки начинающиеся с # (markdown-стиль)
+        if (line.match(/^### /)) {
+          body.appendParagraph(line.replace(/^### /, '')).setHeading(DocumentApp.ParagraphHeading.HEADING3);
+        } else if (line.match(/^## /)) {
+          body.appendParagraph(line.replace(/^## /, '')).setHeading(DocumentApp.ParagraphHeading.HEADING2);
+        } else if (line.match(/^# /)) {
+          body.appendParagraph(line.replace(/^# /, '')).setHeading(DocumentApp.ParagraphHeading.HEADING1);
+        } else if (line.trim() === '') {
+          body.appendParagraph('');
+        } else {
+          body.appendParagraph(line);
+        }
+      }
+
+      doc.saveAndClose();
+
+      fileId = doc.getId();
+      fileUrl = doc.getUrl();
+      file = DriveApp.getFileById(fileId);
+
+      Logger.log('  - Google Doc создан: ' + fileId);
+
+    } else if (docType === 'sheet') {
+      // === Создание Google Sheet ===
+      var spreadsheet = SpreadsheetApp.create(name);
+      var sheet = spreadsheet.getActiveSheet();
+
+      // Парсим содержимое: ожидаем JSON массив массивов
+      var data;
+      if (typeof content === 'string') {
+        try {
+          data = JSON.parse(content);
+        } catch (e) {
+          throw new Error('Для типа "sheet" содержимое должно быть JSON массивом: ' + e.toString());
+        }
+      } else {
+        data = content;
+      }
+
+      if (!Array.isArray(data) || data.length === 0) {
+        throw new Error('Содержимое должно быть непустым массивом массивов');
+      }
+
+      // Записываем данные
+      var numRows = data.length;
+      var numCols = data[0].length;
+      sheet.getRange(1, 1, numRows, numCols).setValues(data);
+
+      // Форматируем заголовок (первая строка)
+      var headerRange = sheet.getRange(1, 1, 1, numCols);
+      headerRange.setFontWeight('bold');
+      headerRange.setBackground('#4285f4');
+      headerRange.setFontColor('#ffffff');
+
+      // Авторесайз колонок
+      for (var c = 1; c <= numCols; c++) {
+        sheet.autoResizeColumn(c);
+      }
+
+      fileId = spreadsheet.getId();
+      fileUrl = spreadsheet.getUrl();
+      file = DriveApp.getFileById(fileId);
+
+      Logger.log('  - Google Sheet создан: ' + fileId);
+    }
+
+    // Перемещаем в целевую папку (если указана)
+    if (folderId && file) {
+      try {
+        var targetFolder = DriveApp.getFolderById(folderId);
+        targetFolder.addFile(file);
+        // Удаляем из корня
+        DriveApp.getRootFolder().removeFile(file);
+        Logger.log('  - Перемещён в папку: ' + targetFolder.getName());
+      } catch (moveError) {
+        Logger.log('  ⚠️ Не удалось переместить в папку: ' + moveError);
+        // Файл остаётся в корне, но создан успешно
+      }
+    }
+
+    Logger.log('✅ Документ создан: ' + name + ' | URL: ' + fileUrl);
+
+    return {
+      fileId: fileId,
+      fileUrl: fileUrl,
+      fileName: name,
+      type: docType
+    };
+
+  } catch (error) {
+    Logger.log('❌ Ошибка createDocument: ' + error.toString());
+    Logger.log('  - Stack: ' + (error.stack || 'нет стека'));
+    throw error;
+  }
+}
+
+/**
+ * Получить список файлов и/или подпапок из папки Google Drive
+ *
+ * @param {string} folderUrlOrId - URL папки или ID папки
+ * @param {string} mimeType - Опциональный фильтр по MIME-типу.
+ *   "application/vnd.google-apps.folder" — вернуть только подпапки.
+ *   Любой другой тип — вернуть только файлы с этим MIME.
+ *   Не указан — вернуть все файлы (без подпапок).
+ * @param {string} query - Опциональный поиск по названию (регистронезависимый).
+ * @returns {Array} Массив объектов {id, name, url, size, mimeType, modifiedTime, isFolder}
+ */
+function getFolderFiles(folderUrlOrId, mimeType, query) {
+  try {
+    Logger.log('📁 Получение содержимого папки');
     Logger.log('  - folderUrlOrId: ' + folderUrlOrId);
-    
+    Logger.log('  - mimeType: ' + (mimeType || 'не указан'));
+    Logger.log('  - query: ' + (query || 'не указан'));
+
     if (!folderUrlOrId || !folderUrlOrId.trim()) {
       throw new Error('URL или ID папки не указан');
     }
-    
-    const folderId = extractDriveIdFromUrl(folderUrlOrId);
-    
+
+    var folderId = extractDriveIdFromUrl(folderUrlOrId);
     if (!folderId) {
       throw new Error('Неверный формат URL папки: ' + folderUrlOrId);
     }
-    
-    Logger.log('  - Folder ID для получения файлов: ' + folderId);
-    
-    // Получаем папку по ID
-    const folder = DriveApp.getFolderById(folderId);
-    const folderName = folder.getName();
-    Logger.log('  - Название папки: "' + folderName + '"');
-    
-    // Получаем все файлы из папки
-    const files = folder.getFiles();
-    const filesList = [];
-    
-    while (files.hasNext()) {
-      const file = files.next();
-      const fileData = {
-        id: file.getId(),
-        name: file.getName(),
-        url: file.getUrl(),
-        size: file.getSize(),
-        mimeType: file.getMimeType(),
-        modifiedTime: file.getLastUpdated().toISOString()
-      };
-      filesList.push(fileData);
+
+    var folder = DriveApp.getFolderById(folderId);
+    Logger.log('  - Папка: "' + folder.getName() + '"');
+
+    var resultList = [];
+    var queryLower = query ? query.toLowerCase() : null;
+
+    // Определяем, что нужно загружать
+    var needFolders = !mimeType || mimeType === 'application/vnd.google-apps.folder';
+    var needFiles = !mimeType || mimeType !== 'application/vnd.google-apps.folder';
+
+    // Подпапки
+    if (needFolders) {
+      var subFolders = folder.getFolders();
+      while (subFolders.hasNext()) {
+        var sub = subFolders.next();
+        if (queryLower && sub.getName().toLowerCase().indexOf(queryLower) === -1) continue;
+        resultList.push({
+          id: sub.getId(),
+          name: sub.getName(),
+          url: sub.getUrl(),
+          size: 0,
+          mimeType: 'application/vnd.google-apps.folder',
+          modifiedTime: sub.getLastUpdated().toISOString(),
+          isFolder: true
+        });
+      }
     }
-    
-    Logger.log('  - Найдено файлов: ' + filesList.length);
-    
+
+    // Файлы
+    if (needFiles) {
+      var files = folder.getFiles();
+      while (files.hasNext()) {
+        var file = files.next();
+        if (mimeType && file.getMimeType() !== mimeType) continue;
+        if (queryLower && file.getName().toLowerCase().indexOf(queryLower) === -1) continue;
+        resultList.push({
+          id: file.getId(),
+          name: file.getName(),
+          url: file.getUrl(),
+          size: file.getSize(),
+          mimeType: file.getMimeType(),
+          modifiedTime: file.getLastUpdated().toISOString(),
+          isFolder: false
+        });
+      }
+    }
+
+    Logger.log('  - Найдено элементов: ' + resultList.length);
+
     // Сортируем по дате изменения (новые сначала)
-    filesList.sort((a, b) => {
+    resultList.sort(function(a, b) {
       return new Date(b.modifiedTime) - new Date(a.modifiedTime);
     });
-    
-    return filesList;
+
+    return resultList;
   } catch (error) {
-    Logger.log('❌ Ошибка при получении списка файлов: ' + error.toString());
-    Logger.log('  - Error stack: ' + (error.stack || 'нет стека'));
+    Logger.log('❌ Ошибка getFolderFiles: ' + error.toString());
+    Logger.log('  - Stack: ' + (error.stack || 'нет стека'));
     throw error;
   }
 }
@@ -634,6 +783,67 @@ function syncAllEquipmentFoldersAccess() {
       processedCount: 0,
       errorCount: 0
     };
+  }
+}
+
+/**
+ * Установить доступ "по ссылке" (ANYONE_WITH_LINK) для всех папок оборудования.
+ *
+ * Запускается один раз вручную из редактора GAS для исправления существующих папок,
+ * созданных до изменения политики доступа.
+ *
+ * @returns {Object} {success, processedCount, errorCount, message}
+ */
+function setAllFoldersPublicLink() {
+  try {
+    Logger.log('🔓 Установка доступа по ссылке для всех папок оборудования...');
+
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    const equipmentSheet = spreadsheet.getSheetByName('Оборудование');
+
+    if (!equipmentSheet) {
+      return { success: false, message: 'Лист "Оборудование" не найден', processedCount: 0, errorCount: 0 };
+    }
+
+    const data = equipmentSheet.getDataRange().getValues();
+    if (data.length < 2) {
+      return { success: true, message: 'Нет записей оборудования', processedCount: 0, errorCount: 0 };
+    }
+
+    const headers = data[0];
+    const driveUrlIndex = headers.indexOf('Google Drive URL');
+    if (driveUrlIndex === -1) {
+      return { success: false, message: 'Колонка "Google Drive URL" не найдена', processedCount: 0, errorCount: 0 };
+    }
+
+    let processedCount = 0;
+    let errorCount = 0;
+
+    for (let i = 1; i < data.length; i++) {
+      const driveUrl = data[i][driveUrlIndex];
+      if (!driveUrl || !driveUrl.toString().trim()) continue;
+
+      try {
+        const folderId = extractDriveIdFromUrl(driveUrl.toString().trim());
+        if (!folderId) { errorCount++; continue; }
+
+        const folder = DriveApp.getFolderById(folderId);
+        folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+        Logger.log('  ✅ [' + (i) + '] ' + folder.getName());
+        processedCount++;
+      } catch (err) {
+        Logger.log('  ⚠️ [' + (i) + '] Ошибка: ' + err.toString());
+        errorCount++;
+      }
+    }
+
+    const message = 'Готово: обработано ' + processedCount + ' папок, ошибок: ' + errorCount;
+    Logger.log('✅ ' + message);
+    return { success: true, message: message, processedCount: processedCount, errorCount: errorCount };
+
+  } catch (error) {
+    Logger.log('❌ setAllFoldersPublicLink: ' + error.toString());
+    return { success: false, message: 'Ошибка: ' + error.toString(), processedCount: 0, errorCount: 0 };
   }
 }
 
@@ -1195,6 +1405,115 @@ function uploadMaintenancePhoto(equipmentId, photoBase64, mimeType, description,
   } catch (error) {
     Logger.log('❌ Ошибка uploadMaintenancePhoto: ' + error.toString());
     Logger.log('  - Stack: ' + (error.stack || 'нет стека'));
+    throw error;
+  }
+}
+
+/**
+ * Загрузить документ обслуживания в Google Drive
+ *
+ * Загружает файл (PDF, Word, Excel, изображение и т.д.) в подпапку
+ * "Документы обслуживания" внутри папки оборудования.
+ * Файлы привязываются к конкретной записи журнала через entryId в имени файла.
+ *
+ * @param {string} equipmentId - ID оборудования
+ * @param {string} fileBase64 - Base64-кодированное содержимое файла
+ * @param {string} mimeType - MIME-тип файла
+ * @param {string} originalFileName - Оригинальное имя файла
+ * @param {string} date - Дата обслуживания (YYYY-MM-DD)
+ * @param {string} entryId - ID записи журнала обслуживания
+ * @returns {Object} {success, fileId, fileUrl, fileName, mimeType, size}
+ */
+function uploadMaintenanceDocument(equipmentId, fileBase64, mimeType, originalFileName, date, entryId) {
+  try {
+    Logger.log('📎 uploadMaintenanceDocument');
+    Logger.log('  - equipmentId: ' + equipmentId);
+    Logger.log('  - mimeType: ' + mimeType);
+    Logger.log('  - originalFileName: ' + originalFileName);
+    Logger.log('  - date: ' + date);
+    Logger.log('  - entryId: ' + entryId);
+    Logger.log('  - fileBase64 length: ' + (fileBase64 ? fileBase64.length : 0));
+
+    if (!equipmentId) {
+      throw new Error('ID оборудования не указан');
+    }
+    if (!fileBase64) {
+      throw new Error('Файл не предоставлен');
+    }
+    if (!entryId) {
+      throw new Error('ID записи журнала не указан');
+    }
+
+    mimeType = mimeType || 'application/octet-stream';
+
+    // Получаем оборудование для доступа к папке
+    var equipment = getEquipmentById(equipmentId);
+    if (!equipment) {
+      throw new Error('Оборудование с ID ' + equipmentId + ' не найдено');
+    }
+
+    if (!equipment.googleDriveUrl) {
+      throw new Error('У оборудования нет папки Google Drive');
+    }
+
+    // Получаем папку оборудования
+    var equipmentFolderId = extractDriveIdFromUrl(equipment.googleDriveUrl);
+    var equipmentFolder = DriveApp.getFolderById(equipmentFolderId);
+
+    // Ищем или создаем подпапку "Документы обслуживания"
+    var docsFolderName = 'Документы обслуживания';
+    var docsFolder = null;
+
+    var subFolders = equipmentFolder.getFoldersByName(docsFolderName);
+    if (subFolders.hasNext()) {
+      docsFolder = subFolders.next();
+    } else {
+      docsFolder = equipmentFolder.createFolder(docsFolderName);
+      Logger.log('  - Создана подпапка: "' + docsFolderName + '"');
+    }
+
+    // Формируем имя файла: YYYY-MM-DD_entryId_originalName
+    var safeDate = date ? date.replace(/[/\\:*?"<>|]/g, '-') : new Date().toISOString().split('T')[0];
+    var safeName = originalFileName ? originalFileName.replace(/[/\\:*?"<>|]/g, '_') : 'document';
+    // Укорачиваем entryId до первых 8 символов для читабельности
+    var shortEntryId = entryId ? entryId.substring(0, 8) : '';
+    var fileName = safeDate + '_' + shortEntryId + '_' + safeName;
+
+    // Ограничиваем длину имени файла
+    if (fileName.length > 150) {
+      fileName = fileName.substring(0, 150);
+    }
+
+    Logger.log('  - Имя файла: "' + fileName + '"');
+
+    // Декодируем Base64 в Blob
+    var fileBlob = Utilities.newBlob(
+      Utilities.base64Decode(fileBase64),
+      mimeType,
+      fileName
+    );
+
+    // Создаем файл в папке
+    var file = docsFolder.createFile(fileBlob);
+    var fileUrl = file.getUrl();
+    var fileSize = file.getSize();
+
+    Logger.log('✅ Документ загружен');
+    Logger.log('  - File ID: ' + file.getId());
+    Logger.log('  - File URL: ' + fileUrl);
+    Logger.log('  - Size: ' + fileSize);
+
+    return {
+      success: true,
+      fileId: file.getId(),
+      fileUrl: fileUrl,
+      fileName: fileName,
+      mimeType: mimeType,
+      size: fileSize
+    };
+
+  } catch (error) {
+    Logger.log('❌ Ошибка uploadMaintenanceDocument: ' + error.toString());
     throw error;
   }
 }

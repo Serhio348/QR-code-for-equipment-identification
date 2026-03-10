@@ -139,6 +139,10 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
   // Хранит единственный экземпляр SpeechRecognition на всё время жизни компонента
   const recognitionRef = useRef<SpeechRecognition | null>(null);
 
+  // Отслеживаем уже обработанные индексы результатов,
+  // чтобы не добавлять один и тот же финальный результат повторно
+  const processedIndicesRef = useRef<Set<number>>(new Set());
+
   // Проверка поддержки браузером.
   // SSR-safe: проверяем typeof window !== 'undefined'
   const isSupported = typeof window !== 'undefined' &&
@@ -156,37 +160,27 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
 
     const recognition = new SpeechRecognitionAPI();
 
-    // continuous: true — не останавливаться после первой распознанной фразы.
-    // Пользователь может говорить несколько предложений подряд
-    recognition.continuous = true;
+    // continuous: false — останавливается после первой фразы (после паузы).
+    // Это предотвращает дублирование слов, которое возникает в continuous режиме.
+    // Пользователь нажимает кнопку для каждого нового высказывания.
+    recognition.continuous = false;
 
-    // interimResults: true — получать промежуточные результаты.
-    // Мы их не показываем в transcript, но они нужны для отзывчивости
-    recognition.interimResults = true;
+    // interimResults: false — только финальный результат.
+    // Промежуточные результаты вызывают дублирование в русском языке.
+    recognition.interimResults = false;
 
     // Язык распознавания — русский
     recognition.lang = 'ru-RU';
 
     // --- Обработчик результатов ---
-    // Вызывается при каждом новом распознанном фрагменте.
-    // event.results — массив результатов, каждый может быть:
-    //   - isFinal: true  — окончательный результат (фраза завершена)
-    //   - isFinal: false — промежуточный результат (пользователь ещё говорит)
-    // Мы берём только финальные результаты для transcript
+    // С continuous=false и interimResults=false получаем один чистый результат.
     recognition.onresult = (event: SpeechRecognitionEvent) => {
-      let finalTranscript = '';
-
-      // Перебираем только новые результаты (начиная с resultIndex)
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const result = event.results[i];
-        if (result.isFinal) {
-          finalTranscript += result[0].transcript;
+      const result = event.results[0];
+      if (result && result.isFinal) {
+        const text = result[0].transcript.trim();
+        if (text) {
+          setTranscript(prev => prev ? prev + ' ' + text : text);
         }
-      }
-
-      // Добавляем к накопленному тексту (не заменяем!)
-      if (finalTranscript) {
-        setTranscript(prev => prev + finalTranscript);
       }
     };
 
@@ -243,6 +237,7 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
 
     setError(null);
     setTranscript('');
+    processedIndicesRef.current.clear();
 
     try {
       recognitionRef.current.start();

@@ -1,37 +1,30 @@
-/**
- * GeminiProvider.ts
- *
- * Провайдер для Google Gemini API.
- * Реализует интерфейс AIProvider для работы с Gemini.
- */
-
-import { GoogleGenerativeAI, Content } from '@google/generative-ai';
+import OpenAI from 'openai';
 import { BaseAIProvider } from '../AIProvider.js';
 import { ChatMessage, ChatResponse, ToolDefinition, EquipmentContext, WaterDashboardContext } from '../types.js';
 import {
-  convertToGeminiTools,
-  extractGeminiFunctionCalls,
-  formatGeminiFunctionResults,
-} from '../adapters/geminiToolAdapter.js';
+  convertToDeepSeekTools,
+  extractDeepSeekToolCalls,
+  formatDeepSeekToolResults,
+} from '../adapters/deepseekToolAdapter.js';
 import { executeToolCall } from '../../../tools/index.js';
 
-export class GeminiProvider extends BaseAIProvider {
-  readonly name = 'Gemini';
-  private client: GoogleGenerativeAI;
+export class DeepSeekProvider extends BaseAIProvider {
+  readonly name = 'DeepSeek';
+  private client: OpenAI;
   private model: string;
+  private apiKey: string;
 
-  constructor(apiKey: string, model: string = 'gemini-2.0-flash-exp') {
+  constructor(apiKey: string, model: string = 'deepseek-chat') {
     super();
-    this.client = new GoogleGenerativeAI(apiKey);
+    this.apiKey = apiKey;
+    // DeepSeek использует OpenAI SDK с кастомным baseURL
+    this.client = new OpenAI({
+      apiKey,
+      baseURL: 'https://api.deepseek.com',
+    });
     this.model = model;
   }
 
-  /**
-   * Обработка сообщения чата через Gemini API.
-   *
-   * Реализует "agentic loop" — цикл, в котором Gemini может
-   * многократно вызывать functions, пока не сформирует финальный ответ.
-   */
   async chat(
     messages: ChatMessage[],
     tools: ToolDefinition[],
@@ -40,257 +33,178 @@ export class GeminiProvider extends BaseAIProvider {
     waterContext?: WaterDashboardContext
   ): Promise<ChatResponse> {
     try {
-      // Защита от бесконечного цикла
       let iteration = 0;
-
-      // Массив для сбора имён вызванных tools
       const toolsUsed: string[] = [];
 
-      // ----------------------------------------
-      // Шаг 1: Подготовка модели и сообщений
-      // ----------------------------------------
+      // Системный промпт
+      const systemPrompt = this.getSystemPrompt(equipmentContext, waterContext);
 
-      // Создаём модель с системным промптом и tools (с учётом контекста оборудования)
-      const genAI = this.client.getGenerativeModel({
+      // Преобразуем сообщения в формат OpenAI
+      const openAIMessages: OpenAI.ChatCompletionMessageParam[] = [
+        { role: 'system', content: systemPrompt },
+        ...this.convertMessages(messages),
+      ];
+
+      // Конвертируем tools
+      const deepSeekTools = convertToDeepSeekTools(tools);
+
+      // Первый запрос
+      let response = await this.client.chat.completions.create({
         model: this.model,
-        systemInstruction: this.getSystemPrompt(equipmentContext, waterContext),
+        messages: openAIMessages,
+        tools: deepSeekTools,
+        tool_choice: 'auto',
+        max_tokens: 4096,
       });
 
-      // Конвертируем tools в формат Gemini
-      const geminiTools = convertToGeminiTools(tools);
+      let responseMessage = response.choices[0].message;
 
-      // Преобразуем наш формат ChatMessage[] в формат Gemini Content[]
-      const geminiMessages: Content[] = this.convertMessagesToGemini(messages);
-
-      // ----------------------------------------
-      // Шаг 2: Запуск чата с Gemini
-      // ----------------------------------------
-
-      // Gemini использует chat session для поддержки истории
-      const chat = genAI.startChat({
-        history: geminiMessages.slice(0, -1), // Всё кроме последнего сообщения
-        tools: [{ functionDeclarations: geminiTools }],
-      });
-
-      // Последнее сообщение отправляем как prompt
-      const lastMessage = geminiMessages[geminiMessages.length - 1];
-      const userPrompt = this.extractTextFromContent(lastMessage);
-
-      let result = await chat.sendMessage(userPrompt);
-
-      // ----------------------------------------
-      // Шаг 3: Агентный цикл (agentic loop)
-      // ----------------------------------------
-
-      // Если Gemini хочет вызвать function — выполняем его и отправляем результат обратно
-      while (this.hasFunctionCalls(result) && iteration < this.MAX_ITERATIONS) {
+      // Агентный цикл (agentic loop)
+      while (
+        responseMessage.tool_calls &&
+        responseMessage.tool_calls.length > 0 &&
+        iteration < this.MAX_ITERATIONS
+      ) {
         iteration++;
 
-        if (iteration === this.MAX_ITERATIONS) {
-          throw new Error('AI агент превысил максимальное количество шагов анализа');
-        }
+        // Добавляем ответ ассистента в историю
+        openAIMessages.push(responseMessage);
 
-        // Извлекаем function calls из ответа Gemini
-        const functionCalls = extractGeminiFunctionCalls(
-          result.response.candidates?.[0]?.content?.parts || []
-        );
+        // Извлекаем и выполняем tool calls
+        const toolCalls = extractDeepSeekToolCalls(responseMessage);
+        const toolResults: Array<{ id: string; result: unknown; isError?: boolean }> = [];
 
-        // Массив результатов выполнения functions
-        const functionResults: Array<{
-          name: string;
-          result: unknown;
-          isError?: boolean;
-        }> = [];
-
-        // Выполняем каждую function по очереди
-        for (const functionCall of functionCalls) {
-          this.log(`Executing function: ${functionCall.name}`);
-          toolsUsed.push(functionCall.name);
+        for (const toolCall of toolCalls) {
+          this.log(`Executing tool: ${toolCall.name}`);
+          toolsUsed.push(toolCall.name);
 
           try {
-            // executeToolCall — вызывает соответствующую функцию
-            const functionResult = await executeToolCall(
-              functionCall.name,
-              functionCall.input
-            );
-
-            // Успешный результат
-            functionResults.push({
-              name: functionCall.name,
-              result: functionResult,
-              isError: false,
-            });
+            const result = await executeToolCall(toolCall.name, toolCall.input);
+            toolResults.push({ id: toolCall.id, result, isError: false });
           } catch (error) {
-            // Ошибка выполнения: сообщаем Gemini об ошибке
-            this.logError(`Function ${functionCall.name} failed`, error);
-            functionResults.push({
-              name: functionCall.name,
-              result: `Ошибка выполнения: ${
-                error instanceof Error ? error.message : 'Неизвестная ошибка'
-              }`,
+            this.logError(`Tool ${toolCall.name} failed`, error);
+            toolResults.push({
+              id: toolCall.id,
+              result: error instanceof Error ? error.message : 'Неизвестная ошибка',
               isError: true,
             });
           }
         }
 
-        // ----------------------------------------
-        // Шаг 4: Отправляем результаты functions обратно Gemini
-        // ----------------------------------------
+        // Добавляем результаты tools в историю
+        openAIMessages.push(...formatDeepSeekToolResults(toolResults));
 
-        const functionResponseParts = formatGeminiFunctionResults(functionResults);
+        // Повторный запрос
+        response = await this.client.chat.completions.create({
+          model: this.model,
+          messages: openAIMessages,
+          tools: deepSeekTools,
+          tool_choice: 'auto',
+          max_tokens: 4096,
+        });
 
-        // Отправляем результаты и получаем следующий ответ
-        result = await chat.sendMessage(functionResponseParts);
+        responseMessage = response.choices[0].message;
       }
 
-      // ----------------------------------------
-      // Шаг 5: Извлекаем финальный текстовый ответ
-      // ----------------------------------------
-
-      const textResponse = this.extractTextFromResult(result);
-
-      // Возвращаем текст и список использованных tools
       return {
-        message: textResponse || 'Не удалось получить ответ',
+        message: responseMessage.content || 'Не удалось получить ответ',
         toolsUsed: toolsUsed.length > 0 ? toolsUsed : undefined,
         provider: this.name,
         tokensUsed: {
-          input: result.response.usageMetadata?.promptTokenCount || 0,
-          output: result.response.usageMetadata?.candidatesTokenCount || 0,
+          input: response.usage?.prompt_tokens || 0,
+          output: response.usage?.completion_tokens || 0,
         },
       };
     } catch (error) {
-      // ----------------------------------------
-      // Обработка ошибок API
-      // ----------------------------------------
-
       this.logError('Chat error', error);
 
-      // Gemini выбрасывает ошибки с различными кодами в сообщении
-      if (error instanceof Error) {
-        const errorMessage = error.message || '';
-
-        // 429 — слишком много запросов (rate limit)
-        if (errorMessage.includes('429') || errorMessage.includes('RESOURCE_EXHAUSTED')) {
+      if (error instanceof OpenAI.APIError) {
+        if (error.status === 401) {
           throw new Error(
-            '⚠️ Превышен лимит запросов Gemini API\n\n' +
-            'Код ошибки: 429 (Resource Exhausted)\n' +
-            'Причина: Превышен бесплатный лимит (15 запросов/минуту для gemini-1.5-pro).\n\n' +
+            '🔒 Ошибка авторизации DeepSeek API\n\n' +
+            'Причина: Неверный API ключ.\n\n' +
+            'Что делать:\n' +
+            '• Проверьте переменную DEEPSEEK_API_KEY\n' +
+            '• Ключ должен начинаться с "sk-"\n' +
+            '• Создайте новый ключ на https://platform.deepseek.com/api_keys'
+          );
+        }
+
+        if (error.status === 402) {
+          throw new Error(
+            '💳 Недостаточно средств на балансе DeepSeek\n\n' +
+            'Что делать:\n' +
+            '• Пополните баланс на https://platform.deepseek.com/top_up\n' +
+            '• Минимум $2-5 для начала работы'
+          );
+        }
+
+        if (error.status === 429) {
+          throw new Error(
+            '⚠️ Превышен лимит запросов DeepSeek API\n\n' +
             'Что делать:\n' +
             '• Подождите 1 минуту и повторите запрос\n' +
-            '• Используйте более быструю модель: gemini-1.5-flash (60 запросов/минуту)\n' +
-            '• Перейдите на платный тариф на https://aistudio.google.com\n' +
-            '• Настройте fallback на Claude в переменных окружения'
+            '• Проверьте лимиты на https://platform.deepseek.com'
           );
         }
 
-        // 401, 403 — неверный API ключ или доступ запрещен
-        if (errorMessage.includes('401') || errorMessage.includes('403') ||
-            errorMessage.includes('API_KEY_INVALID') || errorMessage.includes('PERMISSION_DENIED')) {
+        if (error.status >= 500) {
           throw new Error(
-            '🔒 Ошибка авторизации Gemini API\n\n' +
-            'Код ошибки: 401/403 (Unauthorized/Permission Denied)\n' +
-            'Причина: Неверный API ключ или доступ запрещен.\n\n' +
+            '🔧 Технические проблемы DeepSeek API\n\n' +
             'Что делать:\n' +
-            '• Проверьте, что переменная GEMINI_API_KEY установлена правильно\n' +
-            '• Создайте новый API ключ на https://aistudio.google.com/app/apikey\n' +
-            '• Убедитесь, что ключ начинается с "AIza"\n' +
-            '• ВАЖНО: API ключ должен быть от того же Google аккаунта, что и проект'
+            '• Подождите 5-10 минут\n' +
+            '• Проверьте статус: https://status.deepseek.com\n' +
+            '• Используйте fallback провайдер (Gemini/Claude)'
           );
         }
 
-        // 405 — метод не разрешён
-        if (errorMessage.includes('405') || errorMessage.includes('METHOD_NOT_ALLOWED')) {
-          throw new Error(
-            '🚫 Неподдерживаемый метод запроса к Gemini API\n\n' +
-            'Код ошибки: 405 (Method Not Allowed)\n' +
-            'Причина: Использован неправильный HTTP метод (GET вместо POST или наоборот).\n\n' +
-            'Что делать:\n' +
-            '• Это ошибка в коде приложения, не в настройках\n' +
-            '• Обратитесь к администратору системы\n' +
-            '• Проверьте версию SDK @google/generative-ai (должна быть актуальной)'
-          );
-        }
-
-        // 400 — неверный запрос
-        if (errorMessage.includes('400') || errorMessage.includes('INVALID_ARGUMENT')) {
-          throw new Error(
-            '❌ Неверный формат запроса к Gemini API\n\n' +
-            'Код ошибки: 400 (Invalid Argument)\n' +
-            `Детали: ${errorMessage}\n\n` +
-            'Причина: API не смог обработать запрос из-за неверного формата данных.\n\n' +
-            'Возможные причины:\n' +
-            '• Слишком большое изображение (макс. 10MB)\n' +
-            '• Неподдерживаемый формат данных\n' +
-            '• Слишком длинный текст запроса'
-          );
-        }
-
-        // 500, 502, 503 — ошибки на стороне сервера
-        if (errorMessage.includes('500') || errorMessage.includes('502') ||
-            errorMessage.includes('503') || errorMessage.includes('INTERNAL') ||
-            errorMessage.includes('UNAVAILABLE')) {
-          throw new Error(
-            '🔧 Технические проблемы на стороне Gemini API\n\n' +
-            'Код ошибки: 500+ (Server Error)\n' +
-            'Причина: Временные проблемы с серверами Google.\n\n' +
-            'Что делать:\n' +
-            '• Подождите 5-10 минут и повторите запрос\n' +
-            '• Проверьте статус сервиса на https://status.cloud.google.com\n' +
-            '• Используйте fallback на Claude (если настроен)\n' +
-            '• Если проблема сохраняется, попробуйте другую модель'
-          );
-        }
-
-        // Ошибка квоты (бесплатный лимит исчерпан)
-        if (errorMessage.includes('QUOTA') || errorMessage.includes('quota')) {
-          throw new Error(
-            '💳 Исчерпан бесплатный лимит Gemini API\n\n' +
-            'Код ошибки: Quota Exceeded\n' +
-            'Причина: Бесплатный лимит исчерпан (например, лимит на день или месяц).\n\n' +
-            'Что делать:\n' +
-            '• Подождите до следующего дня/месяца\n' +
-            '• Перейдите на платный тариф: https://aistudio.google.com/app/pricing\n' +
-            '• Используйте Claude как основной провайдер\n' +
-            '• Проверьте квоты: https://console.cloud.google.com/apis/api/generativelanguage.googleapis.com/quotas'
-          );
-        }
-
-        // Прочие ошибки Gemini
-        throw new Error(
-          `⚠️ Ошибка Gemini API\n\n` +
-          `Детали: ${errorMessage}\n\n` +
-          'Рекомендации:\n' +
-          '• Попробуйте повторить запрос\n' +
-          '• Настройте fallback на Claude\n' +
-          '• Обратитесь к администратору системы'
-        );
+        throw new Error(`⚠️ Ошибка DeepSeek API: ${error.message}`);
       }
 
-      // Прочие ошибки (не Error)
       throw new Error(
-        '❌ Неизвестная ошибка при работе с Gemini API\n\n' +
-        'Обратитесь к администратору системы.'
+        `❌ Неизвестная ошибка DeepSeek: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`
       );
     }
   }
 
-  /**
-   * Проверка доступности Gemini API
-   */
   async isAvailable(): Promise<boolean> {
-    try {
-      const genAI = this.client.getGenerativeModel({ model: this.model });
-      const result = await genAI.generateContent('test');
-      return !!result.response;
-    } catch (error) {
-      console.error('[GeminiProvider] Not available:', error instanceof Error ? error.message : error);
-      return false;
-    }
+    return !!this.apiKey;
   }
 
   /**
-   * Системный промпт для Gemini
+   * Преобразует ChatMessage[] в формат OpenAI
+   */
+  private convertMessages(messages: ChatMessage[]): OpenAI.ChatCompletionMessageParam[] {
+    return messages.map(msg => {
+      if (typeof msg.content === 'string') {
+        // Явно указываем роль как const чтобы TypeScript сузил тип
+        if (msg.role === 'assistant') {
+          return { role: 'assistant' as const, content: msg.content };
+        }
+        return { role: 'user' as const, content: msg.content };
+      }
+
+      // Мультимодальный контент (текст + изображения) — только для user
+      const content: OpenAI.ChatCompletionContentPart[] = msg.content.map(block => {
+        if (block.type === 'text') {
+          return { type: 'text' as const, text: block.text };
+        } else {
+          // Изображение в формате base64
+          return {
+            type: 'image_url' as const,
+            image_url: {
+              url: `data:${block.source.media_type};base64,${block.source.data}`,
+            },
+          };
+        }
+      });
+
+      return { role: 'user' as const, content };
+    });
+  }
+
+  /**
+   * Системный промпт (идентичен Claude/Gemini провайдерам)
    */
   private getSystemPrompt(equipmentContext?: EquipmentContext, waterContext?: WaterDashboardContext): string {
     const waterInfo = waterContext
@@ -410,70 +324,5 @@ export class GeminiProvider extends BaseAIProvider {
 Язык общения: русский.
 
 Текущая дата: ${new Date().toISOString().split('T')[0]}`;
-  }
-
-  /**
-   * Преобразует наш формат ChatMessage в формат Gemini Content
-   */
-  private convertMessagesToGemini(messages: ChatMessage[]): Content[] {
-    return messages.map(msg => {
-      // Gemini использует 'user' и 'model' вместо 'assistant'
-      const role = msg.role === 'assistant' ? 'model' : 'user';
-
-      // Если content это строка - преобразуем в parts
-      if (typeof msg.content === 'string') {
-        return {
-          role,
-          parts: [{ text: msg.content }],
-        };
-      }
-
-      // Если content это массив блоков (мультимодальный контент)
-      const parts = msg.content.map(block => {
-        if (block.type === 'text') {
-          return { text: block.text };
-        } else if (block.type === 'image') {
-          return {
-            inlineData: {
-              mimeType: block.source.media_type,
-              data: block.source.data,
-            },
-          };
-        }
-        throw new Error(`Unknown block type: ${(block as any).type}`);
-      });
-
-      return { role, parts };
-    });
-  }
-
-  /**
-   * Проверяет, содержит ли ответ function calls
-   */
-  private hasFunctionCalls(result: any): boolean {
-    const parts = result.response.candidates?.[0]?.content?.parts || [];
-    return parts.some((part: any) => part.functionCall);
-  }
-
-  /**
-   * Извлекает текст из Content
-   */
-  private extractTextFromContent(content: Content): string {
-    if (!content.parts) return '';
-
-    const textParts = content.parts
-      .filter((part: any) => part.text)
-      .map((part: any) => part.text);
-
-    return textParts.join('');
-  }
-
-  /**
-   * Извлекает текст из результата генерации
-   */
-  private extractTextFromResult(result: any): string {
-    const parts = result.response.candidates?.[0]?.content?.parts || [];
-    const textParts = parts.filter((part: any) => part.text).map((part: any) => part.text);
-    return textParts.join('');
   }
 }

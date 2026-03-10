@@ -76,6 +76,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     setSelectedPhotos(prev => prev.filter((_, i) => i !== index));
   };
 
+  const handleVoiceTranscript = (voiceText: string) => {
+    // Добавляем распознанный текст к текущему тексту
+    setText(prev => prev + (prev ? ' ' : '') + voiceText);
+  };
+
   return (
     <form className="ai-chat-input" onSubmit={handleSubmit}>
       {/* Превью выбранных фото */}
@@ -110,7 +115,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
       <div className="ai-chat-input__actions">
         <PhotoButton disabled={isLoading} onPhotosSelected={handlePhotosSelected} />
-        <VoiceButton disabled={isLoading} />
+        <VoiceButton disabled={isLoading} onTranscript={handleVoiceTranscript} />
         {onQRScanClick && <QRButton disabled={isLoading} onClick={onQRScanClick} />}
 
         <button
