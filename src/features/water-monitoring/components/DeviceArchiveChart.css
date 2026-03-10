@@ -1,0 +1,116 @@
+.device-archive-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Сетка карточек статистики */
+.archive-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 768px) {
+  .archive-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .archive-stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Карточка статистики */
+.archive-stat-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: box-shadow 0.2s;
+}
+
+.archive-stat-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.archive-stat-card--warn {
+  border-color: #fbbf24;
+  background: #fffbeb;
+}
+
+.archive-stat-label {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.archive-stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1e293b;
+  line-height: 1.2;
+}
+
+.archive-stat-value--accent {
+  color: #7c3aed;
+}
+
+.archive-stat-value--warn {
+  color: #d97706;
+}
+
+.archive-stat-value--ok {
+  color: #16a34a;
+}
+
+.archive-stat-missing {
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
+  color: #92400e;
+  margin-top: 2px;
+}
+
+/* Tooltip */
+.archive-chart-tooltip {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  font-size: 13px;
+  min-width: 180px;
+}
+
+.archive-chart-tooltip__label {
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #f0f4f8;
+}
+
+/* Подсказка под графиком */
+.archive-chart-hint {
+  font-size: 12px;
+  color: #94a3b8;
+  text-align: center;
+  margin: 0;
+  padding: 0 16px;
+}
+
+/* Пустое состояние */
+.archive-chart-empty {
+  text-align: center;
+  padding: 48px 16px;
+  color: #9ca3af;
+  font-size: 14px;
+}
