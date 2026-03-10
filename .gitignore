@@ -31,3 +31,9 @@ dist-ssr
 
 # Railway
 .railway
+
+# AI consultant downloads (runtime files)
+ai-consultant-api/downloads/
+
+# Claude Code local settings
+.claude/settings.local.json
