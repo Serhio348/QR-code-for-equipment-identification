@@ -14,6 +14,13 @@ export interface BeliotDeviceOverride {
   serial_number?: string;
   device_group?: string;
   object_name?: string;
+  /**
+   * Роль счётчика в водном балансе:
+   * - 'source'     — источник воды (скважина / водозабор)
+   * - 'production' — производственный потребитель (ХВО, Очистное, АЛПО)
+   * - 'domestic'   — хозяйственно-питьевое водоснабжение
+   */
+  device_role?: 'source' | 'production' | 'domestic' | null;
   // Паспортные данные
   manufacture_date?: string; // Дата выпуска (формат: YYYY-MM-DD)
   manufacturer?: string; // Производитель
@@ -60,6 +67,7 @@ export async function getBeliotDevicesOverrides(): Promise<BeliotDevicesOverride
           serial_number: override.serial_number,
           device_group: override.device_group,
           object_name: override.object_name,
+          device_role: override.device_role as 'source' | 'production' | 'domestic' | null,
           manufacture_date: override.manufacture_date,
           manufacturer: override.manufacturer,
           verification_date: override.verification_date,
@@ -135,6 +143,7 @@ export async function saveBeliotDeviceOverride(
       serial_number: override.serial_number,
       device_group: override.device_group,
       object_name: override.object_name,
+      device_role: override.device_role ?? null,
       manufacture_date: override.manufacture_date || null,
       manufacturer: override.manufacturer || null,
       verification_date: override.verification_date || null,
@@ -190,6 +199,7 @@ export async function saveBeliotDevicesOverrides(
       serial_number: override.serial_number,
       device_group: override.device_group,
       object_name: override.object_name,
+      device_role: override.device_role ?? null,
       manufacture_date: override.manufacture_date || null,
       manufacturer: override.manufacturer || null,
       verification_date: override.verification_date || null,

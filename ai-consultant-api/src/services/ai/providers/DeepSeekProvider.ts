@@ -172,34 +172,41 @@ export class DeepSeekProvider extends BaseAIProvider {
   }
 
   /**
-   * Преобразует ChatMessage[] в формат OpenAI
+   * Преобразует ChatMessage[] в формат OpenAI.
+   * DeepSeek НЕ поддерживает vision: изображения заменяются текстовым уведомлением.
    */
   private convertMessages(messages: ChatMessage[]): OpenAI.ChatCompletionMessageParam[] {
     return messages.map(msg => {
       if (typeof msg.content === 'string') {
-        // Явно указываем роль как const чтобы TypeScript сузил тип
         if (msg.role === 'assistant') {
           return { role: 'assistant' as const, content: msg.content };
         }
         return { role: 'user' as const, content: msg.content };
       }
 
-      // Мультимодальный контент (текст + изображения) — только для user
-      const content: OpenAI.ChatCompletionContentPart[] = msg.content.map(block => {
-        if (block.type === 'text') {
-          return { type: 'text' as const, text: block.text };
-        } else {
-          // Изображение в формате base64
-          return {
-            type: 'image_url' as const,
-            image_url: {
-              url: `data:${block.source.media_type};base64,${block.source.data}`,
-            },
-          };
-        }
-      });
+      // Мультимодальный контент: DeepSeek не поддерживает image_url —
+      // извлекаем только текстовые блоки, изображения заменяем описанием.
+      const textParts: string[] = [];
+      let imageCount = 0;
 
-      return { role: 'user' as const, content };
+      for (const block of msg.content) {
+        if (block.type === 'text') {
+          textParts.push(block.text);
+        } else {
+          imageCount++;
+        }
+      }
+
+      if (imageCount > 0) {
+        textParts.push(
+          `\n[⚠️ Пользователь прикрепил ${imageCount} изображение(й), но DeepSeek не поддерживает анализ фото. ` +
+          `Сообщи пользователю об этом ограничении и предложи описать содержимое изображения текстом, ` +
+          `либо переключиться на Claude или Gemini для работы с фотографиями.]`
+        );
+      }
+
+      const text = textParts.join('\n').trim();
+      return { role: 'user' as const, content: text };
     });
   }
 
@@ -319,6 +326,20 @@ export class DeepSeekProvider extends BaseAIProvider {
 - Если пользователь просит другой тип документа — сформируй содержимое по смыслу запроса.
 - ВСЕГДА сохраняй документ в папку оборудования (googleDriveUrl из контекста), если доступна.
 - После создания покажи пользователю ссылку на документ.
+
+11. Работать с порталом bvod.by (Брестводоканал) — скачивать и читать счета за воду:
+    - Войти на портал: portal_login (логин и пароль хранятся в конфигурации сервера, не спрашивай у пользователя)
+    - Получить список счетов на странице личного кабинета: portal_list_invoices
+    - Скачать конкретный счёт (PDF/Excel/CSV): portal_download_invoice
+    - Прочитать текст скачанного файла: portal_read_invoice
+    - Список уже скачанных ранее файлов: portal_list_downloaded
+    Стандартная цепочка: portal_login → portal_list_invoices → portal_download_invoice → portal_read_invoice
+
+    КРИТИЧЕСКИ ВАЖНО для bvod.by:
+    1. ВСЕГДА вызывай portal_login ПЕРВЫМ — при каждом запросе о счетах, КАЖДЫЙ РАЗ. Не пропускай даже если раньше уже входил. Сессия могла истечь.
+    2. Если portal_list_invoices вернул ошибку "сессия истекла" — вызови portal_login снова, затем portal_list_invoices.
+    3. НИКОГДА не отвечай по памяти о содержимом сайта — только из результатов инструментов.
+    4. Если portal_list_invoices вернул page_text без файлов — сообщи что видит браузер и спроси как продолжить.
 
 Отвечай кратко и по делу. Используй эмодзи для наглядности.
 Язык общения: русский.

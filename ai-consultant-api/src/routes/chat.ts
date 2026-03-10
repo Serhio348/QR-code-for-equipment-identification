@@ -49,6 +49,14 @@ import { tools } from '../tools/index.js';
 // AuthenticatedRequest — расширенный Request с полем req.user
 import { authMiddleware, AuthenticatedRequest } from '../middleware/auth.js';
 
+// chatMemoryService — сохранение и загрузка истории чата между сессиями
+import {
+    getOrCreateSession,
+    saveMessages,
+    loadRecentHistory,
+    updateSessionTitle,
+} from '../services/chatMemoryService.js';
+
 // ============================================
 // Инициализация роутера
 // ============================================
@@ -163,6 +171,26 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
             equipmentContext ? `context: ${equipmentContext.name} (${equipmentContext.id})` : 'no context'
         );
 
+        const userId = req.user?.id || '';
+
+        // ----------------------------------------
+        // Память: загружаем историю прошлых сессий
+        // ----------------------------------------
+        // Загружаем последние 20 сообщений из БД и добавляем их В НАЧАЛО
+        // текущего массива messages. Так агент видит прошлые разговоры
+        // как будто они произошли в этой же сессии.
+        //
+        // Пример итогового массива для AI:
+        //   [история из БД...] + [текущие сообщения из фронтенда]
+        //
+        // Фронтенд присылает только сообщения ТЕКУЩЕЙ сессии (с момента открытия чата).
+        // Мы добавляем к ним историю ПРОШЛЫХ сессий из БД.
+        const history = await loadRecentHistory(userId);
+
+        // Объединяем: история (старые) + текущие сообщения (новые)
+        // Дедупликация не нужна — фронтенд не хранит историю между перезагрузками
+        const messagesWithHistory: ChatMessage[] = [...history, ...messages];
+
         // ----------------------------------------
         // Обработка через AI Provider (Claude, Gemini, или другой)
         // ----------------------------------------
@@ -172,12 +200,36 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
         const provider = await ProviderFactory.create();
 
         const response = await provider.chat(
-            messages,
+            messagesWithHistory,
             tools as ToolDefinition[], // Type assertion для совместимости Anthropic.Tool с ToolDefinition
-            req.user?.id || '',
+            userId,
             equipmentContext,
             waterContext
         );
+
+        // ----------------------------------------
+        // Память: сохраняем новый обмен сообщениями в БД
+        // ----------------------------------------
+        // Сохраняем только ПОСЛЕДНЕЕ сообщение пользователя (не всю историю) —
+        // предыдущие уже были сохранены в прошлых запросах.
+        const lastUserMessage = messages[messages.length - 1];
+
+        // Запускаем сохранение параллельно с отправкой ответа (не блокируем)
+        const sessionId = await getOrCreateSession(userId, equipmentContext?.id);
+
+        // Обновляем заголовок сессии если это первое сообщение
+        if (typeof lastUserMessage.content === 'string') {
+            updateSessionTitle(sessionId, lastUserMessage.content).catch(() => {});
+        }
+
+        // Сохраняем пару: сообщение пользователя + ответ агента
+        saveMessages(
+            sessionId,
+            userId,
+            lastUserMessage,
+            response.message,
+            response.toolsUsed || []
+        ).catch(err => console.error('Ошибка сохранения в память:', err));
 
         // Успешный ответ — оборачиваем в { success, data }
         // для единообразия с остальными API ответами
@@ -201,6 +253,42 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
             success: false,
             error: message,
         });
+    }
+});
+
+// ============================================
+// GET /api/chat/history
+// ============================================
+
+/**
+ * Загрузить историю чата для отображения в интерфейсе.
+ *
+ * Фронтенд вызывает этот эндпоинт при открытии чата,
+ * чтобы показать пользователю прошлые сообщения.
+ *
+ * Отличие от логики выше (в POST):
+ *   POST — загружает историю для контекста AI (тихо, без UI)
+ *   GET  — загружает историю для отображения пользователю
+ *
+ * Query параметры:
+ *   limit — сколько сообщений вернуть (по умолчанию 20, макс 100)
+ *
+ * Ответ: { success: true, data: { messages: ChatMessage[] } }
+ */
+router.get('/history', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const userId = req.user?.id || '';
+        const limit = Math.min(Number(req.query.limit) || 20, 100);
+
+        const messages = await loadRecentHistory(userId, limit);
+
+        res.json({
+            success: true,
+            data: { messages },
+        });
+    } catch (error) {
+        console.error('Ошибка загрузки истории:', error);
+        res.status(500).json({ success: false, error: 'Не удалось загрузить историю' });
     }
 });
 

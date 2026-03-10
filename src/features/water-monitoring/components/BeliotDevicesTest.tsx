@@ -793,6 +793,7 @@ const BeliotDevicesTest: React.FC = () => {
     name: string;
     serialNumber: string;
     object: string;
+    deviceRole: 'source' | 'production' | 'domestic' | '';
     manufactureDate: string;
     manufacturer: string;
     verificationDate: string;
@@ -801,6 +802,7 @@ const BeliotDevicesTest: React.FC = () => {
     name: '',
     serialNumber: '',
     object: '',
+    deviceRole: '',
     manufactureDate: '',
     manufacturer: '',
     verificationDate: '',
@@ -972,6 +974,7 @@ const BeliotDevicesTest: React.FC = () => {
       name: '',
       serialNumber: '',
       object: '',
+      deviceRole: '',
       manufactureDate: '',
       manufacturer: '',
       verificationDate: '',
@@ -992,6 +995,7 @@ const BeliotDevicesTest: React.FC = () => {
         name: passportData.name || undefined,
         serial_number: passportData.serialNumber || undefined,
         object_name: passportData.object || undefined,
+        device_role: passportData.deviceRole || null,
         manufacture_date: passportData.manufactureDate || undefined,
         manufacturer: passportData.manufacturer || undefined,
         verification_date: passportData.verificationDate || undefined,
@@ -1282,6 +1286,7 @@ const BeliotDevicesTest: React.FC = () => {
       name: getEditableValue(deviceId, 'name', getDeviceName(device)),
       serialNumber: getEditableValue(deviceId, 'serialNumber', getDeviceSerialNumber(device)),
       object: getEditableValue(deviceId, 'object', getDeviceObject(device)),
+      deviceRole: (override?.device_role as 'source' | 'production' | 'domestic') || '',
       manufactureDate: formatDate(override?.manufacture_date),
       manufacturer: override?.manufacturer || '',
       verificationDate: formatDate(override?.verification_date),
@@ -3412,9 +3417,23 @@ const BeliotDevicesTest: React.FC = () => {
                       placeholder="Введите объект"
                     />
                   </div>
+
+                  <div className="passport-form-field">
+                    <label>Роль в водном балансе:</label>
+                    <select
+                      className="passport-input"
+                      value={passportData.deviceRole}
+                      onChange={(e) => setPassportData({ ...passportData, deviceRole: e.target.value as 'source' | 'production' | 'domestic' | '' })}
+                    >
+                      <option value="">— не указана —</option>
+                      <option value="source">🚰 Источник (скважина)</option>
+                      <option value="production">🏭 Производство</option>
+                      <option value="domestic">🏠 Хоз-питьевое водоснабжение</option>
+                    </select>
+                  </div>
                 </div>
               </div>
-              
+
               {/* Паспортные данные */}
               <div className="passport-section">
                 <h4>Паспортные данные</h4>

@@ -58,6 +58,112 @@
   z-index: 10;
 }
 
+/* Бейдж алертов на кнопке */
+.ai-chat-widget__badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+  padding: 0 5px;
+  color: #fff;
+  pointer-events: none;
+  border: 2px solid #fff;
+}
+
+.ai-chat-widget__badge--critical {
+  background: #dc2626;
+}
+
+.ai-chat-widget__badge--warning {
+  background: #d97706;
+}
+
+/* Баннер алертов внутри чата */
+.ai-chat-widget__alerts-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--ai-chat-border);
+  flex-shrink: 0;
+}
+
+.ai-chat-widget__alerts-banner--critical {
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.ai-chat-widget__alerts-banner--warning {
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.ai-chat-widget__alerts-banner-body {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.ai-chat-widget__alerts-banner-icon {
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
+.ai-chat-widget__alerts-banner-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ai-chat-widget__alerts-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.ai-chat-widget__alerts-banner-ask {
+  background: none;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.8;
+  white-space: nowrap;
+}
+
+.ai-chat-widget__alerts-banner-ask:hover {
+  opacity: 1;
+}
+
+.ai-chat-widget__alerts-banner-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  color: inherit;
+  opacity: 0.6;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+.ai-chat-widget__alerts-banner-close:hover {
+  opacity: 1;
+}
+
 /* Окно чата */
 .ai-chat-widget__window {
   position: absolute;
