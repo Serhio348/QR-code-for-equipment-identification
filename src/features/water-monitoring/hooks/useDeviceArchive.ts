@@ -292,11 +292,17 @@ export function useDeviceArchive(deviceId: string | null) {
   }, [archiveReadings, archiveGroupBy, archiveViewType, archiveReadingsRaw]);
 
   // ─── Пагинация ────────────────────────────────────────────────────────────
+  // Таблица показывает свежие данные сверху (reversed), график — хронологически
+
+  const archiveReadingsDesc = useMemo(
+    () => [...archiveReadings].reverse(),
+    [archiveReadings],
+  );
 
   const archiveTotalPages = Math.ceil(archiveReadings.length / archivePageSize);
   const archiveStartIndex = (archiveCurrentPage - 1) * archivePageSize;
   const archiveEndIndex = archiveStartIndex + archivePageSize;
-  const archiveDisplayedReadings = archiveReadings.slice(archiveStartIndex, archiveEndIndex);
+  const archiveDisplayedReadings = archiveReadingsDesc.slice(archiveStartIndex, archiveEndIndex);
 
   const handlePreviousPage = useCallback(() => {
     setArchiveCurrentPage(p => Math.max(1, p - 1));
