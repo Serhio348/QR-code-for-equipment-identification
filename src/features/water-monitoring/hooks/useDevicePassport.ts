@@ -103,29 +103,28 @@ export function useDevicePassport({
   // ── Геттеры данных устройства ──────────────────────────────────────────────
 
   const getDeviceName = useCallback((device: BeliotDevice): string => {
-    const deviceId = String(device.device_id || device.id || (device as any)._id);
+    const deviceId = String(device.device_id || device.id || device._id);
     const editableValue = getEditableValue(deviceId, 'name', '');
     if (editableValue) return editableValue;
     return device.name || '-';
   }, [getEditableValue]);
 
   const getDeviceSerialNumber = useCallback((device: BeliotDevice): string => {
-    const deviceId = String(device.device_id || device.id || (device as any)._id);
+    const deviceId = String(device.device_id || device.id || device._id);
     const editableValue = getEditableValue(deviceId, 'serialNumber', '');
     if (editableValue) return editableValue;
 
     // Явные поля серийного номера (на случай если API вернёт их напрямую)
-    const d = device as any;
-    if (d.serial_number) return String(d.serial_number);
-    if (d.serialNumber) return String(d.serialNumber);
-    if (d.serial) return String(d.serial);
-    if (d.sn) return String(d.sn);
-    if (d.factory_number) return String(d.factory_number);
-    if (d.factoryNumber) return String(d.factoryNumber);
+    if (device.serial_number) return String(device.serial_number);
+    if (device.serialNumber) return String(device.serialNumber);
+    if (device.serial) return String(device.serial);
+    if (device.sn) return String(device.sn);
+    if (device.factory_number) return String(device.factory_number);
+    if (device.factoryNumber) return String(device.factoryNumber);
 
     // Проверяем в объекте модели
-    if (d.model && typeof d.model === 'object') {
-      const m = d.model;
+    if (device.model && typeof device.model === 'object') {
+      const m = device.model as Record<string, unknown>;
       if (m.serial_number) return String(m.serial_number);
       if (m.serialNumber) return String(m.serialNumber);
       if (m.serial) return String(m.serial);
@@ -149,7 +148,7 @@ export function useDevicePassport({
   }, [getEditableValue]);
 
   const getDeviceObject = useCallback((device: BeliotDevice): string => {
-    const deviceId = String(device.device_id || device.id || (device as any)._id);
+    const deviceId = String(device.device_id || device.id || device._id);
     const editableValue = getEditableValue(deviceId, 'object', '');
     if (editableValue) return editableValue;
 
@@ -172,7 +171,7 @@ export function useDevicePassport({
   // ── Открытие ───────────────────────────────────────────────────────────────
 
   const handleOpenPassport = useCallback((device: BeliotDevice) => {
-    const deviceId = String(device.device_id || device.id || (device as any)._id);
+    const deviceId = String(device.device_id || device.id || device._id);
     setPassportDevice(device);
 
     /** Форматирует ISO-дату в YYYY-MM-DD для input[type="date"] */
@@ -210,7 +209,7 @@ export function useDevicePassport({
   const handleSavePassport = useCallback(async () => {
     if (!passportDevice) return;
 
-    const deviceId = String(passportDevice.device_id || passportDevice.id || (passportDevice as any)._id);
+    const deviceId = String(passportDevice.device_id || passportDevice.id || passportDevice._id);
     setPassportSaving(true);
 
     try {
