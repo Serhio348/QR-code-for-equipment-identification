@@ -49,6 +49,9 @@ import { tools } from '../tools/index.js';
 // AuthenticatedRequest — расширенный Request с полем req.user
 import { authMiddleware, AuthenticatedRequest } from '../middleware/auth.js';
 
+// rate limiting — ограничение частоты запросов на пользователя
+import rateLimit from 'express-rate-limit';
+
 // chatMemoryService — сохранение и загрузка истории чата между сессиями
 import {
     getOrCreateSession,
@@ -65,6 +68,25 @@ import {
 // Подключается в index.ts: app.use('/api/chat', chatRouter)
 // Все маршруты здесь будут относительно /api/chat
 const router = Router();
+
+// ============================================
+// Лимиты
+// ============================================
+
+// Максимальное количество сообщений в одном запросе
+const MAX_MESSAGES = 50;
+// Максимальная длина одного сообщения в символах (~25k токенов)
+const MAX_MESSAGE_LENGTH = 32_000;
+
+// Rate limiter: не более 30 запросов в минуту на IP
+// Защита от случайных циклов на фронтенде и злоупотреблений
+const chatRateLimit = rateLimit({
+    windowMs: 60 * 1000, // 1 минута
+    max: 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many requests, please slow down' },
+});
 
 // ============================================
 // CORS preflight для этого роута
@@ -128,7 +150,7 @@ interface ChatRequestBody {
  * - 401: нет/невалидный JWT токен (от authMiddleware)
  * - 500: ошибка Claude API или внутренняя ошибка
  */
-router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { messages, equipmentContext, waterContext } = req.body as ChatRequestBody;
 
@@ -137,6 +159,14 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
         // ----------------------------------------
         if (!messages || !Array.isArray(messages) || messages.length === 0) {
             res.status(400).json({ error: 'Messages array is required' });
+            return;
+        }
+
+        // ----------------------------------------
+        // Лимит: не более MAX_MESSAGES сообщений за раз
+        // ----------------------------------------
+        if (messages.length > MAX_MESSAGES) {
+            res.status(400).json({ error: `Too many messages: max ${MAX_MESSAGES} allowed` });
             return;
         }
 
@@ -160,6 +190,11 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
             // Проверяем тип content: должен быть string или array
             if (typeof msg.content !== 'string' && !Array.isArray(msg.content)) {
                 res.status(400).json({ error: 'Invalid content type' });
+                return;
+            }
+            // Лимит длины текстового сообщения
+            if (typeof msg.content === 'string' && msg.content.length > MAX_MESSAGE_LENGTH) {
+                res.status(400).json({ error: `Message too long: max ${MAX_MESSAGE_LENGTH} characters` });
                 return;
             }
         }

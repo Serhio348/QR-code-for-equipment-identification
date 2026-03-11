@@ -28,6 +28,38 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
+// Читает роль из кэша localStorage — вынесено чтобы не дублировать в 3 местах
+function readCachedRole(userId: string): 'admin' | 'user' {
+  try {
+    const raw = localStorage.getItem('user_session');
+    if (raw) {
+      const cached = JSON.parse(raw);
+      if (cached?.user?.id === userId && cached?.user?.role) {
+        return cached.user.role;
+      }
+    }
+  } catch {
+    // не критично
+  }
+  return 'user';
+}
+
+// Строит объект пользователя из данных Supabase сессии (fallback когда профиль недоступен)
+function buildFallbackUser(sessionUser: {
+  id: string;
+  email?: string | null;
+  user_metadata?: Record<string, unknown>;
+  created_at?: string;
+}): User {
+  return {
+    id: sessionUser.id,
+    email: sessionUser.email || '',
+    name: sessionUser.user_metadata?.name as string | undefined,
+    role: readCachedRole(sessionUser.id),
+    createdAt: sessionUser.created_at || new Date().toISOString(),
+  };
+}
+
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -48,6 +80,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     let userRestored = false;
     let restorationInProgress = false;
     let signedInProcessing = false; // Флаг для предотвращения повторной обработки SIGNED_IN
+    const timeouts: ReturnType<typeof setTimeout>[] = [];
 
     // Инициализация: быстро проверяем сессию синхронно
     console.log('🔐 Инициализация аутентификации...');
@@ -86,34 +119,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
             // Это позволяет не зависать на экране загрузки при медленном профиле
             console.debug('⚠️ Профиль не загружен, используем данные сессии (quickSessionCheck)');
 
-            let cachedRole: 'admin' | 'user' = 'user';
-            try {
-              const cachedSessionData = localStorage.getItem('user_session');
-              if (cachedSessionData) {
-                const cachedSession = JSON.parse(cachedSessionData);
-                if (cachedSession?.user?.id === session.user.id && cachedSession?.user?.role) {
-                  cachedRole = cachedSession.user.role;
-                }
-              }
-            } catch (cacheError) {
-              console.debug('⚠️ Ошибка чтения кэшированной роли (не критично):', cacheError);
-            }
-
-            const fallbackUser: User = {
-              id: session.user.id,
-              email: session.user.email || '',
-              name: session.user.user_metadata?.name || undefined,
-              role: cachedRole,
-              createdAt: session.user.created_at || new Date().toISOString(),
-            };
-
+            const fallbackUser = buildFallbackUser(session.user);
             setUser(fallbackUser);
             startActivityTracking();
             userRestored = true;
             console.debug('🔐 Пользователь восстановлен из данных сессии:', fallbackUser.email);
 
             // Пытаемся обновить профиль в фоне через 2 секунды
-            setTimeout(async () => {
+            timeouts.push(setTimeout(async () => {
               try {
                 const updatedUser = await getCurrentUser();
                 if (updatedUser && mounted) {
@@ -123,7 +136,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
               } catch (bgError) {
                 console.debug('⚠️ Ошибка фоновой загрузки профиля (не критично):', bgError);
               }
-            }, 2000);
+            }, 2000));
           }
 
           // Восстановление завершено
@@ -158,13 +171,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
     
     // Резервный таймаут на случай зависания запросов (например, проблемы с сетью)
     // Установлен в 5 секунд - если quickSessionCheck не завершился, принудительно завершаем инициализацию
-    setTimeout(() => {
+    timeouts.push(setTimeout(() => {
       if (mounted && !initializationComplete) {
         initializationComplete = true;
         setLoading(false);
         console.debug('🔐 Инициализация завершена (резервный таймаут 5 секунд)');
       }
-    }, 5000);
+    }, 5000));
 
     // Подписываемся на изменения состояния аутентификации
     const {
@@ -273,30 +286,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             // Это позволяет странице загрузиться даже если профиль еще не создан
             console.debug('⚠️ Профиль не найден, создаем пользователя из данных сессии');
 
-            // Пытаемся получить кэшированную роль из localStorage
-            // Это позволяет админам видеть вкладку "Администрирование" сразу
-            let cachedRole: 'admin' | 'user' = 'user';
-            try {
-              const cachedSessionData = localStorage.getItem('user_session');
-              if (cachedSessionData) {
-                const cachedSession = JSON.parse(cachedSessionData);
-                if (cachedSession?.user?.id === session.user.id && cachedSession?.user?.role) {
-                  cachedRole = cachedSession.user.role;
-                  console.debug('✅ Используем кэшированную роль:', cachedRole);
-                }
-              }
-            } catch (cacheError) {
-              console.debug('⚠️ Ошибка чтения кэшированной роли (не критично):', cacheError);
-            }
-
-            const fallbackUser: User = {
-              id: session.user.id,
-              email: session.user.email || '',
-              name: session.user.user_metadata?.name || undefined,
-              role: cachedRole, // Используем кэшированную роль или 'user' по умолчанию
-              createdAt: session.user.created_at || new Date().toISOString(),
-            };
-            
+            const fallbackUser = buildFallbackUser(session.user);
             setUser(fallbackUser);
             startActivityTracking();
             setError(null);
@@ -319,7 +309,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             }
             
             // Пытаемся обновить пользователя в фоне, когда профиль будет готов
-            setTimeout(async () => {
+            timeouts.push(setTimeout(async () => {
               try {
                 const updatedUser = await getCurrentUser();
                 if (updatedUser && mounted) {
@@ -329,8 +319,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
               } catch (error) {
                 console.debug('⚠️ Ошибка обновления пользователя в фоне (не критично):', error);
               }
-            }, 2000);
-            
+            }, 2000));
+
             // Снимаем флаг обработки после создания fallback пользователя
             signedInProcessing = false;
           } else {
@@ -383,27 +373,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
               // Это предотвращает показ страницы логина после долгого отсутствия.
               console.debug('⚠️ TOKEN_REFRESHED: профиль не загружен, используем данные сессии');
 
-              let cachedRole: 'admin' | 'user' = 'user';
-              try {
-                const cachedSessionData = localStorage.getItem('user_session');
-                if (cachedSessionData) {
-                  const cachedSession = JSON.parse(cachedSessionData);
-                  if (cachedSession?.user?.id === session.user.id && cachedSession?.user?.role) {
-                    cachedRole = cachedSession.user.role;
-                  }
-                }
-              } catch (cacheError) {
-                console.debug('⚠️ Ошибка чтения кэшированной роли (не критично):', cacheError);
-              }
-
-              const fallbackUser: User = {
-                id: session.user.id,
-                email: session.user.email || '',
-                name: session.user.user_metadata?.name || undefined,
-                role: cachedRole,
-                createdAt: session.user.created_at || new Date().toISOString(),
-              };
-
+              const fallbackUser = buildFallbackUser(session.user);
               setUser(fallbackUser);
               startActivityTracking();
 
@@ -424,7 +394,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
               }
 
               // Пытаемся обновить профиль в фоне через 2 секунды
-              setTimeout(async () => {
+              timeouts.push(setTimeout(async () => {
                 try {
                   const updatedUser = await getCurrentUser();
                   if (updatedUser && mounted) {
@@ -434,7 +404,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 } catch (bgError) {
                   console.debug('⚠️ Ошибка фоновой загрузки профиля (не критично):', bgError);
                 }
-              }, 2000);
+              }, 2000));
             }
 
             // Если инициализация ещё не завершена — завершаем
@@ -552,6 +522,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     return () => {
       mounted = false;
+      timeouts.forEach(clearTimeout);
       subscription.unsubscribe();
       stopActivityTracking();
       window.removeEventListener('session-timeout', handleSessionTimeout);

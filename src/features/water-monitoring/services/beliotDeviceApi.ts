@@ -598,7 +598,7 @@ export async function getCompanyDevices(
  */
 export interface DeviceReading {
   period: string; // 'current' | 'previous'
-  date?: string;
+  date?: string | number | Date; // API может вернуть строку, unix-timestamp или Date
   value?: number;
   unit?: string;
   [key: string]: any;
