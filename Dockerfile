@@ -4,7 +4,7 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Сброс кэша Railway (увеличить значение для принудительной пересборки)
-ARG CACHEBUST=5
+ARG CACHEBUST=6
 
 # Copy package files
 COPY package*.json ./
@@ -62,8 +62,13 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 # Copy nginx configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
+# Copy startup script
+COPY start.sh /start.sh
+RUN chmod +x /start.sh
+
 # Expose standard HTTP port
 EXPOSE 80
 
 # При старте заменяем порт 80 на $PORT (Railway назначает случайный порт), fallback на 80
-CMD ["/bin/sh", "-c", "sed -i \"s/listen 80 default_server/listen ${PORT:-80} default_server/g\" /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
+ENTRYPOINT []
+CMD ["/start.sh"]
