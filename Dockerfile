@@ -4,7 +4,7 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Сброс кэша Railway (увеличить значение для принудительной пересборки)
-ARG CACHEBUST=3
+ARG CACHEBUST=4
 
 # Copy package files
 COPY package*.json ./
@@ -49,7 +49,7 @@ RUN echo "📝 Creating .env file..." && \
 
 # Build the application
 RUN echo "🔨 Building..." && \
-    npm run build && \
+    NODE_OPTIONS="--max-old-space-size=4096" npm run build && \
     echo "✅ Build completed" && \
     ls -la dist/
 
