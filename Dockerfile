@@ -56,11 +56,11 @@ FROM nginx:alpine
 # Copy built files to nginx html directory
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Copy nginx configuration template
-COPY nginx.conf /etc/nginx/templates/default.conf.template
+# Копируем шаблон конфига (НЕ в /etc/nginx/templates/ — там nginx-entrypoint делает свой envsubst)
+COPY nginx.conf /etc/nginx/conf.d/default.conf.template
 
-# Expose standard HTTP port
+# Expose порт (Railway переопределит через $PORT)
 EXPOSE 80
 
-# Подставляем $PORT через envsubst и запускаем nginx
-CMD ["/bin/sh", "-c", "envsubst '$PORT' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
+# Подставляем только $PORT (остальные nginx-переменные $uri/$host не трогаем), запускаем nginx
+CMD ["/bin/sh", "-c", "envsubst '$PORT' < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf && exec nginx -g 'daemon off;'"]
