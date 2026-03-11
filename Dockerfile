@@ -65,5 +65,5 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 # Expose standard HTTP port
 EXPOSE 80
 
-# Start nginx
-CMD ["nginx", "-g", "daemon off;"]
+# При старте заменяем порт 80 на $PORT (Railway назначает случайный порт), fallback на 80
+CMD ["/bin/sh", "-c", "sed -i 's/listen 80 default_server/listen '${PORT:-80}' default_server/g; s/listen \\[::]:80 default_server//' /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
