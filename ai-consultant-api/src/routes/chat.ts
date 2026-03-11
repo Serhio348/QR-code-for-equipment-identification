@@ -209,24 +209,6 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
         const userId = req.user?.id || '';
 
         // ----------------------------------------
-        // Память: загружаем историю прошлых сессий
-        // ----------------------------------------
-        // Загружаем последние 20 сообщений из БД и добавляем их В НАЧАЛО
-        // текущего массива messages. Так агент видит прошлые разговоры
-        // как будто они произошли в этой же сессии.
-        //
-        // Пример итогового массива для AI:
-        //   [история из БД...] + [текущие сообщения из фронтенда]
-        //
-        // Фронтенд присылает только сообщения ТЕКУЩЕЙ сессии (с момента открытия чата).
-        // Мы добавляем к ним историю ПРОШЛЫХ сессий из БД.
-        const history = await loadRecentHistory(userId);
-
-        // Объединяем: история (старые) + текущие сообщения (новые)
-        // Дедупликация не нужна — фронтенд не хранит историю между перезагрузками
-        const messagesWithHistory: ChatMessage[] = [...history, ...messages];
-
-        // ----------------------------------------
         // Обработка через AI Provider (Claude, Gemini, или другой)
         // ----------------------------------------
         // ProviderFactory создаёт провайдер на основе конфигурации (AI_PROVIDER)
@@ -235,7 +217,7 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
         const provider = await ProviderFactory.create();
 
         const response = await provider.chat(
-            messagesWithHistory,
+            messages,
             tools as ToolDefinition[], // Type assertion для совместимости Anthropic.Tool с ToolDefinition
             userId,
             equipmentContext,
