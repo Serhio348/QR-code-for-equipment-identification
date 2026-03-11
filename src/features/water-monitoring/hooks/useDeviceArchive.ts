@@ -17,8 +17,8 @@ export type ArchiveGroupBy = 'hour' | 'day' | 'week' | 'month' | 'year';
 export type ArchiveViewType = 'readings' | 'volume';
 export type ArchiveDisplayMode = 'table' | 'chart';
 
-/** Элемент сгруппированного архива (внутренний тип хука) */
-interface GroupedReading {
+/** Элемент сгруппированного архива */
+export interface GroupedReading {
   groupKey: string;
   groupDate: Date;
   reading?: BeliotDeviceReading;
