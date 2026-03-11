@@ -3,6 +3,9 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Сброс кэша Railway (увеличить значение для принудительной пересборки)
+ARG CACHEBUST=2
+
 # Copy package files
 COPY package*.json ./
 
@@ -56,11 +59,11 @@ FROM nginx:alpine
 # Copy built files to nginx html directory
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Копируем шаблон конфига (НЕ в /etc/nginx/templates/ — там nginx-entrypoint делает свой envsubst)
-COPY nginx.conf /etc/nginx/conf.d/default.conf.template
+# Copy nginx configuration
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Expose порт (Railway переопределит через $PORT)
+# Expose standard HTTP port
 EXPOSE 80
 
-# Подставляем только $PORT (остальные nginx-переменные $uri/$host не трогаем), запускаем nginx
-CMD ["/bin/sh", "-c", "envsubst '$PORT' < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf && exec nginx -g 'daemon off;'"]
+# Start nginx
+CMD ["nginx", "-g", "daemon off;"]
