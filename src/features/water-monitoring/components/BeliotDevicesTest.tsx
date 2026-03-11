@@ -268,14 +268,14 @@ const BeliotDevicesTest: React.FC = () => {
     let value: number | undefined;
     // Пробуем получить last_message_type.1.in1
     if (device.last_message_type && typeof device.last_message_type === 'object') {
-      const msgType = device.last_message_type as any;
+      const msgType = device.last_message_type as Record<string, Record<string, number>>;
       if (msgType['1'] && msgType['1'].in1 !== undefined) {
         value = Number(msgType['1'].in1);
       }
     }
     // Альтернативные пути
-    if (value === undefined && (device as any).last_message_type?.['1']?.in1 !== undefined) {
-      value = Number((device as any).last_message_type['1'].in1);
+    if (value === undefined && device.last_message_type?.['1']?.in1 !== undefined) {
+      value = Number(device.last_message_type['1'].in1);
     }
     // Округляем до одного знака после запятой
     if (value !== undefined && !isNaN(value)) {
@@ -321,14 +321,10 @@ const BeliotDevicesTest: React.FC = () => {
           const currentDateValue = readings.current.date;
           let currentDate: Date;
           
-          if (currentDateValue && typeof currentDateValue === 'object' && 'getTime' in currentDateValue) {
-            // Проверяем, что это Date объект
-            const dateObj = currentDateValue as any;
-            if (dateObj instanceof Date) {
-              currentDate = dateObj;
-            } else {
-              currentDate = new Date(String(currentDateValue));
-            }
+          if (currentDateValue instanceof Date) {
+            currentDate = currentDateValue;
+          } else if (currentDateValue && typeof currentDateValue === 'object') {
+            currentDate = new Date(String(currentDateValue));
           } else if (typeof currentDateValue === 'number') {
             // Если это timestamp в секундах, конвертируем в миллисекунды
             const timestamp = currentDateValue < 10000000000 ? currentDateValue * 1000 : currentDateValue;
@@ -364,14 +360,10 @@ const BeliotDevicesTest: React.FC = () => {
           const previousDateValue = readings.previous.date;
           let previousDate: Date;
           
-          if (previousDateValue && typeof previousDateValue === 'object' && 'getTime' in previousDateValue) {
-            // Проверяем, что это Date объект
-            const dateObj = previousDateValue as any;
-            if (dateObj instanceof Date) {
-              previousDate = dateObj;
-            } else {
-              previousDate = new Date(String(previousDateValue));
-            }
+          if (previousDateValue instanceof Date) {
+            previousDate = previousDateValue;
+          } else if (previousDateValue && typeof previousDateValue === 'object') {
+            previousDate = new Date(String(previousDateValue));
           } else if (typeof previousDateValue === 'number') {
             // Если это timestamp в секундах, конвертируем в миллисекунды
             const timestamp = previousDateValue < 10000000000 ? previousDateValue * 1000 : previousDateValue;
@@ -1089,12 +1081,10 @@ const BeliotDevicesTest: React.FC = () => {
                         <div className="mobile-reading-unit">{deviceReadings.current.unit || 'м³'}</div>
                         <div className="mobile-reading-date">
                           {deviceReadings.current.date ? (() => {
-                            let dateValue: string | number = deviceReadings.current.date;
+                            const rawDate = deviceReadings.current.date;
                             // Если дата в секундах (Unix timestamp), конвертируем в миллисекунды
-                            if (typeof dateValue === 'number' && dateValue < 10000000000) {
-                              dateValue = dateValue * 1000;
-                            }
-                            const date = new Date(dateValue);
+                            const dateMs = typeof rawDate === 'number' && rawDate < 10000000000 ? rawDate * 1000 : rawDate;
+                            const date = new Date(dateMs as string | number);
                             if (isNaN(date.getTime())) return '-';
                             const day = String(date.getDate()).padStart(2, '0');
                             const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -1113,12 +1103,10 @@ const BeliotDevicesTest: React.FC = () => {
                         <div className="mobile-reading-unit">{deviceReadings.previous.unit || 'м³'}</div>
                         <div className="mobile-reading-date">
                           {deviceReadings.previous.date ? (() => {
-                            let dateValue: string | number = deviceReadings.previous.date;
+                            const rawDate = deviceReadings.previous.date;
                             // Если дата в секундах (Unix timestamp), конвертируем в миллисекунды
-                            if (typeof dateValue === 'number' && dateValue < 10000000000) {
-                              dateValue = dateValue * 1000;
-                            }
-                            const date = new Date(dateValue);
+                            const dateMs = typeof rawDate === 'number' && rawDate < 10000000000 ? rawDate * 1000 : rawDate;
+                            const date = new Date(dateMs as string | number);
                             if (isNaN(date.getTime())) return '-';
                             const day = String(date.getDate()).padStart(2, '0');
                             const month = String(date.getMonth() + 1).padStart(2, '0');
