@@ -4,7 +4,7 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Сброс кэша Railway (увеличить значение для принудительной пересборки)
-ARG CACHEBUST=2
+ARG CACHEBUST=3
 
 # Copy package files
 COPY package*.json ./
