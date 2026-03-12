@@ -4,7 +4,7 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Bump to force Railway cache invalidation
-ARG CACHEBUST=7
+ARG CACHEBUST=8
 
 # Copy package files
 COPY package*.json ./
@@ -59,14 +59,9 @@ FROM nginx:alpine
 # Copy built files
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Copy nginx configuration
+# Copy nginx configuration (listens on port 80 — matches Railway target port)
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-# Copy startup script
-COPY start.sh /start.sh
-RUN chmod +x /start.sh
 
 EXPOSE 80
 
-ENTRYPOINT []
-CMD ["/start.sh"]
+CMD ["nginx", "-g", "daemon off;"]
