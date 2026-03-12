@@ -3,6 +3,9 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Bump to force Railway cache invalidation
+ARG CACHEBUST=7
+
 # Copy package files
 COPY package*.json ./
 
@@ -50,17 +53,20 @@ RUN echo "🔨 Building..." && \
     echo "✅ Build completed" && \
     ls -la dist/
 
-# Production stage - use official nginx:alpine
+# Production stage
 FROM nginx:alpine
 
-# Copy built files to nginx html directory
+# Copy built files
 COPY --from=builder /app/dist /usr/share/nginx/html
 
 # Copy nginx configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Expose standard HTTP port
+# Copy startup script
+COPY start.sh /start.sh
+RUN chmod +x /start.sh
+
 EXPOSE 80
 
-# Start nginx
-CMD ["nginx", "-g", "daemon off;"]
+ENTRYPOINT []
+CMD ["/start.sh"]
