@@ -3,9 +3,6 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Сброс кэша Railway (увеличить значение для принудительной пересборки)
-ARG CACHEBUST=6
-
 # Copy package files
 COPY package*.json ./
 
@@ -49,7 +46,7 @@ RUN echo "📝 Creating .env file..." && \
 
 # Build the application
 RUN echo "🔨 Building..." && \
-    NODE_OPTIONS="--max-old-space-size=4096" npm run build && \
+    npm run build && \
     echo "✅ Build completed" && \
     ls -la dist/
 
@@ -62,13 +59,8 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 # Copy nginx configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Copy startup script
-COPY start.sh /start.sh
-RUN chmod +x /start.sh
-
 # Expose standard HTTP port
 EXPOSE 80
 
-# При старте заменяем порт 80 на $PORT (Railway назначает случайный порт), fallback на 80
-ENTRYPOINT []
-CMD ["/start.sh"]
+# Start nginx
+CMD ["nginx", "-g", "daemon off;"]
