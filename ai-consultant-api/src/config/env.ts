@@ -57,6 +57,13 @@ export const config = {
 
   // Безопасность циклов
   maxAgentIterations: parseInt(process.env.MAX_AGENT_ITERATIONS || '15', 15),
+
+  // Web Push уведомления (VAPID)
+  vapidPublicKey:     process.env.VAPID_PUBLIC_KEY  || '',
+  vapidPrivateKey:    process.env.VAPID_PRIVATE_KEY || '',
+  vapidEmail:         process.env.VAPID_EMAIL       || '',
+  // UUID пользователя которому отправляются уведомления (владелец bvod.by аккаунта)
+  notificationUserId: process.env.NOTIFICATION_USER_ID || '',
 };
 
 // Диагностическое логирование при старте
