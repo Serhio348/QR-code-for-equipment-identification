@@ -162,6 +162,7 @@ export async function syncInvoices(forceAll = false): Promise<SyncResult> {
                     sewage_volume_m3: parsed.sewage_volume_m3,
                     sewage_tariff_per_m3: parsed.sewage_tariff_per_m3,
                     amount_byn: parsed.amount_byn,
+                    sections: parsed.sections ?? null,
                     file_name: fileName,
                     storage_path: storagePath,
                     raw_text: rawText.slice(0, 50000),

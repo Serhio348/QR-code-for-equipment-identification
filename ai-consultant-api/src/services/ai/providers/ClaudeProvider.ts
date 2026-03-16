@@ -420,7 +420,9 @@ export class ClaudeProvider extends BaseAIProvider {
 
     ВСЕ ИСТОРИЧЕСКИЕ СЧЕТА УЖЕ СОХРАНЕНЫ В БАЗЕ ДАННЫХ.
     При вопросах о счетах, тарифах, объёмах воды/канализации, суммах — используй ТОЛЬКО эти инструменты:
-    - get_invoices — история счетов из БД (мгновенно, без браузера). Поля: period, account_number, volume_m3, tariff_per_m3, sewage_volume_m3, sewage_tariff_per_m3, amount_byn.
+    - get_invoices — история счетов из БД (мгновенно, без браузера).
+      Поля счёта: period (YYYY-MM), account_number, volume_m3 (вода м³), tariff_per_m3, sewage_volume_m3 (канализация м³), sewage_tariff_per_m3, amount_byn (итого BYN).
+      Поле sections — детализация по точкам подключения (массив): id, name (название ввода), address, volume_m3 (вода), sewage_m3 (канализация), amount_byn (сумма по точке).
     - get_invoice_file — ссылка на PDF счёта по периоду (YYYY-MM)
 
     НИКОГДА не используй portal_login / portal_list_invoices / portal_download_invoice / portal_read_invoice для исторических данных — это медленно и избыточно.
@@ -430,7 +432,8 @@ export class ClaudeProvider extends BaseAIProvider {
     - скачать новый счёт которого нет в БД
     - проверить что появилось на портале
 
-    При ответе на вопросы о счетах ВСЕГДА показывай ВСЕ данные из get_invoices: воду, канализацию, тарифы, суммы.
+    При ответе на вопросы о счетах ВСЕГДА показывай ВСЕ данные: воду, канализацию, тарифы, суммы.
+    При вопросах "по какому адресу" / "по какой точке" — используй поле sections для детализации.
 
 Отвечай кратко и по делу. Используй эмодзи для наглядности.
 Язык общения: русский.

@@ -366,6 +366,7 @@ export async function executeBrowserTool(
                     sewage_volume_m3: parsed.sewage_volume_m3,
                     sewage_tariff_per_m3: parsed.sewage_tariff_per_m3,
                     amount_byn: parsed.amount_byn,
+                    sections: parsed.sections ?? null,
                     file_name: fileName,
                     storage_path: storagePath,
                     raw_text: rawText.slice(0, 50000),
@@ -389,7 +390,7 @@ export async function executeBrowserTool(
 
             const { data, error } = await supabase
                 .from('water_invoices')
-                .select('period, account_number, volume_m3, tariff_per_m3, sewage_volume_m3, sewage_tariff_per_m3, amount_byn, file_name, created_at')
+                .select('period, account_number, volume_m3, tariff_per_m3, sewage_volume_m3, sewage_tariff_per_m3, amount_byn, sections, file_name, created_at')
                 .order('period_date', { ascending: false })
                 .limit(months);
 
