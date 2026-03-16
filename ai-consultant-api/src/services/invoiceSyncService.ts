@@ -22,6 +22,7 @@ import * as path from 'path';
 import { createClient } from '@supabase/supabase-js';
 import { loginToPortal, getInvoicesList, downloadInvoice, readInvoiceFile } from './browserService.js';
 import { parseInvoiceText } from './invoiceParserService.js';
+import { updateTariffFromInvoice } from './agentMemoryService.js';
 import { config } from '../config/env.js';
 
 const supabase = createClient(config.supabaseUrl, config.supabaseServiceKey);
@@ -103,6 +104,9 @@ export async function syncInvoices(forceAll = false): Promise<SyncResult> {
         console.log(`[invoiceSync] Already in DB: ${existingKeys.size} records`);
     }
 
+    // Для автообновления тарифов — запоминаем самый свежий сохранённый счёт
+    let latestSaved: Awaited<ReturnType<typeof parseInvoiceText>> | null = null;
+
     // 5–7. Скачать новые, спарсить, сохранить
     for (const inv of pdfInvoices) {
         const fileName = inv.title || `invoice_${Date.now()}.pdf`;
@@ -173,7 +177,11 @@ export async function syncInvoices(forceAll = false): Promise<SyncResult> {
             }
 
             result.saved++;
-            existingKeys.add(key); // не скачивать повторно если дубль в списке
+            existingKeys.add(key);
+            // Запоминаем самый свежий сохранённый счёт для обновления тарифов
+            if (!latestSaved || parsed.period > latestSaved.period) {
+                latestSaved = parsed;
+            }
             result.details.push({
                 fileName,
                 period: parsed.period,
@@ -195,6 +203,14 @@ export async function syncInvoices(forceAll = false): Promise<SyncResult> {
             });
             console.error(`[invoiceSync] Error processing ${fileName}:`, err);
         }
+    }
+
+    // Автообновление тарифов в памяти агента из самого свежего счёта
+    if (latestSaved) {
+        await updateTariffFromInvoice(latestSaved).catch(err =>
+            console.warn('[invoiceSync] Tariff memory update failed:', err)
+        );
+        console.log(`[invoiceSync] Tariff memory updated from period ${latestSaved.period}`);
     }
 
     console.log(`[invoiceSync] Done. saved=${result.saved}, skipped=${result.skipped}, errors=${result.errors.length}`);

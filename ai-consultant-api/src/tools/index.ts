@@ -72,6 +72,11 @@ import { waterTools, executeWaterTool } from './waterTools.js';
 // - executeBrowserTool: функция выполнения — автоматизация браузера
 import { browserTools, executeBrowserTool } from './browserTools.js';
 
+// Tools для долговременной памяти агента (Supabase agent_memory):
+// - memoryTools: 3 инструмента (save_memory, get_memory, delete_memory)
+// - executeMemoryTool: функция выполнения — upsert/select/update в agent_memory
+import { memoryTools, executeMemoryTool } from './memoryTools.js';
+
 // ============================================
 // Объединённый массив tools
 // ============================================
@@ -115,6 +120,7 @@ export const tools: Anthropic.Tool[] = [
     ...documentTools,
     ...waterTools,
     ...browserTools,
+    ...memoryTools,
 ];
 
 // ============================================
@@ -173,6 +179,11 @@ const toolExecutors: Record<string, (name: string, input: Record<string, unknown
     'save_invoice': executeBrowserTool,
     'get_invoices': executeBrowserTool,
     'get_invoice_file': executeBrowserTool,
+
+    // Memory tools → executeMemoryTool (Supabase: agent_memory)
+    'save_memory': executeMemoryTool,
+    'get_memory': executeMemoryTool,
+    'delete_memory': executeMemoryTool,
 };
 
 // ============================================

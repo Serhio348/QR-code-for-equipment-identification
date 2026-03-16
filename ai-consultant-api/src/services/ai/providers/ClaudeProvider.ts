@@ -10,7 +10,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { BaseAIProvider } from '../AIProvider.js';
-import { ChatMessage, ChatResponse, ToolDefinition, EquipmentContext, WaterDashboardContext } from '../types.js';
+import { ChatMessage, ChatResponse, ToolDefinition, EquipmentContext, WaterDashboardContext, MemoryContext } from '../types.js';
 import {
   convertToClaudeTools,
   extractClaudeToolCalls,
@@ -40,7 +40,8 @@ export class ClaudeProvider extends BaseAIProvider {
     tools: ToolDefinition[],
     userId: string,
     equipmentContext?: EquipmentContext,
-    waterContext?: WaterDashboardContext
+    waterContext?: WaterDashboardContext,
+    memoryContext?: MemoryContext
   ): Promise<ChatResponse> {
     try {
       // Защита от бесконечного цикла
@@ -63,7 +64,7 @@ export class ClaudeProvider extends BaseAIProvider {
       const claudeTools = convertToClaudeTools(tools);
 
       // Системный промпт с учётом контекста оборудования и дашборда воды
-      const systemPrompt = this.getSystemPrompt(equipmentContext, waterContext);
+      const systemPrompt = this.getSystemPrompt(equipmentContext, waterContext, memoryContext);
 
       // ----------------------------------------
       // Шаг 2: Первый запрос к Claude
@@ -302,7 +303,7 @@ export class ClaudeProvider extends BaseAIProvider {
   /**
    * Системный промпт для Claude
    */
-  private getSystemPrompt(equipmentContext?: EquipmentContext, waterContext?: WaterDashboardContext): string {
+  private getSystemPrompt(equipmentContext?: EquipmentContext, waterContext?: WaterDashboardContext, memoryContext?: MemoryContext): string {
     const waterInfo = waterContext
       ? `\n\nТЕКУЩИЙ КОНТЕКСТ ВОДНОГО ДАШБОРДА (${waterContext.monthLabel}):
 • Скважина (вход): ${waterContext.sourceMonth.toLocaleString('ru')} м³
@@ -437,7 +438,7 @@ export class ClaudeProvider extends BaseAIProvider {
 
 Отвечай кратко и по делу. Используй эмодзи для наглядности.
 Язык общения: русский.
-
+${memoryContext?.factsPrompt ?? ''}
 Текущая дата: ${new Date().toISOString().split('T')[0]}`;
   }
 }

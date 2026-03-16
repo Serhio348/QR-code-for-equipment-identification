@@ -7,7 +7,7 @@
 
 import { GoogleGenerativeAI, Content } from '@google/generative-ai';
 import { BaseAIProvider } from '../AIProvider.js';
-import { ChatMessage, ChatResponse, ToolDefinition, EquipmentContext, WaterDashboardContext } from '../types.js';
+import { ChatMessage, ChatResponse, ToolDefinition, EquipmentContext, WaterDashboardContext, MemoryContext } from '../types.js';
 import {
   convertToGeminiTools,
   extractGeminiFunctionCalls,
@@ -37,7 +37,8 @@ export class GeminiProvider extends BaseAIProvider {
     tools: ToolDefinition[],
     userId: string,
     equipmentContext?: EquipmentContext,
-    waterContext?: WaterDashboardContext
+    waterContext?: WaterDashboardContext,
+    memoryContext?: MemoryContext
   ): Promise<ChatResponse> {
     try {
       // Защита от бесконечного цикла
@@ -292,7 +293,7 @@ export class GeminiProvider extends BaseAIProvider {
   /**
    * Системный промпт для Gemini
    */
-  private getSystemPrompt(equipmentContext?: EquipmentContext, waterContext?: WaterDashboardContext): string {
+  private getSystemPrompt(equipmentContext?: EquipmentContext, waterContext?: WaterDashboardContext, memoryContext?: MemoryContext): string {
     const waterInfo = waterContext
       ? `\n\nТЕКУЩИЙ КОНТЕКСТ ВОДНОГО ДАШБОРДА (${waterContext.monthLabel}):
 • Скважина (вход): ${waterContext.sourceMonth.toLocaleString('ru')} м³
@@ -427,7 +428,7 @@ export class GeminiProvider extends BaseAIProvider {
 
 Отвечай кратко и по делу. Используй эмодзи для наглядности.
 Язык общения: русский.
-
+${memoryContext?.factsPrompt ?? ''}
 Текущая дата: ${new Date().toISOString().split('T')[0]}`;
   }
 

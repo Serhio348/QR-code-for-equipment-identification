@@ -30,6 +30,7 @@ import {
     listDownloadedFiles,
 } from '../services/browserService.js';
 import { parseInvoiceText } from '../services/invoiceParserService.js';
+import { updateTariffFromInvoice } from '../services/agentMemoryService.js';
 import { config } from '../config/env.js';
 
 const supabase = createClient(config.supabaseUrl, config.supabaseServiceKey);
@@ -373,6 +374,9 @@ export async function executeBrowserTool(
                 }, { onConflict: 'period,account_number' });
 
             if (dbError) throw new Error(`Ошибка сохранения: ${dbError.message}`);
+
+            // Автообновление тарифов в памяти агента из актуального счёта
+            updateTariffFromInvoice(parsed).catch(() => {});
 
             return {
                 success: true,

@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import { BaseAIProvider } from '../AIProvider.js';
-import { ChatMessage, ChatResponse, ToolDefinition, EquipmentContext, WaterDashboardContext } from '../types.js';
+import { ChatMessage, ChatResponse, ToolDefinition, EquipmentContext, WaterDashboardContext, MemoryContext } from '../types.js';
 import {
   convertToDeepSeekTools,
   extractDeepSeekToolCalls,
@@ -30,14 +30,15 @@ export class DeepSeekProvider extends BaseAIProvider {
     tools: ToolDefinition[],
     userId: string,
     equipmentContext?: EquipmentContext,
-    waterContext?: WaterDashboardContext
+    waterContext?: WaterDashboardContext,
+    memoryContext?: MemoryContext
   ): Promise<ChatResponse> {
     try {
       let iteration = 0;
       const toolsUsed: string[] = [];
 
       // Системный промпт
-      const systemPrompt = this.getSystemPrompt(equipmentContext, waterContext);
+      const systemPrompt = this.getSystemPrompt(equipmentContext, waterContext, memoryContext);
 
       // Преобразуем сообщения в формат OpenAI
       const openAIMessages: OpenAI.ChatCompletionMessageParam[] = [
@@ -213,7 +214,7 @@ export class DeepSeekProvider extends BaseAIProvider {
   /**
    * Системный промпт (идентичен Claude/Gemini провайдерам)
    */
-  private getSystemPrompt(equipmentContext?: EquipmentContext, waterContext?: WaterDashboardContext): string {
+  private getSystemPrompt(equipmentContext?: EquipmentContext, waterContext?: WaterDashboardContext, memoryContext?: MemoryContext): string {
     const waterInfo = waterContext
       ? `\n\nТЕКУЩИЙ КОНТЕКСТ ВОДНОГО ДАШБОРДА (${waterContext.monthLabel}):
 • Скважина (вход): ${waterContext.sourceMonth.toLocaleString('ru')} м³
@@ -348,7 +349,7 @@ export class DeepSeekProvider extends BaseAIProvider {
 
 Отвечай кратко и по делу. Используй эмодзи для наглядности.
 Язык общения: русский.
-
+${memoryContext?.factsPrompt ?? ''}
 Текущая дата: ${new Date().toISOString().split('T')[0]}`;
   }
 }
