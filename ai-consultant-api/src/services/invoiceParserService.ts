@@ -81,11 +81,11 @@ function parseSection(sectionText: string, id: string, name: string, address: st
     const nums = extractNums(line);
     if (/[Вв]ода\s*,\s*м/.test(line) && nums.length >= 1) {
       volume_m3 += nums[0];
-      // Сумма с НДС — последнее число в строке
-      if (nums.length >= 7) amount_byn += nums[6];
+      // Сумма с НДС — всегда последнее число в строке
+      if (nums.length >= 2) amount_byn += nums[nums.length - 1];
     } else if (/[Кк]анализация\s*,\s*м/.test(line) && nums.length >= 1) {
       sewage_m3 += nums[0];
-      if (nums.length >= 7) amount_byn += nums[6];
+      if (nums.length >= 2) amount_byn += nums[nums.length - 1];
     }
   }
 
