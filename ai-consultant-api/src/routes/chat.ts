@@ -60,6 +60,9 @@ import {
     updateSessionTitle,
 } from '../services/chatMemoryService.js';
 
+// agentMemoryService — долговременная память: факты, тарифы, контакты
+import { loadFactsForPrompt } from '../services/agentMemoryService.js';
+
 // ============================================
 // Инициализация роутера
 // ============================================
@@ -209,6 +212,17 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
         const userId = req.user?.id || '';
 
         // ----------------------------------------
+        // Фоновая история: загружаем последние сообщения для контекста AI
+        // ----------------------------------------
+        // Пользователь видит пустой чат, но агент помнит предыдущий разговор.
+        // Загружаем последние 10 сообщений из прошлой сессии и добавляем
+        // их в начало messages — AI получает контекст, фронтенд его не видит.
+        const backgroundHistory = await loadRecentHistory(userId, 10).catch(() => [] as ChatMessage[]);
+        const messagesWithHistory: ChatMessage[] = backgroundHistory.length > 0
+            ? [...backgroundHistory, ...messages]
+            : messages;
+
+        // ----------------------------------------
         // Обработка через AI Provider (Claude, Gemini, или другой)
         // ----------------------------------------
         // ProviderFactory создаёт провайдер на основе конфигурации (AI_PROVIDER)
@@ -216,12 +230,16 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
         // Провайдер запускает агентный цикл с tool calling.
         const provider = await ProviderFactory.create();
 
+        // Загружаем долговременную память агента (факты, тарифы, контакты)
+        const factsPrompt = await loadFactsForPrompt().catch(() => '');
+
         const response = await provider.chat(
-            messages,
-            tools as ToolDefinition[], // Type assertion для совместимости Anthropic.Tool с ToolDefinition
+            messagesWithHistory,
+            tools as ToolDefinition[],
             userId,
             equipmentContext,
-            waterContext
+            waterContext,
+            factsPrompt ? { factsPrompt } : undefined
         );
 
         // ----------------------------------------
@@ -293,20 +311,12 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
  * Ответ: { success: true, data: { messages: ChatMessage[] } }
  */
 router.get('/history', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
-    try {
-        const userId = req.user?.id || '';
-        const limit = Math.min(Number(req.query.limit) || 20, 100);
-
-        const messages = await loadRecentHistory(userId, limit);
-
-        res.json({
-            success: true,
-            data: { messages },
-        });
-    } catch (error) {
-        console.error('Ошибка загрузки истории:', error);
-        res.status(500).json({ success: false, error: 'Не удалось загрузить историю' });
-    }
+    // История не отображается в UI — чат всегда начинается пустым.
+    // История загружается фоново в POST /api/chat для контекста AI.
+    res.json({
+        success: true,
+        data: { messages: [] },
+    });
 });
 
 // ============================================

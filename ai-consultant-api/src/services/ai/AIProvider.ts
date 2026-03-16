@@ -4,6 +4,7 @@ import {
   ToolDefinition,
   EquipmentContext,
   WaterDashboardContext,
+  MemoryContext,
 } from './types.js';
 
 /**
@@ -32,7 +33,8 @@ export interface AIProvider {
     tools: ToolDefinition[],
     userId: string,
     equipmentContext?: EquipmentContext,
-    waterContext?: WaterDashboardContext
+    waterContext?: WaterDashboardContext,
+    memoryContext?: MemoryContext
   ): Promise<ChatResponse>;
 
   /**
@@ -53,7 +55,9 @@ export abstract class BaseAIProvider implements AIProvider {
     messages: ChatMessage[],
     tools: ToolDefinition[],
     userId: string,
-    equipmentContext?: EquipmentContext
+    equipmentContext?: EquipmentContext,
+    waterContext?: WaterDashboardContext,
+    memoryContext?: MemoryContext
   ): Promise<ChatResponse>;
 
   async isAvailable(): Promise<boolean> {

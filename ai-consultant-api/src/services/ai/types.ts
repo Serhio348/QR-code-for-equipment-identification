@@ -52,6 +52,11 @@ export interface WaterDashboardContext {
   activeAlerts: number;     // кол-во активных превышений норм
 }
 
+// Долговременная память агента — факты для системного промпта
+export interface MemoryContext {
+  factsPrompt: string; // Отформатированные факты для вставки в системный промпт
+}
+
 // Ответ от AI
 export interface ChatResponse {
   message: string;

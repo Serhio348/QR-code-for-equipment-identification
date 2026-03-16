@@ -10,7 +10,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { BaseAIProvider } from '../AIProvider.js';
-import { ChatMessage, ChatResponse, ToolDefinition, EquipmentContext, WaterDashboardContext } from '../types.js';
+import { ChatMessage, ChatResponse, ToolDefinition, EquipmentContext, WaterDashboardContext, MemoryContext } from '../types.js';
 import {
   convertToClaudeTools,
   extractClaudeToolCalls,
@@ -40,7 +40,8 @@ export class ClaudeProvider extends BaseAIProvider {
     tools: ToolDefinition[],
     userId: string,
     equipmentContext?: EquipmentContext,
-    waterContext?: WaterDashboardContext
+    waterContext?: WaterDashboardContext,
+    memoryContext?: MemoryContext
   ): Promise<ChatResponse> {
     try {
       // Защита от бесконечного цикла
@@ -63,7 +64,7 @@ export class ClaudeProvider extends BaseAIProvider {
       const claudeTools = convertToClaudeTools(tools);
 
       // Системный промпт с учётом контекста оборудования и дашборда воды
-      const systemPrompt = this.getSystemPrompt(equipmentContext, waterContext);
+      const systemPrompt = this.getSystemPrompt(equipmentContext, waterContext, memoryContext);
 
       // ----------------------------------------
       // Шаг 2: Первый запрос к Claude
@@ -302,7 +303,7 @@ export class ClaudeProvider extends BaseAIProvider {
   /**
    * Системный промпт для Claude
    */
-  private getSystemPrompt(equipmentContext?: EquipmentContext, waterContext?: WaterDashboardContext): string {
+  private getSystemPrompt(equipmentContext?: EquipmentContext, waterContext?: WaterDashboardContext, memoryContext?: MemoryContext): string {
     const waterInfo = waterContext
       ? `\n\nТЕКУЩИЙ КОНТЕКСТ ВОДНОГО ДАШБОРДА (${waterContext.monthLabel}):
 • Скважина (вход): ${waterContext.sourceMonth.toLocaleString('ru')} м³
@@ -420,7 +421,9 @@ export class ClaudeProvider extends BaseAIProvider {
 
     ВСЕ ИСТОРИЧЕСКИЕ СЧЕТА УЖЕ СОХРАНЕНЫ В БАЗЕ ДАННЫХ.
     При вопросах о счетах, тарифах, объёмах воды/канализации, суммах — используй ТОЛЬКО эти инструменты:
-    - get_invoices — история счетов из БД (мгновенно, без браузера). Поля: period, account_number, volume_m3, tariff_per_m3, sewage_volume_m3, sewage_tariff_per_m3, amount_byn.
+    - get_invoices — история счетов из БД (мгновенно, без браузера).
+      Поля счёта: period (YYYY-MM), account_number, volume_m3 (вода м³), tariff_per_m3, sewage_volume_m3 (канализация м³), sewage_tariff_per_m3, amount_byn (итого BYN).
+      Поле sections — детализация по точкам подключения (массив): id, name (название ввода), address, volume_m3 (вода), sewage_m3 (канализация), amount_byn (сумма по точке).
     - get_invoice_file — ссылка на PDF счёта по периоду (YYYY-MM)
 
     НИКОГДА не используй portal_login / portal_list_invoices / portal_download_invoice / portal_read_invoice для исторических данных — это медленно и избыточно.
@@ -430,11 +433,12 @@ export class ClaudeProvider extends BaseAIProvider {
     - скачать новый счёт которого нет в БД
     - проверить что появилось на портале
 
-    При ответе на вопросы о счетах ВСЕГДА показывай ВСЕ данные из get_invoices: воду, канализацию, тарифы, суммы.
+    При ответе на вопросы о счетах ВСЕГДА показывай ВСЕ данные: воду, канализацию, тарифы, суммы.
+    При вопросах "по какому адресу" / "по какой точке" — используй поле sections для детализации.
 
 Отвечай кратко и по делу. Используй эмодзи для наглядности.
 Язык общения: русский.
-
+${memoryContext?.factsPrompt ?? ''}
 Текущая дата: ${new Date().toISOString().split('T')[0]}`;
   }
 }
