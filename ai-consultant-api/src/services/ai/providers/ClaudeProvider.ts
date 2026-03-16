@@ -103,35 +103,18 @@ export class ClaudeProvider extends BaseAIProvider {
         // Извлекаем блоки tool_use из ответа Claude
         const toolCalls = extractClaudeToolCalls(response.content);
 
-        // Массив результатов выполнения tools
-        const toolResults: Array<{ id: string; result: unknown; isError?: boolean }> = [];
+        // Выполняем все tool calls параллельно
+        toolCalls.forEach(tc => { this.log(`Выполняю инструмент: ${tc.name}`); toolsUsed.push(tc.name); });
 
-        // Выполняем каждый tool по очереди
-        for (const toolCall of toolCalls) {
-          this.log(`Executing tool: ${toolCall.name}`);
-          toolsUsed.push(toolCall.name);
-
+        const toolResults = await Promise.all(toolCalls.map(async (toolCall) => {
           try {
-            // executeToolCall — вызывает соответствующую функцию
-            // (например, search_equipment → запрос к GAS API)
             const result = await executeToolCall(toolCall.name, toolCall.input);
-
-            // Успешный результат
-            toolResults.push({
-              id: toolCall.id,
-              result,
-              isError: false,
-            });
+            return { id: toolCall.id, result, isError: false };
           } catch (error) {
-            // Ошибка выполнения: сообщаем Claude об ошибке
-            this.logError(`Tool ${toolCall.name} failed`, error);
-            toolResults.push({
-              id: toolCall.id,
-              result: `Ошибка выполнения: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`,
-              isError: true,
-            });
+            this.logError(`Инструмент ${toolCall.name} завершился ошибкой`, error);
+            return { id: toolCall.id, result: `Ошибка выполнения: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`, isError: true };
           }
-        }
+        }));
 
         // ----------------------------------------
         // Шаг 4: Отправляем результаты tools обратно Claude
@@ -528,27 +511,19 @@ ${memoryContext?.factsPrompt ?? ''}
         return;
       }
 
-      // Выполняем инструменты
+      // Выполняем инструменты параллельно
       const toolCalls = extractClaudeToolCalls(responseContent);
-      const toolResults: Array<{ id: string; result: unknown; isError?: boolean }> = [];
+      toolCalls.forEach(tc => { onEvent({ type: 'tool_call', name: tc.name }); toolsUsed.push(tc.name); this.log(`Выполняю инструмент (стриминг): ${tc.name}`); });
 
-      for (const toolCall of toolCalls) {
-        onEvent({ type: 'tool_call', name: toolCall.name });
-        toolsUsed.push(toolCall.name);
-        this.log(`Executing tool (stream): ${toolCall.name}`);
-
+      const toolResults = await Promise.all(toolCalls.map(async (toolCall) => {
         try {
           const result = await executeToolCall(toolCall.name, toolCall.input);
-          toolResults.push({ id: toolCall.id, result, isError: false });
+          return { id: toolCall.id, result, isError: false };
         } catch (error) {
-          this.logError(`Tool ${toolCall.name} failed`, error);
-          toolResults.push({
-            id: toolCall.id,
-            result: `Ошибка: ${error instanceof Error ? error.message : String(error)}`,
-            isError: true,
-          });
+          this.logError(`Инструмент ${toolCall.name} завершился ошибкой`, error);
+          return { id: toolCall.id, result: `Ошибка: ${error instanceof Error ? error.message : String(error)}`, isError: true };
         }
-      }
+      }));
 
       // Добавляем ответ агента и результаты инструментов в историю
       claudeMessages.push({ role: 'assistant', content: responseContent });
