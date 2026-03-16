@@ -71,26 +71,19 @@ export class DeepSeekProvider extends BaseAIProvider {
         // Добавляем ответ ассистента в историю
         openAIMessages.push(responseMessage);
 
-        // Извлекаем и выполняем tool calls
+        // Извлекаем и выполняем tool calls параллельно
         const toolCalls = extractDeepSeekToolCalls(responseMessage);
-        const toolResults: Array<{ id: string; result: unknown; isError?: boolean }> = [];
+        toolCalls.forEach(tc => { this.log(`Выполняю инструмент: ${tc.name}`); toolsUsed.push(tc.name); });
 
-        for (const toolCall of toolCalls) {
-          this.log(`Executing tool: ${toolCall.name}`);
-          toolsUsed.push(toolCall.name);
-
+        const toolResults = await Promise.all(toolCalls.map(async (toolCall) => {
           try {
             const result = await executeToolCall(toolCall.name, toolCall.input);
-            toolResults.push({ id: toolCall.id, result, isError: false });
+            return { id: toolCall.id, result, isError: false };
           } catch (error) {
-            this.logError(`Tool ${toolCall.name} failed`, error);
-            toolResults.push({
-              id: toolCall.id,
-              result: error instanceof Error ? error.message : 'Неизвестная ошибка',
-              isError: true,
-            });
+            this.logError(`Инструмент ${toolCall.name} завершился ошибкой`, error);
+            return { id: toolCall.id, result: error instanceof Error ? error.message : 'Неизвестная ошибка', isError: true };
           }
-        }
+        }));
 
         // Добавляем результаты tools в историю
         openAIMessages.push(...formatDeepSeekToolResults(toolResults));
@@ -265,25 +258,19 @@ export class DeepSeekProvider extends BaseAIProvider {
         })),
       });
 
-      const toolResults: Array<{ id: string; result: unknown; isError?: boolean }> = [];
+      toolCallsList.forEach(tc => { this.log(`Выполняю инструмент (стриминг): ${tc.name}`); toolsUsed.push(tc.name); });
 
-      for (const tc of toolCallsList) {
-        toolsUsed.push(tc.name);
-        this.log(`Выполняю инструмент (стриминг): ${tc.name}`);
+      const toolResults = await Promise.all(toolCallsList.map(async (tc) => {
         try {
           let parsedInput: Record<string, unknown> = {};
           try { parsedInput = JSON.parse(tc.arguments); } catch { /* пустые аргументы */ }
           const result = await executeToolCall(tc.name, parsedInput);
-          toolResults.push({ id: tc.id, result, isError: false });
+          return { id: tc.id, result, isError: false };
         } catch (error) {
           this.logError(`Инструмент ${tc.name} завершился ошибкой`, error);
-          toolResults.push({
-            id: tc.id,
-            result: `Ошибка: ${error instanceof Error ? error.message : String(error)}`,
-            isError: true,
-          });
+          return { id: tc.id, result: `Ошибка: ${error instanceof Error ? error.message : String(error)}`, isError: true };
         }
-      }
+      }));
 
       openAIMessages.push(...formatDeepSeekToolResults(toolResults));
     }

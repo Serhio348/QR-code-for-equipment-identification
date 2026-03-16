@@ -187,6 +187,26 @@ const toolExecutors: Record<string, (name: string, input: Record<string, unknown
 };
 
 // ============================================
+// Кэш результатов инструментов (TTL 5 минут)
+// ============================================
+
+// Только read-only инструменты — не кэшируем запись/изменение данных
+const CACHEABLE_TOOLS = new Set([
+    'get_all_equipment', 'get_equipment_details', 'get_maintenance_log',
+    'search_files_in_folder', 'read_file_content',
+    'get_maintenance_photos', 'search_maintenance_photos',
+    'get_water_devices', 'get_water_readings', 'analyze_water_consumption',
+    'get_water_quality_analyses', 'get_water_quality_alerts', 'get_water_meter_passport',
+    'get_invoices', 'get_memory',
+    'portal_list_invoices', 'portal_list_downloaded',
+]);
+
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 минут
+
+interface CacheEntry { result: unknown; expiresAt: number; }
+const toolCache = new Map<string, CacheEntry>();
+
+// ============================================
 // Функция выполнения tool
 // ============================================
 
@@ -220,29 +240,42 @@ export async function executeToolCall(
 ): Promise<unknown> {
     const requestId = crypto.randomUUID();
     const startTime = Date.now();
-    
-    console.log(`[${requestId}] Tool ${name} called`);
-    
+
     // Поиск исполнителя по имени tool
     const executor = toolExecutors[name];
-
-    // Tool не зарегистрирован — Claude вызвал несуществующий инструмент.
-    // Такое может случиться, если определения tools и toolExecutors
-    // рассинхронизировались (добавили tool, но забыли добавить executor)
     if (!executor) {
         const availableTools = Object.keys(toolExecutors).join(', ');
-        console.error(`[${requestId}] Unknown tool: ${name}. Available: ${availableTools}`);
+        console.error(`[${requestId}] Неизвестный инструмент: ${name}. Доступные: ${availableTools}`);
         throw new Error(`Unknown tool: ${name}`);
     }
+
+    // Проверяем кэш для read-only инструментов
+    if (CACHEABLE_TOOLS.has(name)) {
+        const cacheKey = `${name}:${JSON.stringify(input)}`;
+        const cached = toolCache.get(cacheKey);
+        if (cached && cached.expiresAt > Date.now()) {
+            console.log(`[${requestId}] Tool ${name} — из кэша`);
+            return cached.result;
+        }
+    }
+
+    console.log(`[${requestId}] Tool ${name} вызван`);
 
     try {
         const result = await executor(name, input);
         const duration = Date.now() - startTime;
-        console.log(`[${requestId}] Tool ${name} completed in ${duration}ms`);
+        console.log(`[${requestId}] Tool ${name} завершён за ${duration}мс`);
+
+        // Сохраняем в кэш если инструмент кэшируемый
+        if (CACHEABLE_TOOLS.has(name)) {
+            const cacheKey = `${name}:${JSON.stringify(input)}`;
+            toolCache.set(cacheKey, { result, expiresAt: Date.now() + CACHE_TTL_MS });
+        }
+
         return result;
     } catch (error) {
         const duration = Date.now() - startTime;
-        console.error(`[${requestId}] Tool ${name} failed after ${duration}ms:`, error);
+        console.error(`[${requestId}] Tool ${name} ошибка через ${duration}мс:`, error);
         throw error;
     }
 }
