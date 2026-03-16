@@ -18,6 +18,11 @@
 
 import { Router, Request, Response } from 'express';
 import { syncInvoices } from '../services/invoiceSyncService.js';
+import { createClient } from '@supabase/supabase-js';
+import { config } from '../config/env.js';
+import { authMiddleware, AuthenticatedRequest } from '../middleware/auth.js';
+
+const supabase = createClient(config.supabaseUrl, config.supabaseServiceKey);
 
 const router = Router();
 
@@ -77,6 +82,42 @@ router.post('/sync-all', requireSyncSecret, async (_req: Request, res: Response)
         console.error('[POST /api/invoices/sync-all] Error:', err);
         res.status(500).json({ ok: false, error: message });
     }
+});
+
+// ============================================
+// GET /api/invoices/signed-url?period=YYYY-MM
+// Получить временную ссылку на PDF счёта (1 час)
+// ============================================
+
+router.get('/signed-url', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+    const period = req.query.period as string;
+    if (!period) {
+        res.status(400).json({ error: 'period обязателен (YYYY-MM)' });
+        return;
+    }
+
+    const { data, error } = await supabase
+        .from('water_invoices')
+        .select('storage_path, file_name')
+        .eq('period', period)
+        .limit(1)
+        .single();
+
+    if (error || !data?.storage_path) {
+        res.status(404).json({ error: 'Файл не найден' });
+        return;
+    }
+
+    const { data: signed } = await supabase.storage
+        .from('invoices')
+        .createSignedUrl(data.storage_path, 3600);
+
+    if (!signed?.signedUrl) {
+        res.status(500).json({ error: 'Не удалось создать ссылку' });
+        return;
+    }
+
+    res.json({ url: signed.signedUrl, file_name: data.file_name });
 });
 
 export default router;
