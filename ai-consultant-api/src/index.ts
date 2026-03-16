@@ -72,6 +72,9 @@ import equipmentRouter from './routes/equipment.js';
 // alertsRouter — проактивные алерты по воде (GET /api/alerts)
 import alertsRouter from './routes/alerts.js';
 
+// invoicesRouter — синхронизация счетов bvod.by (POST /api/invoices/sync)
+import invoicesRouter from './routes/invoices.js';
+
 // ============================================
 // Валидация конфигурации
 // ============================================
@@ -173,6 +176,10 @@ app.use('/api/equipment', equipmentRouter);
 // Проактивные алерты по воде — GET /api/alerts
 // Возвращает активные превышения качества воды и просроченные поверки счётчиков.
 app.use('/api/alerts', alertsRouter);
+
+// Синхронизация счетов bvod.by — POST /api/invoices/sync, POST /api/invoices/sync-all
+// Защищён заголовком X-Sync-Secret. Используется GitHub Actions cron.
+app.use('/api/invoices', invoicesRouter);
 
 // ============================================
 // Обработка 404 (Not Found)
