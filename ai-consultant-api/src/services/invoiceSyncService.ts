@@ -23,6 +23,7 @@ import { createClient } from '@supabase/supabase-js';
 import { loginToPortal, getInvoicesList, downloadInvoice, readInvoiceFile } from './browserService.js';
 import { parseInvoiceText } from './invoiceParserService.js';
 import { updateTariffFromInvoice } from './agentMemoryService.js';
+import { checkAndNotify } from './notificationService.js';
 import { config } from '../config/env.js';
 
 const supabase = createClient(config.supabaseUrl, config.supabaseServiceKey);
@@ -204,6 +205,16 @@ export async function syncInvoices(forceAll = false): Promise<SyncResult> {
             console.error(`[invoiceSync] Error processing ${fileName}:`, err);
         }
     }
+
+    // Проверяем и создаём уведомления ПЕРЕД обновлением тарифов в памяти,
+    // чтобы checkTariffChange увидел старый тариф и мог сравнить с новым
+    const savedDetails = result.details
+        .filter(d => d.status === 'saved')
+        .map(d => ({ period: d.period, amount_byn: null, volume_m3: null }));
+
+    await checkAndNotify(savedDetails, latestSaved).catch(err =>
+        console.warn('[invoiceSync] Notification check failed:', err)
+    );
 
     // Автообновление тарифов в памяти агента из самого свежего счёта
     if (latestSaved) {

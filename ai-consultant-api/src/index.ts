@@ -75,6 +75,12 @@ import alertsRouter from './routes/alerts.js';
 // invoicesRouter — синхронизация счетов bvod.by (POST /api/invoices/sync)
 import invoicesRouter from './routes/invoices.js';
 
+// notificationsRouter — уведомления (GET /api/notifications, POST /api/notifications/mark-read)
+import notificationsRouter from './routes/notifications.js';
+
+// pushRouter — Web Push подписки (POST /api/push/subscribe, DELETE /api/push/unsubscribe)
+import pushRouter from './routes/push.js';
+
 // ============================================
 // Валидация конфигурации
 // ============================================
@@ -180,6 +186,12 @@ app.use('/api/alerts', alertsRouter);
 // Синхронизация счетов bvod.by — POST /api/invoices/sync, POST /api/invoices/sync-all
 // Защищён заголовком X-Sync-Secret. Используется GitHub Actions cron.
 app.use('/api/invoices', invoicesRouter);
+
+// Уведомления — GET /api/notifications, POST /api/notifications/mark-read
+app.use('/api/notifications', notificationsRouter);
+
+// Web Push подписки — POST /api/push/subscribe, DELETE /api/push/unsubscribe
+app.use('/api/push', pushRouter);
 
 // ============================================
 // Обработка 404 (Not Found)

@@ -12,6 +12,8 @@ import WaterDashboard from '../components/WaterDashboard';
 import BeliotDevicesTest from '../components/BeliotDevicesTest';
 import WaterQualityJournalPage from '../../water-quality/pages/WaterQualityJournalPage';
 import { ROUTES } from '@/shared/utils/routes';
+import { useWaterNotifications } from '../hooks/useWaterNotifications';
+import { usePushSubscription } from '../hooks/usePushSubscription';
 import './WaterPage.css';
 
 type WaterTab = 'dashboard' | 'counters' | 'quality';
@@ -20,6 +22,9 @@ const WaterPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [activeTab, setActiveTab] = useState<WaterTab>('dashboard');
+
+  useWaterNotifications();
+  usePushSubscription();
 
   // Определяем активную вкладку на основе маршрута и search-параметра ?tab=
   useEffect(() => {

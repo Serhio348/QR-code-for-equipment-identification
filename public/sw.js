@@ -135,6 +135,33 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
+// ============================================
+// Web Push уведомления
+// ============================================
+
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+
+  let data = {};
+  try { data = event.data.json(); } catch { return; }
+
+  const title = data.title || 'Уведомление';
+  const options = {
+    body: data.body || '',
+    icon: '/icons/icon-192x192.png',
+    badge: '/icons/icon-72x72.png',
+    data: data.payload || {},
+    tag: data.payload?.type || 'water-notification',
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(clients.openWindow('/water'));
+});
+
 // Обработка сообщений от клиента
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
