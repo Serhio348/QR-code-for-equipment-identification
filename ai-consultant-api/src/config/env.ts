@@ -8,7 +8,11 @@ export const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
 
   // AI Provider Configuration
-  aiProvider: process.env.AI_PROVIDER || 'gemini', // 'claude' | 'gemini' | 'deepseek'
+  // Если AI_PROVIDER не задан — выбираем по наличию ключа: claude → gemini → deepseek
+  aiProvider: process.env.AI_PROVIDER ||
+    (process.env.ANTHROPIC_API_KEY ? 'claude' :
+     process.env.GEMINI_API_KEY    ? 'gemini' :
+     'deepseek'),
 
   // Anthropic Claude API
   anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
