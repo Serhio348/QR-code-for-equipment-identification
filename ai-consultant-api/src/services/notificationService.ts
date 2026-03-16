@@ -55,23 +55,27 @@ async function createNotification(
     body: string,
     payload: Record<string, unknown> = {}
 ): Promise<void> {
-    const userId = config.notificationUserId;
-    if (!userId) {
-        console.warn('[Notifications] NOTIFICATION_USER_ID not set — skipping');
+    // Список получателей: NOTIFICATION_USER_IDS=uuid1,uuid2,...
+    const userIds = config.notificationUserIds;
+    if (userIds.length === 0) {
+        console.warn('[Notifications] NOTIFICATION_USER_IDS not set — skipping');
         return;
     }
 
+    const rows = userIds.map(user_id => ({ user_id, type, title, body, payload }));
     const { error } = await supabase
         .from('water_notifications')
-        .insert({ user_id: userId, type, title, body, payload });
+        .insert(rows);
 
     if (error) {
         console.error('[Notifications] Insert error:', error.message);
         return;
     }
 
-    // Отправить Web Push параллельно
-    await sendPushToUser(userId, title, body, { type, ...payload });
+    // Отправить Web Push всем получателям параллельно
+    await Promise.allSettled(
+        userIds.map(uid => sendPushToUser(uid, title, body, { type, ...payload }))
+    );
 }
 
 // ============================================
