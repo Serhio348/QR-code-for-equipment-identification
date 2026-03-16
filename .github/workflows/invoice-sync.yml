@@ -14,7 +14,7 @@ jobs:
     steps:
       - name: Sync new invoices
         run: |
-          RESPONSE=$(curl -s -w "\n%{http_code}" \
+          RESPONSE=$(curl -s -L -w "\n%{http_code}" \
             -X POST "${{ secrets.AI_API_URL }}/api/invoices/sync" \
             -H "X-Sync-Secret: ${{ secrets.INVOICE_SYNC_SECRET }}" \
             -H "Content-Type: application/json")
