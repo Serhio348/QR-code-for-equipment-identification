@@ -62,8 +62,10 @@ export const config = {
   vapidPublicKey:     process.env.VAPID_PUBLIC_KEY  || '',
   vapidPrivateKey:    process.env.VAPID_PRIVATE_KEY || '',
   vapidEmail:         process.env.VAPID_EMAIL       || '',
-  // UUID пользователя которому отправляются уведомления (владелец bvod.by аккаунта)
-  notificationUserId: process.env.NOTIFICATION_USER_ID || '',
+  // UUID пользователей которым отправляются уведомления (через запятую)
+  // Пример: NOTIFICATION_USER_IDS=uuid1,uuid2
+  notificationUserIds: (process.env.NOTIFICATION_USER_IDS || process.env.NOTIFICATION_USER_ID || '')
+    .split(',').map(s => s.trim()).filter(Boolean),
 };
 
 // Диагностическое логирование при старте
