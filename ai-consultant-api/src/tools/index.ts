@@ -164,12 +164,15 @@ const toolExecutors: Record<string, (name: string, input: Record<string, unknown
     'add_water_quality_analysis': executeWaterTool,
     'get_water_meter_passport': executeWaterTool,
 
-    // Browser tools → executeBrowserTool (Playwright: bvod.by portal)
+    // Browser tools → executeBrowserTool (Playwright: bvod.by portal + invoice DB)
     'portal_login': executeBrowserTool,
     'portal_list_invoices': executeBrowserTool,
     'portal_download_invoice': executeBrowserTool,
     'portal_read_invoice': executeBrowserTool,
     'portal_list_downloaded': executeBrowserTool,
+    'save_invoice': executeBrowserTool,
+    'get_invoices': executeBrowserTool,
+    'get_invoice_file': executeBrowserTool,
 };
 
 // ============================================
