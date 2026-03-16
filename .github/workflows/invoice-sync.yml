@@ -1,0 +1,42 @@
+name: Sync bvod.by Invoices
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # Каждый день в 06:00 UTC (09:00 Минск)
+    # Проверяет появились ли новые счета на портале bvod.by.
+    # Если есть новые PDF — скачивает, парсит и сохраняет в Supabase.
+    # Уже сохранённые периоды пропускаются (onConflict upsert).
+  workflow_dispatch:  # Позволяет запускать вручную из GitHub UI
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync new invoices
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -X POST "${{ secrets.AI_API_URL }}/api/invoices/sync" \
+            -H "X-Sync-Secret: ${{ secrets.INVOICE_SYNC_SECRET }}" \
+            -H "Content-Type: application/json")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+
+          echo "HTTP Status: $HTTP_CODE"
+          echo "Response: $BODY"
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "❌ Sync failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
+
+          OK=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('ok','false'))" 2>/dev/null || echo "false")
+          SAVED=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('saved',0))" 2>/dev/null || echo "0")
+          SKIPPED=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('skipped',0))" 2>/dev/null || echo "0")
+          ERRORS=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d.get('errors',[])))" 2>/dev/null || echo "0")
+
+          echo "✅ Sync complete: saved=$SAVED, skipped=$SKIPPED, errors=$ERRORS"
+
+          if [ "$ERRORS" != "0" ]; then
+            echo "⚠️ Some invoices failed to sync. Check response above."
+          fi

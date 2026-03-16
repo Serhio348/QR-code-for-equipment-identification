@@ -21,6 +21,7 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
+import { createClient } from '@supabase/supabase-js';
 import {
     loginToPortal,
     getInvoicesList,
@@ -28,6 +29,10 @@ import {
     readInvoiceFile,
     listDownloadedFiles,
 } from '../services/browserService.js';
+import { parseInvoiceText } from '../services/invoiceParserService.js';
+import { config } from '../config/env.js';
+
+const supabase = createClient(config.supabaseUrl, config.supabaseServiceKey);
 
 // ============================================
 // Определения инструментов
@@ -111,6 +116,68 @@ export const browserTools: Anthropic.Tool[] = [
             type: 'object' as const,
             properties: {},
             required: [],
+        },
+    },
+
+    // ----------------------------------------
+    // Tool 6: Сохранить счёт в БД
+    // ----------------------------------------
+    {
+        name: 'save_invoice',
+        description: 'Парсит PDF счёта и сохраняет данные (период, объём воды, канализации, тарифы, сумма) в базу данных. Загружает PDF в хранилище. Вызывай после portal_download_invoice для каждого PDF-файла.',
+        input_schema: {
+            type: 'object' as const,
+            properties: {
+                file_path: {
+                    type: 'string',
+                    description: 'Путь к скачанному PDF файлу (из portal_download_invoice)',
+                },
+                file_name: {
+                    type: 'string',
+                    description: 'Имя файла',
+                },
+            },
+            required: ['file_path', 'file_name'],
+        },
+    },
+
+    // ----------------------------------------
+    // Tool 7: История счетов из БД
+    // ----------------------------------------
+    {
+        name: 'get_invoices',
+        description: 'Получить историю счетов из базы данных — быстро, без обращения к порталу. Возвращает объёмы воды и канализации, тарифы, суммы за каждый месяц. Используй для анализа потребления.',
+        input_schema: {
+            type: 'object' as const,
+            properties: {
+                months: {
+                    type: 'number',
+                    description: 'Количество последних месяцев (по умолчанию 12)',
+                },
+            },
+            required: [],
+        },
+    },
+
+    // ----------------------------------------
+    // Tool 8: Ссылка на PDF счёта
+    // ----------------------------------------
+    {
+        name: 'get_invoice_file',
+        description: 'Получить ссылку для открытия/скачивания PDF счёта за указанный период.',
+        input_schema: {
+            type: 'object' as const,
+            properties: {
+                period: {
+                    type: 'string',
+                    description: 'Период в формате YYYY-MM, например 2026-01',
+                },
+                account_number: {
+                    type: 'string',
+                    description: 'Лицевой счёт, например 107.00 или 107.09 (опционально)',
+                },
+            },
+            required: ['period'],
         },
     },
 ];
@@ -256,6 +323,122 @@ export async function executeBrowserTool(
                     path: f.path,
                 })),
             };
+        }
+
+        // ----------------------------------------
+        // Сохранить счёт в БД
+        // ----------------------------------------
+        case 'save_invoice': {
+            const filePath = input.file_path as string;
+            const fileName = input.file_name as string;
+
+            // 1. Читаем файл и парсим
+            const rawText = await readInvoiceFile(filePath);
+            const parsed = parseInvoiceText(rawText, fileName);
+
+            // 2. Загружаем PDF в Supabase Storage
+            let storagePath: string | null = null;
+            try {
+                const { default: fs } = await import('fs');
+                const fileBuffer = fs.readFileSync(filePath);
+                const storageKey = `invoices/${parsed.account_number ?? 'unknown'}/${parsed.period}.pdf`;
+                const { error: uploadError } = await supabase.storage
+                    .from('invoices')
+                    .upload(storageKey, fileBuffer, {
+                        contentType: 'application/pdf',
+                        upsert: true,
+                    });
+                if (!uploadError) storagePath = storageKey;
+            } catch {
+                // Ошибка загрузки не должна блокировать сохранение данных
+            }
+
+            // 3. Upsert в water_invoices
+            const periodDate = `${parsed.period}-01`;
+            const { error: dbError } = await supabase
+                .from('water_invoices')
+                .upsert({
+                    period: parsed.period,
+                    period_date: periodDate,
+                    account_number: parsed.account_number,
+                    volume_m3: parsed.volume_m3,
+                    tariff_per_m3: parsed.tariff_per_m3,
+                    sewage_volume_m3: parsed.sewage_volume_m3,
+                    sewage_tariff_per_m3: parsed.sewage_tariff_per_m3,
+                    amount_byn: parsed.amount_byn,
+                    file_name: fileName,
+                    storage_path: storagePath,
+                    raw_text: rawText.slice(0, 50000),
+                }, { onConflict: 'period,account_number' });
+
+            if (dbError) throw new Error(`Ошибка сохранения: ${dbError.message}`);
+
+            return {
+                success: true,
+                message: `Сохранено: ${parsed.period} (сч. ${parsed.account_number}) — вода: ${parsed.volume_m3 ?? '—'} м³, канализация: ${parsed.sewage_volume_m3 ?? '—'} м³, итого: ${parsed.amount_byn ?? '—'} BYN`,
+                parsed,
+                storage_uploaded: !!storagePath,
+            };
+        }
+
+        // ----------------------------------------
+        // История счетов из БД
+        // ----------------------------------------
+        case 'get_invoices': {
+            const months = (input.months as number) ?? 12;
+
+            const { data, error } = await supabase
+                .from('water_invoices')
+                .select('period, account_number, volume_m3, tariff_per_m3, sewage_volume_m3, sewage_tariff_per_m3, amount_byn, file_name, created_at')
+                .order('period_date', { ascending: false })
+                .limit(months);
+
+            if (error) throw new Error(`Ошибка запроса: ${error.message}`);
+
+            if (!data || data.length === 0) {
+                return {
+                    found: false,
+                    message: 'В базе нет сохранённых счетов. Скачай счета через portal_download_invoice и сохрани через save_invoice.',
+                };
+            }
+
+            return {
+                found: true,
+                count: data.length,
+                invoices: data,
+            };
+        }
+
+        // ----------------------------------------
+        // Ссылка на PDF счёта
+        // ----------------------------------------
+        case 'get_invoice_file': {
+            const period = input.period as string;
+            const accountNumber = input.account_number as string | undefined;
+
+            let query = supabase
+                .from('water_invoices')
+                .select('period, account_number, storage_path, file_name')
+                .eq('period', period);
+
+            if (accountNumber) query = query.eq('account_number', accountNumber);
+
+            const { data, error } = await query.limit(5);
+
+            if (error) throw new Error(`Ошибка запроса: ${error.message}`);
+            if (!data || data.length === 0) {
+                return { found: false, message: `Счёт за ${period} не найден в базе. Сначала скачай и сохрани через portal_download_invoice + save_invoice.` };
+            }
+
+            const results = await Promise.all(data.map(async (row) => {
+                if (!row.storage_path) return { ...row, url: null };
+                const { data: signed } = await supabase.storage
+                    .from('invoices')
+                    .createSignedUrl(row.storage_path, 3600);
+                return { ...row, url: signed?.signedUrl ?? null };
+            }));
+
+            return { found: true, invoices: results };
         }
 
         default:
