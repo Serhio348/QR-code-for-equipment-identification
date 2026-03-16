@@ -92,3 +92,10 @@ export interface ToolResult {
   result: unknown;
   isError?: boolean;
 }
+
+// События стриминга (SSE)
+export type StreamEvent =
+  | { type: 'tool_call'; name: string }        // агент вызывает инструмент
+  | { type: 'text_delta'; delta: string }       // кусочек текста финального ответа
+  | { type: 'done'; toolsUsed: string[]; provider?: string } // всё готово
+  | { type: 'error'; message: string };         // ошибка
