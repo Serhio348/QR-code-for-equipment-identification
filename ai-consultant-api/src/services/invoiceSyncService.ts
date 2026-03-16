@@ -208,9 +208,23 @@ export async function syncInvoices(forceAll = false): Promise<SyncResult> {
 
     // Проверяем и создаём уведомления ПЕРЕД обновлением тарифов в памяти,
     // чтобы checkTariffChange увидел старый тариф и мог сравнить с новым
-    const savedDetails = result.details
-        .filter(d => d.status === 'saved')
-        .map(d => ({ period: d.period, amount_byn: null, volume_m3: null }));
+    const savedDetailsRaw = result.details.filter(d => d.status === 'saved');
+    const savedDetails = await Promise.all(
+        savedDetailsRaw.map(async (d) => {
+            const { data: row } = await supabase
+                .from('water_invoices')
+                .select('amount_byn, volume_m3, storage_path')
+                .eq('period', d.period)
+                .limit(1)
+                .single();
+            return {
+                period: d.period,
+                amount_byn: (row?.amount_byn as number | null) ?? null,
+                volume_m3: (row?.volume_m3 as number | null) ?? null,
+                storage_path: (row?.storage_path as string | null) ?? null,
+            };
+        })
+    );
 
     await checkAndNotify(savedDetails, latestSaved).catch(err =>
         console.warn('[invoiceSync] Notification check failed:', err)

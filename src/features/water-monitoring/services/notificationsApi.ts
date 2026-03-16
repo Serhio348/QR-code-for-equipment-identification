@@ -99,3 +99,19 @@ export async function getVapidPublicKey(): Promise<string | null> {
         return null;
     }
 }
+
+// ============================================
+// Получить временную ссылку на PDF счёта
+// ============================================
+
+export async function getInvoiceSignedUrl(period: string): Promise<string | null> {
+    try {
+        const headers = await authHeaders();
+        const res = await fetch(`${API_URL}/api/invoices/signed-url?period=${encodeURIComponent(period)}`, { headers });
+        if (!res.ok) return null;
+        const json = await res.json();
+        return json.url ?? null;
+    } catch {
+        return null;
+    }
+}

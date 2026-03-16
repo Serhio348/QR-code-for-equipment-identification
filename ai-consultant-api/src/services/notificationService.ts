@@ -138,7 +138,7 @@ async function sendPushToUser(
  * чтобы сравнить новый тариф со старым (ещё не обновлённым в памяти).
  */
 export async function checkAndNotify(
-    savedPeriods: Array<{ period: string; amount_byn?: number | null; volume_m3?: number | null }>,
+    savedPeriods: Array<{ period: string; amount_byn?: number | null; volume_m3?: number | null; storage_path?: string | null }>,
     latestParsed: ParsedInvoice | null
 ): Promise<void> {
     if (savedPeriods.length === 0 && !latestParsed) return;
@@ -151,7 +151,12 @@ export async function checkAndNotify(
             'new_invoice',
             `Новый счёт за ${inv.period}`,
             `Объём: ${volStr}, сумма: ${amtStr}`,
-            { period: inv.period, volume_m3: inv.volume_m3, amount_byn: inv.amount_byn }
+            {
+                period: inv.period,
+                volume_m3: inv.volume_m3,
+                amount_byn: inv.amount_byn,
+                storage_path: inv.storage_path ?? null,
+            }
         );
     }
 

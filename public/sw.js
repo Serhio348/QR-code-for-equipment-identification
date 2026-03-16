@@ -146,12 +146,16 @@ self.addEventListener('push', (event) => {
   try { data = event.data.json(); } catch { return; }
 
   const title = data.title || 'Уведомление';
+  const payload = data.payload || {};
   const options = {
     body: data.body || '',
     icon: '/icons/icon-192x192.png',
     badge: '/icons/icon-72x72.png',
-    data: data.payload || {},
-    tag: data.payload?.type || 'water-notification',
+    data: payload,
+    tag: payload.type || 'water-notification',
+    actions: payload.type === 'new_invoice' && payload.period
+      ? [{ action: 'open_invoice', title: 'Открыть счёт' }]
+      : [],
   };
 
   event.waitUntil(self.registration.showNotification(title, options));
@@ -159,7 +163,18 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  event.waitUntil(clients.openWindow('/water'));
+
+  const payload = event.notification.data || {};
+  const action = event.action;
+
+  // Клик по кнопке "Открыть счёт" или клик по уведомлению о новом счёте
+  if (action === 'open_invoice' || (payload.type === 'new_invoice' && payload.period)) {
+    const period = payload.period;
+    // Открываем страницу воды с параметром для подсветки нужного счёта
+    event.waitUntil(clients.openWindow(`/water?invoice=${period}`));
+  } else {
+    event.waitUntil(clients.openWindow('/water'));
+  }
 });
 
 // Обработка сообщений от клиента
