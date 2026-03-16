@@ -284,20 +284,13 @@ export class ClaudeProvider extends BaseAIProvider {
   }
 
   /**
-   * Проверка доступности Claude API
+   * Проверка доступности Claude API.
+   * Не делаем тестовый запрос — он тратит токены, может вызвать 429 и
+   * спровоцировать лишний fallback на Gemini/DeepSeek (у которых нет стриминга).
+   * Достаточно проверить, что клиент инициализирован с API ключом.
    */
   async isAvailable(): Promise<boolean> {
-    try {
-      await this.client.messages.create({
-        model: this.model,
-        max_tokens: 10,
-        messages: [{ role: 'user', content: 'test' }],
-      });
-      return true;
-    } catch (error) {
-      console.error('[ClaudeProvider] Not available:', error instanceof Error ? error.message : error);
-      return false;
-    }
+    return !!(this.client);
   }
 
   /**

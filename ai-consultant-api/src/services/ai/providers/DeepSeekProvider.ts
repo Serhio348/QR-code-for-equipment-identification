@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import { BaseAIProvider } from '../AIProvider.js';
-import { ChatMessage, ChatResponse, ToolDefinition, EquipmentContext, WaterDashboardContext, MemoryContext } from '../types.js';
+import { ChatMessage, ChatResponse, ToolDefinition, EquipmentContext, WaterDashboardContext, MemoryContext, StreamEvent } from '../types.js';
 import {
   convertToDeepSeekTools,
   extractDeepSeekToolCalls,
@@ -170,6 +170,125 @@ export class DeepSeekProvider extends BaseAIProvider {
 
   async isAvailable(): Promise<boolean> {
     return !!this.apiKey;
+  }
+
+  /**
+   * Стриминговый чат: инструменты выполняются без стриминга,
+   * финальный текст отдаётся по кускам через onEvent({ type: 'text_delta' }).
+   */
+  async streamChat(
+    messages: ChatMessage[],
+    tools: ToolDefinition[],
+    _userId: string,
+    onEvent: (event: StreamEvent) => void,
+    equipmentContext?: EquipmentContext,
+    waterContext?: WaterDashboardContext,
+    memoryContext?: MemoryContext,
+  ): Promise<void> {
+    const toolsUsed: string[] = [];
+    const systemPrompt = this.getSystemPrompt(equipmentContext, waterContext, memoryContext);
+
+    const openAIMessages: OpenAI.ChatCompletionMessageParam[] = [
+      { role: 'system', content: systemPrompt },
+      ...this.convertMessages(messages),
+    ];
+
+    const deepSeekTools = convertToDeepSeekTools(tools);
+    let iteration = 0;
+
+    while (iteration < this.MAX_ITERATIONS) {
+      iteration++;
+
+      // Аккумуляторы для сбора данных из стримингового ответа
+      let fullContent = '';
+      let finishReason = '';
+      const toolCallAccumulators: Record<number, { id: string; name: string; arguments: string }> = {};
+
+      // Стриминговый запрос к DeepSeek
+      const stream = await this.client.chat.completions.create({
+        model: this.model,
+        messages: openAIMessages,
+        tools: deepSeekTools,
+        tool_choice: 'auto',
+        max_tokens: 4096,
+        stream: true,
+      });
+
+      for await (const chunk of stream) {
+        const delta = chunk.choices[0]?.delta;
+        const reason = chunk.choices[0]?.finish_reason;
+        if (reason) finishReason = reason;
+
+        // Текстовый фрагмент — сразу отправляем на фронтенд
+        if (delta?.content) {
+          fullContent += delta.content;
+          onEvent({ type: 'text_delta', delta: delta.content });
+        }
+
+        // Накапливаем данные вызовов инструментов (приходят кусками)
+        if (delta?.tool_calls) {
+          for (const tc of delta.tool_calls) {
+            const idx = tc.index;
+            if (!toolCallAccumulators[idx]) {
+              toolCallAccumulators[idx] = { id: tc.id || '', name: tc.function?.name || '', arguments: '' };
+              if (tc.function?.name) {
+                onEvent({ type: 'tool_call', name: tc.function.name });
+              }
+            } else {
+              if (tc.id) toolCallAccumulators[idx].id = tc.id;
+              if (tc.function?.name) toolCallAccumulators[idx].name = tc.function.name;
+            }
+            if (tc.function?.arguments) {
+              toolCallAccumulators[idx].arguments += tc.function.arguments;
+            }
+          }
+        }
+      }
+
+      // Финальный текстовый ответ — всё уже отправлено через text_delta
+      if (finishReason !== 'tool_calls') {
+        onEvent({ type: 'done', toolsUsed, provider: this.name });
+        return;
+      }
+
+      // Выполняем накопленные инструменты
+      const toolCallsList = Object.values(toolCallAccumulators);
+
+      // Добавляем ответ ассистента с tool_calls в историю
+      openAIMessages.push({
+        role: 'assistant',
+        content: fullContent || null,
+        tool_calls: toolCallsList.map(tc => ({
+          id: tc.id,
+          type: 'function' as const,
+          function: { name: tc.name, arguments: tc.arguments },
+        })),
+      });
+
+      const toolResults: Array<{ id: string; result: unknown; isError?: boolean }> = [];
+
+      for (const tc of toolCallsList) {
+        toolsUsed.push(tc.name);
+        this.log(`Выполняю инструмент (стриминг): ${tc.name}`);
+        try {
+          let parsedInput: Record<string, unknown> = {};
+          try { parsedInput = JSON.parse(tc.arguments); } catch { /* пустые аргументы */ }
+          const result = await executeToolCall(tc.name, parsedInput);
+          toolResults.push({ id: tc.id, result, isError: false });
+        } catch (error) {
+          this.logError(`Инструмент ${tc.name} завершился ошибкой`, error);
+          toolResults.push({
+            id: tc.id,
+            result: `Ошибка: ${error instanceof Error ? error.message : String(error)}`,
+            isError: true,
+          });
+        }
+      }
+
+      openAIMessages.push(...formatDeepSeekToolResults(toolResults));
+    }
+
+    onEvent({ type: 'error', message: 'Превышен лимит итераций агента' });
   }
 
   /**
