@@ -63,6 +63,9 @@ import { config, validateConfig, logProviderConfig } from './config/env.js';
 // chatRouter — маршруты чата с Claude AI (POST /api/chat)
 import chatRouter from './routes/chat.js';
 
+// chatStreamRouter — SSE стриминг (POST /api/chat/stream)
+import chatStreamRouter from './routes/chatStream.js';
+
 // healthRouter — health-check эндпоинт (GET /health)
 import healthRouter from './routes/health.js';
 
@@ -173,6 +176,9 @@ app.use('/health', healthRouter);
 // Защищён authMiddleware внутри chatRouter.
 // Принимает историю сообщений, возвращает ответ Claude
 app.use('/api/chat', chatRouter);
+
+// Стриминг чата — POST /api/chat/stream (SSE)
+app.use('/api/chat/stream', chatStreamRouter);
 
 // Прокси для загрузки файлов — POST /api/equipment/*
 // Фронтенд не может напрямую отправлять POST на GAS (CORS preflight блокируется).

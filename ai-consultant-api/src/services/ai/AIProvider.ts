@@ -5,6 +5,7 @@ import {
   EquipmentContext,
   WaterDashboardContext,
   MemoryContext,
+  StreamEvent,
 } from './types.js';
 
 /**
@@ -39,9 +40,21 @@ export interface AIProvider {
 
   /**
    * Проверка доступности провайдера
-   * (есть ли API ключ, доступен ли API endpoint)
    */
   isAvailable(): Promise<boolean>;
+
+  /**
+   * Стриминг-версия чата через SSE-колбэк.
+   */
+  streamChat(
+    messages: ChatMessage[],
+    tools: ToolDefinition[],
+    userId: string,
+    onEvent: (event: StreamEvent) => void,
+    equipmentContext?: EquipmentContext,
+    waterContext?: WaterDashboardContext,
+    memoryContext?: MemoryContext,
+  ): Promise<void>;
 }
 
 /**
@@ -62,11 +75,34 @@ export abstract class BaseAIProvider implements AIProvider {
 
   async isAvailable(): Promise<boolean> {
     try {
-      // Базовая проверка - можно переопределить в дочерних классах
       return true;
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Стриминг-версия чата. Эмитит события через onEvent колбэк:
+   *   tool_call  — агент вызывает инструмент
+   *   text_delta — кусочек финального текста (стриминг)
+   *   done       — всё готово
+   *   error      — ошибка
+   *
+   * Базовая реализация: обычный chat() + эмит полного текста одним text_delta.
+   * ClaudeProvider переопределяет для настоящего стриминга.
+   */
+  async streamChat(
+    messages: ChatMessage[],
+    tools: ToolDefinition[],
+    userId: string,
+    onEvent: (event: StreamEvent) => void,
+    equipmentContext?: EquipmentContext,
+    waterContext?: WaterDashboardContext,
+    memoryContext?: MemoryContext,
+  ): Promise<void> {
+    const response = await this.chat(messages, tools, userId, equipmentContext, waterContext, memoryContext);
+    onEvent({ type: 'text_delta', delta: response.message });
+    onEvent({ type: 'done', toolsUsed: response.toolsUsed || [], provider: response.provider });
   }
 
   /**

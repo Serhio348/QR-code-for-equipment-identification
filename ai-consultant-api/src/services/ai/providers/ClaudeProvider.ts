@@ -10,7 +10,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { BaseAIProvider } from '../AIProvider.js';
-import { ChatMessage, ChatResponse, ToolDefinition, EquipmentContext, WaterDashboardContext, MemoryContext } from '../types.js';
+import { ChatMessage, ChatResponse, ToolDefinition, EquipmentContext, WaterDashboardContext, MemoryContext, StreamEvent } from '../types.js';
 import {
   convertToClaudeTools,
   extractClaudeToolCalls,
@@ -443,5 +443,125 @@ export class ClaudeProvider extends BaseAIProvider {
 Язык общения: русский.
 ${memoryContext?.factsPrompt ?? ''}
 Текущая дата: ${new Date().toISOString().split('T')[0]}`;
+  }
+
+  /**
+   * Стриминговый чат с настоящим SSE-стримингом финального текста.
+   *
+   * Алгоритм:
+   *   1. Для каждого запроса в агентном цикле используем messages.stream().
+   *   2. Если ответ содержит tool_use — эмитим tool_call события, выполняем
+   *      инструменты, добавляем результаты в историю и повторяем.
+   *   3. Если ответ содержит текст — эмитим text_delta в реальном времени
+   *      (символы появляются на фронтенде по мере генерации).
+   */
+  async streamChat(
+    messages: ChatMessage[],
+    tools: ToolDefinition[],
+    _userId: string,
+    onEvent: (event: StreamEvent) => void,
+    equipmentContext?: EquipmentContext,
+    waterContext?: WaterDashboardContext,
+    memoryContext?: MemoryContext,
+  ): Promise<void> {
+    const toolsUsed: string[] = [];
+
+    const claudeMessages: Anthropic.MessageParam[] = messages.map(msg => ({
+      role: msg.role,
+      content: msg.content as string | Anthropic.ContentBlockParam[],
+    }));
+
+    const claudeTools = convertToClaudeTools(tools);
+    const systemPrompt = this.getSystemPrompt(equipmentContext, waterContext, memoryContext);
+
+    let iteration = 0;
+
+    while (iteration < this.MAX_ITERATIONS) {
+      iteration++;
+
+      // Накопленные блоки контента из потока
+      const responseContent: Anthropic.ContentBlock[] = [];
+      const toolInputAccumulator: Record<number, string> = {};
+      let stopReason = '';
+
+      // Стриминговый запрос к Claude
+      const stream = this.client.messages.stream({
+        model: this.model,
+        max_tokens: 4096,
+        system: systemPrompt,
+        tools: claudeTools,
+        messages: claudeMessages,
+      });
+
+      for await (const event of stream) {
+        if (event.type === 'content_block_start') {
+          const block = event.content_block;
+          if (block.type === 'tool_use') {
+            responseContent[event.index] = { ...block, input: {} };
+            toolInputAccumulator[event.index] = '';
+          } else if (block.type === 'text') {
+            responseContent[event.index] = { type: 'text', text: '', citations: [] } as Anthropic.TextBlock;
+          }
+        } else if (event.type === 'content_block_delta') {
+          const delta = event.delta;
+          if (delta.type === 'text_delta') {
+            // Стриминг текста в реальном времени!
+            onEvent({ type: 'text_delta', delta: delta.text });
+            const textBlock = responseContent[event.index] as Anthropic.TextBlock;
+            if (textBlock) textBlock.text = (textBlock.text || '') + delta.text;
+          } else if (delta.type === 'input_json_delta') {
+            toolInputAccumulator[event.index] = (toolInputAccumulator[event.index] || '') + delta.partial_json;
+          }
+        } else if (event.type === 'message_delta') {
+          stopReason = event.delta.stop_reason || '';
+        }
+      }
+
+      // Парсим JSON ввода инструментов из накопленных строк
+      for (const [idx, jsonStr] of Object.entries(toolInputAccumulator)) {
+        const toolBlock = responseContent[parseInt(idx)] as Anthropic.ToolUseBlock;
+        if (toolBlock && jsonStr) {
+          try {
+            toolBlock.input = JSON.parse(jsonStr) as Record<string, unknown>;
+          } catch {
+            toolBlock.input = {};
+          }
+        }
+      }
+
+      // Если не tool_use — финальный ответ уже был заэмичен через text_delta
+      if (stopReason !== 'tool_use') {
+        onEvent({ type: 'done', toolsUsed, provider: this.name });
+        return;
+      }
+
+      // Выполняем инструменты
+      const toolCalls = extractClaudeToolCalls(responseContent);
+      const toolResults: Array<{ id: string; result: unknown; isError?: boolean }> = [];
+
+      for (const toolCall of toolCalls) {
+        onEvent({ type: 'tool_call', name: toolCall.name });
+        toolsUsed.push(toolCall.name);
+        this.log(`Executing tool (stream): ${toolCall.name}`);
+
+        try {
+          const result = await executeToolCall(toolCall.name, toolCall.input);
+          toolResults.push({ id: toolCall.id, result, isError: false });
+        } catch (error) {
+          this.logError(`Tool ${toolCall.name} failed`, error);
+          toolResults.push({
+            id: toolCall.id,
+            result: `Ошибка: ${error instanceof Error ? error.message : String(error)}`,
+            isError: true,
+          });
+        }
+      }
+
+      // Добавляем ответ агента и результаты инструментов в историю
+      claudeMessages.push({ role: 'assistant', content: responseContent });
+      claudeMessages.push({ role: 'user', content: formatClaudeToolResults(toolResults) });
+    }
+
+    onEvent({ type: 'error', message: 'Превышен лимит итераций агента' });
   }
 }

@@ -32,7 +32,7 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({ initialOpen = false }) =
     maintenanceSheetId: equipmentContext.maintenanceSheetId,
   } : null;
 
-  const { messages, isLoading, error, sendMessage, clearMessages } = useChat(contextForChat, waterContext);
+  const { messages, isLoading, error, activeToolName, sendMessage, clearMessages } = useChat(contextForChat, waterContext);
   const { alerts } = useAlerts();
   const { transcript, resetTranscript } = useSpeechRecognition();
   const { data: equipmentListData } = useEquipmentData();
@@ -253,12 +253,36 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({ initialOpen = false }) =
               <ChatMessage key={index} role={msg.role} content={msg.content} />
             ))}
 
-            {isLoading && (
+            {isLoading && !activeToolName && messages[messages.length - 1]?.content === '' && (
               <div className="ai-chat-widget__loading">
                 <span className="ai-chat-widget__loading-dots">
                   <span>.</span><span>.</span><span>.</span>
                 </span>
                 Думаю...
+              </div>
+            )}
+
+            {activeToolName && (
+              <div className="ai-chat-widget__loading">
+                <span className="ai-chat-widget__loading-dots">
+                  <span>.</span><span>.</span><span>.</span>
+                </span>
+                {({
+                  get_invoices: 'Читаю счета...',
+                  get_invoice_file: 'Получаю файл счёта...',
+                  search_equipment: 'Ищу оборудование...',
+                  get_equipment: 'Читаю данные оборудования...',
+                  get_maintenance_log: 'Открываю журнал обслуживания...',
+                  add_maintenance_record: 'Добавляю запись...',
+                  drive_search: 'Ищу в Google Drive...',
+                  drive_read: 'Читаю файл...',
+                  analyze_water_consumption: 'Анализирую потребление воды...',
+                  portal_login: 'Вхожу на портал...',
+                  portal_list_invoices: 'Ищу счета на портале...',
+                  portal_download_invoice: 'Скачиваю счёт...',
+                  save_memory: 'Запоминаю...',
+                  get_memory: 'Вспоминаю...',
+                } as Record<string, string>)[activeToolName] ?? `${activeToolName}...`}
               </div>
             )}
 

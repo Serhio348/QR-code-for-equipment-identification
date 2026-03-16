@@ -36,7 +36,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   ChatMessage,
-  sendChatMessage,
+  streamChatMessage,
   TextContentBlock,
   ImageContentBlock,
   EquipmentContext,
@@ -81,6 +81,8 @@ export interface UseChatReturn {
   error: string | null;
   /** true если есть неудачное сообщение, которое можно повторить */
   canRetry: boolean;
+  /** Название текущего инструмента или null */
+  activeToolName: string | null;
   /** Отправить новое сообщение (с текстом и/или фото) */
   sendMessage: (message: ChatInputMessage) => Promise<void>;
   /** Повторить последнее неудачное сообщение */
@@ -169,9 +171,9 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
   const [messages, setMessages] = useState<ChatMessageWithMeta[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeToolName, setActiveToolName] = useState<string | null>(null);
 
   // Последнее неудачное сообщение — для retry механизма.
-  // Хранит сообщение и историю на момент отправки
   const [lastFailed, setLastFailed] = useState<{
     message: ChatInputMessage;
     messagesSnapshot: ChatMessage[];
@@ -240,73 +242,82 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
     const startTime = Date.now();
 
     try {
-      // Обрезаем историю перед отправкой на сервер
       const apiMessages = trimForApi(newMessages);
-      const response = await sendChatMessage(
+
+      // Создаём плейсхолдер для стримингового сообщения
+      const streamingId = generateId();
+      const streamingMsg: ChatMessageWithMeta = createMessage('assistant', '');
+      streamingMsg.id = streamingId;
+      setMessages([...newMessages, streamingMsg]);
+
+      let accText = '';
+      let toolsUsed: string[] = [];
+
+      for await (const event of streamChatMessage(
         apiMessages,
         controller.signal,
         equipmentContext || undefined,
-        waterContext || undefined
-      );
-      const duration = Date.now() - startTime;
-
-      if (response.success && response.data) {
-        // Debug-лог успешного запроса
-        console.debug('[Chat]', {
-          duration: `${duration}ms`,
-          toolsUsed: response.data.toolsUsed,
-          responseLength: response.data.message.length,
-          hasPhotos: !!inputMessage.photos?.length,
-          photoCount: inputMessage.photos?.length || 0,
-          hasContext: !!equipmentContext,
-          equipmentId: equipmentContext?.id,
-        });
-
-        // Логируем активность пользователя
-        const messagePreview = typeof content === 'string'
-          ? content.substring(0, 100)
-          : 'Сообщение с изображением';
-        logUserActivity(
-          'chat_message',
-          equipmentContext
-            ? `Отправлено сообщение в AI-консультант (контекст: ${equipmentContext.name}): "${messagePreview}"`
-            : `Отправлено сообщение в AI-консультант: "${messagePreview}"`,
-          {
-            entityType: 'chat',
-            entityId: equipmentContext?.id,
-            metadata: {
-              hasPhotos: !!inputMessage.photos?.length,
-              photoCount: inputMessage.photos?.length || 0,
-              toolsUsed: response.data.toolsUsed,
-              duration,
-              hasContext: !!equipmentContext,
-              equipmentName: equipmentContext?.name,
-              equipmentType: equipmentContext?.type,
-            },
-          }
-        );
-
-        const assistantMessage = createMessage('assistant', response.data.message);
-        setMessages([...newMessages, assistantMessage]);
-      } else {
-        setError(response.error || 'Неизвестная ошибка');
-        setLastFailed({ message: inputMessage, messagesSnapshot: apiMessages });
+        waterContext || undefined,
+      )) {
+        if (event.type === 'tool_call') {
+          setActiveToolName(event.name);
+        } else if (event.type === 'text_delta') {
+          setActiveToolName(null);
+          accText += event.delta;
+          // Обновляем сообщение по мере прихода текста
+          setMessages(prev => prev.map(m =>
+            m.id === streamingId ? { ...m, content: accText } : m
+          ));
+        } else if (event.type === 'done') {
+          toolsUsed = event.toolsUsed || [];
+          setActiveToolName(null);
+        } else if (event.type === 'error') {
+          throw new Error(event.message);
+        }
       }
+
+      const duration = Date.now() - startTime;
+      console.debug('[Chat stream]', {
+        duration: `${duration}ms`,
+        toolsUsed,
+        responseLength: accText.length,
+        hasContext: !!equipmentContext,
+      });
+
+      const messagePreview = typeof content === 'string'
+        ? content.substring(0, 100)
+        : 'Сообщение с изображением';
+      logUserActivity(
+        'chat_message',
+        equipmentContext
+          ? `Отправлено сообщение в AI-консультант (контекст: ${equipmentContext.name}): "${messagePreview}"`
+          : `Отправлено сообщение в AI-консультант: "${messagePreview}"`,
+        {
+          entityType: 'chat',
+          entityId: equipmentContext?.id,
+          metadata: {
+            hasPhotos: !!inputMessage.photos?.length,
+            photoCount: inputMessage.photos?.length || 0,
+            toolsUsed,
+            duration,
+            hasContext: !!equipmentContext,
+            equipmentName: equipmentContext?.name,
+            equipmentType: equipmentContext?.type,
+          },
+        }
+      );
     } catch (err) {
-      // AbortError — запрос отменён при размонтировании, не показываем ошибку
       if (err instanceof DOMException && err.name === 'AbortError') {
         return;
       }
 
       const duration = Date.now() - startTime;
       const errorMessage = err instanceof Error ? err.message : 'Ошибка отправки';
-
       console.debug('[Chat] Error:', { duration: `${duration}ms`, error: errorMessage });
 
+      setActiveToolName(null);
       setError(errorMessage);
-      // Сохраняем для retry
       setLastFailed({ message: inputMessage, messagesSnapshot: trimForApi(newMessages) });
-      // Откатываем оптимистичное обновление
       setMessages(messages);
     } finally {
       setIsLoading(false);
@@ -340,26 +351,39 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
     const startTime = Date.now();
 
     try {
-      const response = await sendChatMessage(
+      const streamingId = generateId();
+      const streamingMsg = { ...createMessage('assistant', ''), id: streamingId };
+      setMessages([...newMessages, streamingMsg]);
+
+      let accText = '';
+
+      for await (const event of streamChatMessage(
         lastFailed.messagesSnapshot,
         controller.signal,
         equipmentContext || undefined,
-        waterContext || undefined
-      );
-      const duration = Date.now() - startTime;
-
-      if (response.success && response.data) {
-        console.debug('[Chat] Retry succeeded:', { duration: `${duration}ms` });
-
-        const assistantMessage = createMessage('assistant', response.data.message);
-        setMessages([...newMessages, assistantMessage]);
-        setLastFailed(null);
-      } else {
-        setError(response.error || 'Не удалось повторить запрос');
+        waterContext || undefined,
+      )) {
+        if (event.type === 'tool_call') {
+          setActiveToolName(event.name);
+        } else if (event.type === 'text_delta') {
+          setActiveToolName(null);
+          accText += event.delta;
+          setMessages(prev => prev.map(m =>
+            m.id === streamingId ? { ...m, content: accText } : m
+          ));
+        } else if (event.type === 'done') {
+          setActiveToolName(null);
+          setLastFailed(null);
+        } else if (event.type === 'error') {
+          throw new Error(event.message);
+        }
       }
+
+      console.debug('[Chat] Retry succeeded:', { duration: `${Date.now() - startTime}ms` });
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
 
+      setActiveToolName(null);
       setError(err instanceof Error ? err.message : 'Ошибка отправки');
       setMessages(messages);
     } finally {
@@ -392,6 +416,7 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
     isLoading,
     error,
     canRetry: lastFailed !== null,
+    activeToolName,
     sendMessage,
     retryLastMessage,
     clearMessages,
