@@ -24,7 +24,6 @@ ARG VITE_AI_CONSULTANT_API_URL
 ARG VITE_BELIOT_API_BASE_URL
 ARG VITE_BELIOT_API_KEY
 ARG VITE_BELIOT_LOGIN
-ARG VITE_BELIOT_PASSWORD
 
 # Validate required environment variables
 RUN echo "🔍 Validating build arguments..." && \
@@ -46,7 +45,6 @@ RUN echo "📝 Creating .env file..." && \
     [ -n "$VITE_BELIOT_API_BASE_URL" ] && echo "VITE_BELIOT_API_BASE_URL=${VITE_BELIOT_API_BASE_URL}" >> .env || true && \
     [ -n "$VITE_BELIOT_API_KEY" ] && echo "VITE_BELIOT_API_KEY=${VITE_BELIOT_API_KEY}" >> .env || true && \
     [ -n "$VITE_BELIOT_LOGIN" ] && echo "VITE_BELIOT_LOGIN=${VITE_BELIOT_LOGIN}" >> .env || true && \
-    [ -n "$VITE_BELIOT_PASSWORD" ] && echo "VITE_BELIOT_PASSWORD=${VITE_BELIOT_PASSWORD}" >> .env || true && \
     echo "✅ .env file created"
 
 # Build the application
