@@ -369,53 +369,6 @@
   font-size: 16px;
 }
 
-.reading-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.reading-meta__top {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.reading-meta__value {
-  font-weight: 700;
-}
-
-.reading-meta__time {
-  font-size: 12px;
-  color: #666;
-  font-weight: 500;
-}
-
-.freshness-badge {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.3px;
-  line-height: 16px;
-}
-
-.freshness-badge.ok {
-  background: #e8f5e9;
-  color: #2e7d32;
-}
-
-.freshness-badge.warn {
-  background: #fff3e0;
-  color: #f57c00;
-}
-
-.freshness-badge.bad {
-  background: #ffebee;
-  color: #c62828;
-}
-
 .group-devices-table tbody tr {
   transition: background-color 0.2s;
   cursor: pointer !important;
