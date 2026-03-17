@@ -9,7 +9,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import WaterDashboard from '../components/WaterDashboard';
-import BeliotDevicesTest from '../components/BeliotDevicesTest';
+import BeliotCountersSupabase from '../components/BeliotCountersSupabase';
 import WaterQualityJournalPage from '../../water-quality/pages/WaterQualityJournalPage';
 import { ROUTES } from '@/shared/utils/routes';
 import { useWaterNotifications } from '../hooks/useWaterNotifications';
@@ -82,7 +82,7 @@ const WaterPage: React.FC = () => {
 
       <div className="water-page-content">
         {activeTab === 'dashboard' && <WaterDashboard />}
-        {activeTab === 'counters' && <BeliotDevicesTest />}
+        {activeTab === 'counters' && <BeliotCountersSupabase />}
         {activeTab === 'quality' && <WaterQualityJournalPage />}
       </div>
     </div>
