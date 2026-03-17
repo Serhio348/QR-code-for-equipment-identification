@@ -701,10 +701,30 @@ async function syncDeviceReadingsForPeriod(
   console.log(`   📅 Период: ${startDate.toISOString()} - ${endDate.toISOString()}`);
   
   try {
-    // Получаем показания из API
-    const messages = await getDeviceMessagesFromApi(deviceId, startTimestamp, endTimestamp, token, 1);
+    // Получаем показания из API.
+    // Для части счетчиков UI Beliot использует другую группу сообщений (msgGroup),
+    // поэтому объединяем msgGroup=0 (базовая) и msgGroup=4 (часто содержит недостающие часы).
+    const [messagesGroup0, messagesGroup4] = await Promise.all([
+      getDeviceMessagesFromApi(deviceId, startTimestamp, endTimestamp, token, 1, 0),
+      getDeviceMessagesFromApi(deviceId, startTimestamp, endTimestamp, token, 1, 4),
+    ]);
+
+    const mergedMap = new Map<number, any>();
+    for (const msg of [...messagesGroup0, ...messagesGroup4]) {
+      const tsRaw = msg?.datetime ?? msg?.realdatetime;
+      const ts = typeof tsRaw === 'number' ? tsRaw : parseInt(String(tsRaw ?? ''), 10);
+      if (!Number.isFinite(ts) || ts <= 0) continue;
+      // Предпочитаем msgGroup=0 при совпадении timestamp (он обычно "почасовой" сеткой)
+      if (!mergedMap.has(ts)) {
+        mergedMap.set(ts, msg);
+      }
+    }
+
+    const messages = Array.from(mergedMap.values());
     
-    console.log(`   📊 Получено ${messages.length} показаний из API`);
+    console.log(
+      `   📊 Получено показаний из API: group0=${messagesGroup0.length}, group4=${messagesGroup4.length}, merged=${messages.length}`
+    );
     
     if (messages.length === 0) {
       return { success: 0, errors: 0, skipped: 0, total: 0 };
