@@ -277,26 +277,71 @@ const BeliotDevicesTest: React.FC = () => {
       .filter(group => group.devices.length > 0);
   }, [groupedDevices, searchQuery]);
 
+  const getDeviceRole = (device: BeliotDevice): 'source' | 'production' | 'domestic' | null => {
+    const deviceId = String(device.device_id || device.id || device._id);
+    const role = syncedOverrides?.[deviceId]?.device_role;
+    return (role as 'source' | 'production' | 'domestic' | null) ?? null;
+  };
 
-
-  const getLastReading = (device: BeliotDevice): string => {
+  const getLastReadingMeta = (device: BeliotDevice): { valueText: string; updatedAt: Date | null } => {
     let value: number | undefined;
-    // Пробуем получить last_message_type.1.in1
+    let dateValue: unknown;
+
+    // last_message_type['1'] обычно хранит последнее значение
     if (device.last_message_type && typeof device.last_message_type === 'object') {
-      const msgType = device.last_message_type as Record<string, Record<string, number>>;
-      if (msgType['1'] && msgType['1'].in1 !== undefined) {
-        value = Number(msgType['1'].in1);
+      const msgType = device.last_message_type as any;
+      if (msgType['1']?.in1 !== undefined) value = Number(msgType['1'].in1);
+      if (msgType['1']?.date !== undefined) dateValue = msgType['1'].date;
+      if (msgType['1']?.realdatetime !== undefined) dateValue = msgType['1'].realdatetime;
+      if (msgType['1']?.datetime !== undefined) dateValue = msgType['1'].datetime;
+    }
+
+    const updatedAt = (() => {
+      if (!dateValue) return null;
+      if (dateValue instanceof Date && !isNaN(dateValue.getTime())) return dateValue;
+      if (typeof dateValue === 'number') {
+        const ts = dateValue < 1e12 ? dateValue * 1000 : dateValue;
+        const d = new Date(ts);
+        return isNaN(d.getTime()) ? null : d;
       }
-    }
-    // Альтернативные пути
-    if (value === undefined && device.last_message_type?.['1']?.in1 !== undefined) {
-      value = Number(device.last_message_type['1'].in1);
-    }
-    // Округляем до одного знака после запятой
+      if (typeof dateValue === 'string') {
+        const d = new Date(dateValue);
+        return isNaN(d.getTime()) ? null : d;
+      }
+      return null;
+    })();
+
     if (value !== undefined && !isNaN(value)) {
-      return value.toFixed(1);
+      return { valueText: value.toFixed(1), updatedAt };
     }
-    return '-';
+    return { valueText: '-', updatedAt };
+  };
+
+  const getFreshnessBadge = (device: BeliotDevice): { label: string; className: string } | null => {
+    const { updatedAt } = getLastReadingMeta(device);
+    if (!updatedAt) return null;
+
+    const role = getDeviceRole(device);
+    const ageHours = (Date.now() - updatedAt.getTime()) / (1000 * 60 * 60);
+
+    // Порог зависит от типа счётчика:
+    // - production: ожидаем часто (примерно каждый час)
+    // - domestic: часто бывает обновление раз в сутки
+    const okHours = role === 'domestic' ? 26 : 2.5;
+    const staleHours = role === 'domestic' ? 50 : 6;
+
+    if (ageHours <= okHours) return { label: 'OK', className: 'freshness-badge ok' };
+    if (ageHours <= staleHours) return { label: 'STALE', className: 'freshness-badge warn' };
+    return { label: 'OLD', className: 'freshness-badge bad' };
+  };
+
+  const formatAge = (updatedAt: Date): string => {
+    const diffMs = Date.now() - updatedAt.getTime();
+    const minutes = Math.max(0, Math.round(diffMs / 60000));
+    if (minutes < 60) return `${minutes} мин назад`;
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return mins > 0 ? `${hours} ч ${mins} мин назад` : `${hours} ч назад`;
   };
 
   // Обработка клика на группу
@@ -612,7 +657,25 @@ const BeliotDevicesTest: React.FC = () => {
                             <td>{getDeviceObject(device)}</td>
                             <td>{getDeviceName(device)}</td>
                             <td>{getDeviceSerialNumber(device)}</td>
-                            <td className="reading-cell">{getLastReading(device)}</td>
+                            <td className="reading-cell">
+                              {(() => {
+                                const meta = getLastReadingMeta(device);
+                                const badge = getFreshnessBadge(device);
+                                return (
+                                  <div className="reading-meta">
+                                    <div className="reading-meta__top">
+                                      <span className="reading-meta__value">{meta.valueText}</span>
+                                      {badge && <span className={badge.className}>{badge.label}</span>}
+                                    </div>
+                                    {meta.updatedAt && (
+                                      <div className="reading-meta__time" title={meta.updatedAt.toLocaleString()}>
+                                        {formatAge(meta.updatedAt)}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                            </td>
                             <td className="actions-cell">
                               <button
                                 className="passport-btn"
@@ -886,7 +949,7 @@ const BeliotDevicesTest: React.FC = () => {
                             <span className="mobile-device-name">{getDeviceName(device) || '-'}</span>
                           )}
                         </div>
-                        <div className="mobile-device-reading">{getLastReading(device) || '-'}</div>
+                        <div className="mobile-device-reading">{getLastReadingMeta(device).valueText || '-'}</div>
                       </div>
 
                       <div className="mobile-device-card-body">
