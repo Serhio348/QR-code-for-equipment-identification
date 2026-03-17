@@ -697,8 +697,6 @@ async function syncDeviceReadingsForPeriod(
 ): Promise<{ success: number; errors: number; skipped: number; total: number }> {
   const startTimestamp = Math.floor(startDate.getTime() / 1000);
   const endTimestamp = Math.floor(endDate.getTime() / 1000);
-  const deviceIdStr = String(deviceId);
-  const isDebugDevice = deviceIdStr === '11078';
   
   console.log(`   📅 Период: ${startDate.toISOString()} - ${endDate.toISOString()}`);
   
@@ -711,26 +709,6 @@ async function syncDeviceReadingsForPeriod(
     if (messages.length === 0) {
       return { success: 0, errors: 0, skipped: 0, total: 0 };
     }
-
-    // Диагностика: ищем нужную msgGroup для устройства 11078
-    // В UI Beliot могут использовать другую группу сообщений, поэтому сравниваем counts.
-    if (isDebugDevice) {
-      console.log(`   🧪 DEBUG(11078): msgType=1 msgGroup scan (last 24h)`);
-      for (const group of [0, 1, 2, 3, 4, 5]) {
-        try {
-          const groupMessages = await getDeviceMessagesFromApi(deviceId, startTimestamp, endTimestamp, token, 1, group);
-          console.log(`   🧪 DEBUG(11078): msgGroup=${group} count: ${groupMessages.length}`);
-          if (groupMessages.length > 0) {
-            console.log(
-              `   🧪 DEBUG(11078): msgGroup=${group} sample[0]:`,
-              JSON.stringify(groupMessages[0], null, 2).slice(0, 900)
-            );
-          }
-        } catch (e: any) {
-          console.warn(`   🧪 DEBUG(11078): msgGroup=${group} fetch failed:`, e?.message || String(e));
-        }
-      }
-    }
     
     // Фильтруем по часам
     const readingsToSave = filterByHourStart(messages);
@@ -740,14 +718,15 @@ async function syncDeviceReadingsForPeriod(
     let success = 0;
     let errors = 0;
     let skipped = 0;
+    let total = readingsToSave.length;
     
     // Сохраняем каждое показание
     for (const reading of readingsToSave) {
       try {
-        const timestamp = reading.timestamp || reading.realdatetime || reading.datetime || 0;
-        const value = reading.in1 || 0;
+        const timestamp = reading.timestamp || reading.datetime || reading.realdatetime || 0;
+        const value = reading.end_in1 ?? reading.in1;
         
-        if (!timestamp || value === 0) {
+        if (!timestamp || value === undefined || value === null) {
           skipped++;
           continue;
         }
@@ -755,11 +734,9 @@ async function syncDeviceReadingsForPeriod(
         // Создаем дату на начало часа
         const readingDate = new Date(timestamp * 1000);
         readingDate.setMinutes(0, 0, 0);
-        readingDate.setSeconds(0, 0);
-        readingDate.setMilliseconds(0);
         
         // Сохраняем в Supabase
-        const { data: readingId, error } = await supabase.rpc('insert_beliot_reading', {
+        const { error } = await supabase.rpc('insert_beliot_reading', {
           p_device_id: String(deviceId),
           p_reading_date: readingDate.toISOString(),
           p_reading_value: Number(value),
@@ -780,8 +757,47 @@ async function syncDeviceReadingsForPeriod(
         console.error(`   ❌ Ошибка обработки показания:`, error.message);
       }
     }
+
+    // Дополнительно сохраняем "самую свежую точку" из msgGroup=1 (как в UI Beliot),
+    // чтобы "текущие показания" могли отображаться с точным временем (например 13:51).
+    try {
+      const currentMessages = await getDeviceMessagesFromApi(deviceId, startTimestamp, endTimestamp, token, 1, 1);
+      if (currentMessages.length > 0) {
+        const latest = currentMessages.reduce((acc: any, msg: any) => {
+          const accTs = Number(acc?.datetime ?? acc?.realdatetime ?? 0);
+          const msgTs = Number(msg?.datetime ?? msg?.realdatetime ?? 0);
+          return msgTs > accTs ? msg : acc;
+        });
+
+        const currentTimestamp = Number(latest?.datetime ?? latest?.realdatetime ?? 0);
+        const currentValue = latest?.end_in1 ?? latest?.in1;
+
+        if (currentTimestamp && currentValue !== undefined && currentValue !== null) {
+          const currentDate = new Date(currentTimestamp * 1000);
+          const { error } = await supabase.rpc('insert_beliot_reading', {
+            p_device_id: String(deviceId),
+            p_reading_date: currentDate.toISOString(),
+            p_reading_value: Number(currentValue),
+            p_unit: 'м³',
+            p_reading_type: 'hourly',
+            p_source: 'api',
+            p_period: 'current',
+          });
+
+          if (error) {
+            errors++;
+            console.error(`   ❌ Ошибка сохранения текущей точки за ${currentDate.toISOString()}:`, error.message);
+          } else {
+            success++;
+            total++;
+          }
+        }
+      }
+    } catch (e: any) {
+      console.warn(`   ⚠️ Не удалось сохранить текущую точку (msgGroup=1):`, e?.message || String(e));
+    }
     
-    return { success, errors, skipped, total: readingsToSave.length };
+    return { success, errors, skipped, total };
   } catch (error: any) {
     console.error(`   ❌ Ошибка синхронизации:`, error.message);
     return { success: 0, errors: 1, skipped: 0, total: 0 };
@@ -820,8 +836,8 @@ async function collectReadings(): Promise<void> {
     // Начало: ровно 24 часа назад от текущего момента
     const startDate = new Date(now);
     startDate.setTime(now.getTime() - 24 * 60 * 60 * 1000); // Минус 24 часа в миллисекундах
-    startDate.setSeconds(0, 0);
-    startDate.setMilliseconds(0);
+    // Округляем до начала часа, чтобы не терять почасовую точку текущего часа (например 08:00)
+    startDate.setMinutes(0, 0, 0);
     
     console.log(`📅 Период синхронизации: последние 24 часа (сутки)`);
     console.log(`   Начало: ${startDate.toISOString()}`);
