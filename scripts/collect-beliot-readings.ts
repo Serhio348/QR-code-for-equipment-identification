@@ -412,10 +412,14 @@ function filterByHourStart(messages: any[]): Array<any & { timestamp: number }> 
     // Извлекаем timestamp
     let timestamp: number | null = null;
     
-    if (msg.realdatetime) {
-      timestamp = typeof msg.realdatetime === 'number' ? msg.realdatetime : parseInt(String(msg.realdatetime), 10);
-    } else if (msg.datetime) {
-      timestamp = typeof msg.datetime === 'number' ? msg.datetime : parseInt(String(msg.datetime), 10);
+    // ВАЖНО: для почасовых данных используем datetime (время интервала/измерения).
+    // realdatetime часто одинаковый для пачки сообщений (время доставки), из-за чего часы "слипаются".
+    if (msg.datetime) {
+      const parsed = typeof msg.datetime === 'number' ? msg.datetime : parseInt(String(msg.datetime), 10);
+      timestamp = Number.isFinite(parsed) ? parsed : null;
+    } else if (msg.realdatetime) {
+      const parsed = typeof msg.realdatetime === 'number' ? msg.realdatetime : parseInt(String(msg.realdatetime), 10);
+      timestamp = Number.isFinite(parsed) ? parsed : null;
     }
     
     if (timestamp) {
