@@ -87,16 +87,7 @@ export function validateApiConfig(): boolean {
     envUrl: envUrl ? `${envUrl.substring(0, 50)}...` : 'не установлен',
     finalUrl: API_CONFIG.EQUIPMENT_API_URL ? `${API_CONFIG.EQUIPMENT_API_URL.substring(0, 50)}...` : 'не установлен',
     isProduction: import.meta.env.PROD,
-    mode: import.meta.env.MODE,
-    beliot: {
-      hasApiKey: Boolean(import.meta.env.VITE_BELIOT_API_KEY),
-      hasLogin: Boolean(import.meta.env.VITE_BELIOT_LOGIN),
-      hasPassword: Boolean(import.meta.env.VITE_BELIOT_PASSWORD),
-      useBeliotApi: import.meta.env.VITE_USE_BELIOT_API === 'true',
-      baseUrl: import.meta.env.VITE_BELIOT_API_BASE_URL
-        ? `${String(import.meta.env.VITE_BELIOT_API_BASE_URL).substring(0, 40)}...`
-        : 'default',
-    },
+    mode: import.meta.env.MODE
   });
   
   if (!API_CONFIG.EQUIPMENT_API_URL) {

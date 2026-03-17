@@ -6,12 +6,15 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import {
+  getCompanyDevices,
+  getDeviceById,
+  getDeviceReadings,
   BeliotDevice,
   DeviceReadings,
 } from '../services/beliotDeviceApi';
 import { useDeviceOverrides } from '../hooks/useDeviceOverrides';
 import { useDevicePassport } from '../hooks/useDevicePassport';
-import { supabase } from '@/shared/config/supabase';
+import { saveBeliotReading } from '../services/supabaseBeliotReadingsApi';
 import { useDeviceArchive } from '../hooks/useDeviceArchive';
 import DeviceArchiveModal from './DeviceArchiveModal';
 import DevicePassportModal from './DevicePassportModal';
@@ -139,56 +142,6 @@ const BeliotDevicesTest: React.FC = () => {
     syncOverridesFromServer();
   }, []);
 
-  const buildDevicesFromSupabase = async (): Promise<BeliotDevice[]> => {
-    const { data: overrides, error: overridesError } = await supabase
-      .from('beliot_device_overrides')
-      .select('device_id, name, object_name, serial_number, address')
-      .order('object_name', { ascending: true });
-
-    if (overridesError) {
-      throw new Error(`Не удалось загрузить устройства из Supabase: ${overridesError.message}`);
-    }
-
-    const ids = (overrides || []).map((o: any) => String(o.device_id));
-    if (ids.length === 0) {
-      return [];
-    }
-
-    // Берём последние показания, чтобы заполнить last_message_type.1.in1 (нужно для текущего UI).
-    const { data: readings, error: readingsError } = await supabase
-      .from('beliot_device_readings')
-      .select('device_id, reading_date, reading_value')
-      .in('device_id', ids)
-      .order('reading_date', { ascending: false })
-      .limit(Math.min(ids.length * 5, 500));
-
-    if (readingsError) {
-      throw new Error(`Не удалось загрузить показания из Supabase: ${readingsError.message}`);
-    }
-
-    const lastById: Record<string, { value: number; date: string }> = {};
-    for (const r of readings || []) {
-      const id = String((r as any).device_id);
-      if (!lastById[id]) {
-        lastById[id] = { value: Number((r as any).reading_value), date: String((r as any).reading_date) };
-      }
-    }
-
-    return (overrides || []).map((o: any) => {
-      const id = String(o.device_id);
-      const last = lastById[id];
-      return {
-        device_id: id,
-        name: o.name ?? null,
-        object_name: o.object_name ?? null,
-        address: o.address ?? null,
-        serial_number: o.serial_number ?? null,
-        tied_point: o.object_name ? { place: String(o.object_name) } : undefined,
-        last_message_type: last ? { '1': { in1: last.value, date: last.date } } : undefined,
-      } as unknown as BeliotDevice;
-    });
-  };
-
   const handleGetDevices = async () => {
     setLoading(true);
     setError(null);
@@ -198,10 +151,43 @@ const BeliotDevicesTest: React.FC = () => {
     setDeviceReadings(null);
 
     try {
-      console.log('🔄 Загрузка устройств из Supabase...');
-      const supabaseDevices = await buildDevicesFromSupabase();
-      console.log('✅ Устройства загружены:', supabaseDevices.length);
-      setDevices(supabaseDevices);
+      console.log('🔄 Получение всех устройств...');
+      const allDevices = await getCompanyDevices({
+        is_deleted: false,
+      });
+      
+      console.log('✅ Устройства получены:', allDevices.length);
+      
+      // Для каждого устройства делаем запрос по ID, чтобы получить tied_point.place
+      console.log('🔄 Загрузка tied_point.place для устройств...');
+      const devicesWithPlace = await Promise.all(
+        allDevices.map(async (device) => {
+          const deviceId = device.device_id || device.id || device._id;
+          if (!deviceId) {
+            return device;
+          }
+
+          try {
+            // Получаем только tied_point из полных данных
+            const fullDevice = await getDeviceById(deviceId.toString());
+            if (fullDevice?.tied_point) {
+              // Просто добавляем tied_point к устройству
+              return {
+                ...device,
+                tied_point: fullDevice.tied_point,
+              };
+            }
+          } catch (err: any) {
+            // Игнорируем ошибки, используем оригинальное устройство
+          }
+
+          return device;
+        })
+      );
+
+      console.log('✅ Данные устройств загружены:', devicesWithPlace.length);
+      
+      setDevices(devicesWithPlace);
     } catch (err: any) {
       console.error('❌ Ошибка получения устройств:', err);
       setError(err.message || 'Не удалось получить устройства');
@@ -323,55 +309,95 @@ const BeliotDevicesTest: React.FC = () => {
     }
 
     try {
-      console.log(`🔄 Загрузка последних показаний из Supabase: ${deviceId}...`);
-      const { data, error: readingsError } = await supabase
-        .from('beliot_device_readings')
-        .select('reading_date, reading_value, unit')
-        .eq('device_id', String(deviceId))
-        .order('reading_date', { ascending: false })
-        .limit(2);
-
-      if (readingsError) {
-        throw new Error(`Не удалось загрузить показания из Supabase: ${readingsError.message}`);
-      }
-
-      const current = data?.[0];
-      const previous = data?.[1];
-
-      const readings: DeviceReadings = {
-        current: current
-          ? {
-              period: 'current',
-              date: String((current as any).reading_date),
-              value: Number((current as any).reading_value),
-              unit: String((current as any).unit || 'м³'),
-            }
-          : undefined,
-        previous: previous
-          ? {
-              period: 'previous',
-              date: String((previous as any).reading_date),
-              value: Number((previous as any).reading_value),
-              unit: String((previous as any).unit || 'м³'),
-            }
-          : undefined,
-      };
-
+      console.log(`🔄 Получение показаний устройства: ${deviceId}...`);
+      const readings = await getDeviceReadings(deviceId.toString());
+      
+      console.log('✅ Показания получены:', readings);
       setDeviceReadings(readings);
 
-      // Обновляем last_message_type, чтобы таблица показывала актуальное значение без перезагрузки списка
-      if (readings.current?.value !== undefined) {
-        const id = String(deviceId);
-        setDevices((prev) =>
-          prev.map((d) => {
-            const did = String(d.device_id || d.id || d._id);
-            if (did !== id) return d;
-            return {
-              ...d,
-              last_message_type: { '1': { in1: readings.current!.value as any, date: readings.current!.date as any } },
-            } as BeliotDevice;
-          }),
-        );
+      // Сохраняем текущие показания в Supabase для истории
+      // Это позволит видеть данные в таблице Supabase сразу, без ожидания Railway скрипта
+      try {
+        if (readings.current?.value !== undefined && readings.current?.date) {
+          const currentDateValue = readings.current.date;
+          let currentDate: Date;
+          
+          if (currentDateValue instanceof Date) {
+            currentDate = currentDateValue;
+          } else if (currentDateValue && typeof currentDateValue === 'object') {
+            currentDate = new Date(String(currentDateValue));
+          } else if (typeof currentDateValue === 'number') {
+            // Если это timestamp в секундах, конвертируем в миллисекунды
+            const timestamp = currentDateValue < 10000000000 ? currentDateValue * 1000 : currentDateValue;
+            currentDate = new Date(timestamp);
+          } else {
+            currentDate = new Date(String(currentDateValue));
+          }
+          
+          // Проверяем валидность даты перед сохранением
+          if (!isNaN(currentDate.getTime()) && currentDate.getFullYear() > 2000) {
+            // Округляем до начала часа
+            const hourStart = new Date(currentDate);
+            hourStart.setMinutes(0, 0, 0);
+            hourStart.setSeconds(0, 0);
+            hourStart.setMilliseconds(0);
+            
+            await saveBeliotReading({
+              device_id: deviceId.toString(),
+              reading_date: hourStart,
+              reading_value: Number(readings.current.value),
+              unit: 'м³',
+              reading_type: 'hourly',
+              source: 'api',
+              period: 'current',
+            });
+            console.log('✅ Текущее показание сохранено в Supabase');
+          } else {
+            console.warn('⚠️ Некорректная дата текущего показания, пропускаем сохранение');
+          }
+        }
+
+        if (readings.previous?.value !== undefined && readings.previous?.date) {
+          const previousDateValue = readings.previous.date;
+          let previousDate: Date;
+          
+          if (previousDateValue instanceof Date) {
+            previousDate = previousDateValue;
+          } else if (previousDateValue && typeof previousDateValue === 'object') {
+            previousDate = new Date(String(previousDateValue));
+          } else if (typeof previousDateValue === 'number') {
+            // Если это timestamp в секундах, конвертируем в миллисекунды
+            const timestamp = previousDateValue < 10000000000 ? previousDateValue * 1000 : previousDateValue;
+            previousDate = new Date(timestamp);
+          } else {
+            previousDate = new Date(String(previousDateValue));
+          }
+          
+          // Проверяем валидность даты перед сохранением
+          if (!isNaN(previousDate.getTime()) && previousDate.getFullYear() > 2000) {
+            // Округляем до начала часа
+            const hourStart = new Date(previousDate);
+            hourStart.setMinutes(0, 0, 0);
+            hourStart.setSeconds(0, 0);
+            hourStart.setMilliseconds(0);
+            
+            await saveBeliotReading({
+              device_id: deviceId.toString(),
+              reading_date: hourStart,
+              reading_value: Number(readings.previous.value),
+              unit: 'м³',
+              reading_type: 'hourly',
+              source: 'api',
+              period: 'previous',
+            });
+            console.log('✅ Предыдущее показание сохранено в Supabase');
+          } else {
+            console.warn('⚠️ Некорректная дата предыдущего показания, пропускаем сохранение');
+          }
+        }
+      } catch (saveError: any) {
+        // Не блокируем отображение показаний, если сохранение в Supabase не удалось
+        console.warn('⚠️ Не удалось сохранить показания в Supabase (не критично):', saveError.message);
       }
     } catch (err: any) {
       console.error('❌ Ошибка получения показаний:', err);
