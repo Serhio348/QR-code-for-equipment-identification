@@ -350,7 +350,8 @@ async function getDeviceMessagesFromApi(
   startDate: number,
   stopDate: number,
   token: string,
-  msgType: number = 1
+  msgType: number = 1,
+  msgGroup: number = 0
 ): Promise<any[]> {
   try {
     const response = await fetch(`${beliotApiBaseUrl}/device/messages`, {
@@ -362,7 +363,7 @@ async function getDeviceMessagesFromApi(
       body: JSON.stringify({
         device_id: Number(deviceId),
         msgType: msgType,
-        msgGroup: 0, // все группы
+        msgGroup: msgGroup,
         startDate: startDate,
         stopDate: stopDate,
         per_page: 10000, // Максимальное количество записей
@@ -696,6 +697,8 @@ async function syncDeviceReadingsForPeriod(
 ): Promise<{ success: number; errors: number; skipped: number; total: number }> {
   const startTimestamp = Math.floor(startDate.getTime() / 1000);
   const endTimestamp = Math.floor(endDate.getTime() / 1000);
+  const deviceIdStr = String(deviceId);
+  const isDebugDevice = deviceIdStr === '11078';
   
   console.log(`   📅 Период: ${startDate.toISOString()} - ${endDate.toISOString()}`);
   
@@ -707,6 +710,26 @@ async function syncDeviceReadingsForPeriod(
     
     if (messages.length === 0) {
       return { success: 0, errors: 0, skipped: 0, total: 0 };
+    }
+
+    // Диагностика: ищем нужную msgGroup для устройства 11078
+    // В UI Beliot могут использовать другую группу сообщений, поэтому сравниваем counts.
+    if (isDebugDevice) {
+      console.log(`   🧪 DEBUG(11078): msgType=1 msgGroup scan (last 24h)`);
+      for (const group of [0, 1, 2, 3, 4, 5]) {
+        try {
+          const groupMessages = await getDeviceMessagesFromApi(deviceId, startTimestamp, endTimestamp, token, 1, group);
+          console.log(`   🧪 DEBUG(11078): msgGroup=${group} count: ${groupMessages.length}`);
+          if (groupMessages.length > 0) {
+            console.log(
+              `   🧪 DEBUG(11078): msgGroup=${group} sample[0]:`,
+              JSON.stringify(groupMessages[0], null, 2).slice(0, 900)
+            );
+          }
+        } catch (e: any) {
+          console.warn(`   🧪 DEBUG(11078): msgGroup=${group} fetch failed:`, e?.message || String(e));
+        }
+      }
     }
     
     // Фильтруем по часам
