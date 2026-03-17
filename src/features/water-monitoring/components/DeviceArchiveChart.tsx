@@ -17,6 +17,8 @@ export interface ChartDataPoint {
   date: string;
   reading: number;  // накопленное показание счётчика
   volume: number;   // потребление за период
+  /** true — есть реальная точка данных в этом периоде */
+  hasData?: boolean;
 }
 
 interface Props {
@@ -60,7 +62,7 @@ const DeviceArchiveChart: React.FC<Props> = ({ data, groupBy }) => {
   // Сводная статистика
   const stats = useMemo(() => {
     if (!data.length) return null;
-    const withReading = data.filter(d => d.reading > 0);
+    const withReading = data.filter(d => d.hasData);
     const totalConsumption = data.reduce((s, d) => s + (d.volume || 0), 0);
     const maxVolume = Math.max(...data.map(d => d.volume || 0));
     const avgVolume = withReading.length > 0 ? totalConsumption / withReading.length : 0;
