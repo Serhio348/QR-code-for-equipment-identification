@@ -240,6 +240,26 @@ export function useDeviceArchive(deviceId: string | null) {
       });
     }
 
+    // Если для почасовой сетки первые часы до первой реальной точки пустые,
+    // заполняем их "ближайшим следующим" значением, чтобы в таблице не было прочерков.
+    if (groupBy === 'hour') {
+      let nextKnown: BeliotDeviceReading | undefined;
+      for (let i = allPeriods.length - 1; i >= 0; i--) {
+        const item = allPeriods[i];
+        if (item.reading) {
+          nextKnown = item.reading;
+          continue;
+        }
+        if (nextKnown) {
+          allPeriods[i] = {
+            ...item,
+            reading: nextKnown,
+            isEstimated: true,
+          };
+        }
+      }
+    }
+
     return allPeriods;
   }, []);
 
