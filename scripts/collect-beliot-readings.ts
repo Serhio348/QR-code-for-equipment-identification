@@ -697,6 +697,8 @@ async function syncDeviceReadingsForPeriod(
 ): Promise<{ success: number; errors: number; skipped: number; total: number }> {
   const startTimestamp = Math.floor(startDate.getTime() / 1000);
   const endTimestamp = Math.floor(endDate.getTime() / 1000);
+  const deviceIdStr = String(deviceId);
+  const isMsgGroupDebugDevice = deviceIdStr === '11015' || deviceIdStr === '11016';
   
   console.log(`   📅 Период: ${startDate.toISOString()} - ${endDate.toISOString()}`);
   
@@ -708,6 +710,26 @@ async function syncDeviceReadingsForPeriod(
       getDeviceMessagesFromApi(deviceId, startTimestamp, endTimestamp, token, 1, 0),
       getDeviceMessagesFromApi(deviceId, startTimestamp, endTimestamp, token, 1, 4),
     ]);
+
+    // Диагностика msgGroup для "проблемных" счетчиков (11015/11016):
+    // помогает понять, в какой группе UI Beliot хранит интервальные/часовые данные.
+    if (isMsgGroupDebugDevice) {
+      console.log(`   🧪 DEBUG(${deviceIdStr}): msgType=1 msgGroup scan (last 48h)`);
+      for (const group of [0, 1, 2, 3, 4, 5]) {
+        try {
+          const groupMessages = await getDeviceMessagesFromApi(deviceId, startTimestamp, endTimestamp, token, 1, group);
+          console.log(`   🧪 DEBUG(${deviceIdStr}): msgGroup=${group} count: ${groupMessages.length}`);
+          if (groupMessages.length > 0) {
+            console.log(
+              `   🧪 DEBUG(${deviceIdStr}): msgGroup=${group} sample[0]:`,
+              JSON.stringify(groupMessages[0], null, 2).slice(0, 900)
+            );
+          }
+        } catch (e: any) {
+          console.warn(`   🧪 DEBUG(${deviceIdStr}): msgGroup=${group} fetch failed:`, e?.message || String(e));
+        }
+      }
+    }
 
     const mergedMap = new Map<number, any>();
     for (const msg of [...messagesGroup0, ...messagesGroup4]) {
