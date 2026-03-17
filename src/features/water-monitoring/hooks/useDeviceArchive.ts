@@ -22,6 +22,8 @@ export interface GroupedReading {
   groupKey: string;
   groupDate: Date;
   reading?: BeliotDeviceReading;
+  /** true — значение перенесено из последней известной точки (carry-forward) */
+  isEstimated?: boolean;
   consumption: number;
 }
 
@@ -163,6 +165,7 @@ export function useDeviceArchive(deviceId: string | null) {
 
     const allPeriods: GroupedReading[] = [];
     const current = new Date(start);
+    let lastKnownReading: BeliotDeviceReading | undefined;
 
     while (current <= effectiveEnd) {
       let key: string;
@@ -217,10 +220,22 @@ export function useDeviceArchive(deviceId: string | null) {
         }
       }
 
+      const realReading = sortedReadings[0];
+      const readingToUse =
+        realReading
+          ? realReading
+          : (groupBy === 'hour' ? lastKnownReading : undefined);
+
+      const isEstimated = Boolean(!realReading && readingToUse);
+      if (groupBy === 'hour' && realReading) {
+        lastKnownReading = realReading;
+      }
+
       allPeriods.push({
         groupKey: key,
         groupDate: periodDate,
-        reading: sortedReadings[0],
+        reading: readingToUse,
+        isEstimated,
         consumption,
       });
     }
@@ -246,6 +261,7 @@ export function useDeviceArchive(deviceId: string | null) {
     return archiveReadings.map((groupedReading, index) => {
       const readingDate = groupedReading.groupDate;
       const hasReading = !!groupedReading.reading;
+      const hasRealData = hasReading && !groupedReading.isEstimated;
 
       let dateLabel = '';
       switch (archiveGroupBy) {
@@ -285,7 +301,7 @@ export function useDeviceArchive(deviceId: string | null) {
         fullDate: readingDate.toISOString(),
         reading: readingValue,
         volume,
-        hasData: hasReading,
+        hasData: hasRealData,
         index,
       };
     }).reverse();
