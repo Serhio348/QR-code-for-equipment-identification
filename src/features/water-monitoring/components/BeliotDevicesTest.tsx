@@ -14,7 +14,7 @@ import {
 } from '../services/beliotDeviceApi';
 import { useDeviceOverrides } from '../hooks/useDeviceOverrides';
 import { useDevicePassport } from '../hooks/useDevicePassport';
-import { saveBeliotReading } from '../services/supabaseBeliotReadingsApi';
+import { getLastBeliotReading, saveBeliotReading } from '../services/supabaseBeliotReadingsApi';
 import { useDeviceArchive } from '../hooks/useDeviceArchive';
 import DeviceArchiveModal from './DeviceArchiveModal';
 import DevicePassportModal from './DevicePassportModal';
@@ -36,6 +36,7 @@ const BeliotDevicesTest: React.FC = () => {
   const [devices, setDevices] = useState<BeliotDevice[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [latestReadingsByDeviceId, setLatestReadingsByDeviceId] = useState<Record<string, number>>({});
   const [selectedGroup, setSelectedGroup] = useState<DeviceGroup | null>(null);
   const [selectedDevice, setSelectedDevice] = useState<BeliotDevice | null>(null);
   const [deviceReadings, setDeviceReadings] = useState<DeviceReadings | null>(null);
@@ -149,6 +150,7 @@ const BeliotDevicesTest: React.FC = () => {
     setSelectedGroup(null);
     setSelectedDevice(null);
     setDeviceReadings(null);
+    setLatestReadingsByDeviceId({});
 
     try {
       console.log('🔄 Получение всех устройств...');
@@ -188,6 +190,36 @@ const BeliotDevicesTest: React.FC = () => {
       console.log('✅ Данные устройств загружены:', devicesWithPlace.length);
       
       setDevices(devicesWithPlace);
+
+      // Подтягиваем самые свежие показания из Supabase для отображения в колонке "Показание"
+      // (чтобы совпадало с архивом и не зависело от last_message_type из Beliot)
+      try {
+        const ids = devicesWithPlace
+          .map((d) => String(d.device_id || d.id || d._id || ''))
+          .filter(Boolean);
+
+        const uniqueIds = Array.from(new Set(ids));
+        const latestPairs = await Promise.all(
+          uniqueIds.map(async (id) => {
+            try {
+              const last = await getLastBeliotReading(id, 'hourly');
+              return last ? [id, Number(last.reading_value)] as const : null;
+            } catch {
+              return null;
+            }
+          }),
+        );
+
+        const map: Record<string, number> = {};
+        for (const pair of latestPairs) {
+          if (!pair) continue;
+          const [id, value] = pair;
+          if (!Number.isNaN(value)) map[id] = value;
+        }
+        setLatestReadingsByDeviceId(map);
+      } catch {
+        // Молча игнорируем — останется fallback на last_message_type
+      }
     } catch (err: any) {
       console.error('❌ Ошибка получения устройств:', err);
       setError(err.message || 'Не удалось получить устройства');
@@ -266,19 +298,23 @@ const BeliotDevicesTest: React.FC = () => {
 
 
   const getLastReading = (device: BeliotDevice): string => {
+    const deviceId = String(device.device_id || device.id || device._id || '');
+    const fromSupabase = deviceId ? latestReadingsByDeviceId[deviceId] : undefined;
+    if (fromSupabase !== undefined && !Number.isNaN(fromSupabase)) {
+      return Number(fromSupabase).toFixed(1);
+    }
+
+    // Fallback: last_message_type из Beliot API
     let value: number | undefined;
-    // Пробуем получить last_message_type.1.in1
     if (device.last_message_type && typeof device.last_message_type === 'object') {
       const msgType = device.last_message_type as Record<string, Record<string, number>>;
       if (msgType['1'] && msgType['1'].in1 !== undefined) {
         value = Number(msgType['1'].in1);
       }
     }
-    // Альтернативные пути
-    if (value === undefined && device.last_message_type?.['1']?.in1 !== undefined) {
-      value = Number(device.last_message_type['1'].in1);
+    if (value === undefined && (device as any).last_message_type?.['1']?.in1 !== undefined) {
+      value = Number((device as any).last_message_type['1'].in1);
     }
-    // Округляем до одного знака после запятой
     if (value !== undefined && !isNaN(value)) {
       return value.toFixed(1);
     }

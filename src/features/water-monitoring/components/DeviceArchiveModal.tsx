@@ -80,6 +80,11 @@ const DeviceArchiveModal: React.FC<DeviceArchiveModalProps> = ({
   handlePreviousPage, handleNextPage,
   onClose,
 }) => {
+  // Для расчёта объёма в таблице "по часам" важен порядок:
+  // таблица показывает свежие значения сверху (desc), поэтому и "предыдущее" значение
+  // нужно искать в этом же порядке (следующая строка ниже).
+  const archiveReadingsDesc = [...archiveReadings].reverse();
+
   return (
     <>
       {/* Затемнённый фон */}
@@ -291,17 +296,17 @@ const DeviceArchiveModal: React.FC<DeviceArchiveModalProps> = ({
                           let consumption = 0;
                           if (hasReading && groupedReading.reading) {
                             if (archiveGroupBy === 'hour') {
-                              // Ищем ближайшее предыдущее показание в таблице
-                              for (let i = realIndex + 1; i < archiveReadings.length; i++) {
-                                const candidate = archiveReadings[i];
-                                if (candidate?.reading) {
-                                  const cur = Number(groupedReading.reading.reading_value);
-                                  const prev = Number(candidate.reading.reading_value);
-                                  if (!isNaN(cur) && !isNaN(prev)) {
-                                    consumption = cur - prev;
-                                  }
-                                  break;
+                              // Ищем ближайшее предыдущее показание в порядке таблицы (desc):
+                              // текущая строка => следующий элемент ниже (realIndex + 1).
+                              for (let i = realIndex + 1; i < archiveReadingsDesc.length; i++) {
+                                const candidate = archiveReadingsDesc[i];
+                                if (!candidate?.reading) continue;
+                                const cur = Number(groupedReading.reading.reading_value);
+                                const prev = Number(candidate.reading.reading_value);
+                                if (!isNaN(cur) && !isNaN(prev)) {
+                                  consumption = cur - prev;
                                 }
+                                break;
                               }
                             } else if (archiveGroupBy === 'day') {
                               const dayKey = groupedReading.groupKey;
