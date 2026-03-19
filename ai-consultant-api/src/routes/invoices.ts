@@ -25,6 +25,28 @@ import { authMiddleware, AuthenticatedRequest } from '../middleware/auth.js';
 const supabase = createClient(config.supabaseUrl, config.supabaseServiceKey);
 
 const router = Router();
+let syncInProgress = false;
+
+// ============================================
+// Фоновый запуск sync (чтобы не упираться в timeout прокси)
+// ============================================
+function runSyncInBackground(forceAll: boolean): void {
+    if (syncInProgress) return;
+    syncInProgress = true;
+
+    void syncInvoices(forceAll)
+        .then((result) => {
+            console.log(
+                `[Invoices background sync] done: forceAll=${forceAll}, saved=${result.saved}, skipped=${result.skipped}, errors=${result.errors.length}`
+            );
+        })
+        .catch((err) => {
+            console.error('[Invoices background sync] failed:', err);
+        })
+        .finally(() => {
+            syncInProgress = false;
+        });
+}
 
 // ============================================
 // Middleware: проверка секрета
@@ -51,6 +73,18 @@ function requireSyncSecret(req: Request, res: Response, next: () => void): void 
 
 router.post('/sync', requireSyncSecret, async (_req: Request, res: Response) => {
     console.log('[POST /api/invoices/sync] Starting incremental sync...');
+    const asyncMode = _req.query.async === '1';
+
+    if (asyncMode) {
+        if (syncInProgress) {
+            res.status(202).json({ ok: true, started: false, inProgress: true, mode: 'incremental' });
+            return;
+        }
+        runSyncInBackground(false);
+        res.status(202).json({ ok: true, started: true, inProgress: true, mode: 'incremental' });
+        return;
+    }
+
     try {
         const result = await syncInvoices(false);
         res.json({
@@ -71,6 +105,18 @@ router.post('/sync', requireSyncSecret, async (_req: Request, res: Response) => 
 
 router.post('/sync-all', requireSyncSecret, async (_req: Request, res: Response) => {
     console.log('[POST /api/invoices/sync-all] Starting full sync...');
+    const asyncMode = _req.query.async === '1';
+
+    if (asyncMode) {
+        if (syncInProgress) {
+            res.status(202).json({ ok: true, started: false, inProgress: true, mode: 'full' });
+            return;
+        }
+        runSyncInBackground(true);
+        res.status(202).json({ ok: true, started: true, inProgress: true, mode: 'full' });
+        return;
+    }
+
     try {
         const result = await syncInvoices(true);
         res.json({
