@@ -88,7 +88,7 @@ export async function sendChatMessage(
   waterContext?: WaterDashboardContext
 ): Promise<ChatResponse> {
   // Получаем текущий токен сессии
-  let { data: { session } } = await supabase.auth.getSession();
+  const { data: { session } } = await supabase.auth.getSession();
 
   if (!session?.access_token) {
     throw new Error('Не авторизован');
@@ -105,14 +105,6 @@ export async function sendChatMessage(
       // ignore
     }
     throw new Error('Сессия повреждена. Выйдите и войдите заново.');
-  }
-
-  // Если токен скоро истечёт — обновляем заранее, чтобы не получить exp-check failed на сервере
-  if (session.expires_at && session.expires_at * 1000 <= Date.now() + 30_000) {
-    const { data: refreshed, error } = await supabase.auth.refreshSession();
-    if (!error && refreshed.session) {
-      session = refreshed.session;
-    }
   }
 
   const response = await fetch(`${API_URL}/api/chat`, {
@@ -157,15 +149,8 @@ export async function* streamChatMessage(
   equipmentContext?: EquipmentContext,
   waterContext?: WaterDashboardContext,
 ): AsyncGenerator<StreamEvent> {
-  let { data: { session } } = await supabase.auth.getSession();
+  const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) throw new Error('Не авторизован');
-
-  if (session.expires_at && session.expires_at * 1000 <= Date.now() + 30_000) {
-    const { data: refreshed, error } = await supabase.auth.refreshSession();
-    if (!error && refreshed.session) {
-      session = refreshed.session;
-    }
-  }
 
   const response = await fetch(`${API_URL}/api/chat/stream`, {
     method: 'POST',
@@ -214,16 +199,9 @@ export async function* streamChatMessage(
  * @param limit - сколько сообщений загрузить (по умолчанию 20)
  */
 export async function fetchChatHistory(limit = 20): Promise<ChatMessage[]> {
-  let { data: { session } } = await supabase.auth.getSession();
+  const { data: { session } } = await supabase.auth.getSession();
 
   if (!session?.access_token) return [];
-
-  if (session.expires_at && session.expires_at * 1000 <= Date.now() + 30_000) {
-    const { data: refreshed, error } = await supabase.auth.refreshSession();
-    if (!error && refreshed.session) {
-      session = refreshed.session;
-    }
-  }
 
   const response = await fetch(`${API_URL}/api/chat/history?limit=${limit}`, {
     headers: {

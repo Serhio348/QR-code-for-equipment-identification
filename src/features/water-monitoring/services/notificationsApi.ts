@@ -31,28 +31,9 @@ function isProbablyJwt(token: string): boolean {
     return /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token);
 }
 
-async function ensureFreshAccessToken(): Promise<string | null> {
-    const { data } = await supabase.auth.getSession();
-    const session = data.session;
-    const token = session?.access_token ?? null;
-
-    if (!token) return null;
-    if (!isProbablyJwt(token)) return token;
-
-    // Если токен истекает (или уже истёк) — обновляем
-    const expiresAtMs = session?.expires_at ? session.expires_at * 1000 : null;
-    if (expiresAtMs != null && expiresAtMs <= Date.now() + 30_000) {
-        const { data: refreshed, error } = await supabase.auth.refreshSession();
-        if (!error && refreshed.session?.access_token) {
-            return refreshed.session.access_token;
-        }
-    }
-
-    return token;
-}
-
 async function authHeaders(): Promise<Record<string, string>> {
-    const token = await ensureFreshAccessToken();
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
 
     // Защита от битого токена в localStorage (Invalid Compact JWS)
     if (token && !isProbablyJwt(token)) {
@@ -156,19 +137,8 @@ export async function getInvoiceSignedUrl(period: string): Promise<string | null
 
 export async function downloadInvoicePdf(period: string): Promise<Blob | null> {
     try {
-        // 1-я попытка
-        let headers = await authHeaders();
-        let res = await fetch(`${API_URL}/api/invoices/download?period=${encodeURIComponent(period)}`, { headers });
-
-        // Если access_token истёк на сервере — пробуем refresh и повторяем 1 раз
-        if (res.status === 401) {
-            const { data: refreshed } = await supabase.auth.refreshSession().catch(() => ({ data: null as any }));
-            if (refreshed?.session?.access_token) {
-                headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${refreshed.session.access_token}` };
-                res = await fetch(`${API_URL}/api/invoices/download?period=${encodeURIComponent(period)}`, { headers });
-            }
-        }
-
+        const headers = await authHeaders();
+        const res = await fetch(`${API_URL}/api/invoices/download?period=${encodeURIComponent(period)}`, { headers });
         if (!res.ok) return null;
         return await res.blob();
     } catch {
