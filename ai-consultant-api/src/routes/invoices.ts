@@ -85,11 +85,11 @@ router.post('/sync-all', requireSyncSecret, async (_req: Request, res: Response)
 });
 
 // ============================================
-// GET /api/invoices/signed-url?period=YYYY-MM
-// Получить временную ссылку на PDF счёта (1 час)
+// GET /api/invoices/download?period=YYYY-MM
+// Скачать PDF счёта напрямую (без signedUrl)
 // ============================================
 
-router.get('/signed-url', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/download', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
     const period = req.query.period as string;
     if (!period) {
         res.status(400).json({ error: 'period обязателен (YYYY-MM)' });
@@ -108,16 +108,21 @@ router.get('/signed-url', authMiddleware, async (req: AuthenticatedRequest, res:
         return;
     }
 
-    const { data: signed } = await supabase.storage
+    const { data: file, error: downloadError } = await supabase.storage
         .from('invoices')
-        .createSignedUrl(data.storage_path, 3600);
+        .download(data.storage_path);
 
-    if (!signed?.signedUrl) {
-        res.status(500).json({ error: 'Не удалось создать ссылку' });
+    if (downloadError || !file) {
+        res.status(500).json({ error: 'Не удалось скачать файл' });
         return;
     }
 
-    res.json({ url: signed.signedUrl, file_name: data.file_name });
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const fileName = data.file_name || `${period}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileName)}"`);
+    res.send(buffer);
 });
 
 export default router;
