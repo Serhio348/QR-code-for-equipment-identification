@@ -465,6 +465,15 @@ function getPeriodDates(period: string): { from: string; to: string } {
     }
 }
 
+/**
+ * Округлить число до N знаков после точки.
+ * Возвращает number, чтобы результат был пригоден для JSON.
+ */
+function roundNumber(value: number, digits: number): number {
+    const factor = Math.pow(10, digits);
+    return Math.round(value * factor) / factor;
+}
+
 // ============================================
 // Функция выполнения инструментов
 // ============================================
