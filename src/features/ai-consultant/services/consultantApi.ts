@@ -94,6 +94,19 @@ export async function sendChatMessage(
     throw new Error('Не авторизован');
   }
 
+  // Защита от битого токена в storage (Invalid Compact JWS)
+  if (!/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(session.access_token)) {
+    try {
+      await supabase.auth.signOut();
+      localStorage.removeItem('sb-auth-token');
+      localStorage.removeItem('sb-auth-token.0');
+      localStorage.removeItem('sb-auth-token.1');
+    } catch {
+      // ignore
+    }
+    throw new Error('Сессия повреждена. Выйдите и войдите заново.');
+  }
+
   const response = await fetch(`${API_URL}/api/chat`, {
     method: 'POST',
     headers: {
