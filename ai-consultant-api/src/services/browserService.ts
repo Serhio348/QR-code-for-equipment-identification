@@ -55,21 +55,49 @@ let browserInstance: Browser | null = null;
 
 async function getBrowser(): Promise<Browser> {
     if (!browserInstance || !browserInstance.isConnected()) {
-        const launchOptions: Parameters<typeof chromium.launch>[0] = {
-            headless: true,
-            args: [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-blink-features=AutomationControlled',  // скрываем webdriver
-                '--disable-infobars',
-            ],
-        };
-        // В Docker (Alpine) используем системный Chromium через env-переменную.
-        // В dev-режиме (env не задан) Playwright использует свой бандлированный браузер.
-        if (process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH) {
-            launchOptions.executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
+        const baseArgs = [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-blink-features=AutomationControlled', // скрываем webdriver
+            '--disable-infobars',
+            '--disable-dev-shm-usage',
+        ];
+
+        // CI-профиль: отключаем GPU/Vulkan. Иначе Chromium может падать
+        // на Linux runner с ошибками ANGLE/VK_* и закрываться сразу после старта.
+        const ciSafeArgs = [
+            ...baseArgs,
+            '--disable-gpu',
+            '--disable-software-rasterizer',
+            '--disable-features=Vulkan',
+            '--use-gl=swiftshader',
+            '--in-process-gpu',
+        ];
+
+        type LaunchOptions = NonNullable<Parameters<typeof chromium.launch>[0]>;
+        const launchCandidates: LaunchOptions[] = [
+            { headless: true, args: ciSafeArgs },
+            { headless: true, args: baseArgs },
+        ];
+
+        let lastError: unknown = null;
+        for (const launchOptions of launchCandidates) {
+            try {
+                // В Docker/CI используем системный Chromium через env-переменную.
+                // В dev-режиме (env не задан) Playwright использует свой бандлированный браузер.
+                if (process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH) {
+                    launchOptions.executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
+                }
+                browserInstance = await chromium.launch(launchOptions);
+                break;
+            } catch (err) {
+                lastError = err;
+            }
         }
-        browserInstance = await chromium.launch(launchOptions);
+
+        if (!browserInstance) {
+            throw new Error(`Не удалось запустить Chromium: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
+        }
     }
     return browserInstance;
 }
