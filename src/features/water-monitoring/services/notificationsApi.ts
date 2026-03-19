@@ -26,9 +26,28 @@ export interface WaterNotification {
 // Заголовки с токеном
 // ============================================
 
+function isProbablyJwt(token: string): boolean {
+    // JWT = 3 base64url-сегмента через точки
+    return /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token);
+}
+
 async function authHeaders(): Promise<Record<string, string>> {
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
+
+    // Защита от битого токена в localStorage (Invalid Compact JWS)
+    if (token && !isProbablyJwt(token)) {
+        try {
+            await supabase.auth.signOut();
+            localStorage.removeItem('sb-auth-token');
+            localStorage.removeItem('sb-auth-token.0');
+            localStorage.removeItem('sb-auth-token.1');
+        } catch {
+            // ignore
+        }
+        return { 'Content-Type': 'application/json' };
+    }
+
     return token
         ? { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
         : { 'Content-Type': 'application/json' };
