@@ -3,7 +3,7 @@ import { toast } from 'react-toastify';
 import {
     fetchUnreadNotifications,
     markNotificationsRead,
-    downloadInvoicePdf,
+    getInvoiceSignedUrl,
     type WaterNotification,
 } from '../services/notificationsApi';
 
@@ -45,16 +45,12 @@ export function useWaterNotifications(): void {
 function showInvoiceToast(n: WaterNotification, period: string | undefined): void {
     const openPdf = async () => {
         if (!period) return;
-        const blob = await downloadInvoicePdf(period);
-        if (!blob) {
+        const url = await getInvoiceSignedUrl(period);
+        if (url) {
+            window.open(url, '_blank', 'noopener,noreferrer');
+        } else {
             toast.error('Не удалось получить ссылку на счёт');
-            return;
         }
-
-        const url = URL.createObjectURL(blob);
-        window.open(url, '_blank', 'noopener,noreferrer');
-        // Освобождаем память позже, чтобы вкладка успела открыть файл
-        setTimeout(() => URL.revokeObjectURL(url), 60_000);
     };
 
     toast.success(
