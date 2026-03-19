@@ -14,8 +14,8 @@ jobs:
           AI_API_URL: ${{ secrets.AI_API_URL }}
           INVOICE_SYNC_SECRET: ${{ secrets.INVOICE_SYNC_SECRET }}
         run: |
-          HTTP_CODE=$(curl -s -L -o /tmp/sync_response.json -w "%{http_code}" \
-            -X POST "${AI_API_URL}/api/invoices/sync" \
+          HTTP_CODE=$(curl -sS -L --connect-timeout 15 --max-time 60 -o /tmp/sync_response.json -w "%{http_code}" \
+            -X POST "${AI_API_URL}/api/invoices/sync?async=1" \
             -H "X-Sync-Secret: ${INVOICE_SYNC_SECRET}" \
             -H "Content-Type: application/json")
 
@@ -24,13 +24,13 @@ jobs:
           echo "HTTP Status: $HTTP_CODE"
           echo "Response: $BODY"
 
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "Sync failed with HTTP $HTTP_CODE"
+          if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "202" ]; then
+            echo "Sync start failed with HTTP $HTTP_CODE"
             exit 1
           fi
 
-          SAVED=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('saved',0))" 2>/dev/null || echo "0")
-          SKIPPED=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('skipped',0))" 2>/dev/null || echo "0")
-          ERRORS=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d.get('errors',[])))" 2>/dev/null || echo "0")
+          STARTED=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(str(d.get('started', False)).lower())" 2>/dev/null || echo "false")
+          IN_PROGRESS=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(str(d.get('inProgress', False)).lower())" 2>/dev/null || echo "false")
+          MODE=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('mode','incremental'))" 2>/dev/null || echo "incremental")
 
-          echo "Sync complete: saved=$SAVED, skipped=$SKIPPED, errors=$ERRORS"
+          echo "Sync accepted: mode=$MODE, started=$STARTED, inProgress=$IN_PROGRESS"
