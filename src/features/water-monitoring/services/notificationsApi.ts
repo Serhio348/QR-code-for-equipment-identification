@@ -134,3 +134,14 @@ export async function getInvoiceSignedUrl(period: string): Promise<string | null
         return null;
     }
 }
+
+export async function downloadInvoicePdf(period: string): Promise<Blob | null> {
+    try {
+        const headers = await authHeaders();
+        const res = await fetch(`${API_URL}/api/invoices/download?period=${encodeURIComponent(period)}`, { headers });
+        if (!res.ok) return null;
+        return await res.blob();
+    } catch {
+        return null;
+    }
+}

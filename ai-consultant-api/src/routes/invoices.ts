@@ -120,4 +120,45 @@ router.get('/signed-url', authMiddleware, async (req: AuthenticatedRequest, res:
     res.json({ url: signed.signedUrl, file_name: data.file_name });
 });
 
+// ============================================
+// GET /api/invoices/download?period=YYYY-MM
+// Скачать PDF счёта как файл (без signedUrl)
+// ============================================
+
+router.get('/download', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+    const period = req.query.period as string;
+    if (!period) {
+        res.status(400).json({ error: 'period обязателен (YYYY-MM)' });
+        return;
+    }
+
+    const { data, error } = await supabase
+        .from('water_invoices')
+        .select('storage_path, file_name')
+        .eq('period', period)
+        .limit(1)
+        .single();
+
+    if (error || !data?.storage_path) {
+        res.status(404).json({ error: 'Файл не найден' });
+        return;
+    }
+
+    const { data: file, error: downloadError } = await supabase.storage
+        .from('invoices')
+        .download(data.storage_path);
+
+    if (downloadError || !file) {
+        res.status(500).json({ error: 'Не удалось скачать файл' });
+        return;
+    }
+
+    const ab = await file.arrayBuffer();
+    const buffer = Buffer.from(ab);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(data.file_name || `${period}.pdf`)}"`);
+    res.send(buffer);
+});
+
 export default router;
