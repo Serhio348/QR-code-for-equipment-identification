@@ -164,7 +164,7 @@ export function formatFactsForPrompt(facts: MemoryFact[]): string {
         grouped.set(fact.category, list);
     }
 
-    const lines: string[] = ['\n\n## Что агент знает из прошлых диалогов:'];
+    const lines: string[] = ['\n\n## Справочные факты из памяти (только если релевантны текущему вопросу):'];
 
     for (const [category, items] of grouped) {
         lines.push(`### ${CATEGORY_LABELS[category] ?? category}`);
@@ -174,7 +174,12 @@ export function formatFactsForPrompt(facts: MemoryFact[]): string {
         }
     }
 
-    lines.push('\nИспользуй эти факты при ответах. Если факт устарел — обнови его через save_memory.');
+    lines.push(
+        '\nПравила использования памяти:' +
+        '\n- Используй факты ТОЛЬКО если они напрямую относятся к текущему вопросу.' +
+        '\n- Если пользователь сменил тему и факты не подходят — игнорируй их и отвечай по текущей теме.' +
+        '\n- Если факт выглядит устаревшим или противоречит пользователю — уточни и при необходимости обнови через save_memory / delete_memory.'
+    );
 
     return lines.join('\n');
 }
