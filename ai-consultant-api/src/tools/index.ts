@@ -102,7 +102,6 @@ import { memoryTools, executeMemoryTool } from './memoryTools.js';
  * - get_water_devices              — список счётчиков с названиями и объектами
  * - get_water_readings             — показания счётчиков воды из Supabase
  * - analyze_water_consumption      — анализ потребления воды за период
- * - calculate_water_consumption    — детерминированный расчёт расхода end-start
  * - save_manual_meter_reading      — сохранение показания с фото счётчика
  * - get_water_quality_analyses     — журнал анализов качества воды
  * - get_water_quality_alerts       — превышения норм качества воды
@@ -165,7 +164,6 @@ const toolExecutors: Record<string, (name: string, input: Record<string, unknown
     'get_water_devices': executeWaterTool,
     'get_water_readings': executeWaterTool,
     'analyze_water_consumption': executeWaterTool,
-    'calculate_water_consumption': executeWaterTool,
     'save_manual_meter_reading': executeWaterTool,
     'get_water_quality_analyses': executeWaterTool,
     'get_water_quality_alerts': executeWaterTool,
@@ -197,7 +195,7 @@ const CACHEABLE_TOOLS = new Set([
     'get_all_equipment', 'get_equipment_details', 'get_maintenance_log',
     'search_files_in_folder', 'read_file_content',
     'get_maintenance_photos', 'search_maintenance_photos',
-    'get_water_devices', 'get_water_readings', 'analyze_water_consumption', 'calculate_water_consumption',
+    'get_water_devices', 'get_water_readings', 'analyze_water_consumption',
     'get_water_quality_analyses', 'get_water_quality_alerts', 'get_water_meter_passport',
     'get_invoices', 'get_memory',
     'portal_list_invoices', 'portal_list_downloaded',
