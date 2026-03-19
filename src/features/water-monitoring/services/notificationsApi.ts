@@ -26,9 +26,25 @@ export interface WaterNotification {
 // Заголовки с токеном
 // ============================================
 
-async function authHeaders(): Promise<Record<string, string>> {
+async function getFreshToken(): Promise<string | null> {
     const { data } = await supabase.auth.getSession();
-    const token = data.session?.access_token;
+    const session = data.session;
+    if (!session) return null;
+
+    // Если токен истёк или истекает в ближайшие 30 сек — обновляем
+    const expiresAtMs = session.expires_at ? session.expires_at * 1000 : null;
+    if (expiresAtMs == null || expiresAtMs <= Date.now() + 30_000) {
+        const { data: refreshed, error } = await supabase.auth.refreshSession();
+        if (!error && refreshed.session?.access_token) {
+            return refreshed.session.access_token;
+        }
+    }
+
+    return session.access_token;
+}
+
+async function authHeaders(): Promise<Record<string, string>> {
+    const token = await getFreshToken();
     return token
         ? { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
         : { 'Content-Type': 'application/json' };
