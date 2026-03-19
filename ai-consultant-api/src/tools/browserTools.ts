@@ -165,7 +165,11 @@ export const browserTools: Anthropic.Tool[] = [
     // ----------------------------------------
     {
         name: 'get_invoice_file',
-        description: 'Получить ссылку для открытия/скачивания PDF счёта за указанный период.',
+        description: `Получить данные счёта и ссылки для скачивания PDF за указанный период.
+После получения данных выведи краткую информацию по счёту и для каждого найденного счёта добавь кнопку скачивания в формате:
+[📄 Открыть PDF {account_number}-{period}.pdf](pdf:{period}:{account_number})
+Например: [📄 Открыть PDF 107.00-2025-08.pdf](pdf:2025-08:107.00)
+Эта ссылка будет отображена как кнопка скачивания в интерфейсе.`,
         input_schema: {
             type: 'object' as const,
             properties: {
@@ -423,7 +427,7 @@ export async function executeBrowserTool(
 
             let query = supabase
                 .from('water_invoices')
-                .select('period, account_number, storage_path, file_name')
+                .select('period, account_number, file_name, amount_byn, volume_m3, tariff_per_m3, sewage_volume_m3, sewage_tariff_per_m3, sections, raw_text')
                 .eq('period', period);
 
             if (accountNumber) query = query.eq('account_number', accountNumber);
@@ -435,15 +439,7 @@ export async function executeBrowserTool(
                 return { found: false, message: `Счёт за ${period} не найден в базе. Сначала скачай и сохрани через portal_download_invoice + save_invoice.` };
             }
 
-            const results = await Promise.all(data.map(async (row) => {
-                if (!row.storage_path) return { ...row, url: null };
-                const { data: signed } = await supabase.storage
-                    .from('invoices')
-                    .createSignedUrl(row.storage_path, 3600);
-                return { ...row, url: signed?.signedUrl ?? null };
-            }));
-
-            return { found: true, invoices: results };
+            return { found: true, invoices: data };
         }
 
         default:

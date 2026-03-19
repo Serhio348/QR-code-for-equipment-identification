@@ -91,34 +91,54 @@ router.post('/sync-all', requireSyncSecret, async (_req: Request, res: Response)
 
 router.get('/download', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
     const period = req.query.period as string;
+    const account = req.query.account as string | undefined;
+
     if (!period) {
         res.status(400).json({ error: 'period обязателен (YYYY-MM)' });
         return;
     }
 
-    const { data, error } = await supabase
+    let query = supabase
         .from('water_invoices')
         .select('storage_path, file_name')
-        .eq('period', period)
-        .limit(1)
-        .single();
+        .eq('period', period);
 
-    if (error || !data?.storage_path) {
+    if (account) query = query.eq('account_number', account);
+
+    // Используем limit(1) без .single() — .single() ломается при нескольких строках
+    const { data: rows, error } = await query.limit(1);
+    const row = rows?.[0];
+
+    if (error || !row?.storage_path) {
         res.status(404).json({ error: 'Файл не найден' });
         return;
     }
 
     const { data: file, error: downloadError } = await supabase.storage
         .from('invoices')
-        .download(data.storage_path);
+        .download(row.storage_path);
 
-    if (downloadError || !file) {
-        res.status(500).json({ error: 'Не удалось скачать файл' });
+    if (downloadError) {
+        console.error('[Invoices] Storage download error:', downloadError);
+        res.status(500).json({ error: 'Не удалось скачать файл', detail: downloadError.message });
         return;
     }
 
+    if (!file) {
+        console.error('[Invoices] Storage returned empty file for path:', row.storage_path);
+        res.status(500).json({ error: 'Файл пустой' });
+        return;
+    }
+
+    // Читаем blob один раз — проверяем заголовок PDF из того же buffer
     const buffer = Buffer.from(await file.arrayBuffer());
-    const fileName = data.file_name || `${period}.pdf`;
+    if (buffer.length < 5 || buffer.slice(0, 5).toString('ascii') !== '%PDF-') {
+        console.error('[Invoices] Downloaded content is not a PDF, path:', row.storage_path, buffer.slice(0, 50).toString());
+        res.status(502).json({ error: 'Файл в хранилище недоступен' });
+        return;
+    }
+
+    const fileName = row.file_name || `${period}.pdf`;
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileName)}"`);
