@@ -441,7 +441,11 @@ export class DeepSeekProvider extends BaseAIProvider {
     - get_invoices — история счетов из БД (мгновенно, без браузера).
       Поля счёта: period (YYYY-MM), account_number, volume_m3 (вода м³), tariff_per_m3, sewage_volume_m3 (канализация м³), sewage_tariff_per_m3, amount_byn (итого BYN).
       Поле sections — детализация по точкам подключения (массив): id, name (название ввода), address, volume_m3 (вода), sewage_m3 (канализация), amount_byn (сумма по точке).
-    - get_invoice_file — ссылка на PDF счёта по периоду (YYYY-MM)
+    - get_invoice_file — данные счёта из БД + возможность скачать PDF.
+      После вызова get_invoice_file для каждого найденного счёта ОБЯЗАТЕЛЬНО добавь кнопку скачивания в формате:
+      [📄 Открыть PDF {account_number}-{period}.pdf](pdf:{period}:{account_number})
+      Например: [📄 Открыть PDF 107.00-2025-08.pdf](pdf:2025-08:107.00)
+      Эта ссылка будет автоматически преобразована в кнопку скачивания в интерфейсе.
 
     НИКОГДА не используй portal_login / portal_list_invoices / portal_download_invoice / portal_read_invoice для исторических данных — это медленно и избыточно.
 

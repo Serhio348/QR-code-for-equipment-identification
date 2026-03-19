@@ -120,10 +120,13 @@ export async function getVapidPublicKey(): Promise<string | null> {
 // Скачать PDF счёта как Blob (без signed URL)
 // ============================================
 
-export async function downloadInvoicePdf(period: string): Promise<Blob | null> {
+export async function downloadInvoicePdf(period: string, account?: string): Promise<Blob | null> {
     try {
+        let params = `period=${encodeURIComponent(period)}`;
+        if (account) params += `&account=${encodeURIComponent(account)}`;
+
         let headers = await authHeaders();
-        let res = await fetch(`${API_URL}/api/invoices/download?period=${encodeURIComponent(period)}`, { headers });
+        let res = await fetch(`${API_URL}/api/invoices/download?${params}`, { headers });
 
         // Если 401 — принудительно обновляем сессию и делаем один повтор
         if (res.status === 401) {
@@ -131,7 +134,7 @@ export async function downloadInvoicePdf(period: string): Promise<Blob | null> {
             const token = refreshed?.session?.access_token;
             if (token) {
                 headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
-                res = await fetch(`${API_URL}/api/invoices/download?period=${encodeURIComponent(period)}`, { headers });
+                res = await fetch(`${API_URL}/api/invoices/download?${params}`, { headers });
             }
         }
 

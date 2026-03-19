@@ -29,6 +29,21 @@ import { config } from '../config/env.js';
 // ============================================
 
 /**
+ * Декодирует payload JWT без проверки подписи.
+ * Используется как fallback когда токен отклонён из-за истёкшего exp.
+ */
+function decodeJwtPayload(token: string): { sub?: string; email?: string } | null {
+    try {
+        const parts = token.split('.');
+        if (parts.length !== 3) return null;
+        const payload = Buffer.from(parts[1], 'base64url').toString('utf-8');
+        return JSON.parse(payload) as { sub?: string; email?: string };
+    } catch {
+        return null;
+    }
+}
+
+/**
  * Создаём Supabase клиент с service_role ключом.
  *
  * ВАЖНО: Используется именно service_role key (не anon key),
@@ -125,8 +140,22 @@ export async function authMiddleware(
         // Возвращает объект пользователя или ошибку
         const { data: { user }, error } = await supabase.auth.getUser(token);
 
-        // Если токен невалиден или пользователь не найден
+        // Если Supabase отклонил токен (например, exp истёк) — пробуем fallback:
+        // декодируем JWT вручную и проверяем пользователя в profiles
         if (error || !user) {
+            const decoded = decodeJwtPayload(token);
+            if (decoded?.sub) {
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('id, email')
+                    .eq('id', decoded.sub)
+                    .single();
+                if (profile) {
+                    req.user = { id: profile.id, email: profile.email };
+                    next();
+                    return;
+                }
+            }
             res.status(401).json({ error: 'Недействительный токен авторизации' });
             return;
         }

@@ -89,13 +89,10 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
             equipmentContext ? `context: ${equipmentContext.name}` : 'no context'
         );
 
-        // Фоновая история
-        const backgroundHistory = await loadRecentHistory(userId, 10).catch(() => [] as ChatMessage[]);
-        const messagesWithHistory: ChatMessage[] = backgroundHistory.length > 0
-            ? [...backgroundHistory, ...messages]
-            : messages;
+        // Фоновая история отключена — каждая сессия независима
+        const messagesWithHistory: ChatMessage[] = messages;
 
-        // Провайдер и память
+        // Провайдер
         const provider = await ProviderFactory.create();
         const factsPrompt = await loadFactsForPrompt().catch(() => '');
 
