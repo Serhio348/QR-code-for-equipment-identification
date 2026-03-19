@@ -20,7 +20,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { createClient } from '@supabase/supabase-js';
-import { loginToPortal, getInvoicesList, downloadInvoice, readInvoiceFile } from './browserService.js';
+import { getInvoicesList, downloadInvoice, readInvoiceFile } from './browserService.js';
 import { parseInvoiceText } from './invoiceParserService.js';
 import { updateTariffFromInvoice } from './agentMemoryService.js';
 import { checkAndNotify } from './notificationService.js';
@@ -50,6 +50,31 @@ export interface SyncDetail {
 }
 
 // ============================================
+// Вспомогательные функции
+// ============================================
+
+/**
+ * Быстро извлекает period/account из имени файла, чтобы можно было
+ * пропускать уже сохранённые счета ДО скачивания и парсинга PDF.
+ *
+ * Примеры:
+ * - 107.00-2025-08.pdf -> { account: "107.00", period: "2025-08" }
+ * - 2025-08_107.09.pdf -> { account: "107.09", period: "2025-08" }
+ */
+function extractPeriodAndAccountFromFileName(fileName: string): { period: string; account?: string } | null {
+    const normalized = (fileName || '').trim();
+    if (!normalized) return null;
+
+    const periodMatch = normalized.match(/(20\d{2})[-_.](0[1-9]|1[0-2])/);
+    if (!periodMatch) return null;
+    const period = `${periodMatch[1]}-${periodMatch[2]}`;
+
+    const accountMatch = normalized.match(/\b\d{3}\.\d{2}\b/);
+    const account = accountMatch?.[0];
+    return { period, account };
+}
+
+// ============================================
 // Основная функция синхронизации
 // ============================================
 
@@ -68,19 +93,10 @@ export async function syncInvoices(forceAll = false): Promise<SyncResult> {
         details: [],
     };
 
-    // 1. Войти на портал
-    console.log('[invoiceSync] Logging into portal...');
-    const { context } = await loginToPortal();
-
-    let invoices: Awaited<ReturnType<typeof getInvoicesList>>['invoices'] = [];
-    try {
-        // 2. Получить список всех файлов
-        console.log('[invoiceSync] Fetching invoice list...');
-        const listResult = await getInvoicesList();
-        invoices = listResult.invoices;
-    } finally {
-        await context.close();
-    }
+    // 1–2. Получить список счетов (внутри getInvoicesList уже есть login/close контекста)
+    console.log('[invoiceSync] Fetching invoice list...');
+    const listResult = await getInvoicesList();
+    const invoices = listResult.invoices;
 
     // 3. Отфильтровать только PDF
     const pdfInvoices = invoices.filter(inv => inv.fileType === 'pdf');
@@ -115,6 +131,24 @@ export async function syncInvoices(forceAll = false): Promise<SyncResult> {
 
         let filePath: string | null = null;
         try {
+            // Быстрый skip до скачивания PDF: если период/счёт уже есть в БД.
+            const fastMeta = extractPeriodAndAccountFromFileName(fileName);
+            if (!forceAll && fastMeta) {
+                const fastKey = `${fastMeta.period}|${fastMeta.account ?? ''}`;
+                if (existingKeys.has(fastKey)) {
+                    result.skipped++;
+                    result.details.push({
+                        fileName,
+                        period: fastMeta.period,
+                        account: fastMeta.account,
+                        status: 'skipped',
+                        message: 'Already in DB (fast skip by filename)',
+                    });
+                    console.log(`[invoiceSync] Fast skipped (already saved): ${fileName}`);
+                    continue;
+                }
+            }
+
             // 5. Скачать PDF
             filePath = await downloadInvoice(inv.downloadUrl, fileName.replace(/\.pdf$/i, ''));
             result.downloaded++;
