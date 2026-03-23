@@ -43,7 +43,7 @@ import Anthropic from '@anthropic-ai/sdk';
 // HTTP-клиент для запросов к Google Apps Script (GAS) backend.
 // gasClient.get(action, params) отправляет GET-запрос к GAS Web App:
 // GET {GAS_URL}?action={action}&param1=val1&param2=val2
-import { gasClient } from '../services/gasClient.js';
+import { gasClient } from '../services/equipment/index.js';
 
 // ============================================
 // Определения tools (инструментов)

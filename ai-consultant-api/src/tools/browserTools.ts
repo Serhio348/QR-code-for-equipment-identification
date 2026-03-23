@@ -30,7 +30,7 @@ import {
     listDownloadedFiles,
 } from '../services/browserService.js';
 import { parseInvoiceText } from '../services/invoiceParserService.js';
-import { updateTariffFromInvoice } from '../services/agentMemoryService.js';
+import { updateTariffFromInvoice } from '../services/ai/agentMemoryService.js';
 import { config } from '../config/env.js';
 
 const supabase = createClient(config.supabaseUrl, config.supabaseServiceKey);

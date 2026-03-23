@@ -17,7 +17,7 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
-import { gasClient } from '../services/gasClient.js';
+import { gasClient } from '../services/equipment/index.js';
 
 // ============================================
 // Определения tools

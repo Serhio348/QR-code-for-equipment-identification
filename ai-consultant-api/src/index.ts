@@ -60,29 +60,14 @@ import helmet from 'helmet';
 // validateConfig — функция проверки обязательных переменных окружения
 import { config, validateConfig, logProviderConfig } from './config/env.js';
 
-// chatRouter — маршруты чата с Claude AI (POST /api/chat)
-import chatRouter from './routes/chat.js';
-
-// chatStreamRouter — SSE стриминг (POST /api/chat/stream)
-import chatStreamRouter from './routes/chatStream.js';
-
 // healthRouter — health-check эндпоинт (GET /health)
 import healthRouter from './routes/health.js';
 
-// equipmentRouter — прокси для загрузки файлов в Google Drive (POST /api/equipment/*)
-import equipmentRouter from './routes/equipment.js';
-
-// alertsRouter — проактивные алерты по воде (GET /api/alerts)
-import alertsRouter from './routes/alerts.js';
-
-// invoicesRouter — синхронизация счетов bvod.by (POST /api/invoices/sync)
-import invoicesRouter from './routes/invoices.js';
-
-// notificationsRouter — уведомления (GET /api/notifications, POST /api/notifications/mark-read)
-import notificationsRouter from './routes/notifications.js';
-
-// pushRouter — Web Push подписки (POST /api/push/subscribe, DELETE /api/push/unsubscribe)
-import pushRouter from './routes/push.js';
+// Доменные роуты
+import { chatRouter, chatStreamRouter } from './routes/ai/index.js';
+import { equipmentRouter } from './routes/equipment/index.js';
+import { alertsRouter, invoicesRouter, notificationsRouter, pushRouter } from './routes/water/index.js';
+import { repairRequestsRouter } from './routes/repairs/index.js';
 
 // ============================================
 // Валидация конфигурации
@@ -198,6 +183,9 @@ app.use('/api/notifications', notificationsRouter);
 
 // Web Push подписки — POST /api/push/subscribe, DELETE /api/push/unsubscribe
 app.use('/api/push', pushRouter);
+
+// Заявки на ремонт — каркас домена для будущих endpoint-ов MVP
+app.use('/api/repair-requests', repairRequestsRouter);
 
 // ============================================
 // Обработка 404 (Not Found)
