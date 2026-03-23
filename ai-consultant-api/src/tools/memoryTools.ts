@@ -15,7 +15,7 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
-import { saveFact, loadFacts, deactivateFact, type MemoryCategory } from '../services/agentMemoryService.js';
+import { saveFact, loadFacts, deactivateFact, type MemoryCategory } from '../services/ai/agentMemoryService.js';
 
 // ============================================
 // Определения инструментов

@@ -45,7 +45,7 @@ import Anthropic from '@anthropic-ai/sdk';
 // HTTP-клиент для запросов к Google Apps Script API.
 // gasClient инкапсулирует URL, таймауты и обработку ошибок.
 // Методы: get(action, params) и post(action, body)
-import { gasClient } from '../services/gasClient.js';
+import { gasClient } from '../services/equipment/index.js';
 
 // ============================================
 // Определения tools (инструментов)
