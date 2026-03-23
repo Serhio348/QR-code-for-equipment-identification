@@ -41,6 +41,22 @@ let lastSessionCheck: {
 const SESSION_CHECK_CACHE_TTL = 10000;
 
 /**
+ * Получить refresh token из localStorage (если есть).
+ * Нужен для безопасного вызова refreshSession().
+ */
+function getStoredRefreshToken(): string | null {
+  try {
+    const raw = localStorage.getItem('sb-auth-token');
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const token = parsed?.refresh_token;
+    return typeof token === 'string' && token.length > 0 ? token : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Инвалидация кэша проверки сессии
  * 
  * Используется при выходе пользователя или изменении сессии.
@@ -178,11 +194,12 @@ export async function register(data: RegisterData): Promise<AuthResponse> {
     // Очищаем старую сессию перед регистрацией
     clearOldSessionIfNeeded();
     
-    console.debug('📤 Регистрация пользователя:', { email: data.email });
+    const normalizedEmail = data.email.trim().toLowerCase();
+    console.debug('📤 Регистрация пользователя:', { email: normalizedEmail });
 
     // 1. Создаем пользователя в Supabase Auth (обязательная операция, должна быть первой)
     const { data: authData, error: authError } = await supabase.auth.signUp({
-      email: data.email,
+      email: normalizedEmail,
       password: data.password,
       options: {
         data: {
@@ -276,11 +293,12 @@ export async function login(data: LoginData): Promise<AuthResponse> {
     // Очищаем старую сессию перед входом
     clearOldSessionIfNeeded();
     
-    console.debug('📤 Вход пользователя:', { email: data.email });
+    const normalizedEmail = data.email.trim().toLowerCase();
+    console.debug('📤 Вход пользователя:', { email: normalizedEmail });
 
     // 1. Входим через Supabase Auth
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-      email: data.email,
+      email: normalizedEmail,
       password: data.password,
     });
 
@@ -293,6 +311,10 @@ export async function login(data: LoginData): Promise<AuthResponse> {
       let errorMessage = 'Неверный email или пароль';
       if (authError.message.includes('Invalid login credentials')) {
         errorMessage = 'Неверный email или пароль';
+      } else if (authError.message.includes('Email not confirmed')) {
+        errorMessage = 'Email не подтверждён. Проверьте почту и подтвердите регистрацию.';
+      } else if (authError.message.includes('Too many requests')) {
+        errorMessage = 'Слишком много попыток входа. Попробуйте позже.';
       } else if (authError.message.includes('User not found')) {
         errorMessage = 'Пользователь не найден';
       } else {
@@ -492,6 +514,15 @@ async function performSessionCheck(): Promise<SessionCheckResponse> {
 
       // Шаг 2: Если сессии нет или ошибка, пытаемся восстановить через refresh token
       if (error || !session) {
+        // Если refresh token отсутствует в storage — это нормальное состояние
+        // для неавторизованного пользователя. Не вызываем refreshSession().
+        if (!getStoredRefreshToken()) {
+          return {
+            active: false,
+            message: 'Сессия не найдена',
+          };
+        }
+
         console.debug('🔐 Сессия не найдена, пытаемся восстановить через refresh token...');
         
         try {
@@ -730,16 +761,17 @@ export async function getLoginHistory(limit: number = 100): Promise<LoginHistory
  */
 export async function resetPassword(email: string): Promise<void> {
   try {
-    console.debug('📤 Отправка ссылки для восстановления пароля:', { email });
+    const normalizedEmail = email.trim().toLowerCase();
+    console.debug('📤 Отправка ссылки для восстановления пароля:', { email: normalizedEmail });
     
     // Валидация email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email.trim())) {
+    if (!emailRegex.test(normalizedEmail)) {
       throw new Error('Неверный формат email');
     }
 
     // Отправляем ссылку для восстановления пароля через Supabase
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+    const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
       redirectTo: `${window.location.origin}/reset-password`,
     });
 
