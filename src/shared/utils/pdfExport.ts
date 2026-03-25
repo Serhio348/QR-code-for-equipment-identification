@@ -252,21 +252,17 @@ export const exportToPDF = async (
     } else if (size === 'custom' && (settings as any).customWidth && (settings as any).customHeight) {
       pdfWidth = (settings as any).customWidth;
       pdfHeight = (settings as any).customHeight;
-      // Если ширина больше высоты, используем альбомную ориентацию
-      if (pdfWidth > pdfHeight) {
-        orientation = 'l';
-        // Меняем местами для jsPDF
-        const temp = pdfWidth;
-        pdfWidth = pdfHeight;
-        pdfHeight = temp;
-      }
     } else {
       // A4 по умолчанию
       pdfWidth = 210; // A4 width in mm
       pdfHeight = 297; // A4 height in mm
     }
-    
-    const pdf = new jsPDF(orientation, 'mm', [pdfHeight, pdfWidth]);
+
+    // Ориентация определяется по целевому размеру страницы (в мм)
+    orientation = pdfWidth > pdfHeight ? 'l' : 'p';
+
+    // jsPDF ожидает формат как [width, height] в выбранных единицах
+    const pdf = new jsPDF(orientation, 'mm', [pdfWidth, pdfHeight]);
     
     const actualPdfWidth = pdf.internal.pageSize.getWidth();
     const actualPdfHeight = pdf.internal.pageSize.getHeight();
@@ -422,16 +418,25 @@ export const exportToPDF = async (
         console.log(`Total pages created: ${pageNumber}`);
       }
     } else {
-      // Для таблички оборудования используем масштабирование и центрирование
-      const ratio = Math.min(actualPdfWidth / imgWidth, actualPdfHeight / imgHeight);
-      const scaledWidth = imgWidth * ratio;
-      const scaledHeight = imgHeight * ratio;
-      
-      // Центрируем изображение
-      const imgX = (actualPdfWidth - scaledWidth) / 2;
-      const imgY = (actualPdfHeight - scaledHeight) / 2;
+      // Для таблички оборудования корректно переводим px -> mm,
+      // иначе размер в PDF "уплывает" (мм сравниваются с px).
+      const scale = 2; // html2canvas scale (см. выше)
+      const dpi = 96; // типичный DPI браузера
+      const mmPerInch = 25.4;
+      const pxToMm = mmPerInch / dpi;
 
-      pdf.addImage(imgData, 'PNG', imgX, imgY, scaledWidth, scaledHeight);
+      const imgWidthMm = (imgWidth / scale) * pxToMm;
+      const imgHeightMm = (imgHeight / scale) * pxToMm;
+
+      const ratio = Math.min(actualPdfWidth / imgWidthMm, actualPdfHeight / imgHeightMm);
+      const scaledWidthMm = imgWidthMm * ratio;
+      const scaledHeightMm = imgHeightMm * ratio;
+
+      // Центрируем изображение
+      const imgX = (actualPdfWidth - scaledWidthMm) / 2;
+      const imgY = (actualPdfHeight - scaledHeightMm) / 2;
+
+      pdf.addImage(imgData, 'PNG', imgX, imgY, scaledWidthMm, scaledHeightMm);
     }
     
     pdf.save(filename);
