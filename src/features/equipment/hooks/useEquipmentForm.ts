@@ -124,10 +124,6 @@ export function useEquipmentForm({ equipmentId, onSave, onCancel }: UseEquipment
       setError('URL Google Drive обязателен при редактировании');
       return false;
     }
-    if (isEditMode && !qrCodeUrl.trim()) {
-      setError('URL для QR-кода обязателен при редактировании');
-      return false;
-    }
     return true;
   };
 
@@ -147,15 +143,14 @@ export function useEquipmentForm({ equipmentId, onSave, onCancel }: UseEquipment
       let finalGoogleDriveUrl = googleDriveUrl.trim();
       let finalQrCodeUrl = qrCodeUrl.trim();
 
-      // Если URL для QR-кода не указан, используем Google Drive URL или генерируем
-      if (!finalQrCodeUrl) {
-        if (finalGoogleDriveUrl) {
-          finalQrCodeUrl = finalGoogleDriveUrl;
-        } else if (isEditMode && equipmentId) {
-          finalQrCodeUrl = generateQRCodeUrl(equipmentId, finalGoogleDriveUrl);
-        } else {
-          finalQrCodeUrl = '';
-        }
+      // QR должен быть уникальным для каждой единицы оборудования и вести на карточку /equipment/:id.
+      // Если пользователь оставил поле пустым или оно совпадает с общей папкой Drive — генерируем URL приложения.
+      if (isEditMode && equipmentId && (!finalQrCodeUrl || finalQrCodeUrl === finalGoogleDriveUrl)) {
+        finalQrCodeUrl = generateQRCodeUrl(equipmentId);
+      }
+      if (!isEditMode && finalQrCodeUrl === finalGoogleDriveUrl) {
+        // На create ещё нет id, поэтому поправим после addEquipment()
+        finalQrCodeUrl = '';
       }
 
       // input type="date" уже возвращает YYYY-MM-DD
@@ -184,17 +179,12 @@ export function useEquipmentForm({ equipmentId, onSave, onCancel }: UseEquipment
       } else {
         savedEquipment = await addEquipment(equipmentData as any);
         
-        // После создания обновляем QR-код URL с правильным ID, если нужно
+        // После создания проставляем QR-код URL по id (уникальный для каждой единицы).
         const driveUrl = savedEquipment.googleDriveUrl || finalGoogleDriveUrl;
-        if (!savedEquipment.qrCodeUrl && driveUrl) {
-          savedEquipment = await updateEquipment(savedEquipment.id, {
-            qrCodeUrl: driveUrl
-          });
-        } else if (!savedEquipment.qrCodeUrl) {
-          const generatedUrl = generateQRCodeUrl(savedEquipment.id, driveUrl);
-          savedEquipment = await updateEquipment(savedEquipment.id, {
-            qrCodeUrl: generatedUrl
-          });
+        const needsQrFix = !savedEquipment.qrCodeUrl || savedEquipment.qrCodeUrl === driveUrl;
+        if (needsQrFix) {
+          const generatedUrl = generateQRCodeUrl(savedEquipment.id);
+          savedEquipment = await updateEquipment(savedEquipment.id, { qrCodeUrl: generatedUrl });
         }
       }
 

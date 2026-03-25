@@ -15,16 +15,19 @@ export function generateQRCodeUrl(
   googleDriveUrl?: string,
   baseUrl?: string
 ): string {
-  // Если указан Google Drive URL, используем его
-  if (googleDriveUrl && googleDriveUrl.trim()) {
-    return googleDriveUrl.trim();
-  }
-  
-  // Иначе генерируем ссылку на страницу оборудования в приложении
-  const appBaseUrl = baseUrl || (typeof window !== 'undefined' 
-    ? `${window.location.protocol}//${window.location.host}` 
-    : '');
-  
+  // Всегда генерируем ссылку на страницу оборудования в приложении.
+  // Google Drive URL относится к документации и не должен быть QR-назначением,
+  // иначе одинаковые модели с общей папкой будут иметь одинаковые QR и будут открывать "первую" карточку.
+  void googleDriveUrl;
+
+  const publicBaseUrl = (typeof import.meta !== 'undefined'
+    ? (import.meta as unknown as { env?: Record<string, string | undefined> }).env?.VITE_PUBLIC_APP_URL
+    : undefined) ?? '';
+
+  const appBaseUrl = (baseUrl || publicBaseUrl || (typeof window !== 'undefined'
+    ? `${window.location.protocol}//${window.location.host}`
+    : '')).trim().replace(/\/+$/, '');
+
   return `${appBaseUrl}/equipment/${equipmentId}`;
 }
 
