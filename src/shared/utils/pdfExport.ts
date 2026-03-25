@@ -22,15 +22,46 @@ const waitForElementReady = async (element: HTMLElement, maxAttempts = 10): Prom
  * Применяет настройки экспорта к элементу через манипуляцию DOM
  */
 const applyExportSettings = (element: HTMLElement, settings: PlateExportSettings) => {
-  // Применяем размеры
-  if (settings.size === 'custom' && settings.customWidth && settings.customHeight) {
-    const mmToPx = 3.78;
-    element.style.width = `${settings.customWidth * mmToPx}px`;
-    element.style.minHeight = `${settings.customHeight * mmToPx}px`;
-  } else if (settings.size === 'A5') {
-    element.style.width = '560px';
-    element.style.minHeight = '794px';
+  element.setAttribute('data-export-mode', 'true');
+
+  // Применяем размеры таблички (в мм -> px) только для экспорта.
+  // Важно: это НЕ размер страницы PDF, а размер таблички на листе.
+  const mmToPx = 3.78;
+  const plateWidthMm =
+    settings.size === 'custom' && settings.customWidth ? settings.customWidth
+      : settings.size === 'A5' ? 148
+        : settings.size === 'A4' ? 210
+          : 210;
+  const plateHeightMm =
+    settings.size === 'custom' && settings.customHeight ? settings.customHeight
+      : settings.size === 'A5' ? 210
+        : settings.size === 'A4' ? 297
+          : 297;
+
+  const minSideMm = Math.min(plateWidthMm, plateHeightMm);
+  const isCompact = minSideMm <= 60; // 40×40 точно попадает сюда
+  if (isCompact) {
+    element.setAttribute('data-export-compact', 'true');
+  } else {
+    element.removeAttribute('data-export-compact');
   }
+
+  const clamp = (value: number, min: number, max: number): number => Math.min(Math.max(value, min), max);
+  const minSidePx = minSideMm * mmToPx;
+  const exportPaddingPx = clamp(Math.round(minSidePx * (isCompact ? 0.045 : 0.08)), 3, 16);
+  const exportGapPx = clamp(Math.round(minSidePx * (isCompact ? 0.03 : 0.06)), 2, 14);
+  const titleFontPx = clamp(Math.round(minSidePx * (isCompact ? 0.065 : 0.10)), 6, 22);
+  const qrLabelFontPx = clamp(Math.round(minSidePx * (isCompact ? 0.042 : 0.055)), 4, 11);
+
+  element.style.setProperty('--plate-export-padding', `${exportPaddingPx}px`);
+  element.style.setProperty('--plate-export-gap', `${exportGapPx}px`);
+  element.style.setProperty('--plate-export-title-font-size', `${titleFontPx}px`);
+  element.style.setProperty('--plate-export-qr-label-font-size', `${qrLabelFontPx}px`);
+
+  element.style.width = `${plateWidthMm * mmToPx}px`;
+  element.style.minHeight = `${plateHeightMm * mmToPx}px`;
+  element.style.height = `${plateHeightMm * mmToPx}px`;
+  element.style.overflow = 'hidden';
 
   // Скрываем/показываем элементы
   const header = element.querySelector('[data-plate-element="header"]') as HTMLElement;
@@ -81,11 +112,37 @@ const applyExportSettings = (element: HTMLElement, settings: PlateExportSettings
     qrSection.style.display = settings.showQRCode ? '' : 'none';
     
     // Изменяем размер QR-кода
-    if (settings.showQRCode && settings.qrCodeSize) {
+    if (settings.showQRCode) {
+      // Подбор размера QR от доступного места (важно для 40×40),
+      // иначе QR может обрезаться из-за overflow:hidden у таблички.
+      const headerReservePx = settings.showName
+        ? clamp(Math.round(titleFontPx * (isCompact ? 1.55 : 2.2) + exportPaddingPx * (isCompact ? 0.8 : 1.2)), 12, Math.round(minSidePx * 0.42))
+        : 0;
+      const qrSectionChromePx = isCompact ? clamp(Math.round(exportPaddingPx * 0.6), 2, 10) : exportPaddingPx;
+      const qrLabelReservePx = isCompact ? clamp(Math.round(qrLabelFontPx * 4.2), 18, 60) : 0;
+      const availableQrPx = clamp(
+        Math.round(minSidePx - exportPaddingPx * 2 - headerReservePx - exportGapPx - qrSectionChromePx * 2 - qrLabelReservePx),
+        40,
+        300,
+      );
+
+      const qrSizePx = !settings.qrCodeAuto && settings.qrCodeSize
+        ? settings.qrCodeSize
+        : clamp(Math.round(availableQrPx * (isCompact ? 0.92 : 1.05)), 40, 260);
+
+      element.style.setProperty('--plate-export-qr-size', `${qrSizePx}px`);
       const qrCodeSvg = qrSection.querySelector('svg');
       if (qrCodeSvg) {
-        qrCodeSvg.setAttribute('width', settings.qrCodeSize.toString());
-        qrCodeSvg.setAttribute('height', settings.qrCodeSize.toString());
+        qrCodeSvg.setAttribute('width', qrSizePx.toString());
+        qrCodeSvg.setAttribute('height', qrSizePx.toString());
+        (qrCodeSvg as unknown as HTMLElement).style.width = `${qrSizePx}px`;
+        (qrCodeSvg as unknown as HTMLElement).style.height = `${qrSizePx}px`;
+      }
+
+      // На маленьких табличках подпись под QR почти всегда мешает
+      const qrLabel = qrSection.querySelector('.qr-label') as HTMLElement | null;
+      if (qrLabel) {
+        qrLabel.style.display = '';
       }
     }
   }
@@ -143,51 +200,20 @@ export const exportToPDF = async (
     throw new Error(`Element with id "${elementId}" not found`);
   }
 
-  // Сохраняем оригинальные стили
-  const originalStyles: { [key: string]: string } = {};
-  const originalDisplay: Map<HTMLElement, string> = new Map();
-  const originalQrSvgAttrs: { width?: string; height?: string } = {};
-  
   // Определяем тип настроек
   const isInspectionSettings = settings && 'paddingTop' in settings;
-  
-  if (settings) {
-    // Сохраняем текущие стили контейнера
-    originalStyles.width = element.style.width;
-    originalStyles.minHeight = element.style.minHeight;
-    originalStyles.padding = element.style.padding;
-    originalStyles.boxSizing = element.style.boxSizing;
-    originalStyles.margin = element.style.margin;
-    originalStyles.height = element.style.height;
-    originalStyles.overflow = element.style.overflow;
-    
-    if (isInspectionSettings) {
-      // Применяем настройки для акта освидетельствования
-      applyInspectionExportSettings(element, settings as InspectionExportSettings);
-    } else {
-      // Сохраняем display для всех элементов
-      const allElements = element.querySelectorAll('[data-plate-element], [data-plate-field]');
-      allElements.forEach((el) => {
-        const htmlEl = el as HTMLElement;
-        const inlineDisplay = htmlEl.style.display;
-        const computedDisplay = window.getComputedStyle(htmlEl).display;
-        originalDisplay.set(htmlEl, inlineDisplay || computedDisplay);
-      });
-      
-      // Сохраняем размеры QR-кода SVG
-      const qrSection = element.querySelector('[data-plate-element="qr-section"]') as HTMLElement;
-      if (qrSection) {
-        const qrCodeSvg = qrSection.querySelector('svg');
-        if (qrCodeSvg) {
-          originalQrSvgAttrs.width = qrCodeSvg.getAttribute('width') || undefined;
-          originalQrSvgAttrs.height = qrCodeSvg.getAttribute('height') || undefined;
-        }
-      }
-      
-      // Применяем настройки для таблички оборудования
-      applyExportSettings(element, settings as PlateExportSettings);
-    }
-  }
+
+  const plateSettings = (!isInspectionSettings ? (settings as PlateExportSettings | undefined) : undefined);
+  const mmToPx = 3.78;
+  const plateWidthMm =
+    plateSettings?.size === 'custom' && plateSettings.customWidth ? plateSettings.customWidth
+      : plateSettings?.size === 'A5' ? 148
+        : 210;
+  const plateHeightMm =
+    plateSettings?.size === 'custom' && plateSettings.customHeight ? plateSettings.customHeight
+      : plateSettings?.size === 'A5' ? 210
+        : 297;
+  const isPlateExport = !isInspectionSettings;
 
   try {
     // КРИТИЧНО: Ждем готовности элемента
@@ -201,15 +227,18 @@ export const exportToPDF = async (
     });
 
     // Создаем canvas с правильными настройками
+    const exportWidthPx = isPlateExport ? Math.round(plateWidthMm * mmToPx) : element.offsetWidth;
+    const exportHeightPx = isPlateExport ? Math.round(plateHeightMm * mmToPx) : element.scrollHeight;
+
     const canvas = await html2canvas(element, {
       scale: 2,
       useCORS: true,
       allowTaint: true,
       logging: false,
       backgroundColor: '#ffffff',
-      width: element.offsetWidth,
-      height: element.scrollHeight, // Используем полную высоту контента
-      windowWidth: element.scrollWidth,
+      width: exportWidthPx,
+      height: exportHeightPx,
+      windowWidth: exportWidthPx,
       onclone: (clonedDoc) => {
         // Убеждаемся, что цвета сохраняются при клонировании
         const clonedElement = clonedDoc.getElementById(elementId);
@@ -245,23 +274,25 @@ export const exportToPDF = async (
     let orientation: 'p' | 'l' = 'p';
     
     const size = (settings as any)?.size;
-    
-    if (size === 'A5') {
-      pdfWidth = 148; // A5 width in mm
-      pdfHeight = 210; // A5 height in mm
-    } else if (size === 'custom' && (settings as any).customWidth && (settings as any).customHeight) {
-      pdfWidth = (settings as any).customWidth;
-      pdfHeight = (settings as any).customHeight;
+
+    if (isInspectionSettings) {
+      if (size === 'A5') {
+        pdfWidth = 148;
+        pdfHeight = 210;
+      } else if (size === 'custom' && (settings as any).customWidth && (settings as any).customHeight) {
+        pdfWidth = (settings as any).customWidth;
+        pdfHeight = (settings as any).customHeight;
+      } else {
+        pdfWidth = 210;
+        pdfHeight = 297;
+      }
     } else {
-      // A4 по умолчанию
-      pdfWidth = 210; // A4 width in mm
-      pdfHeight = 297; // A4 height in mm
+      // Для таблички: лист всегда A4, а настройки регулируют размер таблички на листе.
+      pdfWidth = 210;
+      pdfHeight = 297;
     }
 
-    // Ориентация определяется по целевому размеру страницы (в мм)
     orientation = pdfWidth > pdfHeight ? 'l' : 'p';
-
-    // jsPDF ожидает формат как [width, height] в выбранных единицах
     const pdf = new jsPDF(orientation, 'mm', [pdfWidth, pdfHeight]);
     
     const actualPdfWidth = pdf.internal.pageSize.getWidth();
@@ -428,15 +459,22 @@ export const exportToPDF = async (
       const imgWidthMm = (imgWidth / scale) * pxToMm;
       const imgHeightMm = (imgHeight / scale) * pxToMm;
 
-      const ratio = Math.min(actualPdfWidth / imgWidthMm, actualPdfHeight / imgHeightMm);
-      const scaledWidthMm = imgWidthMm * ratio;
-      const scaledHeightMm = imgHeightMm * ratio;
+      if (isPlateExport && plateSettings) {
+        // Для таблички: кладём картинку размером таблички (мм) на лист A4 без растягивания.
+        const x = Math.max(0, (actualPdfWidth - plateWidthMm) / 2);
+        const y = Math.max(0, (actualPdfHeight - plateHeightMm) / 2);
+        pdf.addImage(imgData, 'PNG', x, y, plateWidthMm, plateHeightMm);
+      } else {
+        const ratio = Math.min(actualPdfWidth / imgWidthMm, actualPdfHeight / imgHeightMm);
+        const scaledWidthMm = imgWidthMm * ratio;
+        const scaledHeightMm = imgHeightMm * ratio;
 
-      // Центрируем изображение
-      const imgX = (actualPdfWidth - scaledWidthMm) / 2;
-      const imgY = (actualPdfHeight - scaledHeightMm) / 2;
+        // Центрируем изображение
+        const imgX = (actualPdfWidth - scaledWidthMm) / 2;
+        const imgY = (actualPdfHeight - scaledHeightMm) / 2;
 
-      pdf.addImage(imgData, 'PNG', imgX, imgY, scaledWidthMm, scaledHeightMm);
+        pdf.addImage(imgData, 'PNG', imgX, imgY, scaledWidthMm, scaledHeightMm);
+      }
     }
     
     pdf.save(filename);
@@ -444,45 +482,7 @@ export const exportToPDF = async (
     console.error('Error exporting to PDF:', error);
     throw error;
   } finally {
-    // Восстанавливаем оригинальные стили
-    if (settings) {
-      element.style.width = originalStyles.width || '';
-      element.style.minHeight = originalStyles.minHeight || '';
-      element.style.padding = originalStyles.padding || '';
-      element.style.boxSizing = originalStyles.boxSizing || '';
-      element.style.margin = originalStyles.margin || '';
-      element.style.height = originalStyles.height || '';
-      element.style.overflow = originalStyles.overflow || '';
-      
-      if (!isInspectionSettings) {
-        // Восстанавливаем display для всех элементов из Map
-        originalDisplay.forEach((displayValue, htmlEl) => {
-          if (displayValue && displayValue !== 'none') {
-            htmlEl.style.display = displayValue;
-          } else {
-            htmlEl.style.display = '';
-          }
-        });
-        
-        // Восстанавливаем размер QR-кода
-        const qrSection = element.querySelector('[data-plate-element="qr-section"]') as HTMLElement;
-        if (qrSection) {
-          const qrCodeSvg = qrSection.querySelector('svg');
-          if (qrCodeSvg) {
-            if (originalQrSvgAttrs.width) {
-              qrCodeSvg.setAttribute('width', originalQrSvgAttrs.width);
-            } else {
-              qrCodeSvg.removeAttribute('width');
-            }
-            if (originalQrSvgAttrs.height) {
-              qrCodeSvg.setAttribute('height', originalQrSvgAttrs.height);
-            } else {
-              qrCodeSvg.removeAttribute('height');
-            }
-          }
-        }
-      }
-    }
+    // Ничего не восстанавливаем: экспортные стили применяются только к клону (html2canvas.onclone)
   }
 };
 
