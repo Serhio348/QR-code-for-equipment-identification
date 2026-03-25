@@ -36,6 +36,8 @@ export interface PlateExportSettings {
   showLastMaintenanceDate: boolean;
   /** Показывать QR-код */
   showQRCode: boolean;
+  /** Автоматически подбирать размер QR-кода для выбранного формата */
+  qrCodeAuto: boolean;
   /** Размер QR-кода (в пикселях) */
   qrCodeSize?: number;
   /** Показывать конкретные поля характеристик (если showSpecs = true) */
@@ -54,6 +56,7 @@ export const DEFAULT_EXPORT_SETTINGS: PlateExportSettings = {
   showCommissioningDate: true,
   showLastMaintenanceDate: true,
   showQRCode: true,
+  qrCodeAuto: true,
   qrCodeSize: 200,
 };
 
@@ -69,6 +72,7 @@ export const PLATE_TEMPLATES: Record<PlateTemplate, Partial<PlateExportSettings>
     showCommissioningDate: true,
     showLastMaintenanceDate: true,
     showQRCode: true,
+    qrCodeAuto: true,
     qrCodeSize: 200,
   },
   minimal: {
@@ -79,6 +83,7 @@ export const PLATE_TEMPLATES: Record<PlateTemplate, Partial<PlateExportSettings>
     showCommissioningDate: false,
     showLastMaintenanceDate: false,
     showQRCode: true,
+    qrCodeAuto: true,
     qrCodeSize: 150,
   },
   'qr-only': {
@@ -89,6 +94,7 @@ export const PLATE_TEMPLATES: Record<PlateTemplate, Partial<PlateExportSettings>
     showCommissioningDate: false,
     showLastMaintenanceDate: false,
     showQRCode: true,
+    qrCodeAuto: true,
     qrCodeSize: 300,
   },
 };

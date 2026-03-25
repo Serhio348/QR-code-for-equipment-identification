@@ -153,6 +153,71 @@
   height: auto;
 }
 
+/* Режим экспорта: игнорируем адаптивные ограничения размера QR */
+.equipment-plate[data-export-mode="true"] .qr-code-container svg {
+  width: var(--plate-export-qr-size, 200px) !important;
+  height: var(--plate-export-qr-size, 200px) !important;
+  max-width: none !important;
+}
+
+/* Режим экспорта: компактные размеры (например 40×40) */
+.equipment-plate[data-export-mode="true"] {
+  padding: var(--plate-export-padding, 30px) !important;
+  margin: 0 !important;
+  box-shadow: none !important;
+}
+
+.equipment-plate[data-export-mode="true"] .plate-content {
+  gap: var(--plate-export-gap, 12px) !important;
+}
+
+.equipment-plate[data-export-mode="true"] .equipment-name {
+  font-size: var(--plate-export-title-font-size, 24px) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: 1.15 !important;
+}
+
+.equipment-plate[data-export-mode="true"][data-export-compact="true"] .plate-header {
+  margin: 0 !important;
+  width: 100% !important;
+  border-radius: 6px !important;
+  padding: calc(var(--plate-export-padding, 12px) * 0.45) !important;
+  border-bottom: none !important;
+}
+
+.equipment-plate[data-export-mode="true"][data-export-compact="true"] .plate-header {
+  margin-bottom: calc(var(--plate-export-gap, 10px) * 0.4) !important;
+}
+
+.equipment-plate[data-export-mode="true"][data-export-compact="true"] .plate-content {
+  flex-direction: column !important;
+  align-items: center !important;
+}
+
+.equipment-plate[data-export-mode="true"][data-export-compact="true"] .qr-section {
+  padding: calc(var(--plate-export-padding, 12px) * 0.35) !important;
+  gap: calc(var(--plate-export-gap, 10px) * 0.35) !important;
+  border: none !important;
+  background: transparent !important;
+}
+
+.equipment-plate[data-export-mode="true"] .qr-label {
+  font-size: var(--plate-export-qr-label-font-size, 12px) !important;
+  line-height: 1.05 !important;
+  max-width: calc(100% - var(--plate-export-padding, 12px) * 2) !important;
+  white-space: normal !important;
+  word-break: normal !important;
+  overflow-wrap: break-word !important;
+  hyphens: auto !important;
+  -webkit-hyphens: auto !important;
+  -ms-hyphens: auto !important;
+  hyphenate-character: "-" !important;
+  hyphenate-limit-chars: 6 3 2;
+  margin: 0 !important;
+  text-align: center !important;
+}
+
 @media print {
   .equipment-plate {
     box-shadow: none;

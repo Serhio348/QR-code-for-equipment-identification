@@ -71,7 +71,7 @@ const EquipmentPlate: React.FC<EquipmentPlateProps> = ({
   }, [isQRModalOpen]);
 
   return (
-    <div className="equipment-plate" id="equipment-plate" data-plate-element="container">
+    <div className="equipment-plate" id="equipment-plate" data-plate-element="container" lang="ru">
       <div className="plate-header" data-plate-element="header">
         <h1 className="equipment-name">{displayName}</h1>
       </div>

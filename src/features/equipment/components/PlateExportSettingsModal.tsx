@@ -2,7 +2,7 @@
  * Модальное окно настроек экспорта таблички оборудования
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { PlateExportSettings, PlateSize, PlateTemplate, DEFAULT_EXPORT_SETTINGS, PLATE_TEMPLATES } from '@/shared/types/plateExport';
 import { EquipmentType, EquipmentSpecs } from '../types/equipment';
 import { getAllSpecFieldsForType } from '../constants/equipmentSpecFields';
@@ -28,6 +28,9 @@ const PlateExportSettingsModal: React.FC<PlateExportSettingsModalProps> = ({
   const [settings, setSettings] = useState<PlateExportSettings>(DEFAULT_EXPORT_SETTINGS);
   const [customWidth, setCustomWidth] = useState<number>(210); // A4 width in mm
   const [customHeight, setCustomHeight] = useState<number>(297); // A4 height in mm
+  const [customWidthInput, setCustomWidthInput] = useState<string>('210');
+  const [customHeightInput, setCustomHeightInput] = useState<string>('297');
+  const backdropMouseDown = useRef(false);
 
   // Мемоизируем список полей для текущего типа оборудования
   const availableSpecFields = useMemo(() => {
@@ -57,30 +60,40 @@ const PlateExportSettingsModal: React.FC<PlateExportSettingsModalProps> = ({
     }
   }, [isOpen, visibleSpecFieldKeysString]);
 
+  useEffect(() => {
+    if (isOpen) {
+      setCustomWidthInput(customWidth.toString());
+      setCustomHeightInput(customHeight.toString());
+    }
+  }, [customHeight, customWidth, isOpen]);
+
   const handleTemplateChange = (template: PlateTemplate) => {
     const templateSettings = PLATE_TEMPLATES[template];
-    setSettings({
-      ...settings,
+    setSettings((prev) => ({
+      ...prev,
       ...templateSettings,
       template,
-    });
+    }));
   };
 
   const handleSizeChange = (size: PlateSize) => {
-    setSettings({
-      ...settings,
+    setSettings((prev) => ({
+      ...prev,
       size,
-    });
+    }));
   };
 
   const handleCustomSizeChange = (width: number, height: number) => {
     setCustomWidth(width);
     setCustomHeight(height);
-    setSettings({
-      ...settings,
+    setCustomWidthInput(width.toString());
+    setCustomHeightInput(height.toString());
+    setSettings((prev) => ({
+      ...prev,
+      size: 'custom',
       customWidth: width,
       customHeight: height,
-    });
+    }));
   };
 
   const handleFieldToggle = (fieldKey: string) => {
@@ -124,7 +137,19 @@ const PlateExportSettingsModal: React.FC<PlateExportSettingsModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="plate-export-modal-overlay" onClick={onClose}>
+    <div
+      className="plate-export-modal-overlay"
+      onMouseDown={(e) => {
+        backdropMouseDown.current = e.target === e.currentTarget;
+      }}
+      onMouseUp={(e) => {
+        const isBackdrop = e.target === e.currentTarget;
+        if (backdropMouseDown.current && isBackdrop) {
+          onClose();
+        }
+        backdropMouseDown.current = false;
+      }}
+    >
       <div className="plate-export-modal" onClick={(e) => e.stopPropagation()}>
         <div className="plate-export-modal-header">
           <h2>Настройки экспорта таблички</h2>
@@ -196,8 +221,17 @@ const PlateExportSettingsModal: React.FC<PlateExportSettingsModalProps> = ({
                     type="number"
                     min="10"
                     max="500"
-                    value={customWidth}
-                    onChange={(e) => handleCustomSizeChange(Number(e.target.value), customHeight)}
+                    placeholder="210"
+                    value={customWidthInput}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      setCustomWidthInput(raw);
+                      if (raw === '') return;
+                      const parsed = Number.parseInt(raw, 10);
+                      if (Number.isFinite(parsed) && parsed > 0) {
+                        handleCustomSizeChange(parsed, customHeight);
+                      }
+                    }}
                   />
                 </div>
                 <div className="plate-export-custom-size-input">
@@ -206,8 +240,17 @@ const PlateExportSettingsModal: React.FC<PlateExportSettingsModalProps> = ({
                     type="number"
                     min="10"
                     max="500"
-                    value={customHeight}
-                    onChange={(e) => handleCustomSizeChange(customWidth, Number(e.target.value))}
+                    placeholder="297"
+                    value={customHeightInput}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      setCustomHeightInput(raw);
+                      if (raw === '') return;
+                      const parsed = Number.parseInt(raw, 10);
+                      if (Number.isFinite(parsed) && parsed > 0) {
+                        handleCustomSizeChange(customWidth, parsed);
+                      }
+                    }}
                   />
                 </div>
               </div>
@@ -222,7 +265,7 @@ const PlateExportSettingsModal: React.FC<PlateExportSettingsModalProps> = ({
                 <input
                   type="checkbox"
                   checked={settings.showName}
-                  onChange={(e) => setSettings({ ...settings, showName: e.target.checked })}
+                  onChange={(e) => setSettings((prev) => ({ ...prev, showName: e.target.checked }))}
                 />
                 <span>Название оборудования</span>
               </label>
@@ -230,7 +273,7 @@ const PlateExportSettingsModal: React.FC<PlateExportSettingsModalProps> = ({
                 <input
                   type="checkbox"
                   checked={settings.showInventoryNumber}
-                  onChange={(e) => setSettings({ ...settings, showInventoryNumber: e.target.checked })}
+                  onChange={(e) => setSettings((prev) => ({ ...prev, showInventoryNumber: e.target.checked }))}
                 />
                 <span>Инвентарный номер</span>
               </label>
@@ -238,7 +281,7 @@ const PlateExportSettingsModal: React.FC<PlateExportSettingsModalProps> = ({
                 <input
                   type="checkbox"
                   checked={settings.showSpecs}
-                  onChange={(e) => setSettings({ ...settings, showSpecs: e.target.checked })}
+                  onChange={(e) => setSettings((prev) => ({ ...prev, showSpecs: e.target.checked }))}
                 />
                 <span>Характеристики</span>
               </label>
@@ -278,7 +321,7 @@ const PlateExportSettingsModal: React.FC<PlateExportSettingsModalProps> = ({
                 <input
                   type="checkbox"
                   checked={settings.showCommissioningDate}
-                  onChange={(e) => setSettings({ ...settings, showCommissioningDate: e.target.checked })}
+                  onChange={(e) => setSettings((prev) => ({ ...prev, showCommissioningDate: e.target.checked }))}
                 />
                 <span>Дата ввода в эксплуатацию</span>
               </label>
@@ -286,7 +329,7 @@ const PlateExportSettingsModal: React.FC<PlateExportSettingsModalProps> = ({
                 <input
                   type="checkbox"
                   checked={settings.showLastMaintenanceDate}
-                  onChange={(e) => setSettings({ ...settings, showLastMaintenanceDate: e.target.checked })}
+                  onChange={(e) => setSettings((prev) => ({ ...prev, showLastMaintenanceDate: e.target.checked }))}
                 />
                 <span>Дата последнего обслуживания</span>
               </label>
@@ -294,19 +337,37 @@ const PlateExportSettingsModal: React.FC<PlateExportSettingsModalProps> = ({
                 <input
                   type="checkbox"
                   checked={settings.showQRCode}
-                  onChange={(e) => setSettings({ ...settings, showQRCode: e.target.checked })}
+                  onChange={(e) => setSettings((prev) => ({ ...prev, showQRCode: e.target.checked }))}
                 />
                 <span>QR-код</span>
               </label>
               {settings.showQRCode && (
                 <div className="plate-export-qr-size-input">
-                  <label>Размер QR-кода (пиксели):</label>
+                  <label className="plate-export-field-checkbox" style={{ margin: 0 }}>
+                    <input
+                      type="checkbox"
+                      checked={settings.qrCodeAuto}
+                      onChange={(e) => setSettings((prev) => ({ ...prev, qrCodeAuto: e.target.checked }))}
+                    />
+                    <span>Авто размер QR</span>
+                  </label>
+                  <label style={{ marginTop: 8 }}>Размер QR-кода (пиксели):</label>
                   <input
                     type="number"
-                    min="50"
+                    min="10"
                     max="500"
-                    value={settings.qrCodeSize || 200}
-                    onChange={(e) => setSettings({ ...settings, qrCodeSize: Number(e.target.value) })}
+                    placeholder="200"
+                    value={settings.qrCodeSize ?? ''}
+                    disabled={settings.qrCodeAuto}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      if (raw === '') {
+                        setSettings((prev) => ({ ...prev, qrCodeSize: undefined }));
+                        return;
+                      }
+                      const parsed = Number.parseInt(raw, 10);
+                      setSettings((prev) => ({ ...prev, qrCodeSize: Number.isFinite(parsed) ? parsed : undefined }));
+                    }}
                   />
                 </div>
               )}
