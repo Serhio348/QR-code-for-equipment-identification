@@ -48,9 +48,10 @@ const applyExportSettings = (element: HTMLElement, settings: PlateExportSettings
 
   const clamp = (value: number, min: number, max: number): number => Math.min(Math.max(value, min), max);
   const minSidePx = minSideMm * mmToPx;
-  const exportPaddingPx = clamp(Math.round(minSidePx * (isCompact ? 0.045 : 0.08)), 3, 16);
-  const exportGapPx = clamp(Math.round(minSidePx * (isCompact ? 0.03 : 0.06)), 2, 14);
-  const titleFontPx = clamp(Math.round(minSidePx * (isCompact ? 0.065 : 0.10)), 6, 22);
+  // Для 40×40 нужно максимально экономить место: паддинги/зазоры должны быть очень маленькими.
+  const exportPaddingPx = clamp(Math.round(minSidePx * (isCompact ? 0.02 : 0.08)), 1, 16);
+  const exportGapPx = clamp(Math.round(minSidePx * (isCompact ? 0.015 : 0.06)), 1, 14);
+  const titleFontPx = clamp(Math.round(minSidePx * (isCompact ? 0.055 : 0.10)), 5, 22);
   const qrLabelFontPx = clamp(Math.round(minSidePx * (isCompact ? 0.042 : 0.055)), 4, 11);
 
   element.style.setProperty('--plate-export-padding', `${exportPaddingPx}px`);
@@ -119,7 +120,7 @@ const applyExportSettings = (element: HTMLElement, settings: PlateExportSettings
         ? clamp(Math.round(titleFontPx * (isCompact ? 1.55 : 2.2) + exportPaddingPx * (isCompact ? 0.8 : 1.2)), 12, Math.round(minSidePx * 0.42))
         : 0;
       const qrSectionChromePx = isCompact ? clamp(Math.round(exportPaddingPx * 0.6), 2, 10) : exportPaddingPx;
-      const qrLabelReservePx = isCompact ? clamp(Math.round(qrLabelFontPx * 4.2), 18, 60) : 0;
+      const qrLabelReservePx = isCompact ? clamp(Math.round(qrLabelFontPx * 4.0), 16, 60) : 0;
       const availableQrPx = clamp(
         Math.round(minSidePx - exportPaddingPx * 2 - headerReservePx - exportGapPx - qrSectionChromePx * 2 - qrLabelReservePx),
         40,
@@ -128,7 +129,7 @@ const applyExportSettings = (element: HTMLElement, settings: PlateExportSettings
 
       const qrSizePx = !settings.qrCodeAuto && settings.qrCodeSize
         ? settings.qrCodeSize
-        : clamp(Math.round(availableQrPx * (isCompact ? 0.92 : 1.05)), 40, 260);
+        : clamp(Math.round(availableQrPx * (isCompact ? 1.10 : 1.05)), 40, 320);
 
       element.style.setProperty('--plate-export-qr-size', `${qrSizePx}px`);
       const qrCodeSvg = qrSection.querySelector('svg');
@@ -230,8 +231,11 @@ export const exportToPDF = async (
     const exportWidthPx = isPlateExport ? Math.round(plateWidthMm * mmToPx) : element.offsetWidth;
     const exportHeightPx = isPlateExport ? Math.round(plateHeightMm * mmToPx) : element.scrollHeight;
 
+    const minSideMm = Math.min(plateWidthMm, plateHeightMm);
+    const exportScale = isPlateExport && minSideMm <= 60 ? 5 : 2;
+
     const canvas = await html2canvas(element, {
-      scale: 2,
+      scale: exportScale,
       useCORS: true,
       allowTaint: true,
       logging: false,
@@ -451,7 +455,7 @@ export const exportToPDF = async (
     } else {
       // Для таблички оборудования корректно переводим px -> mm,
       // иначе размер в PDF "уплывает" (мм сравниваются с px).
-      const scale = 2; // html2canvas scale (см. выше)
+      const scale = exportScale; // html2canvas scale (см. выше)
       const dpi = 96; // типичный DPI браузера
       const mmPerInch = 25.4;
       const pxToMm = mmPerInch / dpi;
