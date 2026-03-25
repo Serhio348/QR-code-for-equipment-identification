@@ -194,7 +194,7 @@ const PlateExportSettingsModal: React.FC<PlateExportSettingsModalProps> = ({
                   <label>Ширина (мм):</label>
                   <input
                     type="number"
-                    min="50"
+                    min="10"
                     max="500"
                     value={customWidth}
                     onChange={(e) => handleCustomSizeChange(Number(e.target.value), customHeight)}
@@ -204,7 +204,7 @@ const PlateExportSettingsModal: React.FC<PlateExportSettingsModalProps> = ({
                   <label>Высота (мм):</label>
                   <input
                     type="number"
-                    min="50"
+                    min="10"
                     max="500"
                     value={customHeight}
                     onChange={(e) => handleCustomSizeChange(customWidth, Number(e.target.value))}
