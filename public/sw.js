@@ -130,6 +130,14 @@ self.addEventListener('fetch', (event) => {
           if (event.request.mode === 'navigate') {
             return caches.match('/index.html');
           }
+
+          // Для прочих запросов обязательно возвращаем Response,
+          // иначе respondWith упадёт с "Failed to convert value to 'Response'".
+          return new Response('Offline and no cached response', {
+            status: 504,
+            statusText: 'Gateway Timeout',
+            headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+          });
         });
       })
   );
