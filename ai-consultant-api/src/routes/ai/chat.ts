@@ -15,6 +15,7 @@ import {
     updateSessionTitle,
 } from '../../services/ai/chatMemoryService.js';
 import { loadFactsForPrompt } from '../../services/ai/agentMemoryService.js';
+import { config } from '../../config/env.js';
 
 const router = Router();
 const MAX_MESSAGES = 50;
@@ -77,9 +78,11 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
             : messages;
 
         const hasImages = messagesWithHistory.some(m => Array.isArray(m.content) && m.content.some(b => (b as any).type === 'image'));
-        // Если пользователь прикрепил фото — выбираем провайдера с поддержкой мультимодальности.
-        // Иначе DeepSeek не сможет вызвать tools для загрузки (он не "видит" вложения).
-        const provider = await ProviderFactory.create(hasImages ? 'claude' : undefined);
+        // Если пользователь работает только с DeepSeek — НЕ форсим Claude на фото.
+        // DeepSeek не анализирует изображения, но мы сериализуем вложения как Base64 в тексте,
+        // чтобы он мог загрузить их через tools.
+        const preferredProvider = hasImages && config.aiProvider !== 'deepseek' ? 'claude' : undefined;
+        const provider = await ProviderFactory.create(preferredProvider);
         const factsPrompt = await loadFactsForPrompt().catch(() => '');
 
         const response = await provider.chat(
