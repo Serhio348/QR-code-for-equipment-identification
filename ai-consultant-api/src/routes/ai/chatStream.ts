@@ -62,7 +62,9 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
     const toolsUsedList: string[] = [];
 
     try {
-        const provider = await ProviderFactory.create();
+        const hasImages = messages.some(m => Array.isArray(m.content) && m.content.some(b => (b as any).type === 'image'));
+        // При наличии вложенных фото предпочитаем мультимодальный провайдер, иначе DeepSeek не сможет загрузить фото.
+        const provider = await ProviderFactory.create(hasImages ? 'claude' : undefined);
         const factsPrompt = await loadFactsForPrompt().catch(() => '');
 
         const onEvent = (event: StreamEvent): void => {
