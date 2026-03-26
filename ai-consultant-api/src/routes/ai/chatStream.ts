@@ -11,6 +11,7 @@ import { getOrCreateSession, saveMessages, updateSessionTitle } from '../../serv
 import { loadFactsForPrompt } from '../../services/ai/agentMemoryService.js';
 import { StreamEvent } from '../../services/ai/types.js';
 import rateLimit from 'express-rate-limit';
+import { config } from '../../config/env.js';
 
 const router = Router();
 const MAX_MESSAGES = 50;
@@ -63,8 +64,10 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
 
     try {
         const hasImages = messages.some(m => Array.isArray(m.content) && m.content.some(b => (b as any).type === 'image'));
-        // При наличии вложенных фото предпочитаем мультимодальный провайдер, иначе DeepSeek не сможет загрузить фото.
-        const provider = await ProviderFactory.create(hasImages ? 'claude' : undefined);
+        // Если выбран DeepSeek — не переключаемся на Claude при фото:
+        // вложения сериализуются как Base64 и DeepSeek сможет загрузить их через tools.
+        const preferredProvider = hasImages && config.aiProvider !== 'deepseek' ? 'claude' : undefined;
+        const provider = await ProviderFactory.create(preferredProvider);
         const factsPrompt = await loadFactsForPrompt().catch(() => '');
 
         const onEvent = (event: StreamEvent): void => {
