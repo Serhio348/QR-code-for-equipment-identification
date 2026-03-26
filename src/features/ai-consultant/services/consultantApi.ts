@@ -75,6 +75,12 @@ export interface HistoryResponse {
   error?: string;
 }
 
+export interface UploadPhotoResponse {
+  success: boolean;
+  data?: unknown;
+  error?: string;
+}
+
 /**
  * Отправить сообщение в AI-консультант
  * @param messages - История сообщений
@@ -177,6 +183,44 @@ export async function* streamChatMessage(
       }
     }
   }
+}
+
+/**
+ * Загрузить фото (File) в указанную папку Google Drive через ai-consultant-api.
+ * Фото уходит как multipart/form-data, без Base64 в LLM контексте.
+ */
+export async function uploadPhotoToDriveFolder(
+  folderUrl: string,
+  photo: File,
+  opts?: { name?: string; description?: string; date?: string; maintenanceType?: string },
+  signal?: AbortSignal,
+): Promise<UploadPhotoResponse> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error('Не авторизован');
+
+  const form = new FormData();
+  form.append('folderUrl', folderUrl);
+  form.append('photo', photo);
+  if (opts?.name) form.append('name', opts.name);
+  if (opts?.description) form.append('description', opts.description);
+  if (opts?.date) form.append('date', opts.date);
+  if (opts?.maintenanceType) form.append('maintenanceType', opts.maintenanceType);
+
+  const response = await fetch(`${API_URL}/api/equipment/upload-photo`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${session.access_token}`,
+    },
+    body: form,
+    signal,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `HTTP ${response.status}`);
+  }
+
+  return await response.json() as UploadPhotoResponse;
 }
 
 /**

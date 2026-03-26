@@ -2,6 +2,8 @@ import React, { useRef } from 'react';
 import './ChatWidget.css';
 
 export interface PhotoData {
+  /** Исходный File (для прямой загрузки на backend без LLM) */
+  file: File;
   /** Base64 строка без префикса data:image/... */
   data: string;
   /** MIME тип изображения */
@@ -53,6 +55,7 @@ export const PhotoButton: React.FC<PhotoButtonProps> = ({ disabled, onPhotosSele
         }
 
         resolve({
+          file,
           data: base64Match[1],
           mimeType: file.type as PhotoData['mimeType'],
           fileName: file.name,
