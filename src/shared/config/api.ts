@@ -27,7 +27,10 @@ export const API_CONFIG = {
    * 
    * Если у вас уже есть URL для журнала обслуживания, вставьте его сюда
    */
-  MAINTENANCE_API_URL: 'https://script.google.com/macros/s/AKfycbyt7M8596y4rn9IDihwRu73fzdXV6MpkqmAI0D9lNrW7AObWPyoOKsk1YmxX_6xAsZ_lw/exec',
+  MAINTENANCE_API_URL:
+    import.meta.env.VITE_MAINTENANCE_API_URL ||
+    import.meta.env.VITE_EQUIPMENT_API_URL ||
+    '',
 
   /**
    * Beliot API конфигурация
