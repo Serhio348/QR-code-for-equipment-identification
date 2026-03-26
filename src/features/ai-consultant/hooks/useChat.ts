@@ -251,7 +251,9 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
     // Если есть фото и пользователь просит "просто загрузить" — грузим напрямую на backend,
     // чтобы не отправлять Base64 в LLM (это и вызывает "зависания").
     const wantsDirectUpload = !!inputMessage.photos?.length && /загруз/i.test(inputMessage.text);
-    const lastFolderUrl = wantsDirectUpload ? findLastDriveFolderUrl(messages) : null;
+    const lastFolderUrl = wantsDirectUpload
+      ? (equipmentContext?.googleDriveUrl || findLastDriveFolderUrl(messages))
+      : null;
 
     let messageForAi: ChatInputMessage = inputMessage;
 
@@ -287,6 +289,17 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
             (uploadedLinks.length ? uploadedLinks.map(u => `- ${u}`).join('\n') : ''),
           photos: undefined,
         };
+
+        // ВАЖНО: если пользователь просил "просто загрузить" — на этом всё.
+        // Не делаем запрос к AI, иначе снова будет долго и бессмысленно.
+        const assistantText =
+          `✅ Фото загружены в папку:\n${lastFolderUrl}\n` +
+          (uploadedLinks.length ? `\nСсылки:\n${uploadedLinks.map(u => `- ${u}`).join('\n')}\n` : '');
+
+        setMessages(prev => [...prev, createMessage('assistant', assistantText)]);
+        setIsLoading(false);
+        abortControllerRef.current = null;
+        return;
       } catch {
         // Если прямую загрузку сделать не удалось — fallback на мультимодальный режим ниже.
         messageForAi = inputMessage;
