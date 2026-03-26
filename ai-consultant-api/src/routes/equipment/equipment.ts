@@ -5,8 +5,17 @@
  */
 import { Router, Request, Response } from 'express';
 import { gasClient } from '../../services/equipment/index.js';
+import multer from 'multer';
+import { authMiddleware, type AuthenticatedRequest } from '../../middleware/auth.js';
 
 const router = Router();
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    files: 10,
+    fileSize: 10 * 1024 * 1024, // 10MB на файл
+  },
+});
 
 router.get('/maintenance/log', async (req: Request, res: Response) => {
   try {
@@ -133,5 +142,57 @@ router.post('/attach-files', async (req: Request, res: Response) => {
     res.status(500).json({ success: false, error: message });
   }
 });
+
+/**
+ * Загрузка фото в произвольную папку Google Drive через GAS.
+ *
+ * Важное отличие от tool calling:
+ * - фото передаётся как multipart file, а не через LLM (не зависает на Base64 в контексте).
+ */
+router.post(
+  '/upload-photo',
+  authMiddleware,
+  upload.single('photo'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const file = req.file;
+      const folderUrl = String(req.body.folderUrl || req.body.folder_url || '');
+
+      if (!folderUrl) {
+        res.status(400).json({ success: false, error: 'Обязательное поле: folderUrl' });
+        return;
+      }
+      if (!file || !file.buffer) {
+        res.status(400).json({ success: false, error: 'Файл photo не предоставлен' });
+        return;
+      }
+
+      const mimeType = String(req.body.mimeType || file.mimetype || 'image/jpeg');
+      const name = req.body.name ? String(req.body.name) : undefined;
+      const description = req.body.description ? String(req.body.description) : undefined;
+      const date = req.body.date ? String(req.body.date) : undefined;
+      const maintenanceType = req.body.maintenanceType ? String(req.body.maintenanceType) : undefined;
+
+      const photoBase64 = file.buffer.toString('base64');
+
+      const result = await gasClient.post<Record<string, unknown>>('uploadPhotosToFolder', {
+        folderId: folderUrl,
+        photoBase64,
+        mimeType,
+        name,
+        description,
+        date,
+        maintenanceType,
+        index: 1,
+        total: 1,
+      });
+
+      res.json({ success: true, data: result });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Неизвестная ошибка';
+      res.status(500).json({ success: false, error: message });
+    }
+  }
+);
 
 export default router;

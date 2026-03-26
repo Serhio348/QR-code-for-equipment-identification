@@ -37,6 +37,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   ChatMessage,
   streamChatMessage,
+  uploadPhotoToDriveFolder,
   TextContentBlock,
   ImageContentBlock,
   EquipmentContext,
@@ -142,6 +143,23 @@ const createMultimodalContent = (
   return content;
 };
 
+const DRIVE_FOLDER_URL_REGEX = /https:\/\/drive\.google\.com\/drive\/folders\/[a-zA-Z0-9_-]+/g;
+
+function findLastDriveFolderUrl(messages: ChatMessageWithMeta[]): string | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const content = messages[i]?.content;
+    const text = typeof content === 'string'
+      ? content
+      : content.filter(b => b.type === 'text').map(b => (b as TextContentBlock).text).join('\n');
+
+    const matches = text.match(DRIVE_FOLDER_URL_REGEX);
+    if (matches && matches.length > 0) {
+      return matches[matches.length - 1];
+    }
+  }
+  return null;
+}
+
 /**
  * Создание сообщения с метаданными.
  */
@@ -230,25 +248,69 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
-    // Преобразуем входное сообщение в формат Anthropic API
-    const content = createMultimodalContent(inputMessage);
+    // Если есть фото и пользователь просит "просто загрузить" — грузим напрямую на backend,
+    // чтобы не отправлять Base64 в LLM (это и вызывает "зависания").
+    const wantsDirectUpload = !!inputMessage.photos?.length && /загруз/i.test(inputMessage.text);
+    const lastFolderUrl = wantsDirectUpload ? findLastDriveFolderUrl(messages) : null;
+
+    let messageForAi: ChatInputMessage = inputMessage;
+
+    if (wantsDirectUpload && lastFolderUrl && inputMessage.photos?.every(p => !!(p as any).file)) {
+      // Показываем сообщение пользователя без картинок
+      const userMessage = createMessage('user', inputMessage.text);
+      const newMessages = [...messages, userMessage];
+      setMessages(newMessages);
+
+      try {
+        const uploadedLinks: string[] = [];
+
+        for (const p of inputMessage.photos || []) {
+          const resp = await uploadPhotoToDriveFolder(
+            lastFolderUrl,
+            (p as any).file as File,
+            { name: p.fileName, description: inputMessage.text },
+            controller.signal,
+          );
+
+          // GAS возвращает data.fileUrl; но структура может отличаться — пытаемся достать ссылку аккуратно.
+          const fileUrl = (resp as any)?.data?.fileUrl || (resp as any)?.data?.file_url;
+          if (typeof fileUrl === 'string' && fileUrl.startsWith('http')) {
+            uploadedLinks.push(fileUrl);
+          }
+        }
+
+        // В AI отправляем короткий текст: что фото уже загружены и куда.
+        messageForAi = {
+          text:
+            `${inputMessage.text}\n\n` +
+            `Фото загружены в папку: ${lastFolderUrl}\n` +
+            (uploadedLinks.length ? uploadedLinks.map(u => `- ${u}`).join('\n') : ''),
+          photos: undefined,
+        };
+      } catch {
+        // Если прямую загрузку сделать не удалось — fallback на мультимодальный режим ниже.
+        messageForAi = inputMessage;
+      }
+    }
+
+    const content = createMultimodalContent(messageForAi);
 
     // Оптимистичное обновление
-    const userMessage = createMessage('user', content);
-    const newMessages = [...messages, userMessage];
-    setMessages(newMessages);
+    const userMessage2 = createMessage('user', content);
+    const newMessages2 = [...messages, userMessage2];
+    setMessages(newMessages2);
 
     // Debug: засекаем время начала запроса
     const startTime = Date.now();
 
     try {
-      const apiMessages = trimForApi(newMessages);
+      const apiMessages = trimForApi(newMessages2);
 
       // Создаём плейсхолдер для стримингового сообщения
       const streamingId = generateId();
       const streamingMsg: ChatMessageWithMeta = createMessage('assistant', '');
       streamingMsg.id = streamingId;
-      setMessages([...newMessages, streamingMsg]);
+      setMessages([...newMessages2, streamingMsg]);
 
       let accText = '';
       let toolsUsed: string[] = [];
@@ -317,7 +379,7 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
 
       setActiveToolName(null);
       setError(errorMessage);
-      setLastFailed({ message: inputMessage, messagesSnapshot: trimForApi(newMessages) });
+      setLastFailed({ message: messageForAi, messagesSnapshot: trimForApi(newMessages2) });
       setMessages(messages);
     } finally {
       setIsLoading(false);
