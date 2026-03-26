@@ -24,24 +24,19 @@ ARG VITE_BELIOT_API_BASE_URL
 ARG VITE_BELIOT_API_KEY
 ARG VITE_BELIOT_LOGIN
 
-RUN --mount=type=secret,id=vite_build_env,required=false \
-    set -eu; \
-    if [ -f /run/secrets/vite_build_env ] && [ -s /run/secrets/vite_build_env ]; then \
-      cp /run/secrets/vite_build_env .env; \
-    else \
-      if [ -z "${VITE_SUPABASE_URL:-}" ] || [ -z "${VITE_SUPABASE_ANON_KEY:-}" ]; then \
-        echo "Нужны VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY (переменные сервиса / build args) либо secret vite_build_env."; \
-        exit 1; \
-      fi; \
-      : > .env; \
-      printf 'VITE_SUPABASE_URL=%s\n' "$VITE_SUPABASE_URL" >> .env; \
-      printf 'VITE_SUPABASE_ANON_KEY=%s\n' "$VITE_SUPABASE_ANON_KEY" >> .env; \
-      if [ -n "${VITE_EQUIPMENT_API_URL:-}" ]; then printf 'VITE_EQUIPMENT_API_URL=%s\n' "$VITE_EQUIPMENT_API_URL" >> .env; fi; \
-      if [ -n "${VITE_AI_CONSULTANT_API_URL:-}" ]; then printf 'VITE_AI_CONSULTANT_API_URL=%s\n' "$VITE_AI_CONSULTANT_API_URL" >> .env; fi; \
-      if [ -n "${VITE_BELIOT_API_BASE_URL:-}" ]; then printf 'VITE_BELIOT_API_BASE_URL=%s\n' "$VITE_BELIOT_API_BASE_URL" >> .env; fi; \
-      if [ -n "${VITE_BELIOT_API_KEY:-}" ]; then printf 'VITE_BELIOT_API_KEY=%s\n' "$VITE_BELIOT_API_KEY" >> .env; fi; \
-      if [ -n "${VITE_BELIOT_LOGIN:-}" ]; then printf 'VITE_BELIOT_LOGIN=%s\n' "$VITE_BELIOT_LOGIN" >> .env; fi; \
+RUN set -eu; \
+    if [ -z "${VITE_SUPABASE_URL:-}" ] || [ -z "${VITE_SUPABASE_ANON_KEY:-}" ]; then \
+      echo "Нужны VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY (переменные сервиса / build args)."; \
+      exit 1; \
     fi; \
+    : > .env; \
+    printf 'VITE_SUPABASE_URL=%s\n' "$VITE_SUPABASE_URL" >> .env; \
+    printf 'VITE_SUPABASE_ANON_KEY=%s\n' "$VITE_SUPABASE_ANON_KEY" >> .env; \
+    if [ -n "${VITE_EQUIPMENT_API_URL:-}" ]; then printf 'VITE_EQUIPMENT_API_URL=%s\n' "$VITE_EQUIPMENT_API_URL" >> .env; fi; \
+    if [ -n "${VITE_AI_CONSULTANT_API_URL:-}" ]; then printf 'VITE_AI_CONSULTANT_API_URL=%s\n' "$VITE_AI_CONSULTANT_API_URL" >> .env; fi; \
+    if [ -n "${VITE_BELIOT_API_BASE_URL:-}" ]; then printf 'VITE_BELIOT_API_BASE_URL=%s\n' "$VITE_BELIOT_API_BASE_URL" >> .env; fi; \
+    if [ -n "${VITE_BELIOT_API_KEY:-}" ]; then printf 'VITE_BELIOT_API_KEY=%s\n' "$VITE_BELIOT_API_KEY" >> .env; fi; \
+    if [ -n "${VITE_BELIOT_LOGIN:-}" ]; then printf 'VITE_BELIOT_LOGIN=%s\n' "$VITE_BELIOT_LOGIN" >> .env; fi; \
     npm run build; \
     rm -f .env; \
     test -f dist/index.html; \
