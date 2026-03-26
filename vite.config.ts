@@ -43,8 +43,24 @@ export default defineConfig(({ mode }) => ({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+        manualChunks(id: string): string | undefined {
+          if (!id.includes('node_modules')) {
+            return undefined;
+          }
+          if (
+            id.includes('node_modules/react/') ||
+            id.includes('node_modules/react-dom/') ||
+            id.includes('node_modules/react-router')
+          ) {
+            return 'react-vendor';
+          }
+          if (id.includes('jspdf') || id.includes('html2canvas')) {
+            return 'pdf-export';
+          }
+          if (id.includes('recharts')) {
+            return 'recharts-vendor';
+          }
+          return undefined;
         },
       },
     },

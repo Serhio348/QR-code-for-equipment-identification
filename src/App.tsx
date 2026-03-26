@@ -1,39 +1,43 @@
-import React, { useEffect } from 'react';
+import React, { lazy, Suspense, useEffect } from 'react';
 import { Routes, Route, Link, useLocation, Navigate, useNavigate } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useAuth } from './features/auth/contexts/AuthContext';
-import MainMenuPage from './features/common/pages/MainMenuPage';
-import EquipmentListPage from './features/equipment/pages/EquipmentListPage';
-import LoginPage from './features/auth/pages/LoginPage';
-import RegisterPage from './features/auth/pages/RegisterPage';
-import ResetPasswordPage from './features/auth/pages/ResetPasswordPage';
-import EquipmentPage from './features/equipment/pages/EquipmentPage';
-import EquipmentFormPage from './features/equipment/pages/EquipmentFormPage';
-import WaterPage from './features/water-monitoring/pages/WaterPage';
-import AccessSettingsPage from './features/access-management/pages/AccessSettingsPage';
-import ErrorLogsPage from './features/error-logging/pages/ErrorLogsPage';
-import ActivityLogsPage from './features/user-activity/pages/ActivityLogsPage';
-import WorkshopSettingsPage from './features/workshops/pages/WorkshopSettingsPage';
-import WaterAnalysisFormPage from './features/water-quality/pages/WaterAnalysisFormPage';
-import WaterAnalysisViewPage from './features/water-quality/pages/WaterAnalysisViewPage';
-import WaterQualityAlertsPage from './features/water-quality/pages/WaterQualityAlertsPage';
-import WaterQualityNormsPage from './features/water-quality/pages/WaterQualityNormsPage';
-import WaterQualityNormFormPage from './features/water-quality/pages/WaterQualityNormFormPage';
-import WaterQualityNormViewPage from './features/water-quality/pages/WaterQualityNormViewPage';
-import SamplingPointsPage from './features/water-quality/pages/SamplingPointsPage';
-import SamplingPointFormPage from './features/water-quality/pages/SamplingPointFormPage';
-import SamplingPointViewPage from './features/water-quality/pages/SamplingPointViewPage';
-import NotFoundPage from './features/common/pages/NotFoundPage';
+import LoadingSpinner from './features/common/components/LoadingSpinner';
 import ProtectedRoute from './features/common/components/ProtectedRoute';
 import AppAccessGuard from './features/access-management/components/AppAccessGuard';
 import InstallPWA from './features/common/components/InstallPWA';
 import AppFooter from './features/common/components/AppFooter';
 import { isEquipmentRoute, ROUTES } from './shared/utils/routes';
 import { saveLastPath, loadLastPath } from './shared/utils/pathStorage';
-import { ChatWidget } from './features/ai-consultant/components/ChatWidget';
 import './styles/colors.css';
 import './App.css';
+
+const MainMenuPage = lazy(() => import('./features/common/pages/MainMenuPage'));
+const EquipmentListPage = lazy(() => import('./features/equipment/pages/EquipmentListPage'));
+const LoginPage = lazy(() => import('./features/auth/pages/LoginPage'));
+const RegisterPage = lazy(() => import('./features/auth/pages/RegisterPage'));
+const ResetPasswordPage = lazy(() => import('./features/auth/pages/ResetPasswordPage'));
+const EquipmentPage = lazy(() => import('./features/equipment/pages/EquipmentPage'));
+const EquipmentFormPage = lazy(() => import('./features/equipment/pages/EquipmentFormPage'));
+const WaterPage = lazy(() => import('./features/water-monitoring/pages/WaterPage'));
+const AccessSettingsPage = lazy(() => import('./features/access-management/pages/AccessSettingsPage'));
+const ErrorLogsPage = lazy(() => import('./features/error-logging/pages/ErrorLogsPage'));
+const ActivityLogsPage = lazy(() => import('./features/user-activity/pages/ActivityLogsPage'));
+const WorkshopSettingsPage = lazy(() => import('./features/workshops/pages/WorkshopSettingsPage'));
+const WaterAnalysisFormPage = lazy(() => import('./features/water-quality/pages/WaterAnalysisFormPage'));
+const WaterAnalysisViewPage = lazy(() => import('./features/water-quality/pages/WaterAnalysisViewPage'));
+const WaterQualityAlertsPage = lazy(() => import('./features/water-quality/pages/WaterQualityAlertsPage'));
+const WaterQualityNormsPage = lazy(() => import('./features/water-quality/pages/WaterQualityNormsPage'));
+const WaterQualityNormFormPage = lazy(() => import('./features/water-quality/pages/WaterQualityNormFormPage'));
+const WaterQualityNormViewPage = lazy(() => import('./features/water-quality/pages/WaterQualityNormViewPage'));
+const SamplingPointsPage = lazy(() => import('./features/water-quality/pages/SamplingPointsPage'));
+const SamplingPointFormPage = lazy(() => import('./features/water-quality/pages/SamplingPointFormPage'));
+const SamplingPointViewPage = lazy(() => import('./features/water-quality/pages/SamplingPointViewPage'));
+const NotFoundPage = lazy(() => import('./features/common/pages/NotFoundPage'));
+const ChatWidget = lazy(() =>
+  import('./features/ai-consultant/components/ChatWidget').then((m) => ({ default: m.ChatWidget })),
+);
 
 const App: React.FC = () => {
   const location = useLocation();
@@ -142,6 +146,7 @@ const App: React.FC = () => {
 
       <main className={`app-content ${isAuthPage ? 'auth-page' : ''}`}>
         {!isAuthPage && <InstallPWA />}
+        <Suspense fallback={<LoadingSpinner fullScreen text="Загрузка..." />}>
         <Routes>
           {/* Страницы аутентификации - доступны всем */}
           <Route path={ROUTES.LOGIN} element={<LoginPage />} />
@@ -411,6 +416,7 @@ const App: React.FC = () => {
           {/* Страница 404 - должна быть последней */}
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
+        </Suspense>
       </main>
 
       {/* Футер приложения */}
@@ -429,7 +435,9 @@ const App: React.FC = () => {
         pauseOnHover
         theme="light"
       />
-      <ChatWidget />
+      <Suspense fallback={null}>
+        <ChatWidget />
+      </Suspense>
     </div>
   );
 };
