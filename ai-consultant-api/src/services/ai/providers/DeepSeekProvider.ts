@@ -280,7 +280,9 @@ export class DeepSeekProvider extends BaseAIProvider {
 
   /**
    * Преобразует ChatMessage[] в формат OpenAI.
-   * DeepSeek НЕ поддерживает vision: изображения заменяются текстовым уведомлением.
+   * DeepSeek НЕ поддерживает vision (анализ изображений), но мы можем
+   * передать вложения как Base64 в тексте, чтобы агент мог ЗАГРУЗИТЬ фото
+   * через инструменты (upload_maintenance_photo / upload_photos_to_folder).
    */
   private convertMessages(messages: ChatMessage[]): OpenAI.ChatCompletionMessageParam[] {
     return messages.map(msg => {
@@ -291,25 +293,37 @@ export class DeepSeekProvider extends BaseAIProvider {
         return { role: 'user' as const, content: msg.content };
       }
 
-      // Мультимодальный контент: DeepSeek не поддерживает image_url —
-      // извлекаем только текстовые блоки, изображения заменяем описанием.
+      // Мультимодальный контент: DeepSeek не поддерживает image_url,
+      // поэтому сериализуем изображения как "вложение" в текст (mime + base64).
       const textParts: string[] = [];
-      let imageCount = 0;
+      const images: Array<{ mediaType: string; base64: string }> = [];
 
       for (const block of msg.content) {
         if (block.type === 'text') {
           textParts.push(block.text);
         } else {
-          imageCount++;
+          images.push({
+            mediaType: block.source.media_type,
+            base64: block.source.data,
+          });
         }
       }
 
-      if (imageCount > 0) {
+      if (images.length > 0) {
         textParts.push(
-          `\n[⚠️ Пользователь прикрепил ${imageCount} изображение(й), но DeepSeek не поддерживает анализ фото. ` +
-          `Сообщи пользователю об этом ограничении и предложи описать содержимое изображения текстом, ` +
-          `либо переключиться на Claude или Gemini для работы с фотографиями.]`
+          `\n[ℹ️ Вложенные изображения переданы как Base64. DeepSeek не умеет анализировать фото, ` +
+          `но может загрузить их через инструменты. Если пользователь просит "просто загрузить" — ` +
+          `НЕ проси описание, используй upload_photos_to_folder или upload_maintenance_photo.]`
         );
+
+        images.forEach((img, idx) => {
+          // ВАЖНО: это увеличивает контекст, но позволяет загрузку без Claude/Gemini.
+          textParts.push(
+            `\n[IMAGE_ATTACHMENT_${idx + 1}]\n` +
+            `mime_type: ${img.mediaType}\n` +
+            `base64: ${img.base64}\n`
+          );
+        });
       }
 
       const text = textParts.join('\n').trim();

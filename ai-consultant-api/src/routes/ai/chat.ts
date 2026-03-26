@@ -76,7 +76,10 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
             ? [...backgroundHistory, ...messages]
             : messages;
 
-        const provider = await ProviderFactory.create();
+        const hasImages = messagesWithHistory.some(m => Array.isArray(m.content) && m.content.some(b => (b as any).type === 'image'));
+        // Если пользователь прикрепил фото — выбираем провайдера с поддержкой мультимодальности.
+        // Иначе DeepSeek не сможет вызвать tools для загрузки (он не "видит" вложения).
+        const provider = await ProviderFactory.create(hasImages ? 'claude' : undefined);
         const factsPrompt = await loadFactsForPrompt().catch(() => '');
 
         const response = await provider.chat(
