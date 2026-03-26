@@ -2,7 +2,7 @@
 # Секреты для Vite: предпочтительно BuildKit secret (не попадает в историю слоёв как ARG):
 #   docker buildx build --secret id=vite_build_env,src=./vite.build.env -t app .
 # Файл vite.build.env — строки вида KEY=value (все нужные VITE_*).
-# Railway пока подставляет переменные как ARG — блок fallback ниже; SERVICE ROLE в фронт не передаём.
+# Railway пока подставляет переменные как ARG — блок ниже; SERVICE ROLE в фронт не передаём.
 
 FROM node:20-alpine AS builder
 
