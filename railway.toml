@@ -1,4 +1,5 @@
 [build]
+# Сборка: Dockerfile (BuildKit). Секреты Vite — см. комментарий в Dockerfile (secret vite_build_env).
 builder = "dockerfile"
 dockerfilePath = "Dockerfile"
 
