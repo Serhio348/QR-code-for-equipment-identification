@@ -1,5 +1,5 @@
 [build]
-# Сборка: Dockerfile (BuildKit). Секреты Vite — см. комментарий в Dockerfile (secret vite_build_env).
+# Сборка: Dockerfile. VITE_* — переменные сервиса Railway как build-time (см. Dockerfile).
 builder = "dockerfile"
 dockerfilePath = "Dockerfile"
 
