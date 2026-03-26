@@ -1110,6 +1110,53 @@ function doPost(e) {
           return createErrorResponse('Ошибка загрузки фото: ' + error.toString());
         }
 
+      case 'ensureDriveFolderPath':
+        // Создать (если нужно) подпапки по пути внутри указанной папки Drive
+        Logger.log('📁 Обработка ensureDriveFolderPath');
+        if (!data.parentFolderId) {
+          return createErrorResponse('parentFolderId не указан');
+        }
+        if (!data.subfolderPath) {
+          return createErrorResponse('subfolderPath не указан');
+        }
+        try {
+          var ensureResult = ensureDriveFolderPath(
+            data.parentFolderId,
+            data.subfolderPath
+          );
+          return createJsonResponse(ensureResult);
+        } catch (ensureError) {
+          Logger.log('❌ Ошибка ensureDriveFolderPath: ' + ensureError.toString());
+          return createErrorResponse('Ошибка создания подпапок: ' + ensureError.toString());
+        }
+
+      case 'uploadPhotosToFolder':
+        // Загрузить фото в указанную папку Drive (произвольная папка)
+        Logger.log('📷 Обработка uploadPhotosToFolder');
+        if (!data.folderId) {
+          return createErrorResponse('folderId не указан');
+        }
+        if (!data.photoBase64) {
+          return createErrorResponse('Фото не предоставлено');
+        }
+        try {
+          var uploadToFolderResult = uploadPhotosToFolder(
+            data.folderId,
+            data.photoBase64,
+            data.mimeType || 'image/jpeg',
+            data.name || '',
+            data.description || '',
+            data.date || new Date().toISOString().split('T')[0],
+            data.maintenanceType || 'Фото',
+            data.index || 1,
+            data.total || 1
+          );
+          return createJsonResponse(uploadToFolderResult);
+        } catch (uploadToFolderError) {
+          Logger.log('❌ Ошибка uploadPhotosToFolder: ' + uploadToFolderError.toString());
+          return createErrorResponse('Ошибка загрузки фото: ' + uploadToFolderError.toString());
+        }
+
       case 'uploadMaintenanceDocument':
         // Загрузить документ обслуживания (PDF, Word, Excel и др.)
         Logger.log('📎 Обработка uploadMaintenanceDocument');

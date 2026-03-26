@@ -52,6 +52,11 @@ import { equipmentTools, executeEquipmentTool } from './equipmentTools.js';
 // - executeDriveTool: функция выполнения — парсит Drive URL и вызывает gasClient.get
 import { driveTools, executeDriveTool } from './driveTools.js';
 
+// Tools для записи в Google Drive (создание подпапок, загрузка фото в указанную папку):
+// - driveWriteTools: определения 2 инструментов (ensure_drive_folder_path, upload_photos_to_folder)
+// - executeDriveWriteTool: функция выполнения — вызывает gasClient.post
+import { driveWriteTools, executeDriveWriteTool } from './driveWriteTools.js';
+
 // Tools для работы с фото обслуживания (загрузка, просмотр, поиск):
 // - photoTools: определения 3 инструментов (загрузка, список, поиск фото)
 // - executePhotoTool: функция выполнения — загружает фото через gasClient.post
@@ -116,6 +121,7 @@ import { memoryTools, executeMemoryTool } from './memoryTools.js';
 export const tools: Anthropic.Tool[] = [
     ...equipmentTools,
     ...driveTools,
+    ...driveWriteTools,
     ...photoTools,
     ...documentTools,
     ...waterTools,
@@ -151,6 +157,10 @@ const toolExecutors: Record<string, (name: string, input: Record<string, unknown
     // Drive tools → executeDriveTool (GAS: getFolderFiles, getFileContent)
     'search_files_in_folder': executeDriveTool,
     'read_file_content': executeDriveTool,
+
+    // Drive write tools → executeDriveWriteTool (GAS: ensureDriveFolderPath, uploadPhotosToFolder)
+    'ensure_drive_folder_path': executeDriveWriteTool,
+    'upload_photos_to_folder': executeDriveWriteTool,
 
     // Photo tools → executePhotoTool (GAS: uploadMaintenancePhoto, getMaintenancePhotos, searchMaintenancePhotos)
     'upload_maintenance_photo': executePhotoTool,
