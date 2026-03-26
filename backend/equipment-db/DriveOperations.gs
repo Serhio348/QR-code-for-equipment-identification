@@ -1290,6 +1290,81 @@ function handleGetFileContent(params) {
 }
 
 // ============================================================================
+// ФУНКЦИИ ДЛЯ СОЗДАНИЯ ПОДПАПОК ПО ПУТИ (ДЛЯ AI)
+// ============================================================================
+
+/**
+ * Обеспечить наличие пути подпапок внутри родительской папки.
+ *
+ * Создаёт отсутствующие подпапки по пути subfolderPath внутри parentFolderId.
+ *
+ * @param {string} parentFolderId - ID (или URL) родительской папки
+ * @param {string} subfolderPath - путь подпапок, разделитель "/"
+ * @returns {Object} { folderId, folderUrl, createdPath: Array<{name, folderId, created}> }
+ */
+function ensureDriveFolderPath(parentFolderId, subfolderPath) {
+  Logger.log('📁 ensureDriveFolderPath');
+  Logger.log('  - parentFolderId: ' + parentFolderId);
+  Logger.log('  - subfolderPath: ' + subfolderPath);
+
+  if (!parentFolderId) {
+    throw new Error('parentFolderId не указан');
+  }
+  if (!subfolderPath) {
+    throw new Error('subfolderPath не указан');
+  }
+
+  var rootId = extractDriveIdFromUrl(String(parentFolderId).trim());
+  if (!rootId) {
+    throw new Error('Не удалось извлечь ID родительской папки');
+  }
+
+  var currentFolder = DriveApp.getFolderById(rootId);
+  var segments = String(subfolderPath)
+    .split('/')
+    .map(function(s) { return String(s || '').trim(); })
+    .filter(function(s) { return !!s; });
+
+  if (segments.length === 0) {
+    throw new Error('subfolderPath пуст (после разбиения)');
+  }
+
+  var createdPath = [];
+
+  for (var i = 0; i < segments.length; i++) {
+    var rawName = segments[i];
+    // Google Drive не допускает / \ : * ? " < > |
+    var safeName = rawName.replace(/[/\\:*?"<>|]/g, '_').trim();
+    if (!safeName) safeName = 'Папка';
+
+    var subFolders = currentFolder.getFoldersByName(safeName);
+    var nextFolder = null;
+    var created = false;
+
+    if (subFolders.hasNext()) {
+      nextFolder = subFolders.next();
+    } else {
+      nextFolder = currentFolder.createFolder(safeName);
+      created = true;
+    }
+
+    createdPath.push({
+      name: safeName,
+      folderId: nextFolder.getId(),
+      created: created
+    });
+
+    currentFolder = nextFolder;
+  }
+
+  return {
+    folderId: currentFolder.getId(),
+    folderUrl: currentFolder.getUrl(),
+    createdPath: createdPath
+  };
+}
+
+// ============================================================================
 // ФУНКЦИИ РАБОТЫ С ФОТО ОБСЛУЖИВАНИЯ
 // ============================================================================
 
@@ -1404,6 +1479,104 @@ function uploadMaintenancePhoto(equipmentId, photoBase64, mimeType, description,
 
   } catch (error) {
     Logger.log('❌ Ошибка uploadMaintenancePhoto: ' + error.toString());
+    Logger.log('  - Stack: ' + (error.stack || 'нет стека'));
+    throw error;
+  }
+}
+
+/**
+ * Загрузить фото в УКАЗАННУЮ папку Google Drive (без привязки к equipmentId).
+ *
+ * Используется AI-инструментами для загрузки фото в папку, которую указал пользователь
+ * (или в созданную подпапку внутри папки оборудования).
+ *
+ * @param {string} folderIdOrUrl - ID или URL папки назначения
+ * @param {string} photoBase64 - Base64 изображения (без data:image/...)
+ * @param {string} mimeType - MIME тип (image/jpeg, image/png, ...)
+ * @param {string} name - (опционально) имя файла
+ * @param {string} description - (опционально) описание (используется в имени если name не задан)
+ * @param {string} date - (опционально) YYYY-MM-DD
+ * @param {string} maintenanceType - (опционально) тип работ
+ * @param {number} index - (опционально) номер файла в батче (1..total)
+ * @param {number} total - (опционально) всего файлов в батче
+ * @returns {Object} { success, fileId, fileUrl, thumbnailUrl, fileName, folderUrl }
+ */
+function uploadPhotosToFolder(folderIdOrUrl, photoBase64, mimeType, name, description, date, maintenanceType, index, total) {
+  try {
+    Logger.log('📷 uploadPhotosToFolder');
+    Logger.log('  - folderIdOrUrl: ' + folderIdOrUrl);
+    Logger.log('  - mimeType: ' + mimeType);
+    Logger.log('  - name: ' + name);
+    Logger.log('  - description: ' + description);
+    Logger.log('  - date: ' + date);
+    Logger.log('  - maintenanceType: ' + maintenanceType);
+    Logger.log('  - index/total: ' + index + '/' + total);
+    Logger.log('  - photoBase64 length: ' + (photoBase64 ? photoBase64.length : 0));
+
+    if (!folderIdOrUrl) {
+      throw new Error('folderId не указан');
+    }
+    if (!photoBase64) {
+      throw new Error('Фото не предоставлено');
+    }
+
+    var folderId = extractDriveIdFromUrl(String(folderIdOrUrl).trim());
+    if (!folderId) {
+      throw new Error('Не удалось извлечь ID папки из folderIdOrUrl');
+    }
+
+    var targetFolder = DriveApp.getFolderById(folderId);
+
+    if (!mimeType) {
+      mimeType = 'image/jpeg';
+    }
+
+    // Определяем расширение файла по MIME типу
+    var extension = '.jpg';
+    if (mimeType === 'image/png') {
+      extension = '.png';
+    } else if (mimeType === 'image/gif') {
+      extension = '.gif';
+    } else if (mimeType === 'image/webp') {
+      extension = '.webp';
+    }
+
+    var safeDate = date ? String(date).replace(/[/\\:*?"<>|]/g, '-') : new Date().toISOString().split('T')[0];
+    var safeType = maintenanceType ? String(maintenanceType).replace(/[/\\:*?"<>|]/g, '_') : 'Фото';
+    var safeDesc = description ? String(description).replace(/[/\\:*?"<>|]/g, '_').substring(0, 50) : 'фото';
+
+    var fileName;
+    if (name && String(name).trim()) {
+      fileName = String(name).trim().replace(/[/\\:*?"<>|]/g, '_');
+      if (!fileName.toLowerCase().endsWith(extension)) {
+        fileName = fileName + extension;
+      }
+    } else {
+      var suffix = (total && total > 1) ? ('_' + (index || 1)) : '';
+      fileName = safeDate + '_' + safeType + '_' + safeDesc + suffix + extension;
+    }
+
+    var blob = Utilities.newBlob(
+      Utilities.base64Decode(photoBase64),
+      mimeType,
+      fileName
+    );
+
+    var file = targetFolder.createFile(blob);
+
+    var fileUrl = file.getUrl();
+    var thumbnailUrl = 'https://drive.google.com/thumbnail?id=' + file.getId() + '&sz=w400';
+
+    return {
+      success: true,
+      fileId: file.getId(),
+      fileUrl: fileUrl,
+      thumbnailUrl: thumbnailUrl,
+      fileName: fileName,
+      folderUrl: targetFolder.getUrl()
+    };
+  } catch (error) {
+    Logger.log('❌ Ошибка uploadPhotosToFolder: ' + error.toString());
     Logger.log('  - Stack: ' + (error.stack || 'нет стека'));
     throw error;
   }
