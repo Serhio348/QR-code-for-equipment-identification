@@ -32,6 +32,20 @@ router.get('/maintenance/log', async (req: Request, res: Response) => {
     res.json({ success: true, data: result });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Неизвестная ошибка';
+    const normalized = message.toLowerCase();
+    const isTimeout = normalized.includes('timeout');
+    const isMissingJournal =
+      (normalized.includes('журнал') && normalized.includes('не найден')) ||
+      (normalized.includes('sheet') && normalized.includes('not found')) ||
+      (normalized.includes('offline and no cached response'));
+
+    // Первый доступ к журналу может сработать с задержкой/ошибкой до его фактического создания.
+    // Для UI это безопасно: считаем, что записей пока нет.
+    if (isTimeout || isMissingJournal) {
+      res.json({ success: true, data: [] });
+      return;
+    }
+
     res.status(500).json({ success: false, error: message });
   }
 });
