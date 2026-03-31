@@ -20,11 +20,13 @@
 DROP POLICY IF EXISTS "Users can view profiles" ON public.profiles;
 DROP POLICY IF EXISTS "Admins can view all profiles" ON public.profiles;
 DROP POLICY IF EXISTS "Trigger can insert profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Clients cannot insert profiles" ON public.profiles;
 DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
 DROP POLICY IF EXISTS "Admins can update all profiles" ON public.profiles;
 
 DROP POLICY IF EXISTS "Users can view own access" ON public.user_app_access;
 DROP POLICY IF EXISTS "Trigger can insert access" ON public.user_app_access;
+DROP POLICY IF EXISTS "Clients cannot insert access" ON public.user_app_access;
 DROP POLICY IF EXISTS "Admins can manage all access" ON public.user_app_access;
 
 DROP POLICY IF EXISTS "Users can view own login history" ON public.login_history;
@@ -502,6 +504,16 @@ ALTER TABLE public.login_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.beliot_device_overrides ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.beliot_device_readings ENABLE ROW LEVEL SECURITY;
 
+-- Дополнительная защита:
+-- - роль anon не имеет INSERT
+-- - роль authenticated имеет INSERT только на уровне привилегий,
+--   а фактическое разрешение контролируется RLS (deny для обычных + allow для admin)
+--   Это нужно, чтобы admin upsert в user_app_access не падал.
+REVOKE INSERT ON TABLE public.profiles FROM anon;
+REVOKE INSERT ON TABLE public.user_app_access FROM anon;
+GRANT INSERT ON TABLE public.profiles TO authenticated;
+GRANT INSERT ON TABLE public.user_app_access TO authenticated;
+
 -- Таблица: profiles
 -- Пользователи могут просматривать свой профиль
 -- ВАЖНО: Разделяем политики для избежания рекурсии
@@ -519,12 +531,12 @@ CREATE POLICY "Admins can view all profiles"
   ON public.profiles FOR SELECT
   USING (public.is_admin());
 
--- ВАЖНО: Политика INSERT для функции handle_new_user (триггер регистрации)
--- Функция имеет SECURITY DEFINER, но для надежности добавляем явную политику
--- Это позволяет триггеру создавать профили при регистрации
-CREATE POLICY "Trigger can insert profiles"
+-- Клиентам запрещён прямой INSERT в profiles.
+-- Создание профиля происходит только через триггер handle_new_user() (SECURITY DEFINER).
+CREATE POLICY "Clients cannot insert profiles"
   ON public.profiles FOR INSERT
-  WITH CHECK (true);  -- Разрешаем INSERT для всех (функция с SECURITY DEFINER обходит это)
+  TO anon, authenticated
+  WITH CHECK (false);
 
 -- Пользователи могут обновлять свой профиль, но НЕ могут изменять role
 -- ВАЖНО: Используем функцию get_user_role() для предотвращения рекурсии RLS
@@ -550,12 +562,12 @@ CREATE POLICY "Users can view own access"
   ON public.user_app_access FOR SELECT
   USING (auth.uid() = user_id);
 
--- ВАЖНО: Политика INSERT для функции handle_new_user (триггер регистрации)
--- Функция имеет SECURITY DEFINER, но для надежности добавляем явную политику
--- Это позволяет триггеру создавать записи доступа при регистрации
-CREATE POLICY "Trigger can insert access"
+-- Клиентам запрещён прямой INSERT в user_app_access.
+-- Запись создаётся триггером handle_new_user() (SECURITY DEFINER).
+CREATE POLICY "Clients cannot insert access"
   ON public.user_app_access FOR INSERT
-  WITH CHECK (true);  -- Разрешаем INSERT для всех (функция с SECURITY DEFINER обходит это)
+  TO anon, authenticated
+  WITH CHECK (false);
 
 -- Администраторы могут управлять всем доступом
 CREATE POLICY "Admins can manage all access"

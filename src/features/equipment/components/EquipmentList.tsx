@@ -368,10 +368,6 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
               </div>
               
               <div className="card-body">
-                <div className="card-info">
-                  <span className="info-value info-value-bold">{equipment.name}</span>
-                </div>
-                
                 {equipment.specs?.inventoryNumber && (
                   <div className="card-info">
                     <span className="info-label">Инвентарный номер:</span>

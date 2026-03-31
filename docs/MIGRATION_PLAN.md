@@ -125,7 +125,7 @@ backend/
    ```
 
 3. **Альтернатива: Использовать существующие SQL файлы:**
-   - `docs/supabase-schema.sql` - основная схема
+   - `supabase/migrations/20260326_supabase_schema.sql` - основная схема
    - `docs/migrations/*.sql` - миграции
 
 ### Шаг 2: Адаптация схемы для собственного сервера
