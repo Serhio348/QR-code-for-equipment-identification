@@ -9,6 +9,8 @@ import { supabase } from '@/shared/config/supabase';
 import { API_CONFIG } from '@/shared/config/api';
 import type { UserAppAccess, UpdateUserAccessData } from '../types/access';
 
+let hasLoggedUnsupportedUpdateUserAccess = false;
+
 /**
  * Синхронизировать настройки доступа с Google Sheets через GAS API
  * Это необходимо для корректной работы доступа к папкам Google Drive
@@ -41,11 +43,13 @@ async function syncToGoogleSheets(
       params.append('water', access.water.toString());
     }
 
-    const response = await fetch(`${API_CONFIG.EQUIPMENT_API_URL}?${params.toString()}`, {
-      method: 'GET',
+    const response = await fetch(API_CONFIG.EQUIPMENT_API_URL, {
+      method: 'POST',
       headers: {
+        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
         'Accept': 'application/json',
       },
+      body: params.toString(),
     });
 
     if (!response.ok) {
@@ -55,17 +59,29 @@ async function syncToGoogleSheets(
     const result = await response.json();
 
     if (result.error) {
-      throw new Error(result.error);
+      throw new Error(String(result.error));
     }
 
     console.log('[supabaseAccessApi] Синхронизация с Google Sheets завершена:', result);
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const typedError = error as { message?: string; name?: string; status?: number };
+    const message = typedError?.message || 'Unknown error';
+    const isUnsupportedAction = message.includes('Неизвестное действие') && message.includes('updateUserAccess');
+
+    if (isUnsupportedAction) {
+      if (!hasLoggedUnsupportedUpdateUserAccess) {
+        hasLoggedUnsupportedUpdateUserAccess = true;
+        console.warn('[supabaseAccessApi] GAS endpoint не поддерживает action=updateUserAccess. Синхронизация с GAS пропущена, доступ в Supabase сохранен.');
+      }
+      return;
+    }
+
     // Подробное логирование ошибки для отладки
     const errorDetails = {
-      message: error?.message || 'Unknown error',
-      name: error?.name,
-      status: error?.status,
-      url: `${API_CONFIG.EQUIPMENT_API_URL}?action=updateUserAccess`,
+      message,
+      name: typedError?.name,
+      status: typedError?.status,
+      url: API_CONFIG.EQUIPMENT_API_URL,
     };
     console.warn('[supabaseAccessApi] Ошибка синхронизации с Google Sheets:', errorDetails);
     // Не прерываем выполнение - основные данные в Supabase уже обновлены

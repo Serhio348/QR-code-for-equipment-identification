@@ -284,7 +284,7 @@ ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
 4. **Настройте базу данных Supabase:**
 
    Выполните SQL скрипты для создания необходимых таблиц и функций:
-   - Основная схема: `docs/supabase-schema.sql`
+   - Основная схема: `supabase/migrations/20260326_supabase_schema.sql`
    - Миграции: `docs/migrations/*.sql`
 
    **Порядок выполнения миграций:**
@@ -478,7 +478,7 @@ docker run -p 8080:80 equipment-management
 ### Supabase
 
 1. Создайте проект на [supabase.com](https://supabase.com)
-2. Выполните SQL скрипты из `docs/supabase-schema.sql`
+2. Выполните SQL скрипты из `supabase/migrations/20260326_supabase_schema.sql`
 3. Запустите миграции из `supabase/migrations/` в SQL Editor (по порядку):
    - `20260312_water_invoices.sql` — таблица счетов водоканала
    - `20260316_agent_memory.sql` — долговременная память агента
