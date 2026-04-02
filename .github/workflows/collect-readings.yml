@@ -17,7 +17,16 @@ on:
     # - ON CONFLICT защищает от дублирования записей
     # - Данные всегда актуальны, независимо от времени запуска
     # - Запрос только за последние 24 часа не перегружает API
-  workflow_dispatch:  # Позволяет запускать вручную
+  workflow_dispatch:
+    inputs:
+      task:
+        description: 'Что выполнить'
+        required: true
+        default: 'collect_readings'
+        type: choice
+        options:
+          - collect_readings
+          - export_devices
 
 jobs:
   collect:
@@ -36,6 +45,7 @@ jobs:
         run: npm ci
       
       - name: Run collection script
+        if: github.event_name != 'workflow_dispatch' || inputs.task == 'collect_readings'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -43,6 +53,148 @@ jobs:
           BELIOT_PASSWORD: ${{ secrets.BELIOT_PASSWORD }}
           BELIOT_API_BASE_URL: ${{ secrets.BELIOT_API_BASE_URL }}
         run: npm run collect-readings
+
+      - name: Export devices list (JSON/CSV)
+        if: github.event_name == 'workflow_dispatch' && inputs.task == 'export_devices'
+        env:
+          BELIOT_LOGIN: ${{ secrets.BELIOT_LOGIN }}
+          BELIOT_PASSWORD: ${{ secrets.BELIOT_PASSWORD }}
+          BELIOT_API_BASE_URL: ${{ secrets.BELIOT_API_BASE_URL }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          node <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+          
+          const BELIOT_LOGIN = process.env.BELIOT_LOGIN;
+          const BELIOT_PASSWORD = process.env.BELIOT_PASSWORD;
+          const BELIOT_API_BASE_URL = process.env.BELIOT_API_BASE_URL || 'https://beliot.by:4443/api';
+          
+          if (!BELIOT_LOGIN || !BELIOT_PASSWORD) {
+            console.error('Missing BELIOT_LOGIN or BELIOT_PASSWORD');
+            process.exit(1);
+          }
+          
+          function extractDevices(data) {
+            // { data: { data: { metering_devices: { data: [...] } } } }
+            if (data?.data?.data?.metering_devices?.data && Array.isArray(data.data.data.metering_devices.data)) {
+              return data.data.data.metering_devices.data;
+            }
+            // { data: { metering_devices: { data: [...] } } }
+            if (data?.data?.metering_devices?.data && Array.isArray(data.data.metering_devices.data)) {
+              return data.data.metering_devices.data;
+            }
+            // { data: [...] }
+            if (data?.data && Array.isArray(data.data)) return data.data;
+            // { devices: [...] }
+            if (data?.devices && Array.isArray(data.devices)) return data.devices;
+            // direct array
+            if (Array.isArray(data)) return data;
+            // { data: { devices: [...] } }
+            if (data?.data?.devices && Array.isArray(data.data.devices)) return data.data.devices;
+            // { data: { devices_list: [...] } }
+            if (data?.data?.devices_list && Array.isArray(data.data.devices_list)) return data.data.devices_list;
+            return [];
+          }
+          
+          async function main() {
+            // login
+            const loginRes = await fetch(`${BELIOT_API_BASE_URL}/auth/login`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: BELIOT_LOGIN, password: BELIOT_PASSWORD, personal_data_access: true }),
+            });
+            if (!loginRes.ok) throw new Error(`Login failed: ${loginRes.status} ${loginRes.statusText}`);
+            const loginData = await loginRes.json();
+            const token = loginData?.token || loginData?.access_token || loginData?.bearer_token || loginData?.data?.token;
+            if (!token) throw new Error('Token not found in login response');
+            
+            const byId = new Map();
+            const perPage = 100;
+            const maxPages = 200;
+            let page = 1;
+            let sawPaginationMeta = false;
+            
+            while (page <= maxPages) {
+              const res = await fetch(`${BELIOT_API_BASE_URL}/device/metering_devices`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ paginate: true, page, per_page: perPage }),
+              });
+              if (!res.ok) throw new Error(`metering_devices failed: ${res.status} ${res.statusText}`);
+              const data = await res.json();
+              const devices = extractDevices(data);
+              for (const d of devices) {
+                const id = String(d?.device_id ?? d?.id ?? d?._id ?? '').trim();
+                if (id) byId.set(id, d);
+              }
+              
+              const meta = data?.data?.metering_devices || data?.data?.data?.metering_devices;
+              const currentPage = Number(meta?.current_page ?? page);
+              const lastPage = Number(meta?.last_page ?? NaN);
+              if (Number.isFinite(lastPage)) {
+                sawPaginationMeta = true;
+                if (currentPage >= lastPage) break;
+                page = currentPage + 1;
+                continue;
+              }
+              
+              // No meta: assume single page
+              break;
+            }
+            
+            // If API returned only first page without meta, we still export what we got.
+            const list = Array.from(byId.values()).sort((a, b) => {
+              const aId = String(a?.device_id ?? a?.id ?? a?._id ?? '');
+              const bId = String(b?.device_id ?? b?.id ?? b?._id ?? '');
+              return aId.localeCompare(bId);
+            });
+            
+            console.log(`Exported devices: ${list.length}${sawPaginationMeta ? ' (paginated)' : ''}`);
+            
+            const outDir = path.join(process.cwd(), 'artifacts');
+            const jsonPath = path.join(outDir, 'beliot-devices.json');
+            fs.writeFileSync(jsonPath, JSON.stringify(list, null, 2), 'utf-8');
+            
+            const csvPath = path.join(outDir, 'beliot-devices.csv');
+            const headers = ['device_id', 'name', 'serial_number', 'object_name', 'address'];
+            const esc = (v) => {
+              const s = v === null || v === undefined ? '' : String(v);
+              const needs = /[",\n]/.test(s);
+              return needs ? `"${s.replace(/"/g, '""')}"` : s;
+            };
+            const rows = [headers.join(',')];
+            for (const d of list) {
+              const deviceId = d?.device_id ?? d?.id ?? d?._id ?? '';
+              rows.push([
+                esc(deviceId),
+                esc(d?.name),
+                esc(d?.serial_number),
+                esc(d?.object_name ?? d?.tied_point?.place),
+                esc(d?.address),
+              ].join(','));
+            }
+            fs.writeFileSync(csvPath, rows.join('\n'), 'utf-8');
+            
+            console.log(`Artifacts written: ${jsonPath}, ${csvPath}`);
+          }
+          
+          main().catch((e) => {
+            console.error(e?.stack || e?.message || String(e));
+            process.exit(1);
+          });
+          NODE
+
+      - name: Upload exported devices (artifact)
+        if: github.event_name == 'workflow_dispatch' && inputs.task == 'export_devices'
+        uses: actions/upload-artifact@v4
+        with:
+          name: beliot-devices
+          path: artifacts/beliot-devices.*
       
       - name: Check script result
         if: failure()
