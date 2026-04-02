@@ -190,9 +190,92 @@ async function getBeliotToken(): Promise<string> {
 async function getCompanyDevices(token: string): Promise<BeliotDevice[]> {
   try {
     console.log('📋 Получение списка устройств...');
-    
-    // Пробуем основной endpoint: POST /api/device/metering_devices
-    let response = await fetch(`${beliotApiBaseUrl}/device/metering_devices`, {
+
+    const extractDevicesFromResponse = (data: any): BeliotDevice[] => {
+      // Формат 1: { data: { data: { metering_devices: { data: [...] } } } }
+      if (data?.data?.data?.metering_devices?.data && Array.isArray(data.data.data.metering_devices.data)) {
+        return data.data.data.metering_devices.data;
+      }
+      // Формат 2: { data: { metering_devices: { data: [...] } } }
+      if (data?.data?.metering_devices?.data && Array.isArray(data.data.metering_devices.data)) {
+        return data.data.metering_devices.data;
+      }
+      // Формат 3: { data: [...] }
+      if (data?.data && Array.isArray(data.data)) return data.data;
+      // Формат 4: { devices: [...] }
+      if (data?.devices && Array.isArray(data.devices)) return data.devices;
+      // Формат 5: прямой массив
+      if (Array.isArray(data)) return data;
+      // Формат 6: { data: { devices: [...] } }
+      if (data?.data?.devices && Array.isArray(data.data.devices)) return data.data.devices;
+      // Формат 7: { data: { devices_list: [...] } }
+      if (data?.data?.devices_list && Array.isArray(data.data.devices_list)) return data.data.devices_list;
+      return [];
+    };
+
+    // Важно: многие инсталляции Beliot возвращают по 10 устройств на страницу.
+    // Поэтому пробуем пагинацию и собираем все страницы до пустой.
+    const devicesById = new Map<string, BeliotDevice>();
+    const perPage = 100;
+    const maxPages = 200;
+
+    let sawAnyOkPage = false;
+    for (let page = 1; page <= maxPages; page += 1) {
+      const response = await fetch(`${beliotApiBaseUrl}/device/metering_devices`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          paginate: true,
+          page,
+          per_page: perPage,
+        }),
+      });
+
+      if (!response.ok) {
+        // Если первая страница не доступна — сразу идем в fallback.
+        if (page === 1) break;
+        // Если упали на странице > 1 — прекращаем пагинацию и используем то, что уже собрали.
+        console.warn(`⚠️ /device/metering_devices page=${page} вернул ${response.status}, остановка пагинации`);
+        break;
+      }
+
+      sawAnyOkPage = true;
+      const data = await response.json();
+
+      if (page === 1) {
+        console.log('🔍 Структура ответа API:', {
+          hasData: !!data?.data,
+          dataKeys: data?.data ? Object.keys(data.data) : [],
+          topLevelKeys: Object.keys(data || {}),
+          isArray: Array.isArray(data),
+          isDataArray: Array.isArray(data?.data),
+        });
+      }
+
+      const pageDevices = extractDevicesFromResponse(data);
+      if (pageDevices.length === 0) break;
+
+      for (const device of pageDevices) {
+        const id = String(device?.device_id || device?.id || device?._id || '').trim();
+        if (id) devicesById.set(id, device);
+      }
+
+      // Если вернули меньше perPage — это последняя страница (часто без метаданных last_page).
+      if (pageDevices.length < perPage) break;
+    }
+
+    const devices = Array.from(devicesById.values());
+    if (devices.length > 0) {
+      console.log(`✅ Найдено устройств: ${devices.length}${sawAnyOkPage ? ' (пагинация)' : ''}`);
+      return devices;
+    }
+
+    // Fallback: POST /api/abonent/main/data
+    console.log(`⚠️ Не удалось получить устройства через /device/metering_devices, пробуем fallback...`);
+    const fallbackResponse = await fetch(`${beliotApiBaseUrl}/abonent/main/data`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -201,132 +284,17 @@ async function getCompanyDevices(token: string): Promise<BeliotDevice[]> {
       body: JSON.stringify({}),
     });
 
-    let data;
-    
-    if (!response.ok) {
-      console.log(`⚠️ Endpoint /device/metering_devices вернул ${response.status}, пробуем fallback...`);
-      
-      // Fallback: POST /api/abonent/main/data
-      response = await fetch(`${beliotApiBaseUrl}/abonent/main/data`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({}),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Ошибка получения устройств: ${response.status} ${response.statusText}`);
-      }
-
-      data = await response.json();
-      
-      // Извлекаем устройства из abonent/main/data
-      const devices = data?.data?.devices_list || 
-                     data?.devices_list || 
-                     data?.data?.devices || 
-                     data?.devices || 
-                     [];
-      
-      if (!Array.isArray(devices)) {
-        throw new Error('Ожидался массив устройств в ответе API (abonent/main/data)');
-      }
-
-      console.log(`✅ Найдено устройств (через abonent/main/data): ${devices.length}`);
-      return devices;
+    if (!fallbackResponse.ok) {
+      throw new Error(`Ошибка получения устройств: ${fallbackResponse.status} ${fallbackResponse.statusText}`);
     }
 
-    data = await response.json();
-    
-    // Логируем структуру ответа для отладки
-    console.log('🔍 Структура ответа API:', {
-      hasData: !!data?.data,
-      dataKeys: data?.data ? Object.keys(data.data) : [],
-      topLevelKeys: Object.keys(data || {}),
-      isArray: Array.isArray(data),
-      isDataArray: Array.isArray(data?.data),
-    });
-    
-    // Извлекаем массив устройств из различных возможных форматов ответа
-    let devices: BeliotDevice[] = [];
-    
-    // Формат 1: { data: { data: { metering_devices: { data: [...] } } } }
-    if (data?.data?.data?.metering_devices?.data && Array.isArray(data.data.data.metering_devices.data)) {
-      devices = data.data.data.metering_devices.data;
-      console.log('✅ Формат 1: data.data.metering_devices.data');
+    const fallbackData = await fallbackResponse.json();
+    const fallbackDevices = extractDevicesFromResponse(fallbackData);
+    if (!Array.isArray(fallbackDevices)) {
+      throw new Error('Ожидался массив устройств в ответе API (abonent/main/data)');
     }
-    // Формат 2: { data: { metering_devices: { data: [...] } } }
-    else if (data?.data?.metering_devices?.data && Array.isArray(data.data.metering_devices.data)) {
-      devices = data.data.metering_devices.data;
-      console.log('✅ Формат 2: data.metering_devices.data');
-    }
-    // Формат 3: { data: [...] }
-    else if (data?.data && Array.isArray(data.data)) {
-      devices = data.data;
-      console.log('✅ Формат 3: data (массив)');
-    }
-    // Формат 4: { devices: [...] }
-    else if (data?.devices && Array.isArray(data.devices)) {
-      devices = data.devices;
-      console.log('✅ Формат 4: devices');
-    }
-    // Формат 5: прямой массив
-    else if (Array.isArray(data)) {
-      devices = data;
-      console.log('✅ Формат 5: прямой массив');
-    }
-    // Формат 6: { data: { devices: [...] } }
-    else if (data?.data?.devices && Array.isArray(data.data.devices)) {
-      devices = data.data.devices;
-      console.log('✅ Формат 6: data.devices');
-    }
-    // Формат 7: { data: { devices_list: [...] } }
-    else if (data?.data?.devices_list && Array.isArray(data.data.devices_list)) {
-      devices = data.data.devices_list;
-      console.log('✅ Формат 7: data.devices_list');
-    }
-    
-    if (!Array.isArray(devices) || devices.length === 0) {
-      console.warn('⚠️ Устройства не найдены в основном формате, пробуем fallback...');
-      console.log('🔍 Полный ответ API (первые 500 символов):', JSON.stringify(data, null, 2).substring(0, 500));
-      
-      // Пробуем fallback
-      const fallbackResponse = await fetch(`${beliotApiBaseUrl}/abonent/main/data`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({}),
-      });
-
-      if (fallbackResponse.ok) {
-        const fallbackData = await fallbackResponse.json();
-        console.log('🔍 Структура fallback ответа:', {
-          hasData: !!fallbackData?.data,
-          dataKeys: fallbackData?.data ? Object.keys(fallbackData.data) : [],
-          topLevelKeys: Object.keys(fallbackData || {}),
-        });
-        
-        devices = fallbackData?.data?.devices_list || 
-                 fallbackData?.devices_list || 
-                 fallbackData?.data?.devices || 
-                 fallbackData?.devices || 
-                 [];
-        
-        if (devices.length > 0) {
-          console.log('✅ Устройства найдены через fallback (abonent/main/data)');
-        }
-      }
-    }
-    
-    if (!Array.isArray(devices)) {
-      throw new Error('Ожидался массив устройств в ответе API');
-    }
-
-    console.log(`✅ Найдено устройств: ${devices.length}`);
-    return devices;
+    console.log(`✅ Найдено устройств (через abonent/main/data): ${fallbackDevices.length}`);
+    return fallbackDevices;
   } catch (error: any) {
     console.error('❌ Ошибка получения устройств:', error.message);
     throw error;
