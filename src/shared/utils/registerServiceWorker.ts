@@ -14,18 +14,26 @@ const isLocalhost = Boolean(
 let updateNotificationShown = false;
 
 export function registerServiceWorker(): void {
-  if ('serviceWorker' in navigator) {
-    // Для production используем /sw.js, для dev можно использовать другой путь
-    // В Vite используется import.meta.env.MODE вместо process.env.NODE_ENV
-    const swUrl = '/sw.js';
+  if (!('serviceWorker' in navigator)) {
+    return;
+  }
 
-    if (isLocalhost) {
-      // Для localhost проверяем, что Service Worker существует
-      checkValidServiceWorker(swUrl);
-    } else {
-      // Для production просто регистрируем
-      registerValidSW(swUrl);
-    }
+  // В development SW отключаем полностью, чтобы HMR/обновления кода не кэшировались
+  // и не приводили к запуску устаревшего бандла.
+  if (import.meta.env.DEV) {
+    unregisterServiceWorker();
+    return;
+  }
+
+  // Для production используем /sw.js
+  const swUrl = '/sw.js';
+
+  if (isLocalhost) {
+    // Для localhost проверяем, что Service Worker существует
+    checkValidServiceWorker(swUrl);
+  } else {
+    // Для production просто регистрируем
+    registerValidSW(swUrl);
   }
 }
 

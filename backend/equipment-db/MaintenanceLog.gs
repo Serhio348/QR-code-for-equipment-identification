@@ -93,113 +93,52 @@ function getMaintenanceLogSheet() {
  */
 function getMaintenanceLog(equipmentId, maintenanceSheetId) {
   try {
-    Logger.log('📋 getMaintenanceLog вызвана');
-    Logger.log('  - equipmentId: "' + equipmentId + '"');
-    Logger.log('  - equipmentId type: ' + typeof equipmentId);
-    Logger.log('  - equipmentId length: ' + (equipmentId ? equipmentId.length : 0));
-    Logger.log('  - maintenanceSheetId: ' + (maintenanceSheetId || 'не указан'));
+    Logger.log('📋 getMaintenanceLog вызвана: equipmentId="' + equipmentId + '", maintenanceSheetId=' + (maintenanceSheetId || 'не указан'));
     
     // Нормализуем equipmentId для сравнения
     const normalizedEquipmentId = equipmentId ? String(equipmentId).trim() : '';
     Logger.log('  - normalizedEquipmentId: "' + normalizedEquipmentId + '"');
     
-    // Если указан maintenanceSheetId, это может быть общий журнал для нескольких единиц оборудования
-    // В этом случае нужно использовать основной лист с фильтрацией по equipmentId
-    // Индивидуальный лист используется только если он принадлежит одному оборудованию
-    let sheet;
-    let useMainSheet = false; // Флаг для использования основного листа даже при наличии maintenanceSheetId
+    // В веб-приложении журнал всегда читается из основного листа с фильтрацией по equipmentId.
+    // Ранее здесь была попытка SpreadsheetApp.openById(maintenanceSheetId), но затем все равно
+    // использовался основной лист — это добавляло лишнюю задержку и таймауты.
+    const useMainSheet = true;
+    const sheet = getMaintenanceLogSheet();
     
-    if (maintenanceSheetId) {
-      try {
-        Logger.log('  - Открываем индивидуальный лист журнала: ' + maintenanceSheetId);
-        const spreadsheet = SpreadsheetApp.openById(maintenanceSheetId);
-        sheet = spreadsheet.getSheets()[0];
-        Logger.log('  - Индивидуальный лист открыт: ' + sheet.getName());
-        
-        // Проверяем, есть ли в индивидуальном листе колонка с equipmentId
-        // Если это общий журнал для установки, лучше использовать основной лист с фильтрацией
-        // Для простоты всегда используем основной лист, если нужно фильтровать по equipmentId
-        Logger.log('  - maintenanceSheetId указан, но используем основной лист для фильтрации по equipmentId');
-        useMainSheet = true;
-        sheet = getMaintenanceLogSheet();
-      } catch (error) {
-        Logger.log('⚠️ Не удалось открыть указанный лист журнала (' + maintenanceSheetId + '), используем основной лист: ' + error);
-        sheet = getMaintenanceLogSheet();
-        useMainSheet = true;
-      }
-    } else {
-      Logger.log('  - Используем основной лист "Журнал обслуживания"');
-      sheet = getMaintenanceLogSheet();
-      useMainSheet = true;
+    const lastRow = sheet.getLastRow();
+    Logger.log('  - Всего строк в листе: ' + lastRow);
+    if (lastRow <= 1) {
+      Logger.log('ℹ️ Лист журнала пуст (только заголовок)');
+      return [];
     }
-    
-    const data = sheet.getDataRange().getValues();
-    Logger.log('  - Всего строк в листе: ' + data.length);
-    
-    // Пропускаем заголовок (первая строка)
+
+    // Читаем только нужные 9 колонок и без строки заголовка
+    const data = sheet.getRange(2, 1, lastRow - 1, 9).getValues();
+
     const entries = [];
     let matchedRows = 0;
     
-    for (let i = 1; i < data.length; i++) {
+    for (let i = 0; i < data.length; i++) {
       const row = data[i];
       
-      // Если используется индивидуальный лист (maintenanceSheetId указан, но не используем основной лист)
-      if (maintenanceSheetId && !useMainSheet) {
-        // Структура индивидуального листа:
-        // A (0): Дата обслуживания
-        // B (1): Тип работы
-        // C (2): Описание
-        // D (3): Выполнил
-        // E (4): Статус
-        // F (5): Создано системой
-        // G (6): ID записи
+      // Основной лист "Журнал обслуживания"
+      // A: equipmentId, B: entryId, C: date, D: type, E: description, F: performedBy, G: status, H: createdAt, I: files
+      const rowEquipmentId = row[0] ? String(row[0]).trim() : '';
+
+      // Строгое сравнение нормализованных ID (без частичного совпадения)
+      if (rowEquipmentId === normalizedEquipmentId && rowEquipmentId !== '') {
         entries.push({
-          id: row[6] || '',                        // G: ID записи
-          equipmentId: equipmentId,                // ID оборудования
-          date: row[0] ? formatDate(row[0]) : '',  // A: Дата обслуживания
-          type: row[1] || '',                      // B: Тип работы
-          description: row[2] || '',               // C: Описание
-          performedBy: row[3] || '',               // D: Выполнил
-          status: row[4] || 'completed',          // E: Статус
-          createdAt: row[5] ? formatDate(row[5]) : '' // F: Дата создания
+          id: row[1] ? String(row[1]).trim() : '',
+          equipmentId: equipmentId,
+          date: row[2] ? formatDate(row[2]) : '',
+          type: row[3] ? String(row[3]).trim() : '',
+          description: row[4] ? String(row[4]).trim() : '',
+          performedBy: row[5] ? String(row[5]).trim() : '',
+          status: row[6] ? String(row[6]).trim() : 'completed',
+          createdAt: row[7] ? formatDate(row[7]) : '',
+          files: row[8] ? (function() { try { return JSON.parse(row[8]); } catch(e) { return []; } })() : []
         });
         matchedRows++;
-      } else {
-        // Основной лист "Журнал обслуживания"
-        // Структура основного листа:
-        // A (0): ID оборудования
-        // B (1): ID записи
-        // C (2): Дата обслуживания
-        // D (3): Тип работы
-        // E (4): Описание
-        // F (5): Выполнил
-        // G (6): Статус
-        // H (7): Дата создания
-        
-        // Проверяем, что ID оборудования совпадает
-        const rowEquipmentId = row[0] ? String(row[0]).trim() : '';
-        const normalizedRowEquipmentId = rowEquipmentId.trim();
-        
-        // Логируем все строки для отладки (первые 10 и те, где ID совпадает частично)
-        if (i <= 10 || normalizedRowEquipmentId.includes(normalizedEquipmentId) || normalizedEquipmentId.includes(normalizedRowEquipmentId)) {
-          Logger.log('  - Строка ' + i + ': row[0]="' + rowEquipmentId + '", normalized="' + normalizedRowEquipmentId + '", ищем="' + normalizedEquipmentId + '", совпадение=' + (normalizedRowEquipmentId === normalizedEquipmentId));
-        }
-        
-        // Строгое сравнение нормализованных ID (без частичного совпадения)
-        if (normalizedRowEquipmentId === normalizedEquipmentId && normalizedRowEquipmentId !== '') {
-          entries.push({
-            id: row[1] ? String(row[1]).trim() : '',                      // B: ID записи
-            equipmentId: equipmentId,              // ID оборудования
-            date: row[2] ? formatDate(row[2]) : '', // C: Дата обслуживания
-            type: row[3] ? String(row[3]).trim() : '',                    // D: Тип работы
-            description: row[4] ? String(row[4]).trim() : '',             // E: Описание
-            performedBy: row[5] ? String(row[5]).trim() : '',             // F: Выполнил
-            status: row[6] ? String(row[6]).trim() : 'completed',         // G: Статус
-            createdAt: row[7] ? formatDate(row[7]) : '', // H: Дата создания
-            files: row[8] ? (function() { try { return JSON.parse(row[8]); } catch(e) { return []; } })() : [] // I: Файлы
-          });
-          matchedRows++;
-        }
       }
     }
     
@@ -208,18 +147,10 @@ function getMaintenanceLog(equipmentId, maintenanceSheetId) {
     Logger.log('  - Использовался основной лист: ' + useMainSheet);
     Logger.log('  - maintenanceSheetId был указан: ' + (maintenanceSheetId ? 'ДА (' + maintenanceSheetId + ')' : 'НЕТ'));
     
-    if (matchedRows === 0 && data.length > 1) {
-      Logger.log('⚠️ ВНИМАНИЕ: Записи не найдены, но в таблице есть данные!');
-      Logger.log('  - Проверьте, что equipmentId в таблице совпадает с запрошенным: "' + normalizedEquipmentId + '"');
-      Logger.log('  - Всего строк в таблице (включая заголовок): ' + data.length);
-      // Логируем первые 10 ID из таблицы для сравнения
-      for (let i = 1; i <= Math.min(10, data.length - 1); i++) {
-        const sampleId = data[i][0] ? String(data[i][0]).trim() : '(пусто)';
-        const matches = sampleId === normalizedEquipmentId ? '✅ СОВПАДАЕТ' : '❌ не совпадает';
-        Logger.log('  - Строка ' + i + ': ID="' + sampleId + '" ' + matches);
-      }
-    } else if (matchedRows > 0) {
+    if (matchedRows > 0) {
       Logger.log('✅ Найдено ' + matchedRows + ' записей для equipmentId="' + normalizedEquipmentId + '"');
+    } else {
+      Logger.log('ℹ️ Записи для equipmentId="' + normalizedEquipmentId + '" не найдены');
     }
     
     // Сортируем по дате обслуживания (новые сверху)

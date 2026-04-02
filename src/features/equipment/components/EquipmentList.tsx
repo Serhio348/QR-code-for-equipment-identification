@@ -363,7 +363,7 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
               onClick={() => onSelectEquipment?.(equipment)}
             >
               <div className="card-header">
-                <h3 className="equipment-name">{equipment.name}</h3>
+                <h3 className="equipment-card-name">{equipment.name}</h3>
                 <StatusBadge status={equipment.status} />
               </div>
               

@@ -61,11 +61,12 @@ const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanc
     status: 'completed'
   });
 
+  const effectiveMaintenanceSheetId = maintenanceSheetId || equipment?.maintenanceSheetId;
+
   /**
    * Загрузка журнала обслуживания и информации об оборудовании при монтировании компонента
    */
   useEffect(() => {
-    loadMaintenanceLog();
     // Всегда загружаем оборудование для определения типа
     if (propEquipment) {
       // Если оборудование передано, используем его
@@ -76,11 +77,22 @@ const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanc
         type: propEquipment.type,
         isEnergySource: propEquipment.type === 'energy_source'
       });
-    } else if (equipmentId) {
+      // Если maintenanceSheetId отсутствует, пробуем догрузить актуальные данные по ID.
+      if (!propEquipment.maintenanceSheetId && equipmentId) {
+        loadEquipment();
+      }
+      return;
+    }
+
+    if (equipmentId) {
       // Если не передано, загружаем по ID
       loadEquipment();
     }
-  }, [equipmentId, maintenanceSheetId, propEquipment]);
+  }, [equipmentId, propEquipment]);
+
+  useEffect(() => {
+    loadMaintenanceLog(effectiveMaintenanceSheetId);
+  }, [equipmentId, effectiveMaintenanceSheetId]);
 
   /**
    * Загрузить информацию об оборудовании
@@ -107,7 +119,7 @@ const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanc
   /**
    * Загрузить журнал обслуживания с сервера
    */
-  const loadMaintenanceLog = async () => {
+  const loadMaintenanceLog = async (sheetIdOverride?: string) => {
     if (!equipmentId) {
       console.warn('⚠️ loadMaintenanceLog: equipmentId не указан');
       return;
@@ -115,7 +127,7 @@ const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanc
 
     console.log('📋 loadMaintenanceLog вызвана:', {
       equipmentId,
-      maintenanceSheetId,
+      maintenanceSheetId: sheetIdOverride,
       timestamp: new Date().toISOString()
     });
 
@@ -123,7 +135,7 @@ const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanc
     setError(null);
 
     try {
-      const log = await getMaintenanceLog(equipmentId, maintenanceSheetId);
+      const log = await getMaintenanceLog(equipmentId, sheetIdOverride);
       console.log('📋 loadMaintenanceLog: получено записей:', log.length);
       console.log('📋 loadMaintenanceLog: записи:', log);
       setEntries(log);
@@ -140,7 +152,7 @@ const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanc
         message: err.message,
         stack: err.stack,
         equipmentId,
-        maintenanceSheetId
+        maintenanceSheetId: sheetIdOverride
       });
       setError(`Не удалось загрузить журнал обслуживания: ${err.message || 'Неизвестная ошибка'}`);
     } finally {
@@ -165,7 +177,7 @@ const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanc
     setUploadStep('Сохранение записи...');
 
     try {
-      const newEntry = await addMaintenanceEntry(equipmentId, formData, maintenanceSheetId);
+      const newEntry = await addMaintenanceEntry(equipmentId, formData, effectiveMaintenanceSheetId);
 
       // Проверяем, является ли это временной записью
       const isTempEntry = newEntry.id.startsWith('temp-');
@@ -314,7 +326,7 @@ ${data.notes ? `Примечания: ${data.notes}` : ''}`;
 
       // Шаг 2: Сохранение записи в журнал (40%)
       setSavingProgress(40);
-      await addMaintenanceEntry(equipmentId, entryData, maintenanceSheetId);
+      await addMaintenanceEntry(equipmentId, entryData, effectiveMaintenanceSheetId);
 
       // Шаг 3: Обновление даты следующего испытания (70%)
       setSavingProgress(70);
