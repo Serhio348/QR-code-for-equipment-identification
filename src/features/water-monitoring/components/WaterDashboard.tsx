@@ -48,7 +48,16 @@ interface SelectedMonth {
 interface DeviceInfo {
   device_id: string;
   name: string;
+  address: string | null;
   role: 'source' | 'production' | 'domestic' | null;
+}
+
+interface MeterGroup {
+  key: string;
+  label: string;
+  role: 'source' | 'production' | 'domestic';
+  deviceIds: string[];
+  isCombined: boolean;
 }
 
 interface KpiData {
@@ -68,6 +77,17 @@ interface BalanceDay {
   source: number;
   losses: number;
   [productionDevice: string]: number | string;
+}
+
+interface MonthlyMeterRow {
+  key: string;
+  label: string;
+  role: 'source' | 'production' | 'domestic';
+  currentMonth: number;
+  averagePerDay: number;
+  shareOfRole: number;
+  isCombined: boolean;
+  deviceCount: number;
 }
 
 interface AlertItem {
@@ -102,6 +122,8 @@ const PRIORITY_ICON: Record<string, string> = {
   low: '🔵',
 };
 
+const ADMIN_BUILDING_ADDRESS = 'советская 2/1';
+
 /**
  * Расчёт теоретических потерь на промывку фильтров обезжелезивания.
  * Каждые 120 м³ через установку: 2 фильтра поочерёдно, 800 с × 20 м³/ч каждый.
@@ -109,10 +131,82 @@ const PRIORITY_ICON: Record<string, string> = {
  */
 const FILTER_LOSS_PER_M3 = (2 * (800 / 3600) * 20) / 120; // ≈ 0.07407 м³/м³
 
+function isWeekday(year: number, month: number, day: number): boolean {
+  const dayOfWeek = new Date(year, month, day).getDay();
+  return dayOfWeek >= 1 && dayOfWeek <= 5;
+}
+
+function isPublicHoliday(month: number, day: number): boolean {
+  const monthDay = `${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  return new Set([
+    '01-01', '01-02', '01-03', '01-04', '01-05', '01-06', '01-07', '01-08',
+    '02-23',
+    '03-08',
+    '05-01',
+    '05-09',
+    '06-12',
+    '11-04',
+  ]).has(monthDay);
+}
+
+function normalizeAddress(value: string | null | undefined): string {
+  return (value ?? '')
+    .toLowerCase()
+    .replace(/[.,]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildMeterGroups(devices: DeviceInfo[]): MeterGroup[] {
+  return devices
+    .filter((device): device is DeviceInfo & { role: 'source' | 'production' | 'domestic' } => device.role !== null)
+    .reduce<MeterGroup[]>((groups, device) => {
+      const normalizedAddress = normalizeAddress(device.address);
+      const shouldCombine = normalizedAddress === ADMIN_BUILDING_ADDRESS;
+
+      if (!shouldCombine) {
+        groups.push({
+          key: device.device_id,
+          label: device.name,
+          role: device.role,
+          deviceIds: [device.device_id],
+          isCombined: false,
+        });
+        return groups;
+      }
+
+      const existingGroup = groups.find(group => group.role === device.role && group.isCombined);
+
+      if (existingGroup) {
+        existingGroup.deviceIds.push(device.device_id);
+        existingGroup.deviceIds.sort((a, b) => a.localeCompare(b));
+        existingGroup.key = `combined:${device.role}:${existingGroup.deviceIds.join('|')}`;
+        return groups;
+      }
+
+      groups.push({
+        key: `combined:${device.role}:${device.device_id}`,
+        label: 'Административное здание, Советская 2/1',
+        role: device.role,
+        deviceIds: [device.device_id],
+        isCombined: true,
+      });
+      return groups;
+    }, [])
+    .sort((a, b) => {
+      const roleOrder = ['source', 'production', 'domestic'];
+      const roleDiff = roleOrder.indexOf(a.role) - roleOrder.indexOf(b.role);
+      if (roleDiff !== 0) return roleDiff;
+      return a.label.localeCompare(b.label, 'ru');
+    });
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const WaterDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
+  const [distributionRole, setDistributionRole] = useState<'production' | 'domestic'>('production');
+  const [workDayStats, setWorkDayStats] = useState({ production: 0, domestic: 0 });
   const [kpi, setKpi] = useState<KpiData>({
     sourceMonth: 0,
     productionMonth: 0,
@@ -127,6 +221,7 @@ const WaterDashboard: React.FC = () => {
   const [balanceData, setBalanceData] = useState<BalanceDay[]>([]);
   const [productionDeviceNames, setProductionDeviceNames] = useState<string[]>([]);
   const [domesticDeviceNames, setDomesticDeviceNames] = useState<string[]>([]);
+  const [monthlyMeterRows, setMonthlyMeterRows] = useState<MonthlyMeterRow[]>([]);
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [hasRoles, setHasRoles] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState<SelectedMonth>(() => {
@@ -151,6 +246,7 @@ const WaterDashboard: React.FC = () => {
   const sourceDeviceIdsRef = useRef<string[]>([]);
   const prodDevicesRef = useRef<DeviceInfo[]>([]);
   const domDevicesRef = useRef<DeviceInfo[]>([]);
+  const meterGroupsRef = useRef<MeterGroup[]>([]);
   const selectedMonthRef = useRef<SelectedMonth>(selectedMonth);
   const staticDataLoadedRef = useRef(false);
 
@@ -159,19 +255,20 @@ const WaterDashboard: React.FC = () => {
   const loadBalanceAndKpi = useCallback(async (year: number, month: number) => {
     setBalanceLoading(true);
     try {
-      const monthStart = new Date(year, month, 1);
+      const prevMonthStart = new Date(year, month - 1, 1);
       // Используем локальный формат даты — toISOString() даёт UTC и сдвигает день в UTC+2/+3
       const pad = (n: number) => String(n).padStart(2, '0');
+      const prevMonthStartDate = `${prevMonthStart.getFullYear()}-${pad(prevMonthStart.getMonth() + 1)}-01`;
       const monthStartDate = `${year}-${pad(month + 1)}-01`;
       const nextYear  = month === 11 ? year + 1 : year;
       const nextMonth = month === 11 ? 1 : month + 2;
       const monthEndDate = `${nextYear}-${pad(nextMonth)}-01`;
-      const monthStartTs = monthStart.toISOString(); // для baseline-запроса timestamp нужен как есть
+      const prevMonthStartTs = prevMonthStart.toISOString();
 
       const { data: monthData } = await supabase
         .from('beliot_daily_readings_agg')
         .select('device_id, reading_day, min_value, max_value')
-        .gte('reading_day', monthStartDate)
+        .gte('reading_day', prevMonthStartDate)
         .lt('reading_day', monthEndDate)
         .order('reading_day', { ascending: true });
 
@@ -187,8 +284,9 @@ const WaterDashboard: React.FC = () => {
       const sourceIds = sourceDeviceIdsRef.current;
       const prodDevs  = prodDevicesRef.current;
       const domDevs   = domDevicesRef.current;
+      const meterGroups = meterGroupsRef.current;
 
-      // Загружаем baseline (последнее показание до начала месяца) — нужно для day 1 и для KPI
+      // Загружаем baseline до прошлого месяца — этого хватит и для прошлого, и для текущего месяца
       const allDeviceIds = [...new Set([
         ...sourceIds,
         ...prodDevs.map(d => d.device_id),
@@ -200,13 +298,34 @@ const WaterDashboard: React.FC = () => {
           .from('beliot_device_readings')
           .select('device_id, reading_value')
           .in('device_id', allDeviceIds)
-          .lt('reading_date', monthStartTs)
+          .lt('reading_date', prevMonthStartTs)
           .order('reading_date', { ascending: false })
           .limit(allDeviceIds.length * 10);
         for (const r of baselineData || []) {
           if (!(r.device_id in baselineByDevice)) {
             baselineByDevice[r.device_id] = Number(r.reading_value);
           }
+        }
+      }
+
+      const prevMonthByDevice: Record<string, MinMax> = {};
+      const currentMonthByDevice: Record<string, MinMax> = {};
+      for (const r of monthData || []) {
+        const day = String(r.reading_day);
+        const did = r.device_id;
+        const target = day >= monthStartDate ? currentMonthByDevice : prevMonthByDevice;
+        if (!target[did]) target[did] = { min: Infinity, max: -Infinity };
+        target[did].max = Math.max(target[did].max, Number(r.max_value));
+        target[did].min = Math.min(target[did].min, Number(r.min_value));
+      }
+
+      const monthBaselineByDevice: Record<string, number> = {};
+      for (const id of allDeviceIds) {
+        const prevMonthStats = prevMonthByDevice[id];
+        if (prevMonthStats && prevMonthStats.max !== -Infinity) {
+          monthBaselineByDevice[id] = prevMonthStats.max;
+        } else if (id in baselineByDevice) {
+          monthBaselineByDevice[id] = baselineByDevice[id];
         }
       }
 
@@ -226,11 +345,11 @@ const WaterDashboard: React.FC = () => {
           // Предыдущий максимум: вчера из byDeviceDay или baseline (для 1-го числа)
           let prevMax: number;
           if (d === 1) {
-            prevMax = baselineByDevice[did] ?? seg.min;
+            prevMax = monthBaselineByDevice[did] ?? seg.min;
           } else {
             const prevDayStr = `${year}-${pad(month + 1)}-${pad(d - 1)}`;
             const prevSeg = byDeviceDay[did]?.[prevDayStr];
-            prevMax = prevSeg ? prevSeg.max : (baselineByDevice[did] ?? seg.min);
+            prevMax = prevSeg ? prevSeg.max : (monthBaselineByDevice[did] ?? seg.min);
           }
           return Math.max(0, parseFloat((seg.max - prevMax).toFixed(3)));
         };
@@ -260,33 +379,66 @@ const WaterDashboard: React.FC = () => {
       }
 
       // KPI: месячные итоги (max по месяцу − baseline до начала месяца)
-      // baselineByDevice уже загружен выше — переиспользуем
-      const monthByDevice: Record<string, MinMax> = {};
-      for (const r of monthData || []) {
-        const did = r.device_id;
-        if (!monthByDevice[did]) monthByDevice[did] = { min: Infinity, max: -Infinity };
-        monthByDevice[did].max = Math.max(monthByDevice[did].max, Number(r.max_value));
-        monthByDevice[did].min = Math.min(monthByDevice[did].min, Number(r.min_value));
-      }
-
-      const monthConsumption = (ids: string[]) =>
+      const monthConsumption = (ids: string[], byDevice: Record<string, MinMax>, baseline: Record<string, number>) =>
         ids.reduce((s, id) => {
-          const v = monthByDevice[id];
+          const v = byDevice[id];
           if (!v || v.max === -Infinity) return s;
-          const baseline = id in baselineByDevice ? baselineByDevice[id] : v.min;
-          return s + Math.max(0, v.max - baseline);
+          const base = id in baseline ? baseline[id] : v.min;
+          return s + Math.max(0, v.max - base);
         }, 0);
 
       const prodDeviceIds = prodDevs.map(d => d.device_id);
       const domDeviceIds  = domDevs.map(d => d.device_id);
 
-      const sourceMonth     = parseFloat(monthConsumption(sourceIds).toFixed(2));
-      const productionMonth = parseFloat(monthConsumption(prodDeviceIds).toFixed(2));
-      const domesticMonth   = parseFloat(monthConsumption(domDeviceIds).toFixed(2));
+      const sourceMonth = parseFloat(monthConsumption(sourceIds, currentMonthByDevice, monthBaselineByDevice).toFixed(2));
+      const productionMonth = parseFloat(monthConsumption(prodDeviceIds, currentMonthByDevice, monthBaselineByDevice).toFixed(2));
+      const domesticMonth = parseFloat(monthConsumption(domDeviceIds, currentMonthByDevice, monthBaselineByDevice).toFixed(2));
       const lossesMonth     = parseFloat(Math.max(0, sourceMonth - productionMonth).toFixed(2));
       const lossesPct       = sourceMonth > 0 ? parseFloat(((lossesMonth / sourceMonth) * 100).toFixed(1)) : 0;
 
+      const roleTotals: Record<'source' | 'production' | 'domestic', number> = {
+        source: sourceMonth,
+        production: productionMonth,
+        domestic: domesticMonth,
+      };
+      const now = new Date();
+      const isCurrentMonth = now.getFullYear() === year && now.getMonth() === month;
+      const elapsedDays = isCurrentMonth ? Math.min(now.getDate(), daysInMonth) : daysInMonth;
+      const observedDays = days.slice(0, elapsedDays);
+      const productionStartIndex = observedDays.findIndex(row => row.source > 0);
+      const productionWorkingDays = observedDays.reduce((count, row, index) => {
+        const dayNumber = index + 1;
+        const hasStarted = productionStartIndex !== -1 && index >= productionStartIndex;
+        if (!hasStarted) return count;
+
+        const scheduledWorkday = isWeekday(year, month, dayNumber) && !isPublicHoliday(month, dayNumber);
+        const actualSourceWorkday = row.source > 0;
+        return count + (scheduledWorkday || actualSourceWorkday ? 1 : 0);
+      }, 0);
+      const domesticWorkingDays = observedDays.reduce((count, _row, index) => {
+        const dayNumber = index + 1;
+        return count + (isWeekday(year, month, dayNumber) && !isPublicHoliday(month, dayNumber) ? 1 : 0);
+      }, 0);
+      const monthlyRows = meterGroups
+        .map<MonthlyMeterRow>(group => {
+          const currentMonthValue = monthConsumption(group.deviceIds, currentMonthByDevice, monthBaselineByDevice);
+          const roleTotal = roleTotals[group.role];
+          return {
+            key: group.key,
+            label: group.label,
+            role: group.role,
+            currentMonth: parseFloat(currentMonthValue.toFixed(2)),
+            averagePerDay: elapsedDays > 0 ? parseFloat((currentMonthValue / elapsedDays).toFixed(2)) : 0,
+            shareOfRole: roleTotal > 0 ? parseFloat(((currentMonthValue / roleTotal) * 100).toFixed(1)) : 0,
+            isCombined: group.isCombined,
+            deviceCount: group.deviceIds.length,
+          };
+        })
+        .sort((a, b) => b.currentMonth - a.currentMonth);
+
       setBalanceData(days);
+      setWorkDayStats({ production: productionWorkingDays, domestic: domesticWorkingDays });
+      setMonthlyMeterRows(monthlyRows);
       setKpi(prev => ({ ...prev, sourceMonth, productionMonth, domesticMonth, lossesMonth, lossesPct }));
     } catch (err) {
       console.error('[WaterDashboard] loadBalanceAndKpi error:', err);
@@ -326,7 +478,7 @@ const WaterDashboard: React.FC = () => {
           .order('name'),
         supabase
           .from('beliot_device_overrides')
-          .select('device_id, name, object_name, device_role'),
+          .select('device_id, name, object_name, address, device_role'),
       ]);
 
       // ── Карта устройств ──────────────────────────────────────────────────
@@ -337,6 +489,7 @@ const WaterDashboard: React.FC = () => {
       const devList: DeviceInfo[] = overrides.map(d => ({
         device_id: d.device_id,
         name: d.object_name || d.name || d.device_id,
+        address: d.address || null,
         role: d.device_role as 'source' | 'production' | 'domestic' | null ?? null,
       }));
 
@@ -351,6 +504,11 @@ const WaterDashboard: React.FC = () => {
       sourceDeviceIdsRef.current = sourceDeviceIds;
       prodDevicesRef.current = prodDevices;
       domDevicesRef.current = domDevices;
+      meterGroupsRef.current = buildMeterGroups([
+        ...devList.filter(d => d.role === 'source'),
+        ...prodDevices,
+        ...domDevices,
+      ]);
 
       const activeAlerts = (alertsRes.data || []) as AlertItem[];
       const critCount = activeAlerts.filter(a => a.priority === 'critical').length;
@@ -494,21 +652,44 @@ const WaterDashboard: React.FC = () => {
     return () => setAIChatWaterContext(null);
   }, [kpi, selectedMonth, loading, theoreticalFilterLoss, remainingLoss]);
 
-  // ── Domestic consumption by device name ───────────────────────────────────
-  const domesticConsumptionByDevice = useMemo(() =>
-    domesticDeviceNames
-      .map((name, i) => ({
-        name,
-        color: DOM_COLORS[i % DOM_COLORS.length],
-        total: parseFloat(
-          balanceData.reduce((s, row) =>
-            s + (typeof row[name] === 'number' ? (row[name] as number) : 0), 0
-          ).toFixed(2)
-        ),
-      }))
-      .sort((a, b) => b.total - a.total),
-    [balanceData, domesticDeviceNames]
-  );
+  useEffect(() => {
+    if (
+      distributionRole === 'production' &&
+      !monthlyMeterRows.some(row => row.role === 'production' || row.role === 'source')
+    ) {
+      setDistributionRole('domestic');
+    }
+    if (distributionRole === 'domestic' && !monthlyMeterRows.some(row => row.role === 'domestic')) {
+      setDistributionRole('production');
+    }
+  }, [distributionRole, monthlyMeterRows]);
+
+  const distributionRows = useMemo(() => {
+    if (distributionRole === 'production') {
+      const sourceRows = monthlyMeterRows
+        .filter(row => row.role === 'source')
+        .sort((a, b) => b.currentMonth - a.currentMonth)
+        .map(row => ({ ...row, color: SOURCE_COLOR }));
+
+      const productionRows = monthlyMeterRows
+        .filter(row => row.role === 'production')
+        .sort((a, b) => b.currentMonth - a.currentMonth)
+        .map((row, index) => ({
+          ...row,
+          color: PROD_COLORS[index % PROD_COLORS.length],
+        }));
+
+      return [...sourceRows, ...productionRows];
+    }
+
+    return monthlyMeterRows
+      .filter(row => row.role === 'domestic')
+      .sort((a, b) => b.currentMonth - a.currentMonth)
+      .map((row, index) => ({
+        ...row,
+        color: DOM_COLORS[index % DOM_COLORS.length],
+      }));
+  }, [distributionRole, monthlyMeterRows]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -762,31 +943,61 @@ const WaterDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* ── Domestic distribution ───────────────────────────────────────── */}
-      {domesticConsumptionByDevice.length > 0 && (
+      {/* ── Monthly distribution ────────────────────────────────────────── */}
+      {(monthlyMeterRows.some(row => row.role === 'source' || row.role === 'production') || monthlyMeterRows.some(row => row.role === 'domestic')) && (
         <div className="wd-card wd-card--domestic-dist">
           <div className="wd-card__header">
-            <h3>🏠 Хоз-питьевое водоснабжение — распределение</h3>
-            <span className="wd-card__hint">м³ за месяц</span>
+            <h3>📊 Распределение по учётам</h3>
+            <span className="wd-card__hint">м³ за месяц и среднее за сутки</span>
           </div>
-          <div className="wd-domestic-dist">
-            {domesticConsumptionByDevice.map(item => {
-              const pct = kpi.domesticMonth > 0 ? (item.total / kpi.domesticMonth) * 100 : 0;
-              return (
-                <div key={item.name} className="wd-domestic-dist__item">
-                  <span className="wd-domestic-dist__name">{item.name}</span>
-                  <div className="wd-domestic-dist__track">
-                    <div
-                      className="wd-domestic-dist__bar"
-                      style={{ width: `${pct}%`, background: item.color }}
-                    />
+          <div className="wd-distribution-tabs" role="tablist" aria-label="Группа учётов">
+            <button
+              type="button"
+              className={`wd-distribution-tab${distributionRole === 'production' ? ' wd-distribution-tab--active' : ''}`}
+              onClick={() => setDistributionRole('production')}
+            >
+              Производственные ({workDayStats.production})
+            </button>
+            <button
+              type="button"
+              className={`wd-distribution-tab${distributionRole === 'domestic' ? ' wd-distribution-tab--active' : ''}`}
+              onClick={() => setDistributionRole('domestic')}
+            >
+              Хоз-питьевой ({workDayStats.domestic})
+            </button>
+          </div>
+          {distributionRows.length > 0 ? (
+            <div className="wd-domestic-dist">
+              {distributionRows.map(item => {
+                const pct = item.shareOfRole;
+                const averageLabel = `ср./сутки ${item.averagePerDay.toLocaleString('ru-RU')} м³`;
+
+                return (
+                  <div key={item.key} className="wd-domestic-dist__item">
+                    <div className="wd-domestic-dist__name-wrap">
+                      <span className="wd-domestic-dist__name">{item.label}</span>
+                      {item.isCombined && (
+                        <span className="wd-domestic-dist__badge">{item.deviceCount} счётчика</span>
+                      )}
+                    </div>
+                    <div className="wd-domestic-dist__track">
+                      <div
+                        className="wd-domestic-dist__bar"
+                        style={{ width: `${pct}%`, background: item.color }}
+                      />
+                    </div>
+                    <span className="wd-domestic-dist__val">{item.currentMonth.toLocaleString('ru-RU')} м³</span>
+                    <div className="wd-domestic-dist__meta">
+                      <span className="wd-domestic-dist__pct">{pct.toFixed(1)}%</span>
+                      <span className="wd-domestic-dist__avg">{averageLabel}</span>
+                    </div>
                   </div>
-                  <span className="wd-domestic-dist__val">{item.total.toLocaleString('ru-RU')} м³</span>
-                  <span className="wd-domestic-dist__pct">{pct.toFixed(1)}%</span>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="wd-no-data">Нет данных по выбранной группе учётов</div>
+          )}
         </div>
       )}
 

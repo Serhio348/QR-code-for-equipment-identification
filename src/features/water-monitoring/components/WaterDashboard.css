@@ -346,6 +346,33 @@
   width: 100%;
 }
 
+.wd-distribution-tabs {
+  display: inline-flex;
+  gap: 6px;
+  margin-bottom: 12px;
+  padding: 4px;
+  background: #f3f4f6;
+  border-radius: 10px;
+}
+
+.wd-distribution-tab {
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.wd-distribution-tab--active {
+  background: white;
+  color: #1f2937;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
 .wd-domestic-dist {
   display: flex;
   flex-direction: column;
@@ -354,17 +381,36 @@
 
 .wd-domestic-dist__item {
   display: grid;
-  grid-template-columns: 160px 1fr auto auto;
+  grid-template-columns: minmax(180px, 220px) 1fr auto minmax(130px, 160px);
   align-items: center;
   gap: 10px;
+}
+
+.wd-domestic-dist__name-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
 .wd-domestic-dist__name {
   font-size: 13px;
   color: #374151;
-  font-weight: 500;
+  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wd-domestic-dist__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #ede9fe;
+  color: #6d28d9;
+  font-size: 11px;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -396,9 +442,41 @@
   text-align: right;
 }
 
+.wd-domestic-dist__meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.wd-domestic-dist__avg {
+  font-size: 11px;
+  color: #9ca3af;
+  text-align: right;
+  white-space: nowrap;
+}
+
 @media (max-width: 600px) {
+  .wd-distribution-tabs {
+    width: 100%;
+  }
+
+  .wd-distribution-tab {
+    flex: 1;
+  }
+
   .wd-domestic-dist__item {
-    grid-template-columns: 120px 1fr auto auto;
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .wd-domestic-dist__meta {
+    align-items: flex-start;
+  }
+
+  .wd-domestic-dist__pct,
+  .wd-domestic-dist__avg {
+    text-align: left;
   }
 }
 
