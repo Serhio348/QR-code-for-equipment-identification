@@ -135,7 +135,7 @@
   width: 100%;
 }
 
-.equipment-name {
+.equipment-card-name {
   color: #333;
   font-size: 22px;
   font-weight: 800 !important;
@@ -314,7 +314,7 @@
     flex-wrap: wrap;
   }
 
-  .equipment-name {
+  .equipment-card-name {
     font-size: 20px;
     font-weight: 800 !important;
     word-wrap: break-word;
@@ -396,7 +396,7 @@
     box-sizing: border-box;
   }
 
-  .equipment-name {
+  .equipment-card-name {
     font-size: 18px;
     font-weight: 800 !important;
     line-height: 1.2;
