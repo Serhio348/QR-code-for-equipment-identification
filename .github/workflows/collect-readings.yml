@@ -128,6 +128,7 @@ jobs:
               if (!res.ok) throw new Error(`metering_devices failed: ${res.status} ${res.statusText}`);
               const data = await res.json();
               const devices = extractDevices(data);
+              if (devices.length === 0) break;
               for (const d of devices) {
                 const id = String(d?.device_id ?? d?.id ?? d?._id ?? '').trim();
                 if (id) byId.set(id, d);
@@ -143,8 +144,9 @@ jobs:
                 continue;
               }
               
-              // No meta: assume single page
-              break;
+              // No meta: stop when last page is smaller than perPage
+              if (devices.length < perPage) break;
+              page += 1;
             }
             
             // If API returned only first page without meta, we still export what we got.
