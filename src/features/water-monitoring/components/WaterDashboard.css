@@ -442,6 +442,13 @@
   font-weight: 700;
 }
 
+.wd-work-hours-foot {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #6b7280;
+  line-height: 1.35;
+}
+
 .wd-distribution-tab--active {
   background: white;
   color: #1f2937;

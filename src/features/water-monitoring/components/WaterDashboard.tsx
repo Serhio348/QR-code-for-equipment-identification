@@ -273,6 +273,8 @@ const WaterDashboard: React.FC = () => {
   const [hiddenDevices, setHiddenDevices] = useState<Set<string>>(new Set());
   const [todayTimeData, setTodayTimeData] = useState<Record<string, number | string>[]>([]);
   const [todayLoading, setTodayLoading] = useState(false);
+  const [productionTodayTotalM3, setProductionTodayTotalM3] = useState<number>(0);
+  const [productionTodayWorkHoursByName, setProductionTodayWorkHoursByName] = useState<Record<string, number>>({});
 
   const toggleDevice = useCallback((name: string) => {
     setHiddenDevices(prev => {
@@ -658,19 +660,55 @@ const WaterDashboard: React.FC = () => {
 
       // Строим точки по часам с нарастающим расходом от начала дня
       const maxHour = now.getHours();
+      const EPS = 0.0001;
       const points: Record<string, number | string>[] = [];
+
+      // "Рабочий час" = за этот час появилось приращение (inc > 0).
+      // Для отсутствующих часов используем carry-forward текущего накопления,
+      // как это визуально делает `connectNulls`.
+      const workHoursByName: Record<string, number> = {};
+      const prevCumByName: Record<string, number> = {};
+      const lastCumByName: Record<string, number> = {};
+
+      for (const dev of prodDevs) {
+        workHoursByName[dev.name] = 0;
+        prevCumByName[dev.name] = 0;
+        lastCumByName[dev.name] = 0;
+      }
+
       for (let h = 0; h <= maxHour; h++) {
         const point: Record<string, number | string> = { time: `${pad(h)}:00` };
         for (const dev of prodDevs) {
           const hourVal = byDeviceHour[dev.device_id]?.[h];
           const base    = baselineByDev[dev.device_id] ?? 0;
-          point[dev.name] = hourVal !== undefined
-            ? parseFloat(Math.max(0, hourVal - base).toFixed(2))
-            : (null as unknown as number);
+
+          let cum = lastCumByName[dev.name] ?? 0;
+          if (hourVal !== undefined) {
+            cum = parseFloat(Math.max(0, hourVal - base).toFixed(2));
+            point[dev.name] = cum;
+          } else {
+            point[dev.name] = null as unknown as number;
+          }
+
+          const inc = cum - (prevCumByName[dev.name] ?? 0);
+          if (inc > EPS) {
+            workHoursByName[dev.name] += 1;
+          }
+
+          prevCumByName[dev.name] = cum;
+          lastCumByName[dev.name] = cum;
         }
         points.push(point);
       }
+
+      const productionTodayTotal = prodDevs.reduce(
+        (sum, d) => sum + (lastCumByName[d.name] ?? 0),
+        0,
+      );
+
       setTodayTimeData(points);
+      setProductionTodayTotalM3(parseFloat(productionTodayTotal.toFixed(2)));
+      setProductionTodayWorkHoursByName(workHoursByName);
     } catch (err) {
       console.error('[WaterDashboard] loadTodayReadings error:', err);
     } finally {
@@ -1075,9 +1113,19 @@ const WaterDashboard: React.FC = () => {
             <div className="wd-no-data">Нет показаний за сегодня</div>
           )}
           <div className="wd-month-total-foot">
-            Производственные нужды за выбранный месяц (ЛУ+АЛПО+сортировка):{' '}
-            <strong>{kpi.productionMonth.toLocaleString('ru-RU')} м³</strong>
+            Производственные нужды за сегодня (ЛУ+АЛПО+сортировка):{' '}
+            <strong>{productionTodayTotalM3.toLocaleString('ru-RU')} м³</strong>
           </div>
+          {productionDeviceNames.length > 0 && (
+            <div className="wd-work-hours-foot">
+              Часы работы по учётам:{' '}
+              <strong>
+                {productionDeviceNames
+                  .map((name) => `${name}: ${productionTodayWorkHoursByName[name] ?? 0} ч`)
+                  .join(', ')}
+              </strong>
+            </div>
+          )}
         </div>
       </div>
       )}
