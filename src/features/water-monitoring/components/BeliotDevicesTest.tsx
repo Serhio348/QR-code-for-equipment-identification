@@ -13,6 +13,7 @@ import { getBeliotReadings, getLastBeliotReading } from '../services/supabaseBel
 import { useDeviceArchive } from '../hooks/useDeviceArchive';
 import DeviceArchiveModal from './DeviceArchiveModal';
 import DevicePassportModal from './DevicePassportModal';
+import { BELOT_DEVICE_GROUPS, getBeliotUiDeviceIds } from '../constants/beliotDeviceRegistry';
 import './BeliotDevicesTest.css';
 
 interface StateTableRow {
@@ -156,16 +157,9 @@ const BeliotDevicesTest: React.FC = () => {
       console.log('🔄 Загрузка метаданных счетчиков из Supabase...');
       const overridesById = await getBeliotDevicesOverrides();
 
-      // Список счетчиков берём из конфигурации групп ниже.
+      // Список счетчиков — из общего реестра групп (см. beliotDeviceRegistry).
       // Важно: фронтенд не делает запросов к Beliot API (ограничения внутренней сети).
-      const configuredIds = [
-        '10597', '10596', '10598', '10586',
-        '11015', '11016',
-        '11019', '11018',
-        '11013',
-        '11078',
-      ];
-      const uniqueIds = Array.from(new Set(configuredIds));
+      const uniqueIds = getBeliotUiDeviceIds();
 
       const devicesFromSupabase: BeliotDevice[] = uniqueIds.map((id) => {
         const ov = overridesById[id];
@@ -217,34 +211,10 @@ const BeliotDevicesTest: React.FC = () => {
     }
   };
 
-  // Определение групп устройств
-  const deviceGroups: DeviceGroup[] = [
-    {
-      name: 'ХВО',
-      deviceIds: ['10597', '10596', '10598', '10586'],
-      devices: [],
-    },
-    {
-      name: 'АБК по ул.Советская, 2',
-      deviceIds: ['11015', '11016'],
-      devices: [],
-    },
-    {
-      name: 'АБК по ул.Советская, 2/1',
-      deviceIds: ['11019', '11018'],
-      devices: [],
-    },
-    {
-      name: 'Скважина',
-      deviceIds: ['11013'],
-      devices: [],
-    },
-    {
-      name: 'Посудо-тарный участок',
-      deviceIds: ['11078'],
-      devices: [],
-    },
-  ];
+  const deviceGroups: DeviceGroup[] = useMemo(
+    () => BELOT_DEVICE_GROUPS.map((g) => ({ name: g.name, deviceIds: g.deviceIds, devices: [] })),
+    [],
+  );
 
   // Группировка устройств по заданным группам
   const groupedDevices = useMemo(() => {
@@ -257,7 +227,7 @@ const BeliotDevicesTest: React.FC = () => {
     }));
 
     return groups.filter(group => group.devices.length > 0);
-  }, [devices]);
+  }, [devices, deviceGroups]);
 
   // Фильтрация групп по поисковому запросу
   const filteredGroups = useMemo(() => {

@@ -452,6 +452,32 @@
   margin-top: 0; /* Убираем отступ, так как хедер не фиксированный */
 }
 
+/* Раздел «Вода»: одна колонка на высоту экрана, скролл только у контента под вкладками */
+.app-content:has(.water-page) {
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  height: calc(100vh - 80px - 60px) !important;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+@media (max-width: 768px) {
+  .app-content:has(.water-page) {
+    height: calc(100vh - 70px - 60px) !important;
+    max-height: calc(100vh - 70px - 60px) !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-content:has(.water-page) {
+    padding-bottom: 0 !important;
+    height: calc(100vh - 65px - 60px) !important;
+    max-height: calc(100vh - 65px - 60px) !important;
+  }
+}
+
 /* Убираем отступ для страницы воды (beliot-devices-admin) на всех экранах */
 .app-content:has(.beliot-devices-admin) {
   margin: 0 !important;
