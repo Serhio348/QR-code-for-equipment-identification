@@ -53,6 +53,13 @@ interface SelectedMonth {
   month: number; // 0-based (как в Date)
 }
 
+type ProductionDaySummary = {
+  summary_date: string; // YYYY-MM-DD
+  total_m3: number;
+  totals_by_name: Record<string, number>;
+  work_hours_by_name: Record<string, number>;
+};
+
 interface DeviceInfo {
   device_id: string;
   name: string;
@@ -275,6 +282,11 @@ const WaterDashboard: React.FC = () => {
   const [todayLoading, setTodayLoading] = useState(false);
   const [productionTodayTotalM3, setProductionTodayTotalM3] = useState<number>(0);
   const [productionTodayWorkHoursByName, setProductionTodayWorkHoursByName] = useState<Record<string, number>>({});
+  const [selectedProductionDay, setSelectedProductionDay] = useState<string>(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
+  const [productionHistoryByDay, setProductionHistoryByDay] = useState<Record<string, ProductionDaySummary>>({});
 
   const toggleDevice = useCallback((name: string) => {
     setHiddenDevices(prev => {
@@ -609,40 +621,69 @@ const WaterDashboard: React.FC = () => {
       }));
 
       staticDataLoadedRef.current = true;
+      const prodForToday = chartProd.length > 0 ? chartProd : prodDevices;
       await Promise.all([
         loadBalanceAndKpi(selectedMonthRef.current.year, selectedMonthRef.current.month),
-        loadTodayReadings(chartProd.length > 0 ? chartProd : prodDevices),
+        loadProductionHistory(),
+        loadProductionDayReadings(selectedProductionDay, prodForToday),
       ]);
     } catch (err) {
       console.error('[WaterDashboard] loadDashboard error:', err);
     } finally {
       setLoading(false);
     }
-  // loadTodayReadings declared after this callback — safe because it runs on mount, not at definition time
+  // loadProductionDayReadings declared after this callback — safe because it runs on mount, not at definition time
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadBalanceAndKpi]);
 
   useEffect(() => { loadDashboard(); }, [loadDashboard]);
 
-  // ── Почасовые показания за сегодня по производственным счётчикам ──────────
-  const loadTodayReadings = useCallback(async (prodDevs: DeviceInfo[]) => {
+  const productionDayOptions = useMemo(() => {
+    const out: Array<{ ymd: string; label: string }> = [];
+    const now = new Date();
+    for (let i = 0; i < 31; i += 1) {
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+      const dayOfWeek = d.getDay(); // 0=Sun
+      // "рабочий день" — показываем только пн-пт
+      if (dayOfWeek === 0 || dayOfWeek === 6) continue;
+      const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const label = d.toLocaleDateString('ru-RU', { weekday: 'short', day: '2-digit', month: '2-digit' });
+      out.push({ ymd, label });
+    }
+    return out;
+  }, []);
+
+  // ── Почасовые показания производства за выбранный день ────────────────────
+  const loadProductionDayReadings = useCallback(async (dayYmd: string, prodDevs: DeviceInfo[]) => {
     if (prodDevs.length === 0) return;
     setTodayLoading(true);
     try {
-      const now = new Date();
       const pad = (n: number) => String(n).padStart(2, '0');
-      const todayStart = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T00:00:00`;
-      const todayEnd   = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T23:59:59`;
+      const [yy, mm, dd] = dayYmd.split('-').map(Number);
+      const startLocal = new Date(yy, mm - 1, dd, 0, 0, 0, 0);
+      const endLocal = new Date(yy, mm - 1, dd, 23, 59, 59, 999);
+      const startIso = startLocal.toISOString();
+      const endIso = endLocal.toISOString();
+      const isToday =
+        (() => {
+          const now = new Date();
+          return now.getFullYear() === yy && now.getMonth() === mm - 1 && now.getDate() === dd;
+        })();
 
       const { data } = await supabase
         .from('beliot_device_readings')
         .select('device_id, reading_date, reading_value')
         .in('device_id', prodDevs.map(d => d.device_id))
-        .gte('reading_date', todayStart)
-        .lte('reading_date', todayEnd)
+        .gte('reading_date', startIso)
+        .lte('reading_date', endIso)
         .order('reading_date', { ascending: true });
 
-      if (!data || data.length === 0) { setTodayTimeData([]); return; }
+      if (!data || data.length === 0) {
+        setTodayTimeData([]);
+        setProductionTodayTotalM3(0);
+        setProductionTodayWorkHoursByName({});
+        return;
+      }
 
       // Для каждого device_id берём последнее показание в каждом часу
       const byDeviceHour: Record<string, Record<number, number>> = {};
@@ -659,7 +700,7 @@ const WaterDashboard: React.FC = () => {
       }
 
       // Строим точки по часам с нарастающим расходом от начала дня
-      const maxHour = now.getHours();
+      const maxHour = isToday ? new Date().getHours() : 23;
       const EPS = 0.0001;
       const points: Record<string, number | string>[] = [];
 
@@ -709,11 +750,52 @@ const WaterDashboard: React.FC = () => {
       setTodayTimeData(points);
       setProductionTodayTotalM3(parseFloat(productionTodayTotal.toFixed(2)));
       setProductionTodayWorkHoursByName(workHoursByName);
+
+      const totalsByName: Record<string, number> = {};
+      for (const dev of prodDevs) {
+        totalsByName[dev.name] = parseFloat((lastCumByName[dev.name] ?? 0).toFixed(2));
+      }
+
+      // Сохраняем историю (upsert) — чтобы постепенно набрать последний месяц
+      // (требует прав администратора по RLS).
+      const summaryRow: ProductionDaySummary = {
+        summary_date: dayYmd,
+        total_m3: parseFloat(productionTodayTotal.toFixed(2)),
+        totals_by_name: totalsByName,
+        work_hours_by_name: workHoursByName,
+      };
+      setProductionHistoryByDay(prev => ({ ...prev, [dayYmd]: summaryRow }));
+      await supabase
+        .from('water_production_day_summaries')
+        .upsert(summaryRow, { onConflict: 'summary_date' });
     } catch (err) {
-      console.error('[WaterDashboard] loadTodayReadings error:', err);
+      console.error('[WaterDashboard] loadProductionDayReadings error:', err);
     } finally {
       setTodayLoading(false);
     }
+  }, []);
+
+  const loadProductionHistory = useCallback(async () => {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 31, 0, 0, 0, 0).toISOString();
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString();
+    const { data } = await supabase
+      .from('water_production_day_summaries')
+      .select('summary_date, total_m3, totals_by_name, work_hours_by_name')
+      .gte('summary_date', start.slice(0, 10))
+      .lte('summary_date', end.slice(0, 10))
+      .order('summary_date', { ascending: false });
+
+    const map: Record<string, ProductionDaySummary> = {};
+    for (const r of (data as any[]) || []) {
+      map[String(r.summary_date)] = {
+        summary_date: String(r.summary_date),
+        total_m3: Number(r.total_m3),
+        totals_by_name: (r.totals_by_name || {}) as Record<string, number>,
+        work_hours_by_name: (r.work_hours_by_name || {}) as Record<string, number>,
+      };
+    }
+    setProductionHistoryByDay(map);
   }, []);
 
   // Пересчёт баланса при смене выбранного месяца
@@ -1075,45 +1157,80 @@ const WaterDashboard: React.FC = () => {
           )}
         </div>
 
-        {/* Почасовой расход производства за сегодня */}
+        {/* Почасовой расход производства (выбранный день) */}
         <div className="wd-card wd-card--prod-trend">
           <div className="wd-card__header">
-            <h3>🏭 Производство сегодня</h3>
-            <span className="wd-card__hint">нарастающий расход, м³</span>
+            <h3>🏭 Производство</h3>
+            <div className="wd-prod-day-select">
+              <select
+                className="wd-prod-day-select__control"
+                value={selectedProductionDay}
+                onChange={(e) => {
+                  const day = e.target.value;
+                  setSelectedProductionDay(day);
+                  const prodDevs = productionDevicesForBalanceChart(prodDevicesRef.current);
+                  void loadProductionDayReadings(day, prodDevs);
+                }}
+              >
+                {productionDayOptions.map((opt) => {
+                  const hist = productionHistoryByDay[opt.ymd];
+                  const suffix = hist ? ` — ${Number(hist.total_m3).toFixed(0)} м³` : '';
+                  return (
+                    <option key={opt.ymd} value={opt.ymd}>
+                      {opt.label}{suffix}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
           </div>
           {todayLoading ? (
             <div className="wd-no-data">Загрузка...</div>
           ) : todayTimeData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={200}>
-              <ComposedChart data={todayTimeData} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="time" tick={{ fontSize: 10 }} interval={1} />
-                <YAxis tick={{ fontSize: 11 }} unit=" м³" width={58} />
-                <Tooltip
-                  formatter={(v: number | undefined, name: string | undefined) => [v != null ? `${v} м³` : '—', name]}
-                  contentStyle={{ fontSize: 12, borderRadius: 8 }}
-                />
+            <>
+              <ResponsiveContainer width="100%" height={200}>
+                <ComposedChart data={todayTimeData} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="time" tick={{ fontSize: 10 }} interval={1} />
+                  <YAxis tick={{ fontSize: 11 }} unit=" м³" width={58} />
+                  <Tooltip
+                    formatter={(v: number | undefined, name: string | undefined) => [v != null ? `${v} м³` : '—', name]}
+                    contentStyle={{ fontSize: 12, borderRadius: 8 }}
+                  />
+                  {productionDeviceNames.map((name) => {
+                    const c = balanceMeterColorMap.get(name) ?? '#64748b';
+                    return (
+                      <Line
+                        key={name}
+                        type="monotone"
+                        dataKey={name}
+                        stroke={c}
+                        strokeWidth={2}
+                        dot={{ r: 3, fill: c }}
+                        connectNulls
+                      />
+                    );
+                  })}
+                </ComposedChart>
+              </ResponsiveContainer>
+
+              <div className="wd-prod-legend" aria-label="Легенда графика">
                 {productionDeviceNames.map((name) => {
                   const c = balanceMeterColorMap.get(name) ?? '#64748b';
                   return (
-                    <Line
-                      key={name}
-                      type="monotone"
-                      dataKey={name}
-                      stroke={c}
-                      strokeWidth={2}
-                      dot={{ r: 3, fill: c }}
-                      connectNulls
-                    />
+                    <div key={name} className="wd-prod-legend__item">
+                      <span className="wd-prod-legend__dot" style={{ background: c }} />
+                      <span className="wd-prod-legend__name" title={name}>{name}</span>
+                    </div>
                   );
                 })}
-              </ComposedChart>
-            </ResponsiveContainer>
+              </div>
+            </>
           ) : (
             <div className="wd-no-data">Нет показаний за сегодня</div>
           )}
           <div className="wd-month-total-foot">
-            Производственные нужды за сегодня (ЛУ+АЛПО+сортировка):{' '}
+            Производственные нужды за сутки (ЛУ+АЛПО+сортировка):{' '}
             <strong>{productionTodayTotalM3.toLocaleString('ru-RU')} м³</strong>
           </div>
           {productionDeviceNames.length > 0 && (
