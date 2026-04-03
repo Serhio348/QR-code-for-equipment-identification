@@ -449,6 +449,53 @@
   line-height: 1.35;
 }
 
+.wd-prod-day-select {
+  display: flex;
+  align-items: center;
+}
+
+.wd-prod-day-select__control {
+  border: 1px solid #e5e7eb;
+  background: white;
+  border-radius: 10px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: #111827;
+  cursor: pointer;
+}
+
+.wd-prod-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.wd-prod-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 240px;
+}
+
+.wd-prod-legend__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex: 0 0 auto;
+}
+
+.wd-prod-legend__name {
+  font-size: 11px;
+  color: #6b7280;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .wd-distribution-tab--active {
   background: white;
   color: #1f2937;
