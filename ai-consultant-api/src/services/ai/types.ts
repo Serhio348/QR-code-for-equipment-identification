@@ -47,8 +47,9 @@ export interface WaterDashboardContext {
   domesticMonth: number;    // м³ — хоз-питьевое
   lossesMonth: number;      // м³ — потери
   lossesPct: number;        // % потерь
-  filterLoss: number;       // м³ — промывка фильтров (теоретическая)
-  osmosisLoss: number;      // м³ — осмос (остаток потерь)
+  filterLoss: number;       // м³ — промывка (скважина − умягчённая)
+  osmosisLoss: number;      // м³ — осмос (умягчённая − производственные нужды)
+  softenedWaterMonth: number;
   activeAlerts: number;     // кол-во активных превышений норм
 }
 

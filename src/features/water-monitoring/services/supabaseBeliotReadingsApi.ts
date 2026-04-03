@@ -263,7 +263,9 @@ export async function getBeliotReadingsByPeriod(
   device_id: string,
   start_date: string,
   end_date: string,
-  reading_type: string = 'hourly'
+  reading_type: string = 'hourly',
+  /** PostgREST по умолчанию режет выборку; для архива нужен полный период */
+  max_rows: number = 10_000,
 ): Promise<BeliotDeviceReading[]> {
   try {
     let query = supabase
@@ -273,7 +275,8 @@ export async function getBeliotReadingsByPeriod(
       .eq('reading_type', reading_type)
       .gte('reading_date', start_date)
       .lte('reading_date', end_date)
-      .order('reading_date', { ascending: true });
+      .order('reading_date', { ascending: true })
+      .limit(max_rows);
 
     const { data, error } = await query;
 

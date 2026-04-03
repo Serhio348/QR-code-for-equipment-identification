@@ -5,7 +5,7 @@
  * с поддержкой пагинации, фильтрации и автоматической загрузки.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   getBeliotReadings,
   getLastBeliotReading,
@@ -63,6 +63,7 @@ export function useBeliotDeviceReadings(
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [currentOffset, setCurrentOffset] = useState(0);
+  const periodLoadSeqRef = useRef(0);
 
   const {
     limit = 100,
@@ -165,22 +166,32 @@ export function useBeliotDeviceReadings(
       return;
     }
 
+    const seq = ++periodLoadSeqRef.current;
     setLoading(true);
     setError(null);
 
     try {
-      // Используем reading_type из опций (по умолчанию 'hourly')
-      const periodReadings = await getBeliotReadingsByPeriod(device_id, startDate, endDate, reading_type === 'all' ? 'hourly' : reading_type);
+      const periodReadings = await getBeliotReadingsByPeriod(
+        device_id,
+        startDate,
+        endDate,
+        reading_type === 'all' ? 'hourly' : reading_type,
+        limit,
+      );
+      if (seq !== periodLoadSeqRef.current) return;
       setReadings(periodReadings);
       setTotal(periodReadings.length);
       setHasMore(false);
     } catch (err: any) {
+      if (seq !== periodLoadSeqRef.current) return;
       setError(err);
       setReadings([]);
     } finally {
-      setLoading(false);
+      if (seq === periodLoadSeqRef.current) {
+        setLoading(false);
+      }
     }
-  }, [device_id, reading_type]);
+  }, [device_id, reading_type, limit]);
 
   /**
    * Загрузить следующую страницу

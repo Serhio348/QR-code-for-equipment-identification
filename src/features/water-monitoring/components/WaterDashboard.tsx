@@ -8,16 +8,16 @@
  *  │  💧 Водный баланс 7 дней      │  🕸 Радар качества воды      │
  *  │  ComposedChart: стек+линия    │  (radar chart, % от нормы)   │
  *  ├───────────────────────────────┴──────────────────────────────┤
- *  │  🔢 Теоретические потери (промывка + ОО)                     │
+ *  │  🔢 Структура потерь (по счётчикам)                          │
  *  └──────────────────────────────────────────────────────────────┘
  *
  * Водный баланс:
- *  Производственные нужды = Σ расхода по счётчикам ЛУ/АЛПО/сортировка (группа «ХВО» в beliotDeviceRegistry без агрегата умягчения).
+ *  Производственные нужды = Σ расхода по счётчикам ЛУ/АЛПО/сортировка/очистное (группа «ХВО» без агрегата умягчения 11363).
  *  Потери по дням и KPI = Скважина (source) − эта сумма
  *
- * Теоретические потери — промывка фильтров обезжелезивания:
- *  Каждые 120 м³ → 2 фильтра × 800 с × 20 м³/ч = 8.89 м³/цикл
- *  Потери на фильтрах = (Q_source / 120) × 8.89
+ * Структура потерь:
+ *  Промывка (отмывка фильтров) = расход скважины − расход умягчённой воды (агрегат ХВО)
+ *  Осмос = расход умягчённой − производственные нужды
  */
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
@@ -70,10 +70,12 @@ interface MeterGroup {
 
 interface KpiData {
   sourceMonth: number;       // м³ — скважина за месяц
-  productionMonth: number;   // м³ — ЛУ+АЛПО+сортировка (ХВО без агрегата умягчения)
+  productionMonth: number;   // м³ — ЛУ+АЛПО+сортировка/очистное (ХВО без агрегата умягчения)
   domesticMonth: number;     // м³ — хоз-питьевое за месяц
-  lossesMonth: number;       // м³ — потери = source − production − domestic
+  lossesMonth: number;       // м³ — потери = source − production
   lossesPct: number;         // % потерь
+  /** Расход умягчённой воды (агрегат ХВО), м³ */
+  softenedWaterMonth: number;
   lastAnalysisDate: string | null;
   samplingPointsCount: number;
 }
@@ -108,13 +110,6 @@ const LOSSES_COLOR = '#ef4444';
 const SOURCE_COLOR = '#1e40af';
 
 const ADMIN_BUILDING_ADDRESS = 'советская 2/1';
-
-/**
- * Расчёт теоретических потерь на промывку фильтров обезжелезивания.
- * Каждые 120 м³ через установку: 2 фильтра поочерёдно, 800 с × 20 м³/ч каждый.
- * Потери на цикл = 2 × (800 / 3600) × 20 = 8.889 м³
- */
-const FILTER_LOSS_PER_M3 = (2 * (800 / 3600) * 20) / 120; // ≈ 0.07407 м³/м³
 
 function isWeekday(year: number, month: number, day: number): boolean {
   const dayOfWeek = new Date(year, month, day).getDay();
@@ -261,6 +256,7 @@ const WaterDashboard: React.FC = () => {
     domesticMonth: 0,
     lossesMonth: 0,
     lossesPct: 0,
+    softenedWaterMonth: 0,
     lastAnalysisDate: null,
     samplingPointsCount: 0,
   });
@@ -465,6 +461,7 @@ const WaterDashboard: React.FC = () => {
       const domesticMonth = parseFloat(monthConsumption(domDeviceIds, currentMonthByDevice, monthBaselineByDevice).toFixed(2));
       const lossesMonth     = parseFloat(Math.max(0, sourceMonth - productionMonth).toFixed(2));
       const lossesPct       = sourceMonth > 0 ? parseFloat(((lossesMonth / sourceMonth) * 100).toFixed(1)) : 0;
+      const softenedWaterMonth = parseFloat(aggMonthTotal.toFixed(2));
 
       const roleTotals: Record<'source' | 'production' | 'domestic', number> = {
         source: sourceMonth,
@@ -526,7 +523,15 @@ const WaterDashboard: React.FC = () => {
       setBalanceData(days);
       setWorkDayStats({ production: productionWorkingDays, domestic: domesticWorkingDays });
       setMonthlyMeterRows(monthlyRows);
-      setKpi(prev => ({ ...prev, sourceMonth, productionMonth, domesticMonth, lossesMonth, lossesPct }));
+      setKpi(prev => ({
+        ...prev,
+        sourceMonth,
+        productionMonth,
+        domesticMonth,
+        lossesMonth,
+        lossesPct,
+        softenedWaterMonth,
+      }));
     } catch (err) {
       console.error('[WaterDashboard] loadBalanceAndKpi error:', err);
     } finally {
@@ -699,9 +704,12 @@ const WaterDashboard: React.FC = () => {
     });
   }, [balanceData, hiddenDevices]);
 
-  // ── Theoretical losses ────────────────────────────────────────────────────
-  const theoreticalFilterLoss = parseFloat((kpi.sourceMonth * FILTER_LOSS_PER_M3).toFixed(2));
-  const remainingLoss = parseFloat(Math.max(0, kpi.lossesMonth - theoreticalFilterLoss).toFixed(2));
+  // ── Структура потерь: скважина − умягчённая; умягчённая − производственные нужды ──
+  const { lossWashM3, lossOsmosisM3 } = useMemo(() => {
+    const wash = parseFloat((kpi.sourceMonth - kpi.softenedWaterMonth).toFixed(2));
+    const osm = parseFloat((kpi.softenedWaterMonth - kpi.productionMonth).toFixed(2));
+    return { lossWashM3: wash, lossOsmosisM3: osm };
+  }, [kpi.sourceMonth, kpi.softenedWaterMonth, kpi.productionMonth]);
 
   // ── Передаём KPI-контекст в AI-чат при изменении данных ──────────────────
   useEffect(() => {
@@ -715,13 +723,14 @@ const WaterDashboard: React.FC = () => {
       domesticMonth: kpi.domesticMonth,
       lossesMonth: kpi.lossesMonth,
       lossesPct: kpi.lossesPct,
-      filterLoss: theoreticalFilterLoss,
-      osmosisLoss: remainingLoss,
+      filterLoss: lossWashM3,
+      osmosisLoss: lossOsmosisM3,
+      softenedWaterMonth: kpi.softenedWaterMonth,
       activeAlerts: 0,
     });
     // Очищаем контекст при уходе с дашборда
     return () => setAIChatWaterContext(null);
-  }, [kpi, selectedMonth, loading, theoreticalFilterLoss, remainingLoss]);
+  }, [kpi, selectedMonth, loading, lossWashM3, lossOsmosisM3]);
 
   useEffect(() => {
     if (
@@ -860,13 +869,13 @@ const WaterDashboard: React.FC = () => {
             <div className="wd-kpi__label">Структура потерь</div>
             <div className="wd-kpi__split-row">
               <span>Промывка:</span>
-              <strong>{theoreticalFilterLoss.toLocaleString('ru-RU')} м³</strong>
-              <span className="wd-kpi__pct">({kpi.lossesMonth > 0 ? ((theoreticalFilterLoss / kpi.lossesMonth) * 100).toFixed(0) : 0}%)</span>
+              <strong>{lossWashM3.toLocaleString('ru-RU')} м³</strong>
+              <span className="wd-kpi__pct">({kpi.lossesMonth > 0 ? ((lossWashM3 / kpi.lossesMonth) * 100).toFixed(0) : 0}%)</span>
             </div>
             <div className="wd-kpi__split-row">
               <span>Осмос:</span>
-              <strong>{remainingLoss.toLocaleString('ru-RU')} м³</strong>
-              <span className="wd-kpi__pct">({kpi.lossesMonth > 0 ? ((remainingLoss / kpi.lossesMonth) * 100).toFixed(0) : 0}%)</span>
+              <strong>{lossOsmosisM3.toLocaleString('ru-RU')} м³</strong>
+              <span className="wd-kpi__pct">({kpi.lossesMonth > 0 ? ((lossOsmosisM3 / kpi.lossesMonth) * 100).toFixed(0) : 0}%)</span>
             </div>
           </div>
         </div>

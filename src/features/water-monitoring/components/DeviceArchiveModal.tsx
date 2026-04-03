@@ -202,35 +202,29 @@ const DeviceArchiveModal: React.FC<DeviceArchiveModalProps> = ({
               <option value={100}>100</option>
             </select>
 
-            {/* Кнопка загрузки */}
-            {!archiveDataLoaded && (
-              <button
-                className="archive-load-button"
-                onClick={handleLoadArchiveData}
-                disabled={!currentDeviceId || archiveLoading}
-                title="Загрузить данные за выбранный период"
-              >
-                {archiveLoading ? 'Загрузка...' : '📥 Загрузить данные'}
-              </button>
-            )}
+            <button
+              type="button"
+              className="archive-load-button"
+              onClick={() => void handleLoadArchiveData()}
+              disabled={!currentDeviceId || archiveLoading}
+              title="Перезагрузить данные за выбранный период"
+            >
+              {archiveLoading ? 'Загрузка...' : '🔄 Обновить данные'}
+            </button>
           </div>
 
           {/* Основное содержимое */}
-          {!archiveDataLoaded ? (
-            <div className="empty-state" style={{ padding: '20px', fontSize: '14px', color: '#666' }}>
-              <p>Нажмите кнопку "Загрузить данные" для просмотра архива</p>
-              <p style={{ fontSize: '12px', color: '#999', marginTop: '8px' }}>
-                Период: {archiveStartDate} - {archiveEndDate} (с первого числа текущего месяца до сегодня)
-              </p>
+          {archiveError && !archiveLoading ? (
+            <div className="error-state">
+              <strong>❌ Ошибка:</strong> {archiveError.message || 'Не удалось загрузить архив'}
             </div>
-          ) : archiveLoading ? (
+          ) : !archiveDataLoaded || archiveLoading ? (
             <div className="loading-state">
               <div className="spinner"></div>
               <p>Загрузка архива...</p>
-            </div>
-          ) : archiveError ? (
-            <div className="error-state">
-              <strong>❌ Ошибка:</strong> {archiveError.message || 'Не удалось загрузить архив'}
+              <p style={{ fontSize: '12px', color: '#999', marginTop: '8px' }}>
+                Период: {archiveStartDate} — {archiveEndDate}
+              </p>
             </div>
           ) : archiveReadings.length === 0 ? (
             <div className="empty-state">

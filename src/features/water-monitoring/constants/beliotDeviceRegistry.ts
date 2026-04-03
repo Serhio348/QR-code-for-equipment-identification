@@ -72,8 +72,9 @@ export type BeliotDashboardOverrideRow = {
 export const HVO_AGGREGATE_WATER_DEVICE_IDS = new Set<string>(['11363']);
 
 /**
- * Счётчики ЛУ / АЛПО / сортировка — группа «ХВО» в {@link BELOT_DEVICE_GROUPS} без агрегата умягчения
- * и без уличного ввода (см. «Ввод, ул. Орджоникидзе»). KPI «производственные нужды» = Σ их месячного расхода.
+ * Счётчики ЛУ / АЛПО / сортировка / очистное и др. — группа «ХВО» в {@link BELOT_DEVICE_GROUPS}
+ * без агрегата умягчения и без уличного ввода (см. «Ввод, ул. Орджоникидзе»).
+ * KPI «производственные нужды» и дельта «осмос» в структуре потерь = Σ их месячного расхода.
  */
 export function getProductionNeedsKpiDeviceIds(): string[] {
   const hvo = BELOT_DEVICE_GROUPS.find((g) => g.name === 'ХВО');

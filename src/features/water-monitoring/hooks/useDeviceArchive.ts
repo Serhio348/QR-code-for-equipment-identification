@@ -3,7 +3,8 @@
  *
  * Инкапсулирует всё, что связано с архивом показаний одного счётчика:
  * - управление состоянием (даты, группировка, страница, режим отображения)
- * - загрузку данных через useBeliotDeviceReadings
+ * - загрузку данных через useBeliotDeviceReadings (запрос с календарного дня до начала периода,
+ *   чтобы объём за первый день считался от показания предыдущего дня)
  * - группировку и вычисление объёмов потребления
  * - подготовку данных для графика (fullChartData)
  * - пагинацию таблицы
@@ -38,6 +39,37 @@ export interface ArchiveChartPoint {
 }
 
 const ARCHIVE_DATA_LIMIT = 10_000;
+
+/**
+ * Границы календарных дат YYYY-MM-DD в локальной зоне → ISO для Supabase.
+ * Без привязки к UTC-полуночи строкой вида T00:00:00.000Z (иначе сдвигаются сутки).
+ */
+function localYmdBoundsToIso(startYmd: string, endYmd: string): { startIso: string; endIso: string } {
+  const [ys, ms, ds] = startYmd.split('-').map(Number);
+  const [ye, me, de] = endYmd.split('-').map(Number);
+  const start = new Date(ys, ms - 1, ds, 0, 0, 0, 0);
+  const end = new Date(ye, me - 1, de, 23, 59, 59, 999);
+  return { startIso: start.toISOString(), endIso: end.toISOString() };
+}
+
+/** Предыдущий календарный день YYYY-MM-DD (локальная дата). */
+function previousCalendarDayYmd(ymd: string): string {
+  const [y, m, d] = ymd.split('-').map(Number);
+  const dt = new Date(y, m - 1, d - 1);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Границы запроса в Supabase: на один день раньше archiveStart — иначе объём за первый день
+ * периода (и первый час) считается от «предыдущего показания того же дня» и даёт 0.
+ * Строки таблицы по-прежнему строятся только от archiveStart (см. groupReadings).
+ */
+function archiveFetchRangeIso(archiveStartYmd: string, archiveEndYmd: string): { fetchStartIso: string; fetchEndIso: string } {
+  const prevYmd = previousCalendarDayYmd(archiveStartYmd);
+  const fetchStartIso = localYmdBoundsToIso(prevYmd, prevYmd).startIso;
+  const fetchEndIso = localYmdBoundsToIso(archiveEndYmd, archiveEndYmd).endIso;
+  return { fetchStartIso, fetchEndIso };
+}
 
 function todayStr(): string {
   const d = new Date();
@@ -95,19 +127,20 @@ export function useDeviceArchive(deviceId: string | null) {
 
   const handleLoadArchiveData = useCallback(async () => {
     if (!deviceId || !archiveStartDate || !archiveEndDate) return;
-    setArchiveDataLoaded(true);
 
-    const startDateStr = `${archiveStartDate}T00:00:00.000Z`;
-    const endDate = new Date(`${archiveEndDate}T23:59:59.999Z`);
-    endDate.setDate(endDate.getDate() + 1);
-    const endDateStr = endDate.toISOString();
+    const { fetchStartIso, fetchEndIso } = archiveFetchRangeIso(archiveStartDate, archiveEndDate);
 
-    if (loadByPeriod) {
-      await loadByPeriod(startDateStr, endDateStr);
-    } else {
-      await refreshArchive();
+    try {
+      if (loadByPeriod) {
+        await loadByPeriod(fetchStartIso, fetchEndIso);
+      } else {
+        await refreshArchive();
+      }
+      setArchiveDataLoaded(true);
+      setIsArchiveSettingsCollapsed(true);
+    } catch {
+      setArchiveDataLoaded(false);
     }
-    setIsArchiveSettingsCollapsed(true);
   }, [deviceId, archiveStartDate, archiveEndDate, loadByPeriod, refreshArchive]);
 
   // ─── Группировка показаний ────────────────────────────────────────────────
@@ -267,10 +300,8 @@ export function useDeviceArchive(deviceId: string | null) {
 
   const archiveReadings = useMemo((): GroupedReading[] => {
     if (!archiveStartDate || !archiveEndDate) return [];
-    const startDateStr = `${archiveStartDate}T00:00:00.000Z`;
-    const endDate = new Date(`${archiveEndDate}T23:59:59.999Z`);
-    endDate.setDate(endDate.getDate() + 1);
-    return groupReadings(archiveReadingsRaw, archiveGroupBy, startDateStr, endDate.toISOString());
+    const { startIso, endIso } = localYmdBoundsToIso(archiveStartDate, archiveEndDate);
+    return groupReadings(archiveReadingsRaw, archiveGroupBy, startIso, endIso);
   }, [archiveReadingsRaw, archiveGroupBy, archiveStartDate, archiveEndDate, groupReadings]);
 
   // ─── Данные для графика ───────────────────────────────────────────────────
@@ -355,30 +386,44 @@ export function useDeviceArchive(deviceId: string | null) {
     setArchiveCurrentPage(1);
   }, [archiveGroupBy, archiveDataLoaded]);
 
-  // Перезагрузка при смене дат (если данные уже загружены)
+  // Автозагрузка при открытии модалки, смене счётчика или периода (те же границы, что и у группировки)
   useEffect(() => {
-    if (!isArchiveOpen || !deviceId || !archiveDataLoaded || !archiveStartDate || !archiveEndDate) return;
-    const startDateStr = `${archiveStartDate}T00:00:00.000Z`;
-    const endDate = new Date(`${archiveEndDate}T23:59:59.999Z`);
-    endDate.setDate(endDate.getDate() + 1);
-    if (loadByPeriod) {
-      loadByPeriod(startDateStr, endDate.toISOString());
-    } else {
-      refreshArchive();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [archiveStartDate, archiveEndDate]);
+    if (!isArchiveOpen || !deviceId || !archiveStartDate || !archiveEndDate) return;
 
-  // Сброс при открытии/закрытии архива
+    let cancelled = false;
+    const { fetchStartIso, fetchEndIso } = archiveFetchRangeIso(archiveStartDate, archiveEndDate);
+
+    void (async () => {
+      try {
+        if (loadByPeriod) {
+          await loadByPeriod(fetchStartIso, fetchEndIso);
+        } else {
+          await refreshArchive();
+        }
+        if (!cancelled) {
+          setArchiveDataLoaded(true);
+          setIsArchiveSettingsCollapsed(true);
+        }
+      } catch {
+        if (!cancelled) setArchiveDataLoaded(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isArchiveOpen, deviceId, archiveStartDate, archiveEndDate, loadByPeriod, refreshArchive]);
+
+  // Оформление страницы и сброс «загружено» только при закрытии
   useEffect(() => {
-    setArchiveDataLoaded(false);
-    setArchiveCurrentPage(1);
-    setIsArchiveSettingsCollapsed(false);
     if (isArchiveOpen) {
+      setArchiveCurrentPage(1);
+      setIsArchiveSettingsCollapsed(false);
       document.body.classList.add('archive-modal-open');
-    } else {
-      document.body.classList.remove('archive-modal-open');
+      return;
     }
+    setArchiveDataLoaded(false);
+    document.body.classList.remove('archive-modal-open');
   }, [isArchiveOpen]);
 
   return {
