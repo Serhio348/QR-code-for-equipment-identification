@@ -3,22 +3,21 @@
  *
  * Структура (Вариант 3 — Комбо):
  *  ┌──────────────────────────────────────────────────────────────┐
- *  │  KPI: скважина / производство / потери % / алерты           │
+ *  │  KPI: скважина / производство / потери %                    │
  *  ├───────────────────────────────┬──────────────────────────────┤
  *  │  💧 Водный баланс 7 дней      │  🕸 Радар качества воды      │
  *  │  ComposedChart: стек+линия    │  (radar chart, % от нормы)   │
  *  ├───────────────────────────────┴──────────────────────────────┤
- *  │  🔢 Теоретические потери (промывка + ОО)                     │
- *  ├──────────────────────────────────────────────────────────────┤
- *  │  🚨 Активные превышения норм (таблица алертов)               │
+ *  │  🔢 Структура потерь (по счётчикам)                          │
  *  └──────────────────────────────────────────────────────────────┘
  *
  * Водный баланс:
- *  Потери = Скважина (source) − Σ производство (production)
+ *  Производственные нужды = Σ расхода по счётчикам ЛУ/АЛПО/сортировка/очистное (группа «ХВО» без агрегата умягчения 11363).
+ *  Потери по дням и KPI = Скважина (source) − эта сумма
  *
- * Теоретические потери — промывка фильтров обезжелезивания:
- *  Каждые 120 м³ → 2 фильтра × 800 с × 20 м³/ч = 8.89 м³/цикл
- *  Потери на фильтрах = (Q_source / 120) × 8.89
+ * Структура потерь:
+ *  Промывка (отмывка фильтров) = расход скважины − расход умягчённой воды (агрегат ХВО)
+ *  Осмос = расход умягчённой − производственные нужды
  */
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
@@ -34,6 +33,15 @@ import {
 } from 'recharts';
 import { supabase } from '@/shared/config/supabase';
 import { setAIChatWaterContext } from '@/features/ai-consultant/events/chatEvents';
+import {
+  domesticBalanceLabelForDevice,
+  FIRE_SUPPRESSION_DEVICE_IDS,
+  FIRE_SUPPRESSION_DISPLAY_LABEL,
+  HVO_AGGREGATE_WATER_DEVICE_IDS,
+  getProductionNeedsKpiDeviceIds,
+  mergeBeliotOverridesForDashboard,
+} from '../constants/beliotDeviceRegistry';
+import { buildMeterLabelColorMap } from '../constants/meterSeriesColors';
 import './WaterDashboard.css';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -62,12 +70,12 @@ interface MeterGroup {
 
 interface KpiData {
   sourceMonth: number;       // м³ — скважина за месяц
-  productionMonth: number;   // м³ — производство за месяц
+  productionMonth: number;   // м³ — ЛУ+АЛПО+сортировка/очистное (ХВО без агрегата умягчения)
   domesticMonth: number;     // м³ — хоз-питьевое за месяц
-  lossesMonth: number;       // м³ — потери = source − production − domestic
+  lossesMonth: number;       // м³ — потери = source − production
   lossesPct: number;         // % потерь
-  activeAlerts: number;
-  criticalAlerts: number;
+  /** Расход умягчённой воды (агрегат ХВО), м³ */
+  softenedWaterMonth: number;
   lastAnalysisDate: string | null;
   samplingPointsCount: number;
 }
@@ -88,26 +96,12 @@ interface MonthlyMeterRow {
   shareOfRole: number;
   isCombined: boolean;
   deviceCount: number;
-}
-
-interface AlertItem {
-  id: string;
-  priority: 'critical' | 'high' | 'medium' | 'low';
-  parameter_label: string;
-  value: number;
-  unit: string;
-  deviation_percent: number | null;
-  message: string;
-  created_at: string;
+  deviceIds: string[];
+  /** Для вкладки «Производственные»: отдельные шкалы % для входа ХВО и внутренних счётчиков */
+  distributionSection?: 'hvo_inlet' | 'internal';
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-/** Цвета производственных счётчиков */
-const PROD_COLORS = ['#667eea', '#4ecdc4', '#f9ca24', '#f0932b', '#6c5ce7', '#a29bfe'];
-
-/** Цвета хоз-питьевых счётчиков — янтарь/голубой, не совпадают с потерями (красный) */
-const DOM_COLORS = ['#d97706', '#06b6d4', '#f472b6', '#84cc16', '#c026d3', '#16a34a'];
 
 /** Цвет потерь */
 const LOSSES_COLOR = '#ef4444';
@@ -115,21 +109,7 @@ const LOSSES_COLOR = '#ef4444';
 /** Цвет скважины (источника) */
 const SOURCE_COLOR = '#1e40af';
 
-const PRIORITY_ICON: Record<string, string> = {
-  critical: '🔴',
-  high: '🟠',
-  medium: '🟡',
-  low: '🔵',
-};
-
 const ADMIN_BUILDING_ADDRESS = 'советская 2/1';
-
-/**
- * Расчёт теоретических потерь на промывку фильтров обезжелезивания.
- * Каждые 120 м³ через установку: 2 фильтра поочерёдно, 800 с × 20 м³/ч каждый.
- * Потери на цикл = 2 × (800 / 3600) × 20 = 8.889 м³
- */
-const FILTER_LOSS_PER_M3 = (2 * (800 / 3600) * 20) / 120; // ≈ 0.07407 м³/м³
 
 function isWeekday(year: number, month: number, day: number): boolean {
   const dayOfWeek = new Date(year, month, day).getDay();
@@ -157,9 +137,30 @@ function normalizeAddress(value: string | null | undefined): string {
     .trim();
 }
 
+/** Суммарный учёт на выходе ХВО (умягчённая вода); ЛУ/АЛПО/сортировка — ниже по трубопроводу */
+function isHvoAggregateProductionMeter(device: DeviceInfo): boolean {
+  if (HVO_AGGREGATE_WATER_DEVICE_IDS.has(device.device_id)) return true;
+  return /умягч/i.test(device.name || '');
+}
+
+function filterProductionNeedDevices(devList: DeviceInfo[], anyRole: boolean): DeviceInfo[] {
+  return anyRole
+    ? devList.filter(d => d.role === 'production')
+    : devList.filter(d => d.role !== 'source' && d.role !== 'domestic');
+}
+
+/** На графике баланса — только «листья», если есть агрегат ХВО и внутренние счётчики (без двойного столбца) */
+function productionDevicesForBalanceChart(prodDevices: DeviceInfo[]): DeviceInfo[] {
+  const agg = prodDevices.filter(isHvoAggregateProductionMeter);
+  const leaf = prodDevices.filter(d => !isHvoAggregateProductionMeter(d));
+  if (agg.length > 0 && leaf.length > 0) return leaf;
+  return prodDevices;
+}
+
 function buildMeterGroups(devices: DeviceInfo[]): MeterGroup[] {
   return devices
-    .filter((device): device is DeviceInfo & { role: 'source' | 'production' | 'domestic' } => device.role !== null)
+    .filter((device): device is DeviceInfo & { role: 'source' | 'production' | 'domestic' } =>
+      device.role === 'source' || device.role === 'production' || device.role === 'domestic')
     .reduce<MeterGroup[]>((groups, device) => {
       const normalizedAddress = normalizeAddress(device.address);
       const shouldCombine = normalizedAddress === ADMIN_BUILDING_ADDRESS;
@@ -201,11 +202,53 @@ function buildMeterGroups(devices: DeviceInfo[]): MeterGroup[] {
     });
 }
 
+/**
+ * Сдвоенное пожаротушение — одна строка в распределении и суммарный расход (без двух отдельных МWN).
+ */
+function mergeFireSuppressionDomesticGroups(groups: MeterGroup[]): MeterGroup[] {
+  if (FIRE_SUPPRESSION_DEVICE_IDS.size === 0) return groups;
+
+  const toMerge = groups.filter(
+    g =>
+      g.role === 'domestic' &&
+      g.deviceIds.length > 0 &&
+      g.deviceIds.every(id => FIRE_SUPPRESSION_DEVICE_IDS.has(id)),
+  );
+  const rest = groups.filter(
+    g =>
+      !(
+        g.role === 'domestic' &&
+        g.deviceIds.length > 0 &&
+        g.deviceIds.every(id => FIRE_SUPPRESSION_DEVICE_IDS.has(id))
+      ),
+  );
+
+  if (toMerge.length === 0) return groups;
+
+  const allIds = [...new Set(toMerge.flatMap(g => g.deviceIds))].sort((a, b) => a.localeCompare(b));
+  const merged: MeterGroup = {
+    key: 'combined:domestic:fire-suppression',
+    label: FIRE_SUPPRESSION_DISPLAY_LABEL,
+    role: 'domestic',
+    deviceIds: allIds,
+    isCombined: allIds.length > 1,
+  };
+
+  return [...rest, merged].sort((a, b) => {
+    const roleOrder = ['source', 'production', 'domestic'];
+    const roleDiff = roleOrder.indexOf(a.role) - roleOrder.indexOf(b.role);
+    if (roleDiff !== 0) return roleDiff;
+    return a.label.localeCompare(b.label, 'ru');
+  });
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const WaterDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [distributionRole, setDistributionRole] = useState<'production' | 'domestic'>('production');
+  /** Отдельный экран: меньше вертикальной прокрутки, шрифты не ужимаем */
+  const [dashboardView, setDashboardView] = useState<'charts' | 'distribution'>('charts');
   const [workDayStats, setWorkDayStats] = useState({ production: 0, domestic: 0 });
   const [kpi, setKpi] = useState<KpiData>({
     sourceMonth: 0,
@@ -213,8 +256,7 @@ const WaterDashboard: React.FC = () => {
     domesticMonth: 0,
     lossesMonth: 0,
     lossesPct: 0,
-    activeAlerts: 0,
-    criticalAlerts: 0,
+    softenedWaterMonth: 0,
     lastAnalysisDate: null,
     samplingPointsCount: 0,
   });
@@ -222,7 +264,6 @@ const WaterDashboard: React.FC = () => {
   const [productionDeviceNames, setProductionDeviceNames] = useState<string[]>([]);
   const [domesticDeviceNames, setDomesticDeviceNames] = useState<string[]>([]);
   const [monthlyMeterRows, setMonthlyMeterRows] = useState<MonthlyMeterRow[]>([]);
-  const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [hasRoles, setHasRoles] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState<SelectedMonth>(() => {
     const now = new Date();
@@ -232,6 +273,8 @@ const WaterDashboard: React.FC = () => {
   const [hiddenDevices, setHiddenDevices] = useState<Set<string>>(new Set());
   const [todayTimeData, setTodayTimeData] = useState<Record<string, number | string>[]>([]);
   const [todayLoading, setTodayLoading] = useState(false);
+  const [productionTodayTotalM3, setProductionTodayTotalM3] = useState<number>(0);
+  const [productionTodayWorkHoursByName, setProductionTodayWorkHoursByName] = useState<Record<string, number>>({});
 
   const toggleDevice = useCallback((name: string) => {
     setHiddenDevices(prev => {
@@ -285,6 +328,13 @@ const WaterDashboard: React.FC = () => {
       const prodDevs  = prodDevicesRef.current;
       const domDevs   = domDevicesRef.current;
       const meterGroups = meterGroupsRef.current;
+
+      const aggDevs = prodDevs.filter(isHvoAggregateProductionMeter);
+      const leafDevs = prodDevs.filter(d => !isHvoAggregateProductionMeter(d));
+      const aggIds = aggDevs.map(d => d.device_id);
+      const kpiIdsFromRegistry = getProductionNeedsKpiDeviceIds();
+      const productionNeedsIds =
+        kpiIdsFromRegistry.length > 0 ? kpiIdsFromRegistry : prodDevs.map(d => d.device_id);
 
       // Загружаем baseline до прошлого месяца — этого хватит и для прошлого, и для текущего месяца
       const allDeviceIds = [...new Set([
@@ -356,25 +406,38 @@ const WaterDashboard: React.FC = () => {
 
         const srcTotal = sourceIds.reduce((s, did) => s + getDay(did), 0);
         const row: BalanceDay = { date: label, source: parseFloat(srcTotal.toFixed(3)), losses: 0 };
-        let prodTotal = 0;
 
-        // Группируем по имени объекта — суммируем счётчики одного объекта
         const prodByName: Record<string, number> = {};
-        for (const dev of prodDevs) {
-          prodByName[dev.name] = (prodByName[dev.name] ?? 0) + getDay(dev.device_id);
+        if (aggDevs.length > 0) {
+          for (const dev of aggDevs) {
+            const v = getDay(dev.device_id);
+            prodByName[dev.name] = (prodByName[dev.name] ?? 0) + v;
+          }
+          if (leafDevs.length > 0) {
+            for (const dev of leafDevs) {
+              const v = getDay(dev.device_id);
+              prodByName[dev.name] = (prodByName[dev.name] ?? 0) + v;
+            }
+          }
+        } else {
+          for (const dev of prodDevs) {
+            const v = getDay(dev.device_id);
+            prodByName[dev.name] = (prodByName[dev.name] ?? 0) + v;
+          }
         }
+        const prodTotalForLoss = productionNeedsIds.reduce((s, id) => s + getDay(id), 0);
         for (const [name, v] of Object.entries(prodByName)) {
           row[name] = parseFloat(v.toFixed(3));
-          prodTotal += v;
         }
         const domByName: Record<string, number> = {};
         for (const dev of domDevs) {
-          domByName[dev.name] = (domByName[dev.name] ?? 0) + getDay(dev.device_id);
+          const rowKey = domesticBalanceLabelForDevice(dev.device_id, dev.name);
+          domByName[rowKey] = (domByName[rowKey] ?? 0) + getDay(dev.device_id);
         }
         for (const [name, v] of Object.entries(domByName)) {
           row[name] = parseFloat(v.toFixed(3));
         }
-        row.losses = parseFloat(Math.max(0, srcTotal - prodTotal).toFixed(3));
+        row.losses = parseFloat(Math.max(0, srcTotal - prodTotalForLoss).toFixed(3));
         days.push(row);
       }
 
@@ -387,14 +450,20 @@ const WaterDashboard: React.FC = () => {
           return s + Math.max(0, v.max - base);
         }, 0);
 
-      const prodDeviceIds = prodDevs.map(d => d.device_id);
-      const domDeviceIds  = domDevs.map(d => d.device_id);
+      const domDeviceIds = domDevs.map(d => d.device_id);
 
       const sourceMonth = parseFloat(monthConsumption(sourceIds, currentMonthByDevice, monthBaselineByDevice).toFixed(2));
-      const productionMonth = parseFloat(monthConsumption(prodDeviceIds, currentMonthByDevice, monthBaselineByDevice).toFixed(2));
+      const aggMonthTotal =
+        aggIds.length > 0
+          ? monthConsumption(aggIds, currentMonthByDevice, monthBaselineByDevice)
+          : 0;
+      const productionMonth = parseFloat(
+        monthConsumption(productionNeedsIds, currentMonthByDevice, monthBaselineByDevice).toFixed(2),
+      );
       const domesticMonth = parseFloat(monthConsumption(domDeviceIds, currentMonthByDevice, monthBaselineByDevice).toFixed(2));
       const lossesMonth     = parseFloat(Math.max(0, sourceMonth - productionMonth).toFixed(2));
       const lossesPct       = sourceMonth > 0 ? parseFloat(((lossesMonth / sourceMonth) * 100).toFixed(1)) : 0;
+      const softenedWaterMonth = parseFloat(aggMonthTotal.toFixed(2));
 
       const roleTotals: Record<'source' | 'production' | 'domestic', number> = {
         source: sourceMonth,
@@ -423,23 +492,48 @@ const WaterDashboard: React.FC = () => {
         .map<MonthlyMeterRow>(group => {
           const currentMonthValue = monthConsumption(group.deviceIds, currentMonthByDevice, monthBaselineByDevice);
           const roleTotal = roleTotals[group.role];
+          let shareOfRole = roleTotal > 0 ? parseFloat(((currentMonthValue / roleTotal) * 100).toFixed(1)) : 0;
+          let distributionSection: MonthlyMeterRow['distributionSection'];
+          if (group.role === 'production') {
+            const groupHasAgg = group.deviceIds.some(id => aggIds.includes(id));
+            distributionSection = groupHasAgg ? 'hvo_inlet' : 'internal';
+            const denom = groupHasAgg ? aggMonthTotal : productionMonth;
+            shareOfRole = denom > 0 ? parseFloat(((currentMonthValue / denom) * 100).toFixed(1)) : 0;
+          }
           return {
             key: group.key,
             label: group.label,
             role: group.role,
             currentMonth: parseFloat(currentMonthValue.toFixed(2)),
             averagePerDay: elapsedDays > 0 ? parseFloat((currentMonthValue / elapsedDays).toFixed(2)) : 0,
-            shareOfRole: roleTotal > 0 ? parseFloat(((currentMonthValue / roleTotal) * 100).toFixed(1)) : 0,
+            shareOfRole,
             isCombined: group.isCombined,
             deviceCount: group.deviceIds.length,
+            deviceIds: [...group.deviceIds],
+            distributionSection,
           };
         })
-        .sort((a, b) => b.currentMonth - a.currentMonth);
+        .sort((a, b) => {
+          if (a.role === 'production' && b.role === 'production') {
+            const sa = a.distributionSection === 'hvo_inlet' ? 0 : 1;
+            const sb = b.distributionSection === 'hvo_inlet' ? 0 : 1;
+            if (sa !== sb) return sa - sb;
+          }
+          return b.currentMonth - a.currentMonth;
+        });
 
       setBalanceData(days);
       setWorkDayStats({ production: productionWorkingDays, domestic: domesticWorkingDays });
       setMonthlyMeterRows(monthlyRows);
-      setKpi(prev => ({ ...prev, sourceMonth, productionMonth, domesticMonth, lossesMonth, lossesPct }));
+      setKpi(prev => ({
+        ...prev,
+        sourceMonth,
+        productionMonth,
+        domesticMonth,
+        lossesMonth,
+        lossesPct,
+        softenedWaterMonth,
+      }));
     } catch (err) {
       console.error('[WaterDashboard] loadBalanceAndKpi error:', err);
     } finally {
@@ -454,17 +548,10 @@ const WaterDashboard: React.FC = () => {
     setLoading(true);
     try {
       const [
-        alertsRes,
         lastAnalysisRes,
         samplingPointsRes,
         deviceOverridesRes,
       ] = await Promise.all([
-        supabase
-          .from('water_quality_alerts')
-          .select('id, priority, parameter_label, value, unit, deviation_percent, message, created_at')
-          .eq('status', 'active')
-          .order('created_at', { ascending: false })
-          .limit(15),
         supabase
           .from('water_analysis')
           .select('sample_date')
@@ -482,7 +569,7 @@ const WaterDashboard: React.FC = () => {
       ]);
 
       // ── Карта устройств ──────────────────────────────────────────────────
-      const overrides = deviceOverridesRes.data || [];
+      const overrides = mergeBeliotOverridesForDashboard(deviceOverridesRes.data || []);
       const anyRole = overrides.some(d => d.device_role === 'source' || d.device_role === 'production');
       setHasRoles(anyRole);
 
@@ -490,36 +577,33 @@ const WaterDashboard: React.FC = () => {
         device_id: d.device_id,
         name: d.object_name || d.name || d.device_id,
         address: d.address || null,
-        role: d.device_role as 'source' | 'production' | 'domestic' | null ?? null,
+        role: (d.device_role as DeviceInfo['role']) ?? null,
       }));
 
 
       const sourceDeviceIds = devList.filter(d => d.role === 'source').map(d => d.device_id);
-      const prodDevices = anyRole
-        ? devList.filter(d => d.role === 'production')
-        : devList;
+      const prodDevices = filterProductionNeedDevices(devList, anyRole);
       const domDevices = anyRole ? devList.filter(d => d.role === 'domestic') : [];
 
       // Сохраняем в refs — loadBalanceAndKpi использует их без перезапроса
       sourceDeviceIdsRef.current = sourceDeviceIds;
       prodDevicesRef.current = prodDevices;
       domDevicesRef.current = domDevices;
-      meterGroupsRef.current = buildMeterGroups([
-        ...devList.filter(d => d.role === 'source'),
-        ...prodDevices,
-        ...domDevices,
+      meterGroupsRef.current = mergeFireSuppressionDomesticGroups(
+        buildMeterGroups([
+          ...devList.filter(d => d.role === 'source'),
+          ...prodDevices,
+          ...domDevices,
+        ]),
+      );
+
+      const chartProd = productionDevicesForBalanceChart(prodDevices);
+      setProductionDeviceNames([...new Set(chartProd.map(d => d.name))]);
+      setDomesticDeviceNames([
+        ...new Set(domDevices.map(d => domesticBalanceLabelForDevice(d.device_id, d.name))),
       ]);
-
-      const activeAlerts = (alertsRes.data || []) as AlertItem[];
-      const critCount = activeAlerts.filter(a => a.priority === 'critical').length;
-
-      setProductionDeviceNames([...new Set(prodDevices.map(d => d.name))]);
-      setDomesticDeviceNames([...new Set(domDevices.map(d => d.name))]);
-      setAlerts(activeAlerts);
       setKpi(prev => ({
         ...prev,
-        activeAlerts: activeAlerts.length,
-        criticalAlerts: critCount,
         lastAnalysisDate: lastAnalysisRes.data?.sample_date || null,
         samplingPointsCount: samplingPointsRes.data?.length || 0,
       }));
@@ -527,7 +611,7 @@ const WaterDashboard: React.FC = () => {
       staticDataLoadedRef.current = true;
       await Promise.all([
         loadBalanceAndKpi(selectedMonthRef.current.year, selectedMonthRef.current.month),
-        loadTodayReadings(prodDevices),
+        loadTodayReadings(chartProd.length > 0 ? chartProd : prodDevices),
       ]);
     } catch (err) {
       console.error('[WaterDashboard] loadDashboard error:', err);
@@ -576,19 +660,55 @@ const WaterDashboard: React.FC = () => {
 
       // Строим точки по часам с нарастающим расходом от начала дня
       const maxHour = now.getHours();
+      const EPS = 0.0001;
       const points: Record<string, number | string>[] = [];
+
+      // "Рабочий час" = за этот час появилось приращение (inc > 0).
+      // Для отсутствующих часов используем carry-forward текущего накопления,
+      // как это визуально делает `connectNulls`.
+      const workHoursByName: Record<string, number> = {};
+      const prevCumByName: Record<string, number> = {};
+      const lastCumByName: Record<string, number> = {};
+
+      for (const dev of prodDevs) {
+        workHoursByName[dev.name] = 0;
+        prevCumByName[dev.name] = 0;
+        lastCumByName[dev.name] = 0;
+      }
+
       for (let h = 0; h <= maxHour; h++) {
         const point: Record<string, number | string> = { time: `${pad(h)}:00` };
         for (const dev of prodDevs) {
           const hourVal = byDeviceHour[dev.device_id]?.[h];
           const base    = baselineByDev[dev.device_id] ?? 0;
-          point[dev.name] = hourVal !== undefined
-            ? parseFloat(Math.max(0, hourVal - base).toFixed(2))
-            : (null as unknown as number);
+
+          let cum = lastCumByName[dev.name] ?? 0;
+          if (hourVal !== undefined) {
+            cum = parseFloat(Math.max(0, hourVal - base).toFixed(2));
+            point[dev.name] = cum;
+          } else {
+            point[dev.name] = null as unknown as number;
+          }
+
+          const inc = cum - (prevCumByName[dev.name] ?? 0);
+          if (inc > EPS) {
+            workHoursByName[dev.name] += 1;
+          }
+
+          prevCumByName[dev.name] = cum;
+          lastCumByName[dev.name] = cum;
         }
         points.push(point);
       }
+
+      const productionTodayTotal = prodDevs.reduce(
+        (sum, d) => sum + (lastCumByName[d.name] ?? 0),
+        0,
+      );
+
       setTodayTimeData(points);
+      setProductionTodayTotalM3(parseFloat(productionTodayTotal.toFixed(2)));
+      setProductionTodayWorkHoursByName(workHoursByName);
     } catch (err) {
       console.error('[WaterDashboard] loadTodayReadings error:', err);
     } finally {
@@ -606,12 +726,6 @@ const WaterDashboard: React.FC = () => {
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
-  const fmtDate = (s: string | null) => {
-    if (!s) return '—';
-    try { return new Date(s).toLocaleDateString('ru-RU'); } catch { return s; }
-  };
-
-
   // ── Данные чарта с учётом скрытых серий ──────────────────────────────────
   // Обнуляем скрытые устройства прямо в данных — `hide` проп Bar не надёжен
   const visibleBalanceData = useMemo(() => {
@@ -628,9 +742,12 @@ const WaterDashboard: React.FC = () => {
     });
   }, [balanceData, hiddenDevices]);
 
-  // ── Theoretical losses ────────────────────────────────────────────────────
-  const theoreticalFilterLoss = parseFloat((kpi.sourceMonth * FILTER_LOSS_PER_M3).toFixed(2));
-  const remainingLoss = parseFloat(Math.max(0, kpi.lossesMonth - theoreticalFilterLoss).toFixed(2));
+  // ── Структура потерь: скважина − умягчённая; умягчённая − производственные нужды ──
+  const { lossWashM3, lossOsmosisM3 } = useMemo(() => {
+    const wash = parseFloat((kpi.sourceMonth - kpi.softenedWaterMonth).toFixed(2));
+    const osm = parseFloat((kpi.softenedWaterMonth - kpi.productionMonth).toFixed(2));
+    return { lossWashM3: wash, lossOsmosisM3: osm };
+  }, [kpi.sourceMonth, kpi.softenedWaterMonth, kpi.productionMonth]);
 
   // ── Передаём KPI-контекст в AI-чат при изменении данных ──────────────────
   useEffect(() => {
@@ -644,13 +761,14 @@ const WaterDashboard: React.FC = () => {
       domesticMonth: kpi.domesticMonth,
       lossesMonth: kpi.lossesMonth,
       lossesPct: kpi.lossesPct,
-      filterLoss: theoreticalFilterLoss,
-      osmosisLoss: remainingLoss,
-      activeAlerts: kpi.activeAlerts,
+      filterLoss: lossWashM3,
+      osmosisLoss: lossOsmosisM3,
+      softenedWaterMonth: kpi.softenedWaterMonth,
+      activeAlerts: 0,
     });
     // Очищаем контекст при уходе с дашборда
     return () => setAIChatWaterContext(null);
-  }, [kpi, selectedMonth, loading, theoreticalFilterLoss, remainingLoss]);
+  }, [kpi, selectedMonth, loading, lossWashM3, lossOsmosisM3]);
 
   useEffect(() => {
     if (
@@ -664,6 +782,31 @@ const WaterDashboard: React.FC = () => {
     }
   }, [distributionRole, monthlyMeterRows]);
 
+  /**
+   * Одна фиксированная палитра на все серии баланса и распределения: производство + хозбыт вместе,
+   * чтобы на одном графике не было двух похожих полос и цвет не «плавал» от HSL.
+   */
+  const balanceMeterColorMap = useMemo(() => {
+    const prodLabels = monthlyMeterRows.filter(r => r.role === 'production').map(r => r.label);
+    const domLabels = monthlyMeterRows.filter(r => r.role === 'domestic').map(r => r.label);
+    const keys = [
+      ...new Set([
+        ...prodLabels,
+        ...domLabels,
+        ...productionDeviceNames,
+        ...domesticDeviceNames,
+      ]),
+    ];
+    return buildMeterLabelColorMap(keys);
+  }, [monthlyMeterRows, productionDeviceNames, domesticDeviceNames]);
+
+  const hasDistributionMeterData = useMemo(
+    () =>
+      monthlyMeterRows.some(row => row.role === 'source' || row.role === 'production') ||
+      monthlyMeterRows.some(row => row.role === 'domestic'),
+    [monthlyMeterRows],
+  );
+
   const distributionRows = useMemo(() => {
     if (distributionRole === 'production') {
       const sourceRows = monthlyMeterRows
@@ -671,25 +814,30 @@ const WaterDashboard: React.FC = () => {
         .sort((a, b) => b.currentMonth - a.currentMonth)
         .map(row => ({ ...row, color: SOURCE_COLOR }));
 
-      const productionRows = monthlyMeterRows
+      const productionRowsSorted = monthlyMeterRows
         .filter(row => row.role === 'production')
-        .sort((a, b) => b.currentMonth - a.currentMonth)
-        .map((row, index) => ({
-          ...row,
-          color: PROD_COLORS[index % PROD_COLORS.length],
-        }));
+        .sort((a, b) => {
+          const sa = a.distributionSection === 'hvo_inlet' ? 0 : 1;
+          const sb = b.distributionSection === 'hvo_inlet' ? 0 : 1;
+          if (sa !== sb) return sa - sb;
+          return b.currentMonth - a.currentMonth;
+        });
+      const productionRows = productionRowsSorted.map(row => ({
+        ...row,
+        color: balanceMeterColorMap.get(row.label) ?? '#64748b',
+      }));
 
       return [...sourceRows, ...productionRows];
     }
 
-    return monthlyMeterRows
+    const domesticSorted = monthlyMeterRows
       .filter(row => row.role === 'domestic')
-      .sort((a, b) => b.currentMonth - a.currentMonth)
-      .map((row, index) => ({
-        ...row,
-        color: DOM_COLORS[index % DOM_COLORS.length],
-      }));
-  }, [distributionRole, monthlyMeterRows]);
+      .sort((a, b) => b.currentMonth - a.currentMonth);
+    return domesticSorted.map(row => ({
+      ...row,
+      color: balanceMeterColorMap.get(row.label) ?? '#64748b',
+    }));
+  }, [distributionRole, monthlyMeterRows, balanceMeterColorMap]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -730,7 +878,7 @@ const WaterDashboard: React.FC = () => {
           <div className="wd-kpi__icon">🏭</div>
           <div>
             <div className="wd-kpi__value">{kpi.productionMonth.toLocaleString('ru-RU')} м³</div>
-            <div className="wd-kpi__label">Производство, месяц</div>
+            <div className="wd-kpi__label">Производственные нужды, месяц</div>
           </div>
         </div>
 
@@ -759,20 +907,41 @@ const WaterDashboard: React.FC = () => {
             <div className="wd-kpi__label">Структура потерь</div>
             <div className="wd-kpi__split-row">
               <span>Промывка:</span>
-              <strong>{theoreticalFilterLoss.toLocaleString('ru-RU')} м³</strong>
-              <span className="wd-kpi__pct">({kpi.lossesMonth > 0 ? ((theoreticalFilterLoss / kpi.lossesMonth) * 100).toFixed(0) : 0}%)</span>
+              <strong>{lossWashM3.toLocaleString('ru-RU')} м³</strong>
+              <span className="wd-kpi__pct">({kpi.lossesMonth > 0 ? ((lossWashM3 / kpi.lossesMonth) * 100).toFixed(0) : 0}%)</span>
             </div>
             <div className="wd-kpi__split-row">
               <span>Осмос:</span>
-              <strong>{remainingLoss.toLocaleString('ru-RU')} м³</strong>
-              <span className="wd-kpi__pct">({kpi.lossesMonth > 0 ? ((remainingLoss / kpi.lossesMonth) * 100).toFixed(0) : 0}%)</span>
+              <strong>{lossOsmosisM3.toLocaleString('ru-RU')} м³</strong>
+              <span className="wd-kpi__pct">({kpi.lossesMonth > 0 ? ((lossOsmosisM3 / kpi.lossesMonth) * 100).toFixed(0) : 0}%)</span>
             </div>
           </div>
         </div>
       </div>
 
+      <div className="wd-view-tabs" role="tablist" aria-label="Экран дашборда">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={dashboardView === 'charts'}
+          className={`wd-view-tab${dashboardView === 'charts' ? ' wd-view-tab--active' : ''}`}
+          onClick={() => setDashboardView('charts')}
+        >
+          Графики и баланс
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={dashboardView === 'distribution'}
+          className={`wd-view-tab${dashboardView === 'distribution' ? ' wd-view-tab--active' : ''}`}
+          onClick={() => setDashboardView('distribution')}
+        >
+          Распределение по учётам
+        </button>
+      </div>
 
       {/* ── Charts Row ─────────────────────────────────────────────────── */}
+      {dashboardView === 'charts' && (
       <div className="wd-charts-row">
 
         {/* Balance Chart */}
@@ -809,7 +978,7 @@ const WaterDashboard: React.FC = () => {
           {balanceData.length > 0 ? (
             <div className="wd-balance-wrap">
               <div className="wd-balance-chart">
-                <ResponsiveContainer width="100%" height={240}>
+                <ResponsiveContainer width="100%" height={210}>
                   <ComposedChart data={visibleBalanceData} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                     <XAxis
@@ -827,21 +996,21 @@ const WaterDashboard: React.FC = () => {
                       contentStyle={{ fontSize: 12, borderRadius: 8 }}
                     />
                     {/* Производственные счётчики */}
-                    {productionDeviceNames.slice(0, 6).map((name, i) => (
+                    {productionDeviceNames.map((name) => (
                       <Bar
                         key={name}
                         dataKey={name}
                         stackId="balance"
-                        fill={PROD_COLORS[i % PROD_COLORS.length]}
+                        fill={balanceMeterColorMap.get(name) ?? '#64748b'}
                       />
                     ))}
                     {/* Хоз-питьевые счётчики */}
-                    {domesticDeviceNames.map((name, i) => (
+                    {domesticDeviceNames.map((name) => (
                       <Bar
                         key={name}
                         dataKey={name}
                         stackId="balance"
-                        fill={DOM_COLORS[i % DOM_COLORS.length]}
+                        fill={balanceMeterColorMap.get(name) ?? '#64748b'}
                       />
                     ))}
                     {/* Потери — красная зона */}
@@ -873,7 +1042,7 @@ const WaterDashboard: React.FC = () => {
                   title={hiddenDevices.has('__source__') ? 'Показать' : 'Скрыть'}
                 >
                   <span className="wd-device-filter__dot wd-device-filter__dot--line" style={{ background: SOURCE_COLOR }} />
-                  <span className="wd-device-filter__name">Скважина</span>
+                  <span className="wd-device-filter__name" style={{ color: SOURCE_COLOR }}>Скважина</span>
                 </button>
                 {/* Потери — переключаемая */}
                 <button
@@ -882,12 +1051,12 @@ const WaterDashboard: React.FC = () => {
                   title={hiddenDevices.has('__losses__') ? 'Показать' : 'Скрыть'}
                 >
                   <span className="wd-device-filter__dot" style={{ background: LOSSES_COLOR }} />
-                  <span className="wd-device-filter__name">Потери</span>
+                  <span className="wd-device-filter__name" style={{ color: LOSSES_COLOR }}>Потери</span>
                 </button>
                 {/* Счётчики — объекты */}
                 {[
-                  ...productionDeviceNames.map((name, i) => ({ name, color: PROD_COLORS[i % PROD_COLORS.length] })),
-                  ...domesticDeviceNames.map((name, i) => ({ name, color: DOM_COLORS[i % DOM_COLORS.length] })),
+                  ...productionDeviceNames.map((name) => ({ name, color: balanceMeterColorMap.get(name) ?? '#64748b' })),
+                  ...domesticDeviceNames.map((name) => ({ name, color: balanceMeterColorMap.get(name) ?? '#64748b' })),
                 ].map(({ name, color }) => (
                   <button
                     key={name}
@@ -896,7 +1065,7 @@ const WaterDashboard: React.FC = () => {
                     title={hiddenDevices.has(name) ? 'Показать' : 'Скрыть'}
                   >
                     <span className="wd-device-filter__dot" style={{ background: color }} />
-                    <span className="wd-device-filter__name">{name}</span>
+                    <span className="wd-device-filter__name" style={{ color }}>{name}</span>
                   </button>
                 ))}
               </div>
@@ -915,7 +1084,7 @@ const WaterDashboard: React.FC = () => {
           {todayLoading ? (
             <div className="wd-no-data">Загрузка...</div>
           ) : todayTimeData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={230}>
+            <ResponsiveContainer width="100%" height={200}>
               <ComposedChart data={todayTimeData} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="time" tick={{ fontSize: 10 }} interval={1} />
@@ -924,27 +1093,52 @@ const WaterDashboard: React.FC = () => {
                   formatter={(v: number | undefined, name: string | undefined) => [v != null ? `${v} м³` : '—', name]}
                   contentStyle={{ fontSize: 12, borderRadius: 8 }}
                 />
-                {productionDeviceNames.map((name, i) => (
-                  <Line
-                    key={name}
-                    type="monotone"
-                    dataKey={name}
-                    stroke={PROD_COLORS[i % PROD_COLORS.length]}
-                    strokeWidth={2}
-                    dot={{ r: 3 }}
-                    connectNulls
-                  />
-                ))}
+                {productionDeviceNames.map((name) => {
+                  const c = balanceMeterColorMap.get(name) ?? '#64748b';
+                  return (
+                    <Line
+                      key={name}
+                      type="monotone"
+                      dataKey={name}
+                      stroke={c}
+                      strokeWidth={2}
+                      dot={{ r: 3, fill: c }}
+                      connectNulls
+                    />
+                  );
+                })}
               </ComposedChart>
             </ResponsiveContainer>
           ) : (
             <div className="wd-no-data">Нет показаний за сегодня</div>
           )}
+          <div className="wd-month-total-foot">
+            Производственные нужды за сегодня (ЛУ+АЛПО+сортировка):{' '}
+            <strong>{productionTodayTotalM3.toLocaleString('ru-RU')} м³</strong>
+          </div>
+          {productionDeviceNames.length > 0 && (
+            <div className="wd-work-hours-foot">
+              Часы работы по учётам:{' '}
+              <strong>
+                {productionDeviceNames
+                  .map((name) => `${name}: ${productionTodayWorkHoursByName[name] ?? 0} ч`)
+                  .join(', ')}
+              </strong>
+            </div>
+          )}
         </div>
       </div>
+      )}
 
       {/* ── Monthly distribution ────────────────────────────────────────── */}
-      {(monthlyMeterRows.some(row => row.role === 'source' || row.role === 'production') || monthlyMeterRows.some(row => row.role === 'domestic')) && (
+      {dashboardView === 'distribution' && !hasDistributionMeterData && (
+        <div className="wd-card">
+          <div className="wd-no-data">
+            Нет данных для распределения. Укажите роли счётчиков на вкладке «Счётчики воды».
+          </div>
+        </div>
+      )}
+      {dashboardView === 'distribution' && hasDistributionMeterData && (
         <div className="wd-card wd-card--domestic-dist">
           <div className="wd-card__header">
             <h3>📊 Распределение по учётам</h3>
@@ -968,14 +1162,32 @@ const WaterDashboard: React.FC = () => {
           </div>
           {distributionRows.length > 0 ? (
             <div className="wd-domestic-dist">
-              {distributionRows.map(item => {
+              {distributionRows.map((item, index) => {
                 const pct = item.shareOfRole;
                 const averageLabel = `ср./сутки ${item.averagePerDay.toLocaleString('ru-RU')} м³`;
+                const prev = index > 0 ? distributionRows[index - 1] : null;
+                const showHvoTitle =
+                  distributionRole === 'production' &&
+                  item.role === 'production' &&
+                  item.distributionSection === 'hvo_inlet' &&
+                  (!prev || prev.role !== 'production' || prev.distributionSection !== 'hvo_inlet');
+                const showInternalTitle =
+                  distributionRole === 'production' &&
+                  item.role === 'production' &&
+                  item.distributionSection === 'internal' &&
+                  (!prev || prev.distributionSection !== 'internal');
 
                 return (
-                  <div key={item.key} className="wd-domestic-dist__item">
+                  <React.Fragment key={item.key}>
+                    {showHvoTitle ? (
+                      <div className="wd-distribution-section-title">Вход ХВО (суммарный учёт)</div>
+                    ) : null}
+                    {showInternalTitle ? (
+                      <div className="wd-distribution-section-title">Внутри производства</div>
+                    ) : null}
+                  <div className="wd-domestic-dist__item">
                     <div className="wd-domestic-dist__name-wrap">
-                      <span className="wd-domestic-dist__name">{item.label}</span>
+                      <span className="wd-domestic-dist__name" style={{ color: item.color }}>{item.label}</span>
                       {item.isCombined && (
                         <span className="wd-domestic-dist__badge">{item.deviceCount} счётчика</span>
                       )}
@@ -992,67 +1204,21 @@ const WaterDashboard: React.FC = () => {
                       <span className="wd-domestic-dist__avg">{averageLabel}</span>
                     </div>
                   </div>
+                  </React.Fragment>
                 );
               })}
             </div>
           ) : (
             <div className="wd-no-data">Нет данных по выбранной группе учётов</div>
           )}
-        </div>
-      )}
-
-      {/* ── Alerts ─────────────────────────────────────────────────────── */}
-      <div className="wd-card wd-card--alerts">
-        <div className="wd-card__header">
-          <h3>🚨 Активные превышения норм</h3>
-          {alerts.length > 0 && (
-            <span className="wd-alerts-count">{alerts.length}</span>
+          {distributionRole === 'production' && (
+            <div className="wd-month-total-foot">
+              Производственные нужды за месяц (как в KPI):{' '}
+              <strong>{kpi.productionMonth.toLocaleString('ru-RU')} м³</strong>
+            </div>
           )}
         </div>
-
-        {alerts.length > 0 ? (
-          <div className="wd-alerts-table-wrap">
-            <table className="wd-alerts-table">
-              <thead>
-                <tr>
-                  <th>Приоритет</th>
-                  <th>Параметр</th>
-                  <th>Значение</th>
-                  <th>Превышение</th>
-                  <th>Сообщение</th>
-                  <th>Дата</th>
-                </tr>
-              </thead>
-              <tbody>
-                {alerts.map(a => (
-                  <tr key={a.id} className={`wd-alert-row wd-alert-row--${a.priority}`}>
-                    <td>
-                      <span className="wd-alert-priority">
-                        {PRIORITY_ICON[a.priority] || '⚪'}
-                        <span className="wd-alert-priority__label">{a.priority}</span>
-                      </span>
-                    </td>
-                    <td>{a.parameter_label}</td>
-                    <td className="wd-alert-value">{a.value} {a.unit}</td>
-                    <td>
-                      {a.deviation_percent != null
-                        ? <span className="wd-alert-deviation">+{Math.round(a.deviation_percent)}%</span>
-                        : '—'}
-                    </td>
-                    <td className="wd-alert-msg">{a.message}</td>
-                    <td className="wd-alert-date">{fmtDate(a.created_at)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="wd-no-alerts">
-            ✅ Активных превышений норм нет
-          </div>
-        )}
-      </div>
-
+      )}
 
     </div>
   );

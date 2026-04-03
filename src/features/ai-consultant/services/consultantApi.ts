@@ -53,8 +53,12 @@ export interface WaterDashboardContext {
   domesticMonth: number;
   lossesMonth: number;
   lossesPct: number;
+  /** Промывка: скважина − умягчённая */
   filterLoss: number;
+  /** Осмос: умягчённая − производственные нужды */
   osmosisLoss: number;
+  /** м³ расхода умягчённой воды за месяц */
+  softenedWaterMonth: number;
   activeAlerts: number;
 }
 

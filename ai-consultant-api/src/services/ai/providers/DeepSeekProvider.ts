@@ -341,8 +341,9 @@ export class DeepSeekProvider extends BaseAIProvider {
 • Производство: ${waterContext.productionMonth.toLocaleString('ru')} м³
 • Хоз-питьевое водоснабжение: ${waterContext.domesticMonth.toLocaleString('ru')} м³
 • Потери: ${waterContext.lossesMonth.toLocaleString('ru')} м³ (${waterContext.lossesPct}%)
-  - Промывка фильтров обезжелезивания: ~${waterContext.filterLoss} м³
-  - Осмос: ~${waterContext.osmosisLoss} м³
+  - Умягчённая вода (месяц): ${waterContext.softenedWaterMonth.toLocaleString('ru')} м³
+  - Промывка (скважина − умягчённая): ${waterContext.filterLoss} м³
+  - Осмос (умягчённая − производственные нужды): ${waterContext.osmosisLoss} м³
 • Активных превышений норм: ${waterContext.activeAlerts}
 
 Пользователь сейчас просматривает дашборд воды за ${waterContext.monthLabel}.
