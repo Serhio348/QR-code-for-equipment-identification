@@ -20,7 +20,8 @@
  *  Осмос = расход умягчённой − производственные нужды
  */
 
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from 'react';
+import { flushSync } from 'react-dom';
 import {
   ComposedChart,
   Bar,
@@ -42,11 +43,15 @@ import {
   mergeBeliotOverridesForDashboard,
 } from '../constants/beliotDeviceRegistry';
 import { buildMeterLabelColorMap } from '../constants/meterSeriesColors';
+import { useDeviceDetection } from '@/shared/hooks/useDeviceDetection';
 import './WaterDashboard.css';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type MinMax = { min: number; max: number };
+
+/** На узком экране: короткое окно по умолчанию или прокручиваемый месяц */
+type BalanceMobileRange = '7' | '14' | 'month';
 
 interface SelectedMonth {
   year: number;
@@ -88,6 +93,7 @@ interface KpiData {
 }
 
 interface BalanceDay {
+  /** Число месяца (строка), ось X; месяц/год — в заголовке карточки и в тултипе */
   date: string;
   source: number;
   losses: number;
@@ -115,6 +121,152 @@ const LOSSES_COLOR = '#ef4444';
 
 /** Цвет скважины (источника) */
 const SOURCE_COLOR = '#1e40af';
+
+type ProductionTooltipPayloadEntry = {
+  name?: string;
+  value?: number | string | ReadonlyArray<number | string>;
+  color?: string;
+  fill?: string;
+};
+
+type ProductionChartTooltipProps = {
+  active?: boolean;
+  label?: string | number;
+  payload?: ReadonlyArray<ProductionTooltipPayloadEntry>;
+  onClose: () => void;
+};
+
+function formatProductionTooltipValue(v: ProductionTooltipPayloadEntry['value']): string {
+  if (v == null) return '—';
+  if (typeof v === 'number' && Number.isFinite(v)) return `${v} м³`;
+  if (typeof v === 'string') return `${v} м³`;
+  return '—';
+}
+
+/**
+ * Подсказка графика «Производство»: рендерится через portal в контейнер прокрутки графика,
+ * закрепляется сверху справа в видимой области окна графика.
+ */
+function ProductionChartTooltip({ active, label, payload, onClose }: ProductionChartTooltipProps): React.ReactNode {
+  if (!active || !payload?.length) return null;
+  const title = label != null && label !== '' ? `Час ${label}` : 'Накопление';
+  return (
+    <div
+      className="wd-prod-tooltip-panel"
+      onPointerDown={(e) => e.stopPropagation()}
+      role="dialog"
+      aria-label={title}
+    >
+      <div className="wd-prod-tooltip-panel__head">
+        <span className="wd-prod-tooltip-panel__title">{title}</span>
+        <button
+          type="button"
+          className="wd-prod-tooltip-panel__close"
+          aria-label="Закрыть"
+          onClick={(e) => {
+            e.stopPropagation();
+            onClose();
+          }}
+        >
+          ×
+        </button>
+      </div>
+      <ul className="wd-prod-tooltip-panel__list">
+        {payload.map((entry, i) => {
+          if (entry.name == null) return null;
+          const c = entry.color ?? entry.fill ?? '#64748b';
+          return (
+            <li
+              key={`${String(entry.name)}-${i}`}
+              className="wd-prod-tooltip-panel__row"
+              style={{ borderLeftColor: c }}
+            >
+              <span className="wd-prod-tooltip-panel__name">{entry.name}</span>
+              <span className="wd-prod-tooltip-panel__val">{formatProductionTooltipValue(entry.value)}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+type BalanceChartTooltipProps = {
+  active?: boolean;
+  label?: string | number;
+  payload?: ReadonlyArray<ProductionTooltipPayloadEntry>;
+  onClose: () => void;
+  selectedMonth: SelectedMonth;
+};
+
+function formatBalanceChartTitle(dayLabel: string | number | undefined, selectedMonth: SelectedMonth): string {
+  const d = parseInt(String(dayLabel), 10);
+  if (!Number.isFinite(d) || d < 1) return String(dayLabel ?? '');
+  const dt = new Date(selectedMonth.year, selectedMonth.month, d);
+  return dt.toLocaleDateString('ru-RU', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
+function balanceChartSeriesLabel(name: string | undefined): string {
+  if (name === 'source') return 'Скважина';
+  if (name === 'losses') return 'Потери';
+  return name ?? '';
+}
+
+/** Подсказка графика «Водный баланс» — тот же каркас панели, что у производства (крестик + строки) */
+function BalanceChartTooltip({
+  active,
+  label,
+  payload,
+  onClose,
+  selectedMonth,
+}: BalanceChartTooltipProps): React.ReactNode {
+  if (!active || !payload?.length) return null;
+  const title = formatBalanceChartTitle(label, selectedMonth);
+  return (
+    <div
+      className="wd-prod-tooltip-panel"
+      onPointerDown={(e) => e.stopPropagation()}
+      role="dialog"
+      aria-label={title}
+    >
+      <div className="wd-prod-tooltip-panel__head">
+        <span className="wd-prod-tooltip-panel__title">{title}</span>
+        <button
+          type="button"
+          className="wd-prod-tooltip-panel__close"
+          aria-label="Закрыть"
+          onClick={(e) => {
+            e.stopPropagation();
+            onClose();
+          }}
+        >
+          ×
+        </button>
+      </div>
+      <ul className="wd-prod-tooltip-panel__list">
+        {payload.map((entry, i) => {
+          if (entry.name == null) return null;
+          const c = entry.color ?? entry.fill ?? '#64748b';
+          const seriesName = balanceChartSeriesLabel(String(entry.name));
+          return (
+            <li
+              key={`${String(entry.name)}-${i}`}
+              className="wd-prod-tooltip-panel__row"
+              style={{ borderLeftColor: c }}
+            >
+              <span className="wd-prod-tooltip-panel__name">{seriesName}</span>
+              <span className="wd-prod-tooltip-panel__val">{formatProductionTooltipValue(entry.value)}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
 
 const ADMIN_BUILDING_ADDRESS = 'советская 2/1';
 
@@ -252,6 +404,7 @@ function mergeFireSuppressionDomesticGroups(groups: MeterGroup[]): MeterGroup[] 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const WaterDashboard: React.FC = () => {
+  const { isMobile } = useDeviceDetection();
   const [loading, setLoading] = useState(true);
   const [distributionRole, setDistributionRole] = useState<'production' | 'domestic'>('production');
   /** Отдельный экран: меньше вертикальной прокрутки, шрифты не ужимаем */
@@ -278,15 +431,36 @@ const WaterDashboard: React.FC = () => {
   });
   const [balanceLoading, setBalanceLoading] = useState(false);
   const [hiddenDevices, setHiddenDevices] = useState<Set<string>>(new Set());
+  const [balanceMobileRange, setBalanceMobileRange] = useState<BalanceMobileRange>('7');
   const [todayTimeData, setTodayTimeData] = useState<Record<string, number | string>[]>([]);
   const [todayLoading, setTodayLoading] = useState(false);
   const [productionTodayTotalM3, setProductionTodayTotalM3] = useState<number>(0);
   const [productionTodayWorkHoursByName, setProductionTodayWorkHoursByName] = useState<Record<string, number>>({});
+  /** Накопление м³ с начала суток по каждому учёту — на момент последних данных (текущий час для «сегодня») */
+  const [productionTodayM3ByName, setProductionTodayM3ByName] = useState<Record<string, number>>({});
   const [selectedProductionDay, setSelectedProductionDay] = useState<string>(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   });
   const [productionHistoryByDay, setProductionHistoryByDay] = useState<Record<string, ProductionDaySummary>>({});
+  /** Скрытие крестиком: до следующего тапа по области графика */
+  const [productionTooltipDismissed, setProductionTooltipDismissed] = useState(false);
+  const [balanceTooltipDismissed, setBalanceTooltipDismissed] = useState(false);
+
+  useEffect(() => {
+    setProductionTooltipDismissed(false);
+  }, [selectedProductionDay, todayTimeData]);
+
+  const prodChartScrollViewportRef = useRef<HTMLDivElement>(null);
+  const [productionChartTooltipPortalHost, setProductionChartTooltipPortalHost] = useState<HTMLElement | null>(null);
+
+  useLayoutEffect(() => {
+    if (dashboardView !== 'charts' || todayLoading || todayTimeData.length === 0) {
+      setProductionChartTooltipPortalHost(null);
+      return;
+    }
+    setProductionChartTooltipPortalHost(prodChartScrollViewportRef.current);
+  }, [dashboardView, todayLoading, todayTimeData.length]);
 
   const toggleDevice = useCallback((name: string) => {
     setHiddenDevices(prev => {
@@ -399,7 +573,8 @@ const WaterDashboard: React.FC = () => {
       for (let d = 1; d <= daysInMonth; d++) {
         // Локальная дата строкой — без конвертации в UTC, чтобы не было сдвига в UTC+2/+3
         const dayStr  = `${year}-${pad(month + 1)}-${pad(d)}`;
-        const label   = `${pad(d)}.${pad(month + 1)}`;
+        /** Подпись на оси X — только число месяца (месяц в заголовке карточки) */
+        const label   = String(d);
 
         const getDay = (did: string) => {
           const seg = byDeviceDay[did]?.[dayStr];
@@ -682,6 +857,7 @@ const WaterDashboard: React.FC = () => {
         setTodayTimeData([]);
         setProductionTodayTotalM3(0);
         setProductionTodayWorkHoursByName({});
+        setProductionTodayM3ByName({});
         return;
       }
 
@@ -699,7 +875,7 @@ const WaterDashboard: React.FC = () => {
         if (!(r.device_id in baselineByDev)) baselineByDev[r.device_id] = Number(r.reading_value);
       }
 
-      // Строим точки по часам с нарастающим расходом от начала дня
+      // Прошедшие дни — полные сутки 0–23 ч; выбранный «сегодня» — только до текущего часа включительно.
       const maxHour = isToday ? new Date().getHours() : 23;
       const EPS = 0.0001;
       const points: Record<string, number | string>[] = [];
@@ -719,6 +895,7 @@ const WaterDashboard: React.FC = () => {
 
       for (let h = 0; h <= maxHour; h++) {
         const point: Record<string, number | string> = { time: `${pad(h)}:00` };
+
         for (const dev of prodDevs) {
           const hourVal = byDeviceHour[dev.device_id]?.[h];
           const base    = baselineByDev[dev.device_id] ?? 0;
@@ -755,6 +932,7 @@ const WaterDashboard: React.FC = () => {
       for (const dev of prodDevs) {
         totalsByName[dev.name] = parseFloat((lastCumByName[dev.name] ?? 0).toFixed(2));
       }
+      setProductionTodayM3ByName({ ...totalsByName });
 
       // Сохраняем историю (upsert) — чтобы постепенно набрать последний месяц
       // (требует прав администратора по RLS).
@@ -823,6 +1001,67 @@ const WaterDashboard: React.FC = () => {
       return r;
     });
   }, [balanceData, hiddenDevices]);
+
+  /** Для текущего месяца — только дни до сегодня включительно (без «пустых» будущих суток на графике) */
+  const balanceElapsedDayCount = useMemo(() => {
+    const now = new Date();
+    const { year, month } = selectedMonth;
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const isCurrentMonth = now.getFullYear() === year && now.getMonth() === month;
+    return isCurrentMonth ? Math.min(now.getDate(), daysInMonth) : daysInMonth;
+  }, [selectedMonth]);
+
+  const visibleBalanceDataElapsed = useMemo(
+    () => visibleBalanceData.slice(0, balanceElapsedDayCount),
+    [visibleBalanceData, balanceElapsedDayCount],
+  );
+
+  /** Для мобильных: последние 7/14 прошедших суток или весь отрезок (скролл); на десктопе — все прошедшие дни месяца */
+  const balanceChartDisplayData = useMemo(() => {
+    const data = visibleBalanceDataElapsed;
+    if (!isMobile || balanceMobileRange === 'month') {
+      return data;
+    }
+    const windowDays = balanceMobileRange === '7' ? 7 : 14;
+    if (data.length <= windowDays) return data;
+    return data.slice(-windowDays);
+  }, [visibleBalanceDataElapsed, isMobile, balanceMobileRange]);
+
+  useEffect(() => {
+    setBalanceTooltipDismissed(false);
+  }, [selectedMonth, balanceChartDisplayData, balanceMobileRange]);
+
+  const balanceChartPixelWidth = useMemo(() => {
+    const n = balanceChartDisplayData.length;
+    if (n === 0) return 320;
+    if (isMobile && balanceMobileRange === 'month') {
+      return Math.max(320, n * 26);
+    }
+    return 320;
+  }, [balanceChartDisplayData.length, isMobile, balanceMobileRange]);
+
+  const balanceXAxisInterval = useMemo(() => {
+    const n = balanceChartDisplayData.length;
+    if (n <= 7) return 0;
+    if (n <= 14) return 1;
+    return isMobile ? 2 : 4;
+  }, [balanceChartDisplayData.length, isMobile]);
+
+  const balanceBarMaxSize = useMemo(() => {
+    if (!isMobile) return undefined;
+    const n = balanceChartDisplayData.length;
+    if (n <= 7) return 44;
+    if (n <= 14) return 34;
+    return 20;
+  }, [isMobile, balanceChartDisplayData.length]);
+
+  /** Производство: полные сутки (0–23 ч); ширина области скролла — по числу точек */
+  const productionChartScrollWidth = useMemo(() => {
+    const n = todayTimeData.length;
+    if (n === 0) return 320;
+    const pxPerHour = isMobile ? 34 : 40;
+    return Math.max(320, n * pxPerHour);
+  }, [todayTimeData.length, isMobile]);
 
   // ── Структура потерь: скважина − умягчённая; умягчённая − производственные нужды ──
   const { lossWashM3, lossOsmosisM3 } = useMemo(() => {
@@ -921,6 +1160,28 @@ const WaterDashboard: React.FC = () => {
     }));
   }, [distributionRole, monthlyMeterRows, balanceMeterColorMap]);
 
+  const productionChartLines = useMemo(
+    () =>
+      productionDeviceNames.map((name) => {
+        const c = balanceMeterColorMap.get(name) ?? '#64748b';
+        const strokeW = isMobile ? 2.5 : 2;
+        const adR = isMobile ? 6 : 5;
+        return (
+          <Line
+            key={name}
+            type="monotone"
+            dataKey={name}
+            stroke={c}
+            strokeWidth={strokeW}
+            dot={false}
+            activeDot={{ r: adR, stroke: '#fff', strokeWidth: 2, fill: c }}
+            connectNulls
+          />
+        );
+      }),
+    [productionDeviceNames, balanceMeterColorMap, isMobile],
+  );
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   if (loading) {
@@ -946,60 +1207,116 @@ const WaterDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* ── KPI Cards ──────────────────────────────────────────────────── */}
-      <div className="wd-kpi-row">
-        <div className="wd-kpi wd-kpi--blue">
-          <div className="wd-kpi__icon">🚰</div>
-          <div>
-            <div className="wd-kpi__value">{kpi.sourceMonth.toLocaleString('ru-RU')} м³</div>
-            <div className="wd-kpi__label">Скважина (вход), месяц</div>
-          </div>
-        </div>
-
-        <div className="wd-kpi wd-kpi--teal">
-          <div className="wd-kpi__icon">🏭</div>
-          <div>
-            <div className="wd-kpi__value">{kpi.productionMonth.toLocaleString('ru-RU')} м³</div>
-            <div className="wd-kpi__label">Производственные нужды, месяц</div>
-          </div>
-        </div>
-
-        <div className="wd-kpi wd-kpi--green">
-          <div className="wd-kpi__icon">🏠</div>
-          <div>
-            <div className="wd-kpi__value">{kpi.domesticMonth.toLocaleString('ru-RU')} м³</div>
-            <div className="wd-kpi__label">Хоз-питьевое, месяц</div>
-          </div>
-        </div>
-
-        <div className={`wd-kpi ${kpi.lossesPct > 15 ? 'wd-kpi--red' : kpi.lossesPct > 8 ? 'wd-kpi--orange' : 'wd-kpi--green'}`}>
-          <div className="wd-kpi__icon">💨</div>
-          <div>
-            <div className="wd-kpi__value">
-              {kpi.lossesMonth.toLocaleString('ru-RU')} м³
-              <span className="wd-kpi__pct"> ({kpi.lossesPct}%)</span>
+      {/* ── KPI: на мобильных — одна карточка; на десктопе — сетка ─────── */}
+      {isMobile ? (
+        <div className="wd-kpi-mobile-card">
+          <div className="wd-kpi-mobile-card__title">Расход воды за месяц</div>
+          <div className="wd-kpi-mobile-card__rows">
+            <div className="wd-kpi-mobile-row wd-kpi-mobile-row--blue">
+              <span className="wd-kpi-mobile-row__icon" aria-hidden>🚰</span>
+              <span className="wd-kpi-mobile-row__label">Скважина (вход)</span>
+              <span className="wd-kpi-mobile-row__value">{kpi.sourceMonth.toLocaleString('ru-RU')} м³</span>
             </div>
-            <div className="wd-kpi__label">Потери воды, месяц</div>
+            <div className="wd-kpi-mobile-row wd-kpi-mobile-row--teal">
+              <span className="wd-kpi-mobile-row__icon" aria-hidden>🏭</span>
+              <span className="wd-kpi-mobile-row__label">Производственные нужды</span>
+              <span className="wd-kpi-mobile-row__value">{kpi.productionMonth.toLocaleString('ru-RU')} м³</span>
+            </div>
+            <div className="wd-kpi-mobile-row wd-kpi-mobile-row--green">
+              <span className="wd-kpi-mobile-row__icon" aria-hidden>🏠</span>
+              <span className="wd-kpi-mobile-row__label">Хоз-питьевое</span>
+              <span className="wd-kpi-mobile-row__value">{kpi.domesticMonth.toLocaleString('ru-RU')} м³</span>
+            </div>
+            <div
+              className={
+                kpi.lossesPct > 15
+                  ? 'wd-kpi-mobile-row wd-kpi-mobile-row--red'
+                  : kpi.lossesPct > 8
+                    ? 'wd-kpi-mobile-row wd-kpi-mobile-row--orange'
+                    : 'wd-kpi-mobile-row wd-kpi-mobile-row--muted'
+              }
+            >
+              <span className="wd-kpi-mobile-row__icon" aria-hidden>💨</span>
+              <span className="wd-kpi-mobile-row__label">Потери воды</span>
+              <span className="wd-kpi-mobile-row__value">
+                {kpi.lossesMonth.toLocaleString('ru-RU')} м³
+                <span className="wd-kpi-mobile-row__pct"> ({kpi.lossesPct}%)</span>
+              </span>
+            </div>
           </div>
-        </div>
-
-        <div className="wd-kpi wd-kpi--orange">
-          <div className="wd-kpi__icon">🔧</div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div className="wd-kpi__label">Структура потерь</div>
-            <div className="wd-kpi__split-row">
-              <span>Промывка:</span>
+          <div className="wd-kpi-mobile-card__subsection">
+            <div className="wd-kpi-mobile-card__subsection-title">Структура потерь</div>
+            <div className="wd-kpi-mobile-split">
+              <span>Промывка</span>
               <strong>{lossWashM3.toLocaleString('ru-RU')} м³</strong>
-              <span className="wd-kpi__pct">({kpi.lossesMonth > 0 ? ((lossWashM3 / kpi.lossesMonth) * 100).toFixed(0) : 0}%)</span>
+              <span className="wd-kpi-mobile-split__pct">
+                ({kpi.lossesMonth > 0 ? ((lossWashM3 / kpi.lossesMonth) * 100).toFixed(0) : 0}%)
+              </span>
             </div>
-            <div className="wd-kpi__split-row">
-              <span>Осмос:</span>
+            <div className="wd-kpi-mobile-split">
+              <span>Осмос</span>
               <strong>{lossOsmosisM3.toLocaleString('ru-RU')} м³</strong>
-              <span className="wd-kpi__pct">({kpi.lossesMonth > 0 ? ((lossOsmosisM3 / kpi.lossesMonth) * 100).toFixed(0) : 0}%)</span>
+              <span className="wd-kpi-mobile-split__pct">
+                ({kpi.lossesMonth > 0 ? ((lossOsmosisM3 / kpi.lossesMonth) * 100).toFixed(0) : 0}%)
+              </span>
             </div>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="wd-kpi-row">
+          <div className="wd-kpi wd-kpi--blue">
+            <div className="wd-kpi__icon">🚰</div>
+            <div>
+              <div className="wd-kpi__value">{kpi.sourceMonth.toLocaleString('ru-RU')} м³</div>
+              <div className="wd-kpi__label">Скважина (вход), месяц</div>
+            </div>
+          </div>
+
+          <div className="wd-kpi wd-kpi--teal">
+            <div className="wd-kpi__icon">🏭</div>
+            <div>
+              <div className="wd-kpi__value">{kpi.productionMonth.toLocaleString('ru-RU')} м³</div>
+              <div className="wd-kpi__label">Производственные нужды, месяц</div>
+            </div>
+          </div>
+
+          <div className="wd-kpi wd-kpi--green">
+            <div className="wd-kpi__icon">🏠</div>
+            <div>
+              <div className="wd-kpi__value">{kpi.domesticMonth.toLocaleString('ru-RU')} м³</div>
+              <div className="wd-kpi__label">Хоз-питьевое, месяц</div>
+            </div>
+          </div>
+
+          <div className={`wd-kpi ${kpi.lossesPct > 15 ? 'wd-kpi--red' : kpi.lossesPct > 8 ? 'wd-kpi--orange' : 'wd-kpi--green'}`}>
+            <div className="wd-kpi__icon">💨</div>
+            <div>
+              <div className="wd-kpi__value">
+                {kpi.lossesMonth.toLocaleString('ru-RU')} м³
+                <span className="wd-kpi__pct"> ({kpi.lossesPct}%)</span>
+              </div>
+              <div className="wd-kpi__label">Потери воды, месяц</div>
+            </div>
+          </div>
+
+          <div className="wd-kpi wd-kpi--orange">
+            <div className="wd-kpi__icon">🔧</div>
+            <div className="wd-kpi__text-block">
+              <div className="wd-kpi__label">Структура потерь</div>
+              <div className="wd-kpi__split-row">
+                <span>Промывка:</span>
+                <strong>{lossWashM3.toLocaleString('ru-RU')} м³</strong>
+                <span className="wd-kpi__pct">({kpi.lossesMonth > 0 ? ((lossWashM3 / kpi.lossesMonth) * 100).toFixed(0) : 0}%)</span>
+              </div>
+              <div className="wd-kpi__split-row">
+                <span>Осмос:</span>
+                <strong>{lossOsmosisM3.toLocaleString('ru-RU')} м³</strong>
+                <span className="wd-kpi__pct">({kpi.lossesMonth > 0 ? ((lossOsmosisM3 / kpi.lossesMonth) * 100).toFixed(0) : 0}%)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="wd-view-tabs" role="tablist" aria-label="Экран дашборда">
         <button
@@ -1028,54 +1345,136 @@ const WaterDashboard: React.FC = () => {
 
         {/* Balance Chart */}
         <div className="wd-card wd-card--consumption">
-          <div className="wd-card__header">
-            <h3>💧 Водный баланс — {new Date(selectedMonth.year, selectedMonth.month)
-              .toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })
-              .replace(/^./, c => c.toUpperCase())}</h3>
-            <select
-              className="wd-period-select"
-              value={`${selectedMonth.year}-${selectedMonth.month}`}
-              onChange={e => {
-                const [y, m] = e.target.value.split('-').map(Number);
-                setSelectedMonth({ year: y, month: m });
-              }}
-            >
-              {Array.from({ length: 6 }, (_, i) => {
-                const d = new Date();
-                d.setMonth(d.getMonth() - i);
-                return { year: d.getFullYear(), month: d.getMonth() };
-              }).map(({ year, month }) => (
-                <option key={`${year}-${month}`} value={`${year}-${month}`}>
-                  {new Date(year, month)
-                    .toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })
-                    .replace(/^./, c => c.toUpperCase())}
-                </option>
-              ))}
-            </select>
-            {balanceLoading
-              ? <span className="wd-card__hint">Загрузка...</span>
-              : <span className="wd-card__hint">м³/сут</span>
-            }
+          <div className="wd-card__header wd-card__header--balance">
+            <h3 className="wd-balance-card__title">
+              <span className="wd-balance-card__title-text">💧 Водный баланс</span>
+              <span className="wd-balance-card__title-period">
+                {' — '}
+                {new Date(selectedMonth.year, selectedMonth.month)
+                  .toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })
+                  .replace(/^./, c => c.toUpperCase())}
+              </span>
+            </h3>
+            <div className="wd-card__header-row wd-card__header-row--balance">
+              <select
+                className="wd-period-select wd-period-select--balance"
+                aria-label="Месяц для графика водного баланса"
+                value={`${selectedMonth.year}-${selectedMonth.month}`}
+                onChange={e => {
+                  const [y, m] = e.target.value.split('-').map(Number);
+                  setSelectedMonth({ year: y, month: m });
+                }}
+              >
+                {Array.from({ length: 6 }, (_, i) => {
+                  const d = new Date();
+                  d.setMonth(d.getMonth() - i);
+                  return { year: d.getFullYear(), month: d.getMonth() };
+                }).map(({ year, month }) => (
+                  <option key={`${year}-${month}`} value={`${year}-${month}`}>
+                    {new Date(year, month)
+                      .toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })
+                      .replace(/^./, c => c.toUpperCase())}
+                  </option>
+                ))}
+              </select>
+              {balanceLoading
+                ? <span className="wd-card__hint">Загрузка...</span>
+                : <span className="wd-card__hint">м³/сут</span>
+              }
+            </div>
           </div>
+          {isMobile && balanceData.length > 0 && (
+            <div className="wd-balance-mobile-range" role="group" aria-label="Масштаб графика по дням">
+              <span className="wd-balance-mobile-range__label">На графике:</span>
+              {(
+                [
+                  { id: '7' as const, label: '7 дн.' },
+                  { id: '14' as const, label: '14 дн.' },
+                  { id: 'month' as const, label: 'Месяц' },
+                ] as const
+              ).map(({ id, label }) => (
+                <button
+                  key={id}
+                  type="button"
+                  className={
+                    balanceMobileRange === id
+                      ? 'wd-balance-mobile-range__btn wd-balance-mobile-range__btn--active'
+                      : 'wd-balance-mobile-range__btn'
+                  }
+                  onClick={() => setBalanceMobileRange(id)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
           {balanceData.length > 0 ? (
             <div className="wd-balance-wrap">
-              <div className="wd-balance-chart">
-                <ResponsiveContainer width="100%" height={210}>
-                  <ComposedChart data={visibleBalanceData} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
+              <div className="wd-balance-chart-col">
+              {isMobile && balanceMobileRange === 'month' && (
+                <p className="wd-balance-scroll-hint">Проведите пальцем влево-вправо, чтобы увидеть все дни</p>
+              )}
+              <div
+                className={
+                  isMobile && balanceMobileRange === 'month'
+                    ? 'wd-balance-chart wd-balance-chart-scroll'
+                    : 'wd-balance-chart'
+                }
+              >
+                <div
+                  className={
+                    isMobile && balanceMobileRange === 'month'
+                      ? 'wd-balance-chart-scroll__inner'
+                      : undefined
+                  }
+                  style={
+                    isMobile && balanceMobileRange === 'month'
+                      ? { width: balanceChartPixelWidth, minWidth: balanceChartPixelWidth, height: 210 }
+                      : { width: '100%', height: 210 }
+                  }
+                  onPointerDown={() => {
+                    flushSync(() => setBalanceTooltipDismissed(false));
+                  }}
+                  onMouseEnter={() => setBalanceTooltipDismissed(false)}
+                  role="presentation"
+                >
+                  <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={balanceChartDisplayData} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis
+              <XAxis
                       dataKey="date"
-                      tick={{ fontSize: 11 }}
-                      interval={4}
+                      tick={{ fontSize: isMobile ? 11 : 12 }}
+                      interval={balanceXAxisInterval}
+                      tickMargin={6}
                     />
                     <YAxis tick={{ fontSize: 11 }} unit=" м³" width={58} />
                     <Tooltip
-                      formatter={(v: number | undefined, name: string | undefined) => {
-                        const val = v ?? 0;
-                        const label = name === 'source' ? 'Скважина' : name === 'losses' ? 'Потери' : (name ?? '');
-                        return [`${val} м³`, label];
+                      trigger={isMobile ? 'click' : 'hover'}
+                      active={balanceTooltipDismissed ? false : undefined}
+                      allowEscapeViewBox={{ x: true, y: true }}
+                      wrapperStyle={{
+                        position: 'absolute',
+                        top: 4,
+                        right: 4,
+                        left: 'auto',
+                        bottom: 'auto',
+                        transform: 'none',
+                        margin: 0,
+                        padding: 0,
+                        pointerEvents: 'none',
+                        zIndex: 30,
+                        maxWidth: 'calc(100% - 8px)',
+                        boxSizing: 'border-box',
                       }}
-                      contentStyle={{ fontSize: 12, borderRadius: 8 }}
+                      content={(tipProps) => (
+                        <BalanceChartTooltip
+                          active={tipProps.active}
+                          label={tipProps.label}
+                          payload={tipProps.payload as ReadonlyArray<ProductionTooltipPayloadEntry>}
+                          selectedMonth={selectedMonth}
+                          onClose={() => setBalanceTooltipDismissed(true)}
+                        />
+                      )}
                     />
                     {/* Производственные счётчики */}
                     {productionDeviceNames.map((name) => (
@@ -1084,6 +1483,7 @@ const WaterDashboard: React.FC = () => {
                         dataKey={name}
                         stackId="balance"
                         fill={balanceMeterColorMap.get(name) ?? '#64748b'}
+                        maxBarSize={balanceBarMaxSize}
                       />
                     ))}
                     {/* Хоз-питьевые счётчики */}
@@ -1093,6 +1493,7 @@ const WaterDashboard: React.FC = () => {
                         dataKey={name}
                         stackId="balance"
                         fill={balanceMeterColorMap.get(name) ?? '#64748b'}
+                        maxBarSize={balanceBarMaxSize}
                       />
                     ))}
                     {/* Потери — красная зона */}
@@ -1102,6 +1503,7 @@ const WaterDashboard: React.FC = () => {
                       fill={LOSSES_COLOR}
                       fillOpacity={0.7}
                       radius={[3, 3, 0, 0]}
+                      maxBarSize={balanceBarMaxSize}
                     />
                     {/* Скважина — линия (суммарный вход) */}
                     <Line
@@ -1115,6 +1517,8 @@ const WaterDashboard: React.FC = () => {
                     />
                   </ComposedChart>
                 </ResponsiveContainer>
+                </div>
+              </div>
               </div>
               <div className="wd-device-filter">
                 {/* Скважина — переключаемая */}
@@ -1159,7 +1563,7 @@ const WaterDashboard: React.FC = () => {
 
         {/* Почасовой расход производства (выбранный день) */}
         <div className="wd-card wd-card--prod-trend">
-          <div className="wd-card__header">
+          <div className="wd-card__header wd-card__header--prod">
             <h3>🏭 Производство</h3>
             <div className="wd-prod-day-select">
               <select
@@ -1188,31 +1592,80 @@ const WaterDashboard: React.FC = () => {
             <div className="wd-no-data">Загрузка...</div>
           ) : todayTimeData.length > 0 ? (
             <>
-              <ResponsiveContainer width="100%" height={200}>
-                <ComposedChart data={todayTimeData} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="time" tick={{ fontSize: 10 }} interval={1} />
-                  <YAxis tick={{ fontSize: 11 }} unit=" м³" width={58} />
-                  <Tooltip
-                    formatter={(v: number | undefined, name: string | undefined) => [v != null ? `${v} м³` : '—', name]}
-                    contentStyle={{ fontSize: 12, borderRadius: 8 }}
-                  />
-                  {productionDeviceNames.map((name) => {
-                    const c = balanceMeterColorMap.get(name) ?? '#64748b';
-                    return (
-                      <Line
-                        key={name}
-                        type="monotone"
-                        dataKey={name}
-                        stroke={c}
-                        strokeWidth={2}
-                        dot={{ r: 3, fill: c }}
-                        connectNulls
+              <p className="wd-prod-chart-hint">
+                Накопление за сутки, м³ (↑). Для сегодня на графике только часы до текущего; за прошедшие дни —
+                весь день (0–23 ч). Видна часть шкалы на ширину карточки — прокручивайте график вбок.
+              </p>
+              <div ref={prodChartScrollViewportRef} className="wd-prod-chart-scroll">
+                <div
+                  className="wd-prod-chart-scroll__inner"
+                  style={{
+                    width: productionChartScrollWidth,
+                    minWidth: productionChartScrollWidth,
+                    height: isMobile ? 252 : 268,
+                  }}
+                  onPointerDown={() => {
+                    flushSync(() => setProductionTooltipDismissed(false));
+                  }}
+                  onMouseEnter={() => setProductionTooltipDismissed(false)}
+                  role="presentation"
+                >
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart
+                      data={todayTimeData}
+                      margin={{ top: 8, right: 12, left: 0, bottom: 26 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <XAxis
+                        dataKey="time"
+                        interval={0}
+                        tickMargin={8}
+                        minTickGap={4}
+                        tick={{ fontSize: 11, fill: '#4b5563' }}
+                        tickFormatter={(t) => {
+                          const h = parseInt(String(t).split(':')[0] ?? '', 10);
+                          return Number.isFinite(h) ? `${h}ч` : String(t);
+                        }}
                       />
-                    );
-                  })}
-                </ComposedChart>
-              </ResponsiveContainer>
+                      <YAxis
+                        tick={{ fontSize: 11 }}
+                        unit=" м³"
+                        width={isMobile ? 50 : 56}
+                        tickCount={isMobile ? 5 : 6}
+                      />
+                      <Tooltip
+                        trigger={isMobile ? 'click' : 'hover'}
+                        active={productionTooltipDismissed ? false : undefined}
+                        allowEscapeViewBox={{ x: true, y: true }}
+                        portal={productionChartTooltipPortalHost}
+                        wrapperStyle={{
+                          position: 'absolute',
+                          top: 4,
+                          right: 4,
+                          left: 'auto',
+                          bottom: 'auto',
+                          transform: 'none',
+                          margin: 0,
+                          padding: 0,
+                          pointerEvents: 'none',
+                          zIndex: 30,
+                          maxWidth: 'calc(100% - 8px)',
+                          boxSizing: 'border-box',
+                        }}
+                        content={(tipProps) => (
+                          <ProductionChartTooltip
+                            active={tipProps.active}
+                            label={tipProps.label}
+                            payload={tipProps.payload as ReadonlyArray<ProductionTooltipPayloadEntry>}
+                            onClose={() => setProductionTooltipDismissed(true)}
+                          />
+                        )}
+                      />
+                      {productionChartLines}
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
 
               <div className="wd-prod-legend" aria-label="Легенда графика">
                 {productionDeviceNames.map((name) => {
@@ -1235,11 +1688,23 @@ const WaterDashboard: React.FC = () => {
           </div>
           {productionDeviceNames.length > 0 && (
             <div className="wd-work-hours-foot">
-              Часы работы по учётам:{' '}
-              <strong>
-                {productionDeviceNames
-                  .map((name) => `${name}: ${productionTodayWorkHoursByName[name] ?? 0} ч`)
-                  .join(', ')}
+              Часы работы и накопление м³ по учётам (по данным графика):{' '}
+              <strong className="wd-work-hours-foot__list">
+                {productionDeviceNames.map((name, idx) => {
+                  const h = productionTodayWorkHoursByName[name] ?? 0;
+                  const m3 = productionTodayM3ByName[name] ?? 0;
+                  return (
+                    <span key={name} className="wd-work-hours-foot__item">
+                      {idx > 0 ? '; ' : null}
+                      <span className="wd-work-hours-foot__meter">{name}:</span>{' '}
+                      <span className="wd-work-hours-foot__hours">{h} ч</span>
+                      <span className="wd-work-hours-foot__sep">, </span>
+                      <span className="wd-work-hours-foot__cum">
+                        {m3.toLocaleString('ru-RU')} м³
+                      </span>
+                    </span>
+                  );
+                })}
               </strong>
             </div>
           )}
