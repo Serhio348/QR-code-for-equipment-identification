@@ -30,7 +30,6 @@ interface DeviceGroup {
 
 interface DeviceReadings {
   current?: { value: number; date: string | Date; unit?: string };
-  previous?: { value: number; date: string | Date; unit?: string };
 }
 
 const BeliotDevicesTest: React.FC = () => {
@@ -308,19 +307,15 @@ const BeliotDevicesTest: React.FC = () => {
       const { data } = await getBeliotReadings({
         device_id: String(deviceId),
         reading_type: 'hourly',
-        limit: 2,
+        limit: 1,
         offset: 0,
       });
 
       const current = data?.[0];
-      const previous = data?.[1];
 
       setDeviceReadings({
         current: current
           ? { value: Number(current.reading_value), date: current.reading_date, unit: current.unit }
-          : undefined,
-        previous: previous
-          ? { value: Number(previous.reading_value), date: previous.reading_date, unit: previous.unit }
           : undefined,
       });
     } catch (err: any) {
@@ -953,112 +948,36 @@ const BeliotDevicesTest: React.FC = () => {
                 <div className="error-state">
                   <strong>❌ Ошибка:</strong> {error}
                 </div>
-              ) : deviceReadings ? (() => {
-                const calculateVolume = (): number | null => {
-                  if (deviceReadings.current?.value !== undefined && deviceReadings.previous?.value !== undefined) {
-                    const current = Number(deviceReadings.current.value);
-                    const previous = Number(deviceReadings.previous.value);
-                    if (!isNaN(current) && !isNaN(previous)) {
-                      return current - previous;
-                    }
-                  }
-                  return null;
-                };
-
-                const calculatePeriod = (): string => {
-                  if (deviceReadings.current?.date && deviceReadings.previous?.date) {
-                    try {
-                      const currentDate = new Date(deviceReadings.current.date);
-                      const previousDate = new Date(deviceReadings.previous.date);
-                      
-                      if (isNaN(currentDate.getTime()) || isNaN(previousDate.getTime())) {
-                        return '-';
-                      }
-
-                      const diffMs = Math.abs(currentDate.getTime() - previousDate.getTime());
-                      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-                      const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                      const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-
-                      if (diffDays > 0) {
-                        return `${diffDays} дн. ${diffHours} ч.`;
-                      } else if (diffHours > 0) {
-                        return `${diffHours} ч. ${diffMinutes} мин.`;
-                      } else {
-                        return `${diffMinutes} мин.`;
-                      }
-                    } catch (e) {
-                      return '-';
-                    }
-                  }
-                  return '-';
-                };
-
-                const volume = calculateVolume();
-                const period = calculatePeriod();
-
-                return (
-                  <div className="mobile-readings-cards">
-                    {deviceReadings.current && (
-                      <div className="mobile-reading-card current">
-                        <div className="mobile-reading-badge current">Текущий</div>
-                        <div className="mobile-reading-value">{deviceReadings.current.value !== undefined ? Number(deviceReadings.current.value).toFixed(1) : '-'}</div>
-                        <div className="mobile-reading-unit">{deviceReadings.current.unit || 'м³'}</div>
-                        <div className="mobile-reading-date">
-                          {deviceReadings.current.date ? (() => {
-                            const rawDate = deviceReadings.current.date;
-                            // Если дата в секундах (Unix timestamp), конвертируем в миллисекунды
-                            const dateMs = typeof rawDate === 'number' && rawDate < 10000000000 ? rawDate * 1000 : rawDate;
-                            const date = new Date(dateMs as string | number);
-                            if (isNaN(date.getTime())) return '-';
-                            const day = String(date.getDate()).padStart(2, '0');
-                            const month = String(date.getMonth() + 1).padStart(2, '0');
-                            const year = date.getFullYear();
-                            const hours = String(date.getHours()).padStart(2, '0');
-                            const minutes = String(date.getMinutes()).padStart(2, '0');
-                            return `${day}.${month}.${year} ${hours}:${minutes}`;
-                          })() : '-'}
-                        </div>
+              ) : deviceReadings ? (
+                <div className="mobile-readings-cards">
+                  {deviceReadings.current ? (
+                    <div className="mobile-reading-card current">
+                      <div className="mobile-reading-badge current">Текущий</div>
+                      <div className="mobile-reading-value">{deviceReadings.current.value !== undefined ? Number(deviceReadings.current.value).toFixed(1) : '-'}</div>
+                      <div className="mobile-reading-unit">{deviceReadings.current.unit || 'м³'}</div>
+                      <div className="mobile-reading-date">
+                        {deviceReadings.current.date ? (() => {
+                          const rawDate = deviceReadings.current.date;
+                          // Если дата в секундах (Unix timestamp), конвертируем в миллисекунды
+                          const dateMs = typeof rawDate === 'number' && rawDate < 10000000000 ? rawDate * 1000 : rawDate;
+                          const date = new Date(dateMs as string | number);
+                          if (isNaN(date.getTime())) return '-';
+                          const day = String(date.getDate()).padStart(2, '0');
+                          const month = String(date.getMonth() + 1).padStart(2, '0');
+                          const year = date.getFullYear();
+                          const hours = String(date.getHours()).padStart(2, '0');
+                          const minutes = String(date.getMinutes()).padStart(2, '0');
+                          return `${day}.${month}.${year} ${hours}:${minutes}`;
+                        })() : '-'}
                       </div>
-                    )}
-                    {deviceReadings.previous && (
-                      <div className="mobile-reading-card previous">
-                        <div className="mobile-reading-badge previous">Предыдущий</div>
-                        <div className="mobile-reading-value">{deviceReadings.previous.value !== undefined ? Number(deviceReadings.previous.value).toFixed(1) : '-'}</div>
-                        <div className="mobile-reading-unit">{deviceReadings.previous.unit || 'м³'}</div>
-                        <div className="mobile-reading-date">
-                          {deviceReadings.previous.date ? (() => {
-                            const rawDate = deviceReadings.previous.date;
-                            // Если дата в секундах (Unix timestamp), конвертируем в миллисекунды
-                            const dateMs = typeof rawDate === 'number' && rawDate < 10000000000 ? rawDate * 1000 : rawDate;
-                            const date = new Date(dateMs as string | number);
-                            if (isNaN(date.getTime())) return '-';
-                            const day = String(date.getDate()).padStart(2, '0');
-                            const month = String(date.getMonth() + 1).padStart(2, '0');
-                            const year = date.getFullYear();
-                            const hours = String(date.getHours()).padStart(2, '0');
-                            const minutes = String(date.getMinutes()).padStart(2, '0');
-                            return `${day}.${month}.${year} ${hours}:${minutes}`;
-                          })() : '-'}
-                        </div>
-                      </div>
-                    )}
-                    {volume !== null && (
-                      <div className="mobile-reading-card difference">
-                        <div className="mobile-reading-badge difference">Разница</div>
-                        <div className="mobile-reading-value difference-value">{volume.toFixed(1)}</div>
-                        <div className="mobile-reading-unit">м³</div>
-                        <div className="mobile-reading-period">Период: {period}</div>
-                      </div>
-                    )}
-                    {!deviceReadings.current && !deviceReadings.previous && (
-                      <div className="empty-state">
-                        Показания не найдены
-                      </div>
-                    )}
-                  </div>
-                );
-              })() : (
+                    </div>
+                  ) : (
+                    <div className="empty-state">
+                      Показания не найдены
+                    </div>
+                  )}
+                </div>
+              ) : (
                 <div className="empty-state">
                   Нажмите на счетчик в таблице для просмотра показаний
                 </div>

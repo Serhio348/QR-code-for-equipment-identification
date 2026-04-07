@@ -2231,16 +2231,6 @@
     background: #e8f5e9;
   }
 
-  .mobile-reading-card.previous {
-    border-color: #ff9800;
-    background: #fff3e0;
-  }
-
-  .mobile-reading-card.difference {
-    border-color: #2196f3;
-    background: #e3f2fd;
-  }
-
   .mobile-reading-badge {
     display: inline-block;
     padding: 6px 12px;
@@ -2257,27 +2247,12 @@
     color: white;
   }
 
-  .mobile-reading-badge.previous {
-    background: #ff9800;
-    color: white;
-  }
-
-  .mobile-reading-badge.difference {
-    background: #2196f3;
-    color: white;
-  }
-
   .mobile-reading-value {
     font-size: 28px;
     font-weight: 700;
     color: #333;
     font-family: 'Courier New', monospace;
     line-height: 1.2;
-  }
-
-  .mobile-reading-value.difference-value {
-    color: #1976d2;
-    font-size: 30px;
   }
 
   .mobile-reading-unit {
@@ -2290,13 +2265,6 @@
     font-size: 12px;
     color: #999;
     margin-top: 2px;
-  }
-
-  .mobile-reading-period {
-    font-size: 14px;
-    color: #666;
-    font-style: italic;
-    margin-top: 4px;
   }
 }
 
