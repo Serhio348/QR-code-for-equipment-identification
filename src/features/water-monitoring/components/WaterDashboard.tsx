@@ -1137,12 +1137,19 @@ const WaterDashboard: React.FC = () => {
     return 320;
   }, [balanceChartDisplayData.length, balanceNarrowPhoneLayout, balanceMobileRange]);
 
+  /** Десктоп: подпись через день (interval 1), точная дата в тултипе; узкий экран — своя сетка */
   const balanceXAxisInterval = useMemo(() => {
+    if (!balanceNarrowPhoneLayout) {
+      return 1;
+    }
     const n = balanceChartDisplayData.length;
     if (n <= 7) return 0;
     if (n <= 14) return 1;
-    return balanceNarrowPhoneLayout ? 2 : 4;
+    return 2;
   }, [balanceChartDisplayData.length, balanceNarrowPhoneLayout]);
+
+  /** Горизонтальные подписи (без angle / без наклона) */
+  const balanceXAxisTick = { fontSize: 11, fill: '#4b5563' };
 
   const balanceBarMaxSize = useMemo(() => {
     if (!balanceNarrowPhoneLayout) return undefined;
@@ -1665,9 +1672,10 @@ const WaterDashboard: React.FC = () => {
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis
                       dataKey="date"
-                      tick={{ fontSize: balanceNarrowPhoneLayout ? 11 : 12 }}
+                      tick={balanceXAxisTick}
                       interval={balanceXAxisInterval}
-                      tickMargin={6}
+                      tickMargin={balanceNarrowPhoneLayout ? 6 : 4}
+                      minTickGap={balanceNarrowPhoneLayout ? 4 : 0}
                     />
                     <YAxis tick={{ fontSize: 11 }} unit=" м³" width={58} />
                     <Tooltip
