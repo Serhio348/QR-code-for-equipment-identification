@@ -6,7 +6,7 @@
 .wd {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   min-width: 0;
   width: 100%;
   max-width: 100%;
@@ -17,7 +17,7 @@
 .wd-view-tabs {
   display: flex;
   gap: 8px;
-  padding: 4px;
+  padding: 3px;
   background: #eef2ff;
   border-radius: 10px;
   width: 100%;
@@ -402,6 +402,7 @@
 .wd-balance-chart-col {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -413,6 +414,56 @@
   z-index: 0;
   flex: 1;
   min-width: 0;
+}
+
+/* Детализация расхода за день — под столбчатым графиком (не всплывающий слой) */
+.wd-balance-docked {
+  margin-top: 8px;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+/*
+ * Панель под графиком: без внутреннего скролла — две колонки + плотные строки, чтобы влезли все счётчики.
+ */
+.wd-balance-docked .wd-prod-tooltip-panel {
+  pointer-events: auto;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+}
+
+.wd-balance-docked .wd-prod-tooltip-panel__head {
+  flex-shrink: 0;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+}
+
+.wd-balance-docked .wd-prod-tooltip-panel__title {
+  font-size: 12px;
+}
+
+.wd-balance-docked .wd-prod-tooltip-panel__close {
+  width: 28px;
+  height: 28px;
+  font-size: 20px;
+}
+
+.wd-balance-docked .wd-prod-tooltip-panel__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 1px 8px;
+  align-items: start;
+}
+
+.wd-balance-docked .wd-prod-tooltip-panel__row {
+  padding: 3px 0 3px 8px;
+  font-size: 11px;
+  gap: 6px;
+  border-left-width: 2px;
 }
 
 /* Горизонтальный скролл: полный месяц на мобильном — ширина ~26px на день */
@@ -724,8 +775,8 @@
 }
 
 .wd-month-total-foot {
-  margin-top: 10px;
-  padding-top: 10px;
+  margin-top: 6px;
+  padding-top: 6px;
   border-top: 1px solid #e5e7eb;
   font-size: 12px;
   color: #6b7280;
@@ -767,7 +818,7 @@
 }
 
 .wd-prod-chart-hint {
-  margin: 0 0 10px;
+  margin: 0 0 6px;
   font-size: 11px;
   color: #6b7280;
   line-height: 1.45;
@@ -864,11 +915,12 @@
   max-width: 100%;
   box-sizing: border-box;
   overflow-x: auto;
-  overflow-y: hidden;
+  /* hidden обрезал нижние подписи оси у Recharts (выступ за внутренний бокс) */
+  overflow-y: visible;
   -webkit-overflow-scrolling: touch;
   margin-left: -2px;
   margin-right: -2px;
-  padding-bottom: 6px;
+  padding-bottom: 4px;
   scrollbar-width: thin;
   overscroll-behavior-x: contain;
   touch-action: pan-x pan-y;
@@ -938,9 +990,9 @@
 .wd-prod-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px 12px;
-  margin-top: 8px;
-  padding-top: 8px;
+  gap: 8px 10px;
+  margin-top: 4px;
+  padding-top: 6px;
   border-top: 1px solid #f1f5f9;
 }
 
@@ -1226,5 +1278,133 @@
 
   .wd-theory-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Низкие окна (ноутбук + панели браузера): меньше вертикальный скролл страницы */
+@media (max-height: 900px) {
+  .wd {
+    gap: 10px;
+  }
+
+  .wd-view-tab {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+
+  .wd-kpi-row {
+    gap: 8px;
+  }
+
+  .wd-kpi {
+    padding: 10px 12px;
+    gap: 10px;
+  }
+
+  .wd-kpi__icon {
+    font-size: 22px;
+  }
+
+  .wd-card {
+    padding: 10px 12px;
+  }
+
+  .wd-card__header {
+    margin-bottom: 8px;
+  }
+
+  .wd-charts-row {
+    gap: 10px;
+  }
+
+  .wd-prod-chart-hint {
+    margin-bottom: 6px;
+    font-size: 10px;
+    line-height: 1.4;
+  }
+
+  .wd-month-total-foot {
+    margin-top: 4px;
+  }
+}
+
+@media (max-height: 760px) {
+  .wd {
+    gap: 8px;
+  }
+
+  .wd-view-tabs {
+    padding: 2px;
+  }
+
+  .wd-view-tab {
+    padding: 7px 8px;
+    font-size: 11px;
+  }
+
+  .wd-kpi-row {
+    gap: 6px;
+  }
+
+  .wd-kpi {
+    padding: 8px 10px;
+  }
+
+  .wd-kpi__icon {
+    font-size: 20px;
+  }
+
+  .wd-kpi__value {
+    font-size: 13px;
+  }
+
+  .wd-card {
+    padding: 8px 10px;
+  }
+
+  .wd-card__header {
+    margin-bottom: 6px;
+  }
+
+  .wd-card__header h3,
+  .wd-balance-card__title {
+    font-size: 13px;
+  }
+
+  .wd-charts-row {
+    gap: 8px;
+  }
+}
+
+/* Графики в колонку (max-width 900px): суммарная высота больше — жмём отступы */
+@media (max-width: 900px) and (max-height: 900px) {
+  .wd {
+    gap: 8px;
+  }
+
+  .wd-kpi-row {
+    gap: 6px;
+  }
+
+  .wd-kpi {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+
+  .wd-card {
+    padding: 8px 10px;
+  }
+
+  .wd-card__header {
+    margin-bottom: 6px;
+  }
+
+  .wd-charts-row {
+    gap: 8px;
+  }
+
+  .wd-prod-chart-hint {
+    margin-bottom: 4px;
+    font-size: 10px;
   }
 }

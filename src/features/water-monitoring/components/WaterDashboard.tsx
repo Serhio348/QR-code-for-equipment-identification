@@ -191,14 +191,6 @@ function ProductionChartTooltip({ active, label, payload, onClose }: ProductionC
   );
 }
 
-type BalanceChartTooltipProps = {
-  active?: boolean;
-  label?: string | number;
-  payload?: ReadonlyArray<ProductionTooltipPayloadEntry>;
-  onClose: () => void;
-  selectedMonth: SelectedMonth;
-};
-
 function formatBalanceChartTitle(dayLabel: string | number | undefined, selectedMonth: SelectedMonth): string {
   const d = parseInt(String(dayLabel), 10);
   if (!Number.isFinite(d) || d < 1) return String(dayLabel ?? '');
@@ -216,56 +208,101 @@ function balanceChartSeriesLabel(name: string | undefined): string {
   return name ?? '';
 }
 
-/** Подсказка графика «Водный баланс» — тот же каркас панели, что у производства (крестик + строки) */
-function BalanceChartTooltip({
+/** Панель под графиком баланса: расход по счётчикам за выбранный день (тот же каркас, что у тултипа производства). */
+function BalanceDockedDayPanel({
+  label,
+  payload,
+  selectedMonth,
+  onClose,
+}: {
+  label: string | number | undefined;
+  payload: ReadonlyArray<ProductionTooltipPayloadEntry>;
+  selectedMonth: SelectedMonth;
+  onClose: () => void;
+}): React.ReactNode {
+  const title = formatBalanceChartTitle(label, selectedMonth);
+  return (
+    <div className="wd-balance-docked">
+      <div
+        className="wd-prod-tooltip-panel"
+        onPointerDown={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-label={title}
+      >
+        <div className="wd-prod-tooltip-panel__head">
+          <span className="wd-prod-tooltip-panel__title">{title}</span>
+          <button
+            type="button"
+            className="wd-prod-tooltip-panel__close"
+            aria-label="Закрыть"
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose();
+            }}
+          >
+            ×
+          </button>
+        </div>
+        <ul className="wd-prod-tooltip-panel__list">
+          {payload.map((entry, i) => {
+            if (entry.name == null) return null;
+            const c = entry.color ?? entry.fill ?? '#64748b';
+            const seriesName = balanceChartSeriesLabel(String(entry.name));
+            return (
+              <li
+                key={`${String(entry.name)}-${i}`}
+                className="wd-prod-tooltip-panel__row"
+                style={{ borderLeftColor: c }}
+              >
+                <span className="wd-prod-tooltip-panel__name">{seriesName}</span>
+                <span className="wd-prod-tooltip-panel__val">{formatProductionTooltipValue(entry.value)}</span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+function balanceDockedTipFingerprint(
+  label: string | number | undefined,
+  list: ReadonlyArray<ProductionTooltipPayloadEntry>,
+): string {
+  return `${String(label)}|${list.map(e => `${String(e.name)}:${String(e.value)}`).join(';')}`;
+}
+
+/**
+ * Передаёт данные стандартного Tooltip Recharts в закреплённую панель (сам всплывающий слой скрыт).
+ */
+function BalanceTooltipToDockedRelay({
   active,
   label,
   payload,
-  onClose,
-  selectedMonth,
-}: BalanceChartTooltipProps): React.ReactNode {
-  if (!active || !payload?.length) return null;
-  const title = formatBalanceChartTitle(label, selectedMonth);
-  return (
-    <div
-      className="wd-prod-tooltip-panel"
-      onPointerDown={(e) => e.stopPropagation()}
-      role="dialog"
-      aria-label={title}
-    >
-      <div className="wd-prod-tooltip-panel__head">
-        <span className="wd-prod-tooltip-panel__title">{title}</span>
-        <button
-          type="button"
-          className="wd-prod-tooltip-panel__close"
-          aria-label="Закрыть"
-          onClick={(e) => {
-            e.stopPropagation();
-            onClose();
-          }}
-        >
-          ×
-        </button>
-      </div>
-      <ul className="wd-prod-tooltip-panel__list">
-        {payload.map((entry, i) => {
-          if (entry.name == null) return null;
-          const c = entry.color ?? entry.fill ?? '#64748b';
-          const seriesName = balanceChartSeriesLabel(String(entry.name));
-          return (
-            <li
-              key={`${String(entry.name)}-${i}`}
-              className="wd-prod-tooltip-panel__row"
-              style={{ borderLeftColor: c }}
-            >
-              <span className="wd-prod-tooltip-panel__name">{seriesName}</span>
-              <span className="wd-prod-tooltip-panel__val">{formatProductionTooltipValue(entry.value)}</span>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
+  onRelay,
+  dockDismissedRef,
+}: {
+  active?: boolean;
+  label?: string | number;
+  payload?: ReadonlyArray<ProductionTooltipPayloadEntry>;
+  onRelay: (data: { label: string | number | undefined; payload: ReadonlyArray<ProductionTooltipPayloadEntry> } | null) => void;
+  dockDismissedRef: React.MutableRefObject<boolean>;
+}): null {
+  useLayoutEffect(() => {
+    if (!active) {
+      dockDismissedRef.current = false;
+      onRelay(null);
+      return;
+    }
+    const list = payload ?? [];
+    if (list.length === 0) {
+      onRelay(null);
+      return;
+    }
+    if (dockDismissedRef.current) return;
+    onRelay({ label, payload: list });
+  }, [active, label, payload, onRelay, dockDismissedRef]);
+  return null;
 }
 
 const ADMIN_BUILDING_ADDRESS = 'советская 2/1';
@@ -405,6 +442,10 @@ function mergeFireSuppressionDomesticGroups(groups: MeterGroup[]): MeterGroup[] 
 
 const WaterDashboard: React.FC = () => {
   const { isMobile } = useDeviceDetection();
+  const [viewportSize, setViewportSize] = useState(() => ({
+    width: typeof window !== 'undefined' ? window.innerWidth : 1024,
+    height: typeof window !== 'undefined' ? window.innerHeight : 900,
+  }));
   const [loading, setLoading] = useState(true);
   const [distributionRole, setDistributionRole] = useState<'production' | 'domestic'>('production');
   /** Отдельный экран: меньше вертикальной прокрутки, шрифты не ужимаем */
@@ -445,7 +486,12 @@ const WaterDashboard: React.FC = () => {
   const [productionHistoryByDay, setProductionHistoryByDay] = useState<Record<string, ProductionDaySummary>>({});
   /** Скрытие крестиком: до следующего тапа по области графика */
   const [productionTooltipDismissed, setProductionTooltipDismissed] = useState(false);
-  const [balanceTooltipDismissed, setBalanceTooltipDismissed] = useState(false);
+  const [balanceDockedTip, setBalanceDockedTip] = useState<{
+    label: string | number | undefined;
+    payload: ReadonlyArray<ProductionTooltipPayloadEntry>;
+  } | null>(null);
+  const balanceDockDismissedRef = useRef(false);
+  const balanceDockedRelayFpRef = useRef<string | null>(null);
 
   useEffect(() => {
     setProductionTooltipDismissed(false);
@@ -461,6 +507,15 @@ const WaterDashboard: React.FC = () => {
     }
     setProductionChartTooltipPortalHost(prodChartScrollViewportRef.current);
   }, [dashboardView, todayLoading, todayTimeData.length]);
+
+  useLayoutEffect(() => {
+    const onResize = (): void => {
+      setViewportSize({ width: window.innerWidth, height: window.innerHeight });
+    };
+    onResize();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   const toggleDevice = useCallback((name: string) => {
     setHiddenDevices(prev => {
@@ -1016,52 +1071,216 @@ const WaterDashboard: React.FC = () => {
     [visibleBalanceData, balanceElapsedDayCount],
   );
 
-  /** Для мобильных: последние 7/14 прошедших суток или весь отрезок (скролл); на десктопе — все прошедшие дни месяца */
+  /** Как в CSS `.wd-charts-row`: при ширине <900px графики в колонку (высоты чартов) */
+  const stacksChartsVertically = viewportSize.width < 900;
+
+  /**
+   * Окно 7/14 дней — только при узком viewport (<768).
+   * На десктопе график всегда по **всем дням календаря месяца** (не обрезка «до сегодня»): иначе при текущем
+   * месяце на оси только 1…N, что выглядит как «семь дней».
+   */
+  const balanceNarrowPhoneLayout = viewportSize.width < 768;
+
+  /**
+   * Десктоп / узкий «Месяц»: полный месяц из visibleBalanceData.
+   * Узкий 7/14 дн.: только прошедшие сутки — для среза «последних 7/14».
+   */
+  const balanceChartBaseData = useMemo(() => {
+    if (!balanceNarrowPhoneLayout) {
+      return visibleBalanceData;
+    }
+    if (balanceMobileRange === 'month') {
+      return visibleBalanceData;
+    }
+    return visibleBalanceDataElapsed;
+  }, [balanceNarrowPhoneLayout, balanceMobileRange, visibleBalanceData, visibleBalanceDataElapsed]);
+
   const balanceChartDisplayData = useMemo(() => {
-    const data = visibleBalanceDataElapsed;
-    if (!isMobile || balanceMobileRange === 'month') {
+    const data = balanceChartBaseData;
+    if (!balanceNarrowPhoneLayout || balanceMobileRange === 'month') {
       return data;
     }
     const windowDays = balanceMobileRange === '7' ? 7 : 14;
     if (data.length <= windowDays) return data;
     return data.slice(-windowDays);
-  }, [visibleBalanceDataElapsed, isMobile, balanceMobileRange]);
+  }, [balanceChartBaseData, balanceNarrowPhoneLayout, balanceMobileRange]);
 
   useEffect(() => {
-    setBalanceTooltipDismissed(false);
+    balanceDockDismissedRef.current = false;
+    balanceDockedRelayFpRef.current = null;
+    setBalanceDockedTip(null);
   }, [selectedMonth, balanceChartDisplayData, balanceMobileRange]);
+
+  const onBalanceDockRelay = useCallback(
+    (data: { label: string | number | undefined; payload: ReadonlyArray<ProductionTooltipPayloadEntry> } | null) => {
+      if (data == null) {
+        if (balanceDockedRelayFpRef.current !== null) {
+          balanceDockedRelayFpRef.current = null;
+          setBalanceDockedTip(null);
+        }
+        return;
+      }
+      const fp = balanceDockedTipFingerprint(data.label, data.payload);
+      if (fp === balanceDockedRelayFpRef.current) return;
+      balanceDockedRelayFpRef.current = fp;
+      setBalanceDockedTip(data);
+    },
+    [],
+  );
 
   const balanceChartPixelWidth = useMemo(() => {
     const n = balanceChartDisplayData.length;
     if (n === 0) return 320;
-    if (isMobile && balanceMobileRange === 'month') {
+    if (balanceNarrowPhoneLayout && balanceMobileRange === 'month') {
       return Math.max(320, n * 26);
     }
     return 320;
-  }, [balanceChartDisplayData.length, isMobile, balanceMobileRange]);
+  }, [balanceChartDisplayData.length, balanceNarrowPhoneLayout, balanceMobileRange]);
 
   const balanceXAxisInterval = useMemo(() => {
     const n = balanceChartDisplayData.length;
     if (n <= 7) return 0;
     if (n <= 14) return 1;
-    return isMobile ? 2 : 4;
-  }, [balanceChartDisplayData.length, isMobile]);
+    return balanceNarrowPhoneLayout ? 2 : 4;
+  }, [balanceChartDisplayData.length, balanceNarrowPhoneLayout]);
 
   const balanceBarMaxSize = useMemo(() => {
-    if (!isMobile) return undefined;
+    if (!balanceNarrowPhoneLayout) return undefined;
     const n = balanceChartDisplayData.length;
     if (n <= 7) return 44;
     if (n <= 14) return 34;
     return 20;
-  }, [isMobile, balanceChartDisplayData.length]);
+  }, [balanceNarrowPhoneLayout, balanceChartDisplayData.length]);
+
+  const chartLayoutBand = useMemo((): 'compact' | 'medium' | 'relaxed' => {
+    const h = viewportSize.height;
+    if (stacksChartsVertically) {
+      if (h < 760) return 'compact';
+      if (h < 940) return 'medium';
+      return 'relaxed';
+    }
+    if (h < 700) return 'compact';
+    if (h < 860) return 'medium';
+    return 'relaxed';
+  }, [viewportSize.height, stacksChartsVertically]);
+
+  const BALANCE_CHART_SHRINK_PX = 6;
+  const PROD_CHART_SHRINK_PX = 6;
+
+  const balanceChartInnerHeight = useMemo(() => {
+    let h: number;
+    if (stacksChartsVertically) {
+      switch (chartLayoutBand) {
+        case 'compact':
+          h = 124;
+          break;
+        case 'medium':
+          h = 152;
+          break;
+        default:
+          h = 182;
+      }
+    } else {
+      switch (chartLayoutBand) {
+        case 'compact':
+          h = 136;
+          break;
+        case 'medium':
+          h = 164;
+          break;
+        default:
+          h = 192;
+      }
+    }
+    return Math.max(110, h - BALANCE_CHART_SHRINK_PX);
+  }, [chartLayoutBand, stacksChartsVertically]);
+
+  const productionChartInnerHeight = useMemo(() => {
+    let h: number;
+    if (isMobile) {
+      if (stacksChartsVertically) {
+        switch (chartLayoutBand) {
+          case 'compact':
+            h = 156;
+            break;
+          case 'medium':
+            h = 180;
+            break;
+          default:
+            h = 208;
+        }
+      } else {
+        switch (chartLayoutBand) {
+          case 'compact':
+            h = 168;
+            break;
+          case 'medium':
+            h = 192;
+            break;
+          default:
+            h = 220;
+        }
+      }
+    } else if (stacksChartsVertically) {
+      switch (chartLayoutBand) {
+        case 'compact':
+          h = 168;
+          break;
+        case 'medium':
+          h = 192;
+          break;
+        default:
+          h = 220;
+      }
+    } else {
+      switch (chartLayoutBand) {
+        case 'compact':
+          h = 182;
+          break;
+        case 'medium':
+          h = 206;
+          break;
+        default:
+          h = 232;
+      }
+    }
+    return Math.max(140, h - PROD_CHART_SHRINK_PX);
+  }, [chartLayoutBand, isMobile, stacksChartsVertically]);
+
+  const balanceChartMargin = useMemo(
+    () =>
+      chartLayoutBand === 'compact'
+        ? { top: 2, right: 6, left: 0, bottom: 2 }
+        : { top: 4, right: 8, left: 0, bottom: 4 },
+    [chartLayoutBand],
+  );
+
+  /** Низкий bottom обрезает подписи часов (XAxis + tickMargin); на compact держать около 32px */
+  const productionChartMargin = useMemo(
+    () =>
+      chartLayoutBand === 'compact'
+        ? { top: 4, right: 8, left: 0, bottom: 32 }
+        : chartLayoutBand === 'medium'
+          ? { top: 6, right: 10, left: 0, bottom: 28 }
+          : { top: 8, right: 12, left: 0, bottom: 30 },
+    [chartLayoutBand],
+  );
 
   /** Производство: полные сутки (0–23 ч); ширина области скролла — по числу точек */
   const productionChartScrollWidth = useMemo(() => {
     const n = todayTimeData.length;
     if (n === 0) return 320;
-    const pxPerHour = isMobile ? 34 : 40;
+    let pxPerHour: number;
+    if (isMobile) {
+      pxPerHour = chartLayoutBand === 'compact' ? 28 : chartLayoutBand === 'medium' ? 31 : 34;
+    } else {
+      pxPerHour = chartLayoutBand === 'compact' ? 32 : chartLayoutBand === 'medium' ? 36 : 40;
+    }
+    if (stacksChartsVertically) {
+      pxPerHour = Math.max(26, pxPerHour - 3);
+    }
     return Math.max(320, n * pxPerHour);
-  }, [todayTimeData.length, isMobile]);
+  }, [todayTimeData.length, isMobile, chartLayoutBand, stacksChartsVertically]);
 
   // ── Структура потерь: скважина − умягчённая; умягчённая − производственные нужды ──
   const { lossWashM3, lossOsmosisM3 } = useMemo(() => {
@@ -1383,7 +1602,7 @@ const WaterDashboard: React.FC = () => {
               }
             </div>
           </div>
-          {isMobile && balanceData.length > 0 && (
+          {balanceNarrowPhoneLayout && balanceData.length > 0 && (
             <div className="wd-balance-mobile-range" role="group" aria-label="Масштаб графика по дням">
               <span className="wd-balance-mobile-range__label">На графике:</span>
               {(
@@ -1411,68 +1630,56 @@ const WaterDashboard: React.FC = () => {
           {balanceData.length > 0 ? (
             <div className="wd-balance-wrap">
               <div className="wd-balance-chart-col">
-              {isMobile && balanceMobileRange === 'month' && (
+              {balanceNarrowPhoneLayout && balanceMobileRange === 'month' && (
                 <p className="wd-balance-scroll-hint">Проведите пальцем влево-вправо, чтобы увидеть все дни</p>
               )}
               <div
                 className={
-                  isMobile && balanceMobileRange === 'month'
+                  balanceNarrowPhoneLayout && balanceMobileRange === 'month'
                     ? 'wd-balance-chart wd-balance-chart-scroll'
                     : 'wd-balance-chart'
                 }
               >
                 <div
                   className={
-                    isMobile && balanceMobileRange === 'month'
+                    balanceNarrowPhoneLayout && balanceMobileRange === 'month'
                       ? 'wd-balance-chart-scroll__inner'
                       : undefined
                   }
                   style={
-                    isMobile && balanceMobileRange === 'month'
-                      ? { width: balanceChartPixelWidth, minWidth: balanceChartPixelWidth, height: 210 }
-                      : { width: '100%', height: 210 }
+                    balanceNarrowPhoneLayout && balanceMobileRange === 'month'
+                      ? {
+                          width: balanceChartPixelWidth,
+                          minWidth: balanceChartPixelWidth,
+                          height: balanceChartInnerHeight,
+                        }
+                      : { width: '100%', height: balanceChartInnerHeight }
                   }
                   onPointerDown={() => {
-                    flushSync(() => setBalanceTooltipDismissed(false));
+                    balanceDockDismissedRef.current = false;
                   }}
-                  onMouseEnter={() => setBalanceTooltipDismissed(false)}
                   role="presentation"
                 >
                   <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={balanceChartDisplayData} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
+                  <ComposedChart data={balanceChartDisplayData} margin={balanceChartMargin}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis
                       dataKey="date"
-                      tick={{ fontSize: isMobile ? 11 : 12 }}
+                      tick={{ fontSize: balanceNarrowPhoneLayout ? 11 : 12 }}
                       interval={balanceXAxisInterval}
                       tickMargin={6}
                     />
                     <YAxis tick={{ fontSize: 11 }} unit=" м³" width={58} />
                     <Tooltip
-                      trigger={isMobile ? 'click' : 'hover'}
-                      active={balanceTooltipDismissed ? false : undefined}
-                      allowEscapeViewBox={{ x: true, y: true }}
-                      wrapperStyle={{
-                        position: 'absolute',
-                        top: 4,
-                        right: 4,
-                        left: 'auto',
-                        bottom: 'auto',
-                        transform: 'none',
-                        margin: 0,
-                        padding: 0,
-                        pointerEvents: 'none',
-                        zIndex: 30,
-                        maxWidth: 'calc(100% - 8px)',
-                        boxSizing: 'border-box',
-                      }}
+                      trigger={balanceNarrowPhoneLayout ? 'click' : 'hover'}
+                      wrapperStyle={{ display: 'none' }}
                       content={(tipProps) => (
-                        <BalanceChartTooltip
+                        <BalanceTooltipToDockedRelay
                           active={tipProps.active}
                           label={tipProps.label}
-                          payload={tipProps.payload as ReadonlyArray<ProductionTooltipPayloadEntry>}
-                          selectedMonth={selectedMonth}
-                          onClose={() => setBalanceTooltipDismissed(true)}
+                          payload={tipProps.payload as ReadonlyArray<ProductionTooltipPayloadEntry> | undefined}
+                          onRelay={onBalanceDockRelay}
+                          dockDismissedRef={balanceDockDismissedRef}
                         />
                       )}
                     />
@@ -1519,6 +1726,18 @@ const WaterDashboard: React.FC = () => {
                 </ResponsiveContainer>
                 </div>
               </div>
+              {balanceDockedTip != null && balanceDockedTip.payload.length > 0 ? (
+                <BalanceDockedDayPanel
+                  label={balanceDockedTip.label}
+                  payload={balanceDockedTip.payload}
+                  selectedMonth={selectedMonth}
+                  onClose={() => {
+                    balanceDockDismissedRef.current = true;
+                    balanceDockedRelayFpRef.current = null;
+                    setBalanceDockedTip(null);
+                  }}
+                />
+              ) : null}
               </div>
               <div className="wd-device-filter">
                 {/* Скважина — переключаемая */}
@@ -1602,7 +1821,7 @@ const WaterDashboard: React.FC = () => {
                   style={{
                     width: productionChartScrollWidth,
                     minWidth: productionChartScrollWidth,
-                    height: isMobile ? 252 : 268,
+                    height: productionChartInnerHeight,
                   }}
                   onPointerDown={() => {
                     flushSync(() => setProductionTooltipDismissed(false));
@@ -1613,7 +1832,7 @@ const WaterDashboard: React.FC = () => {
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart
                       data={todayTimeData}
-                      margin={{ top: 8, right: 12, left: 0, bottom: 26 }}
+                      margin={productionChartMargin}
                     >
                       <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                       <XAxis

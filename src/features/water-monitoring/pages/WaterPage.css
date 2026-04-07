@@ -71,7 +71,12 @@
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
-  padding: 16px 20px;
+  /*
+   * Снизу: подписи + кнопка AI-чата (~80px); высоты графиков поджаты в дашборде — скролл страницы минимальный
+   */
+  --water-page-safe-bottom: 88px;
+  padding: 12px 20px var(--water-page-safe-bottom);
+  scroll-padding-bottom: var(--water-page-safe-bottom);
 }
 
 .water-quality-placeholder {
@@ -92,6 +97,40 @@
   color: #666 !important;
   font-size: 14px !important;
   font-style: italic;
+}
+
+@media (max-height: 900px) {
+  .water-page-header {
+    padding: 8px 14px;
+  }
+
+  .water-tab {
+    padding: 6px 12px;
+    font-size: 13px;
+  }
+
+  .water-page-content {
+    --water-page-safe-bottom: 80px;
+    padding: 6px 14px var(--water-page-safe-bottom);
+    scroll-padding-bottom: var(--water-page-safe-bottom);
+  }
+}
+
+@media (max-height: 760px) {
+  .water-page-header {
+    padding: 6px 10px;
+  }
+
+  .water-tab {
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+
+  .water-page-content {
+    --water-page-safe-bottom: 76px;
+    padding: 6px 10px var(--water-page-safe-bottom);
+    scroll-padding-bottom: var(--water-page-safe-bottom);
+  }
 }
 
 /* Адаптивность */
@@ -119,6 +158,8 @@
   }
 
   .water-page-content {
-    padding: 10px;
+    --water-page-safe-bottom: 80px;
+    padding: 8px 10px var(--water-page-safe-bottom);
+    scroll-padding-bottom: var(--water-page-safe-bottom);
   }
 }
