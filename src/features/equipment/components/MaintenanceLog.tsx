@@ -12,6 +12,7 @@ import {
   getMaintenanceLog,
   addMaintenanceEntry,
   deleteMaintenanceEntry,
+  updateMaintenanceEntry,
   updateEquipment,
   getEquipmentById
 } from '../services/equipmentApi';
@@ -24,6 +25,16 @@ import { TechnicalInspectionPDF } from './TechnicalInspectionPDF';
 import InspectionExportSettingsModal from './InspectionExportSettingsModal';
 import { showSuccess } from '@/shared/utils/toast';
 import './MaintenanceLog.css';
+
+const MAINTENANCE_TYPE_OPTIONS = [
+  'Техническое обслуживание',
+  'Ремонт',
+  'Осмотр',
+] as const;
+
+/** Документы и фото для журнала обслуживания */
+const MAINTENANCE_FILE_ACCEPT =
+  '.pdf,.doc,.docx,.xls,.xlsx,.txt,.png,.jpg,.jpeg,.webp,image/*';
 
 interface MaintenanceLogProps {
   /** ID оборудования, для которого отображается журнал */
@@ -41,6 +52,11 @@ const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanc
   const [saving, setSaving] = useState<boolean>(false);
   const [savingProgress, setSavingProgress] = useState<number>(0);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
+  const [editFormData, setEditFormData] = useState<MaintenanceEntryInput | null>(null);
+  const [savingEditId, setSavingEditId] = useState<string | null>(null);
+  const [editSelectedFiles, setEditSelectedFiles] = useState<File[]>([]);
+  const [editUploadLabel, setEditUploadLabel] = useState<string>('');
   const [equipment, setEquipment] = useState<Equipment | null>(propEquipment || null);
   const [showInspectionForm, setShowInspectionForm] = useState<boolean>(false);
   const [showInspectionPDF, setShowInspectionPDF] = useState<boolean>(false);
@@ -421,11 +437,113 @@ ${data.notes ? `Примечания: ${data.notes}` : ''}`;
       await deleteMaintenanceEntry(entryId);
       // Удаляем запись из списка
       setEntries(entries.filter(entry => entry.id !== entryId));
+      if (editingEntryId === entryId) {
+        setEditingEntryId(null);
+        setEditFormData(null);
+        setEditSelectedFiles([]);
+        setEditUploadLabel('');
+      }
     } catch (err: any) {
       console.error('Ошибка удаления записи:', err);
       setError(`Не удалось удалить запись: ${err.message || 'Неизвестная ошибка'}`);
     } finally {
       setDeleting(null);
+    }
+  };
+
+  const startEditEntry = (entry: MaintenanceEntry): void => {
+    setEditingEntryId(entry.id);
+    setEditSelectedFiles([]);
+    setEditUploadLabel('');
+    setEditFormData({
+      date: String(entry.date).split('T')[0].split(' ')[0].trim(),
+      type: entry.type,
+      description: entry.description,
+      performedBy: entry.performedBy,
+      status: entry.status,
+    });
+  };
+
+  const cancelEditEntry = (): void => {
+    setEditingEntryId(null);
+    setEditFormData(null);
+    setEditSelectedFiles([]);
+    setEditUploadLabel('');
+  };
+
+  const handleSaveEdit = async (): Promise<void> => {
+    if (!editingEntryId || !editFormData) return;
+
+    if (!editFormData.date || !editFormData.type || !editFormData.description || !editFormData.performedBy) {
+      setError('Заполните все поля записи перед сохранением.');
+      return;
+    }
+
+    setSavingEditId(editingEntryId);
+    setEditUploadLabel('');
+    setError(null);
+
+    try {
+      let entryAfter = await updateMaintenanceEntry(editingEntryId, {
+        date: editFormData.date,
+        type: editFormData.type,
+        description: editFormData.description,
+        performedBy: editFormData.performedBy,
+        status: editFormData.status ?? 'completed',
+      });
+
+      if (editSelectedFiles.length > 0 && !editingEntryId.startsWith('temp-')) {
+        const uploadedFiles: MaintenanceFile[] = [];
+        for (let fi = 0; fi < editSelectedFiles.length; fi++) {
+          const file = editSelectedFiles[fi];
+          setEditUploadLabel(`Загрузка файла ${fi + 1} из ${editSelectedFiles.length}: ${file.name}`);
+          try {
+            const uploaded = await uploadMaintenanceFile(
+              equipmentId,
+              editingEntryId,
+              file,
+              editFormData.date
+            );
+            uploadedFiles.push(uploaded);
+          } catch (fileError) {
+            console.warn('Не удалось загрузить файл:', file.name, fileError);
+          }
+        }
+        if (uploadedFiles.length > 0) {
+          setEditUploadLabel('Прикрепление файлов к записи...');
+          const existing = entryAfter.files ?? [];
+          entryAfter = await attachFilesToEntry(editingEntryId, [...existing, ...uploadedFiles]);
+        }
+      }
+
+      setEntries((prev) => prev.map((e) => (e.id === entryAfter.id ? entryAfter : e)));
+
+      const merged = entries.map((e) => (e.id === entryAfter.id ? entryAfter : e));
+      const sortedCompleted = merged
+        .filter((e) => e.status === 'completed' && e.date)
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+      if (sortedCompleted.length > 0) {
+        try {
+          await updateEquipment(equipmentId, {
+            lastMaintenanceDate: sortedCompleted[0].date,
+          });
+        } catch (updateError) {
+          console.warn('Не удалось обновить дату последнего обслуживания:', updateError);
+        }
+      }
+
+      setEditingEntryId(null);
+      setEditFormData(null);
+      setEditSelectedFiles([]);
+      showSuccess('Запись обновлена');
+    } catch (err: unknown) {
+      console.error('Ошибка обновления записи:', err);
+      const message = err instanceof Error ? err.message : 'Неизвестная ошибка';
+      setError(`Не удалось сохранить изменения: ${message}`);
+    } finally {
+      setSavingEditId(null);
+      setEditUploadLabel('');
     }
   };
 
@@ -498,9 +616,11 @@ ${data.notes ? `Примечания: ${data.notes}` : ''}`;
               disabled={saving}
             >
               <option value="">Выберите тип</option>
-              <option value="Техническое обслуживание">Техническое обслуживание</option>
-              <option value="Ремонт">Ремонт</option>
-              <option value="Осмотр">Осмотр</option>
+              {MAINTENANCE_TYPE_OPTIONS.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
             </select>
           </div>
         </div>
@@ -530,11 +650,11 @@ ${data.notes ? `Примечания: ${data.notes}` : ''}`;
         </div>
 
         <div className="form-group">
-          <label>Документы (PDF, Word, Excel и др.):</label>
+          <label>Документы (PDF, Word, Excel и др.) или фото:</label>
           <input
             type="file"
             multiple
-            accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.png,.jpg,.jpeg"
+            accept={MAINTENANCE_FILE_ACCEPT}
             onChange={(e) => setSelectedFiles(Array.from(e.target.files || []))}
             disabled={saving || uploadingFiles}
           />
@@ -628,45 +748,189 @@ ${data.notes ? `Примечания: ${data.notes}` : ''}`;
           <p className="no-entries">Записи отсутствуют. Добавьте первую запись о обслуживании.</p>
         ) : (
           <div className="entries">
-            {entries.map(entry => (
-              <div key={entry.id} className="entry">
-                <div className="entry-header">
-                  <span className="entry-date">{formatDate(entry.date)}</span>
-                  <span className="entry-type">{entry.type}</span>
-                  {entry.status === 'planned' && (
-                    <span className="entry-status-planned">Запланировано</span>
-                  )}
-                  <button
-                    className="delete-button"
-                    onClick={() => handleDelete(entry.id)}
-                    disabled={deleting === entry.id}
-                    title="Удалить запись"
-                  >
-                    {deleting === entry.id ? '...' : '×'}
-                  </button>
-                </div>
-                <div className="entry-description">{entry.description}</div>
-                <div className="entry-footer">
-                  Выполнил: {entry.performedBy}
-                </div>
-                {entry.files && entry.files.length > 0 && (
-                  <div className="entry-files">
-                    <span className="entry-files-label">Документы:</span>
-                    {entry.files.map(file => (
-                      <a
-                        key={file.id}
-                        href={file.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="entry-file-link"
-                      >
-                        {file.name}
-                      </a>
-                    ))}
+            {entries.map((entry) => {
+              const isTempEntry = entry.id.startsWith('temp-');
+              const isEditing = editingEntryId === entry.id && editFormData !== null;
+
+              const typeSelectOptions =
+                editFormData && !MAINTENANCE_TYPE_OPTIONS.includes(editFormData.type as (typeof MAINTENANCE_TYPE_OPTIONS)[number])
+                  ? [editFormData.type, ...MAINTENANCE_TYPE_OPTIONS]
+                  : [...MAINTENANCE_TYPE_OPTIONS];
+
+              return (
+                <div key={entry.id} className="entry">
+                  <div className="entry-header">
+                    {isEditing ? (
+                      <div className="entry-edit-header-fields">
+                        <input
+                          type="date"
+                          className="entry-edit-date"
+                          value={editFormData.date}
+                          onChange={(e) => setEditFormData({ ...editFormData, date: e.target.value })}
+                          disabled={!!savingEditId}
+                        />
+                        <select
+                          className="entry-edit-type"
+                          value={editFormData.type}
+                          onChange={(e) => setEditFormData({ ...editFormData, type: e.target.value })}
+                          disabled={!!savingEditId}
+                        >
+                          {typeSelectOptions.map((t) => (
+                            <option key={t} value={t}>
+                              {t}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          className="entry-edit-status"
+                          value={editFormData.status ?? 'completed'}
+                          onChange={(e) =>
+                            setEditFormData({
+                              ...editFormData,
+                              status: e.target.value as MaintenanceEntry['status'],
+                            })
+                          }
+                          disabled={!!savingEditId}
+                        >
+                          <option value="completed">Выполнено</option>
+                          <option value="planned">Запланировано</option>
+                        </select>
+                      </div>
+                    ) : (
+                      <>
+                        <span className="entry-date">{formatDate(entry.date)}</span>
+                        <span className="entry-type">{entry.type}</span>
+                        {entry.status === 'planned' && (
+                          <span className="entry-status-planned">Запланировано</span>
+                        )}
+                      </>
+                    )}
+                    <div className="entry-header-actions">
+                      {!isTempEntry && !isEditing && entry.status === 'completed' && (
+                        <button
+                          type="button"
+                          className="edit-entry-button"
+                          onClick={() => startEditEntry(entry)}
+                          disabled={!!savingEditId || !!deleting}
+                          title="Редактировать запись"
+                        >
+                          Изменить
+                        </button>
+                      )}
+                      {!isEditing && (
+                        <button
+                          type="button"
+                          className="delete-button"
+                          onClick={() => handleDelete(entry.id)}
+                          disabled={deleting === entry.id}
+                          title="Удалить запись"
+                        >
+                          {deleting === entry.id ? '...' : '×'}
+                        </button>
+                      )}
+                    </div>
                   </div>
-                )}
-              </div>
-            ))}
+                  {isEditing ? (
+                    <>
+                      <div className="form-group entry-edit-description">
+                        <label>Описание:</label>
+                        <textarea
+                          value={editFormData.description}
+                          onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
+                          rows={4}
+                          disabled={!!savingEditId}
+                        />
+                      </div>
+                      <div className="form-group entry-edit-performed">
+                        <label>Выполнил:</label>
+                        <input
+                          type="text"
+                          value={editFormData.performedBy}
+                          onChange={(e) => setEditFormData({ ...editFormData, performedBy: e.target.value })}
+                          disabled={!!savingEditId}
+                        />
+                      </div>
+                      <div className="form-group entry-edit-files">
+                        <label>Добавить документы или фото:</label>
+                        <input
+                          type="file"
+                          multiple
+                          accept={MAINTENANCE_FILE_ACCEPT}
+                          onChange={(e) => {
+                            const picked = Array.from(e.target.files || []);
+                            if (picked.length > 0) {
+                              setEditSelectedFiles((prev) => [...prev, ...picked]);
+                            }
+                            e.target.value = '';
+                          }}
+                          disabled={!!savingEditId}
+                        />
+                        {editSelectedFiles.length > 0 && (
+                          <div className="selected-files-preview">
+                            {editSelectedFiles.map((f, i) => (
+                              <span key={`${f.name}-${f.lastModified}-${f.size}-${i}`} className="selected-file-chip">
+                                {f.name} ({(f.size / 1024).toFixed(0)} KB)
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setEditSelectedFiles((files) => files.filter((_, idx) => idx !== i))
+                                  }
+                                  disabled={!!savingEditId}
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {editUploadLabel ? (
+                        <div className="entry-edit-upload-status">{editUploadLabel}</div>
+                      ) : null}
+                      <div className="entry-edit-actions">
+                        <button
+                          type="button"
+                          className="entry-edit-save"
+                          onClick={() => void handleSaveEdit()}
+                          disabled={!!savingEditId}
+                        >
+                          {savingEditId === entry.id ? (editUploadLabel || 'Сохранение...') : 'Сохранить'}
+                        </button>
+                        <button
+                          type="button"
+                          className="entry-edit-cancel"
+                          onClick={cancelEditEntry}
+                          disabled={!!savingEditId}
+                        >
+                          Отмена
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="entry-description">{entry.description}</div>
+                      <div className="entry-footer">Выполнил: {entry.performedBy}</div>
+                    </>
+                  )}
+                  {entry.files && entry.files.length > 0 && (
+                    <div className="entry-files">
+                      <span className="entry-files-label">Документы:</span>
+                      {entry.files.map((file) => (
+                        <a
+                          key={file.id}
+                          href={file.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="entry-file-link"
+                        >
+                          {file.name}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

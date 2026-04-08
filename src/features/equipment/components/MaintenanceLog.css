@@ -150,10 +150,113 @@
 .entry-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 10px;
   margin-bottom: 10px;
   padding-bottom: 10px;
   border-bottom: 1px solid #eee;
+}
+
+.entry-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.entry-edit-header-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.entry-edit-date,
+.entry-edit-type,
+.entry-edit-status {
+  padding: 6px 10px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.entry-edit-description,
+.entry-edit-performed {
+  margin-top: 10px;
+}
+
+.entry-edit-description textarea,
+.entry-edit-performed input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.entry-edit-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.maintenance-log .edit-entry-button {
+  background: #6c757d;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.maintenance-log .edit-entry-button:hover:not(:disabled) {
+  background: #5a6268;
+}
+
+.maintenance-log .edit-entry-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.maintenance-log .entry-edit-save {
+  background: #28a745;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.maintenance-log .entry-edit-save:hover:not(:disabled) {
+  background: #218838;
+}
+
+.maintenance-log .entry-edit-cancel {
+  background: #e9ecef;
+  color: #333;
+  border: 1px solid #ced4da;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.maintenance-log .entry-edit-cancel:hover:not(:disabled) {
+  background: #dee2e6;
+}
+
+.entry-edit-upload-status {
+  font-size: 13px;
+  color: #1565c0;
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: #e3f2fd;
+  border-radius: 6px;
+  border: 1px solid #90caf9;
 }
 
 .entry-date {
@@ -431,6 +534,17 @@
   .entry-header {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .entry-header-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .entry-edit-header-fields {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
   }
 
   .entry-description {
