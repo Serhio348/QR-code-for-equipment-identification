@@ -32,6 +32,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
+import type { MouseHandlerDataParam } from 'recharts';
 import { supabase } from '@/shared/config/supabase';
 import { setAIChatWaterContext } from '@/features/ai-consultant/events/chatEvents';
 import {
@@ -272,6 +273,75 @@ function balanceDockedTipFingerprint(
   return `${String(label)}|${list.map(e => `${String(e.name)}:${String(e.value)}`).join(';')}`;
 }
 
+/** Порядок серий как у ComposedChart баланса — для клика и синхронизации с фильтрами. */
+function buildBalanceDockedTipFromRow(
+  row: BalanceDay,
+  productionDeviceNames: string[],
+  domesticDeviceNames: string[],
+  balanceMeterColorMap: Map<string, string>,
+  hideSourceLine: boolean,
+): { label: string | number | undefined; payload: ProductionTooltipPayloadEntry[] } {
+  const payload: ProductionTooltipPayloadEntry[] = [];
+  for (const name of productionDeviceNames) {
+    const raw = row[name];
+    const value = typeof raw === 'number' ? raw : 0;
+    payload.push({
+      name,
+      value,
+      fill: balanceMeterColorMap.get(name) ?? '#64748b',
+    });
+  }
+  for (const name of domesticDeviceNames) {
+    const raw = row[name];
+    const value = typeof raw === 'number' ? raw : 0;
+    payload.push({
+      name,
+      value,
+      fill: balanceMeterColorMap.get(name) ?? '#64748b',
+    });
+  }
+  payload.push({
+    name: 'losses',
+    value: row.losses,
+    fill: LOSSES_COLOR,
+  });
+  if (!hideSourceLine) {
+    payload.push({
+      name: 'source',
+      value: row.source,
+      fill: SOURCE_COLOR,
+      color: SOURCE_COLOR,
+    });
+  }
+  return { label: row.date, payload };
+}
+
+/**
+ * Recharts 3 отдаёт activeTooltipIndex строкой (например "3"), не number — иначе клик по графику не находит столбец.
+ */
+function balanceChartRowIndexFromPointerState(
+  state: MouseHandlerDataParam,
+  rows: BalanceDay[],
+): number | undefined {
+  const raw = state.activeTooltipIndex ?? state.activeIndex;
+  if (raw != null && raw !== '') {
+    if (typeof raw === 'number' && Number.isFinite(raw)) {
+      const i = Math.trunc(raw);
+      if (i >= 0 && i < rows.length) return i;
+    }
+    if (typeof raw === 'string') {
+      const i = Number.parseInt(raw, 10);
+      if (Number.isFinite(i) && i >= 0 && i < rows.length) return i;
+    }
+  }
+  const label = state.activeLabel;
+  if (label != null && label !== '') {
+    const j = rows.findIndex(r => String(r.date) === String(label));
+    if (j >= 0) return j;
+  }
+  return undefined;
+}
+
 /**
  * Передаёт данные стандартного Tooltip Recharts в закреплённую панель (сам всплывающий слой скрыт).
  */
@@ -281,19 +351,26 @@ function BalanceTooltipToDockedRelay({
   payload,
   onRelay,
   dockDismissedRef,
+  pinned,
 }: {
   active?: boolean;
   label?: string | number;
   payload?: ReadonlyArray<ProductionTooltipPayloadEntry>;
   onRelay: (data: { label: string | number | undefined; payload: ReadonlyArray<ProductionTooltipPayloadEntry> } | null) => void;
   dockDismissedRef: React.MutableRefObject<boolean>;
+  pinned: boolean;
 }): null {
+  const hasPayload = (payload?.length ?? 0) > 0;
+  const effectiveActive = Boolean(active && hasPayload);
   useLayoutEffect(() => {
-    if (!active) {
-      dockDismissedRef.current = false;
-      onRelay(null);
+    if (!effectiveActive) {
+      if (!pinned) {
+        dockDismissedRef.current = false;
+        onRelay(null);
+      }
       return;
     }
+    if (pinned) return;
     const list = payload ?? [];
     if (list.length === 0) {
       onRelay(null);
@@ -301,7 +378,7 @@ function BalanceTooltipToDockedRelay({
     }
     if (dockDismissedRef.current) return;
     onRelay({ label, payload: list });
-  }, [active, label, payload, onRelay, dockDismissedRef]);
+  }, [effectiveActive, label, payload, onRelay, dockDismissedRef, pinned]);
   return null;
 }
 
@@ -492,6 +569,8 @@ const WaterDashboard: React.FC = () => {
   } | null>(null);
   const balanceDockDismissedRef = useRef(false);
   const balanceDockedRelayFpRef = useRef<string | null>(null);
+  /** Клик по столбцу: панель под графиком не следует курсору, пока не повторный клик / крестик / смена периода. */
+  const [balanceDockPinned, setBalanceDockPinned] = useState(false);
 
   useEffect(() => {
     setProductionTooltipDismissed(false);
@@ -1108,16 +1187,16 @@ const WaterDashboard: React.FC = () => {
   useEffect(() => {
     balanceDockDismissedRef.current = false;
     balanceDockedRelayFpRef.current = null;
+    setBalanceDockPinned(false);
     setBalanceDockedTip(null);
   }, [selectedMonth, balanceChartDisplayData, balanceMobileRange]);
 
   const onBalanceDockRelay = useCallback(
     (data: { label: string | number | undefined; payload: ReadonlyArray<ProductionTooltipPayloadEntry> } | null) => {
+      if (balanceDockPinned) return;
       if (data == null) {
-        if (balanceDockedRelayFpRef.current !== null) {
-          balanceDockedRelayFpRef.current = null;
-          setBalanceDockedTip(null);
-        }
+        balanceDockedRelayFpRef.current = null;
+        setBalanceDockedTip(null);
         return;
       }
       const fp = balanceDockedTipFingerprint(data.label, data.payload);
@@ -1125,8 +1204,16 @@ const WaterDashboard: React.FC = () => {
       balanceDockedRelayFpRef.current = fp;
       setBalanceDockedTip(data);
     },
-    [],
+    [balanceDockPinned],
   );
+
+  /** Пока день не закреплён — убрать панель, если курсор ушёл с графика и блока детализации (нет «выделения» столбца). */
+  const onBalanceChartColPointerLeave = useCallback(() => {
+    if (balanceDockPinned) return;
+    balanceDockDismissedRef.current = false;
+    balanceDockedRelayFpRef.current = null;
+    setBalanceDockedTip(null);
+  }, [balanceDockPinned]);
 
   const balanceChartPixelWidth = useMemo(() => {
     const n = balanceChartDisplayData.length;
@@ -1346,6 +1433,65 @@ const WaterDashboard: React.FC = () => {
     ];
     return buildMeterLabelColorMap(keys);
   }, [monthlyMeterRows, productionDeviceNames, domesticDeviceNames]);
+
+  const balanceDockPanelData = useMemo(() => {
+    if (balanceDockedTip == null) return null;
+    if (!balanceDockPinned) return balanceDockedTip;
+    const day = String(balanceDockedTip.label);
+    const row = balanceChartDisplayData.find(r => String(r.date) === day);
+    if (!row) return balanceDockedTip;
+    return buildBalanceDockedTipFromRow(
+      row,
+      productionDeviceNames,
+      domesticDeviceNames,
+      balanceMeterColorMap,
+      hiddenDevices.has('__source__'),
+    );
+  }, [
+    balanceDockedTip,
+    balanceDockPinned,
+    balanceChartDisplayData,
+    productionDeviceNames,
+    domesticDeviceNames,
+    balanceMeterColorMap,
+    hiddenDevices,
+  ]);
+
+  const onBalanceChartClick = useCallback(
+    (state: MouseHandlerDataParam) => {
+      const idx = balanceChartRowIndexFromPointerState(state, balanceChartDisplayData);
+      if (idx == null || idx < 0 || idx >= balanceChartDisplayData.length) return;
+      const row = balanceChartDisplayData[idx];
+      if (row == null) return;
+      const clickDay = String(row.date);
+      if (balanceDockPinned && balanceDockedTip != null && String(balanceDockedTip.label) === clickDay) {
+        setBalanceDockPinned(false);
+        balanceDockedRelayFpRef.current = null;
+        setBalanceDockedTip(null);
+        return;
+      }
+      const built = buildBalanceDockedTipFromRow(
+        row,
+        productionDeviceNames,
+        domesticDeviceNames,
+        balanceMeterColorMap,
+        hiddenDevices.has('__source__'),
+      );
+      balanceDockedRelayFpRef.current = balanceDockedTipFingerprint(built.label, built.payload);
+      setBalanceDockedTip(built);
+      setBalanceDockPinned(true);
+      balanceDockDismissedRef.current = false;
+    },
+    [
+      balanceChartDisplayData,
+      balanceDockPinned,
+      balanceDockedTip,
+      balanceMeterColorMap,
+      domesticDeviceNames,
+      hiddenDevices,
+      productionDeviceNames,
+    ],
+  );
 
   const hasDistributionMeterData = useMemo(
     () =>
@@ -1636,7 +1782,7 @@ const WaterDashboard: React.FC = () => {
           )}
           {balanceData.length > 0 ? (
             <div className="wd-balance-wrap">
-              <div className="wd-balance-chart-col">
+              <div className="wd-balance-chart-col" onPointerLeave={onBalanceChartColPointerLeave}>
               {balanceNarrowPhoneLayout && balanceMobileRange === 'month' && (
                 <p className="wd-balance-scroll-hint">Проведите пальцем влево-вправо, чтобы увидеть все дни</p>
               )}
@@ -1668,7 +1814,11 @@ const WaterDashboard: React.FC = () => {
                   role="presentation"
                 >
                   <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={balanceChartDisplayData} margin={balanceChartMargin}>
+                  <ComposedChart
+                    data={balanceChartDisplayData}
+                    margin={balanceChartMargin}
+                    onClick={onBalanceChartClick}
+                  >
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis
                       dataKey="date"
@@ -1680,6 +1830,7 @@ const WaterDashboard: React.FC = () => {
                     <YAxis tick={{ fontSize: 11 }} unit=" м³" width={58} />
                     <Tooltip
                       trigger={balanceNarrowPhoneLayout ? 'click' : 'hover'}
+                      cursor={false}
                       wrapperStyle={{ display: 'none' }}
                       content={(tipProps) => (
                         <BalanceTooltipToDockedRelay
@@ -1688,6 +1839,7 @@ const WaterDashboard: React.FC = () => {
                           payload={tipProps.payload as ReadonlyArray<ProductionTooltipPayloadEntry> | undefined}
                           onRelay={onBalanceDockRelay}
                           dockDismissedRef={balanceDockDismissedRef}
+                          pinned={balanceDockPinned}
                         />
                       )}
                     />
@@ -1734,14 +1886,15 @@ const WaterDashboard: React.FC = () => {
                 </ResponsiveContainer>
                 </div>
               </div>
-              {balanceDockedTip != null && balanceDockedTip.payload.length > 0 ? (
+              {balanceDockPanelData != null && balanceDockPanelData.payload.length > 0 ? (
                 <BalanceDockedDayPanel
-                  label={balanceDockedTip.label}
-                  payload={balanceDockedTip.payload}
+                  label={balanceDockPanelData.label}
+                  payload={balanceDockPanelData.payload}
                   selectedMonth={selectedMonth}
                   onClose={() => {
                     balanceDockDismissedRef.current = true;
                     balanceDockedRelayFpRef.current = null;
+                    setBalanceDockPinned(false);
                     setBalanceDockedTip(null);
                   }}
                 />
