@@ -414,6 +414,21 @@
   z-index: 0;
   flex: 1;
   min-width: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Клик по SVG/обёртке Recharts не должен давать чёрную рамку фокуса */
+.wd-balance-chart *:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.wd-balance-chart svg {
+  outline: none;
+}
+
+.wd-balance-chart .recharts-wrapper:focus:not(:focus-visible),
+.wd-balance-chart .recharts-surface:focus:not(:focus-visible) {
+  outline: none;
 }
 
 /* Детализация расхода за день — под столбчатым графиком (не всплывающий слой) */
@@ -924,6 +939,21 @@
   scrollbar-width: thin;
   overscroll-behavior-x: contain;
   touch-action: pan-x pan-y;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Клик по SVG / обёртке Recharts — без чёрной рамки фокуса (как у водного баланса) */
+.wd-prod-chart-scroll *:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.wd-prod-chart-scroll svg {
+  outline: none;
+}
+
+.wd-prod-chart-scroll .recharts-wrapper:focus:not(:focus-visible),
+.wd-prod-chart-scroll .recharts-surface:focus:not(:focus-visible) {
+  outline: none;
 }
 
 .wd-prod-chart-scroll__inner {
