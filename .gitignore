@@ -37,9 +37,3 @@ ai-consultant-api/downloads/
 
 # Claude Code local settings
 .claude/settings.local.json
-
-# Снимки регистров Weintek (генерируется scripts/read-weintek-osmos-modbus.ts)
-weintek-osmos-last.csv
-weintek-osmos-last-holding.csv
-weintek-osmos-last.html
-weintek-osmos-last-scan-nonzero.csv
