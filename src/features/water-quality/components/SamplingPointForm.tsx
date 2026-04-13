@@ -12,6 +12,7 @@ import type {
 } from '../types/waterQuality';
 import { useSamplingPointManagement, useSamplingPoint } from '../hooks/useSamplingPoints';
 import { ROUTES } from '@/shared/utils/routes';
+import { logUserActivity } from '@/features/user-activity/services/activityLogsApi';
 import './SamplingPointForm.css';
 
 interface SamplingPointFormProps {
@@ -101,6 +102,22 @@ const SamplingPointForm: React.FC<SamplingPointFormProps> = ({ pointId, onSave, 
       }
 
       toast.success(`Точка отбора проб успешно ${isEditMode ? 'обновлена' : 'создана'}!`);
+
+      if (!isEditMode) {
+        logUserActivity('water_quality_sampling_point_create', 'Добавлена точка отбора проб', {
+          entityType: 'other',
+          entityId: savedPoint.id,
+          metadata: {
+            samplingPointId: savedPoint.id,
+            code: savedPoint.code,
+            name: savedPoint.name,
+            equipmentId: savedPoint.equipmentId ?? null,
+            location: savedPoint.location ?? null,
+            samplingFrequency: savedPoint.samplingFrequency ?? null,
+            isActive: savedPoint.isActive,
+          },
+        }).catch(() => {});
+      }
       
       if (onSave) {
         onSave();

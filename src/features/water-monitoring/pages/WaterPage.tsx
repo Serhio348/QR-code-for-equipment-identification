@@ -6,7 +6,7 @@
  * - Анализы качества воды
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import WaterDashboard from '../components/WaterDashboard';
 import BeliotDevicesTest from '../components/BeliotDevicesTest';
@@ -14,6 +14,7 @@ import WaterQualityJournalPage from '../../water-quality/pages/WaterQualityJourn
 import { ROUTES } from '@/shared/utils/routes';
 import { useWaterNotifications } from '../hooks/useWaterNotifications';
 import { usePushSubscription } from '../hooks/usePushSubscription';
+import { logUserActivity } from '@/features/user-activity/services/activityLogsApi';
 import './WaterPage.css';
 
 type WaterTab = 'dashboard' | 'counters' | 'quality';
@@ -22,17 +23,52 @@ const WaterPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [activeTab, setActiveTab] = useState<WaterTab>('dashboard');
+  const lastLoggedTabRef = useRef<WaterTab | null>(null);
+  const loggedWaterViewRef = useRef(false);
 
   useWaterNotifications();
   usePushSubscription();
 
   // Определяем активную вкладку на основе маршрута и search-параметра ?tab=
   useEffect(() => {
+    if (!loggedWaterViewRef.current) {
+      loggedWaterViewRef.current = true;
+      logUserActivity('water_view', 'Открытие вкладки «Вода»', {
+        entityType: 'other',
+        metadata: {
+          pathname: location.pathname,
+          search: location.search,
+        },
+      }).catch(() => {});
+    }
+
+    let nextTab: WaterTab;
     if (location.pathname.startsWith('/water-quality')) {
-      setActiveTab('quality');
+      nextTab = 'quality';
     } else if (location.pathname === ROUTES.WATER) {
       const params = new URLSearchParams(location.search);
-      setActiveTab(params.get('tab') === 'counters' ? 'counters' : 'dashboard');
+      nextTab = params.get('tab') === 'counters' ? 'counters' : 'dashboard';
+    } else {
+      nextTab = 'dashboard';
+    }
+
+    setActiveTab(nextTab);
+    if (lastLoggedTabRef.current !== nextTab) {
+      lastLoggedTabRef.current = nextTab;
+      const label =
+        nextTab === 'dashboard'
+          ? 'Dashboard'
+          : nextTab === 'counters'
+            ? 'Счётчики воды'
+            : 'Анализы качества воды';
+      logUserActivity('water_tab_view', `Просмотр раздела «Вода»: ${label}`, {
+        entityType: 'other',
+        metadata: {
+          tab: nextTab,
+          pathname: location.pathname,
+          search: location.search,
+        },
+      }).catch(() => {});
     }
   }, [location.pathname, location.search]);
 
