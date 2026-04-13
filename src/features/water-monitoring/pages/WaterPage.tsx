@@ -23,7 +23,6 @@ const WaterPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [activeTab, setActiveTab] = useState<WaterTab>('dashboard');
-  const lastLoggedTabRef = useRef<WaterTab | null>(null);
   const loggedWaterViewRef = useRef(false);
 
   useWaterNotifications();
@@ -53,23 +52,6 @@ const WaterPage: React.FC = () => {
     }
 
     setActiveTab(nextTab);
-    if (lastLoggedTabRef.current !== nextTab) {
-      lastLoggedTabRef.current = nextTab;
-      const label =
-        nextTab === 'dashboard'
-          ? 'Dashboard'
-          : nextTab === 'counters'
-            ? 'Счётчики воды'
-            : 'Анализы качества воды';
-      logUserActivity('water_tab_view', `Просмотр раздела «Вода»: ${label}`, {
-        entityType: 'other',
-        metadata: {
-          tab: nextTab,
-          pathname: location.pathname,
-          search: location.search,
-        },
-      }).catch(() => {});
-    }
   }, [location.pathname, location.search]);
 
   const handleTabChange = (tab: WaterTab) => {

@@ -35,7 +35,7 @@ import {
 import type { MouseHandlerDataParam } from 'recharts';
 import { supabase } from '@/shared/config/supabase';
 import { setAIChatWaterContext } from '@/features/ai-consultant/events/chatEvents';
-import { logUserActivity } from '@/features/user-activity/services/activityLogsApi';
+// Логирование активности по дашборду отключено: слишком шумно для журнала действий.
 import {
   domesticBalanceLabelForDevice,
   FIRE_SUPPRESSION_DEVICE_IDS,
@@ -528,8 +528,6 @@ const WaterDashboard: React.FC = () => {
   const [distributionRole, setDistributionRole] = useState<'production' | 'domestic'>('production');
   /** Отдельный экран: меньше вертикальной прокрутки, шрифты не ужимаем */
   const [dashboardView, setDashboardView] = useState<'charts' | 'distribution'>('charts');
-  const lastLoggedDashboardViewRef = useRef<'charts' | 'distribution' | null>(null);
-  const lastLoggedDistributionRoleRef = useRef<'production' | 'domestic' | null>(null);
   const [workDayStats, setWorkDayStats] = useState({ production: 0, domestic: 0 });
   const [kpi, setKpi] = useState<KpiData>({
     sourceMonth: 0,
@@ -578,33 +576,6 @@ const WaterDashboard: React.FC = () => {
   useEffect(() => {
     setProductionTooltipDismissed(false);
   }, [selectedProductionDay, todayTimeData]);
-
-  useEffect(() => {
-    if (loading) return;
-    if (lastLoggedDashboardViewRef.current === dashboardView) return;
-    lastLoggedDashboardViewRef.current = dashboardView;
-    const label = dashboardView === 'charts' ? 'Графики и баланс' : 'Распределение по учётам';
-    logUserActivity('water_dashboard_view', `Вода: дашборд → ${label}`, {
-      entityType: 'other',
-      metadata: {
-        view: dashboardView,
-      },
-    }).catch(() => {});
-  }, [dashboardView, loading]);
-
-  useEffect(() => {
-    if (loading) return;
-    if (dashboardView !== 'distribution') return;
-    if (lastLoggedDistributionRoleRef.current === distributionRole) return;
-    lastLoggedDistributionRoleRef.current = distributionRole;
-    const label = distributionRole === 'production' ? 'Производственные' : 'Хоз-питьевой';
-    logUserActivity('water_dashboard_distribution_role_view', `Вода: распределение → ${label}`, {
-      entityType: 'other',
-      metadata: {
-        role: distributionRole,
-      },
-    }).catch(() => {});
-  }, [distributionRole, dashboardView, loading]);
 
   const prodChartScrollViewportRef = useRef<HTMLDivElement>(null);
   const [productionChartTooltipPortalHost, setProductionChartTooltipPortalHost] = useState<HTMLElement | null>(null);
