@@ -20,6 +20,7 @@ import { useSamplingPoints } from '../hooks/useSamplingPoints';
 import { useCurrentUser } from '../../auth/hooks/useCurrentUser';
 import { createAnalysisResults, updateAnalysisResult, deleteAnalysisResult, checkResultCompliance, uploadAnalysisPDF, deleteAnalysisPDF } from '../services';
 import { ROUTES } from '@/shared/utils/routes';
+import { logUserActivity } from '@/features/user-activity/services/activityLogsApi';
 import './WaterAnalysisForm.css';
 
 interface WaterAnalysisFormProps {
@@ -205,6 +206,7 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
 
       // Обрабатываем каждый параметр и проверяем соответствие нормам
       const savedResultIds: string[] = [];
+      let createdResultsCount = 0;
       for (const param of allParams) {
         const resultValue = results[param].value.trim();
         const existingResult = existingResultsMap.get(param);
@@ -249,6 +251,7 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
           };
           const createdResults = await createAnalysisResults([newResult]);
           savedResultId = createdResults[0]?.id;
+          if (savedResultId) createdResultsCount += 1;
         }
 
         if (savedResultId) {
@@ -295,6 +298,24 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
       }
 
       toast.success(`Анализ успешно ${isEditMode ? 'обновлен' : 'создан'}!`);
+
+      if (!isEditMode) {
+        const selectedPoint = samplingPoints.find((p) => p.id === samplingPointId.trim());
+        logUserActivity('water_quality_analysis_create', 'Добавлен анализ качества воды', {
+          entityType: 'other',
+          entityId: createdAnalysis.id,
+          metadata: {
+            analysisId: createdAnalysis.id,
+            samplingPointId: samplingPointId.trim(),
+            samplingPointCode: selectedPoint?.code ?? null,
+            samplingPointName: selectedPoint?.name ?? null,
+            sampleDate,
+            externalLab,
+            status,
+            resultsCreatedCount: createdResultsCount,
+          },
+        }).catch(() => {});
+      }
       
       if (onSave) {
         onSave();
