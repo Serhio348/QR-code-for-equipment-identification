@@ -8,7 +8,6 @@
 import { MaintenanceEntry, MaintenanceEntryInput, MaintenanceFile } from '../types/equipment';
 import { logUserActivity } from '../../user-activity/services/activityLogsApi';
 import { API_CONFIG } from '@/shared/config/api';
-import { apiRequest } from '@/shared/services/api/apiRequest';
 import { ApiResponse } from '@/shared/services/api/types';
 
 const maintenanceLogInFlight = new Map<string, Promise<MaintenanceEntry[]>>();
@@ -16,35 +15,35 @@ const maintenanceLogCache = new Map<string, { data: MaintenanceEntry[]; timestam
 const MAINTENANCE_LOG_CACHE_TTL_MS = 60 * 1000;
 const MAINTENANCE_LOG_TIMEOUT_MS = API_CONFIG.TIMEOUT;
 
-async function fetchMaintenanceLogDirect(
-  equipmentId: string,
-  maintenanceSheetId?: string
-): Promise<MaintenanceEntry[]> {
-  const url = new URL(API_CONFIG.EQUIPMENT_API_URL);
-  url.searchParams.append('action', 'getMaintenanceLog');
-  url.searchParams.append('equipmentId', equipmentId);
-  if (maintenanceSheetId) {
-    url.searchParams.append('maintenanceSheetId', maintenanceSheetId);
-  }
+/**
+ * Для операций журнала обслуживания используем backend-proxy, чтобы избежать CORS на Google Apps Script.
+ * Если VITE_AI_CONSULTANT_API_URL не задан, используем относительные пути (same-origin).
+ */
+const BACKEND_API_URL = import.meta.env.VITE_AI_CONSULTANT_API_URL || '';
 
-  const response = await fetch(url.toString(), {
-    method: 'GET',
-    headers: { 'Accept': 'application/json' },
+function backendUrl(path: string): string {
+  if (BACKEND_API_URL) return `${BACKEND_API_URL}${path}`;
+  return path;
+}
+
+async function postToBackend<TResponse>(path: string, body: unknown): Promise<TResponse> {
+  const response = await fetch(backendUrl(path), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     signal: AbortSignal.timeout(MAINTENANCE_LOG_TIMEOUT_MS),
-    cache: 'no-store',
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`HTTP ${response.status}: ${errorText}`);
+    const text = await response.text().catch(() => '');
+    throw new Error(`HTTP ${response.status}: ${text || response.statusText}`);
   }
 
-  const payload = await response.json() as ApiResponse<MaintenanceEntry[]>;
-  if (!payload.success) {
-    throw new Error(payload.error || 'Не удалось загрузить журнал');
-  }
-
-  return payload.data || [];
+  const json = (await response.json().catch(() => null)) as { success?: boolean; data?: TResponse; error?: string } | null;
+  if (!json) throw new Error('Не удалось прочитать ответ сервера');
+  if (json.success === false) throw new Error(json.error || 'Ошибка сервера');
+  if (json.data == null) throw new Error('Сервер не вернул data');
+  return json.data;
 }
 
 /**
@@ -91,10 +90,30 @@ export async function getMaintenanceLog(
   }
 
   const requestPromise = (async (): Promise<MaintenanceEntry[]> => {
-    console.log('📋 getMaintenanceLog напрямую через GAS:', { equipmentId, maintenanceSheetId: '(ignored on read)' });
+    console.log('📋 getMaintenanceLog через backend proxy:', { equipmentId });
 
     try {
-      const log = await fetchMaintenanceLogDirect(equipmentId);
+      const url = new URL(backendUrl('/api/equipment/maintenance/log'), window.location.origin);
+      url.searchParams.set('equipmentId', equipmentId);
+
+      const response = await fetch(url.toString(), {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(MAINTENANCE_LOG_TIMEOUT_MS),
+        cache: 'no-store',
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => '');
+        throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
+      }
+
+      const payload = await response.json() as ApiResponse<MaintenanceEntry[]>;
+      if (!payload.success) {
+        throw new Error(payload.error || 'Не удалось загрузить журнал');
+      }
+
+      const log = payload.data || [];
       maintenanceLogCache.set(requestKey, { data: log, timestamp: Date.now() });
       console.log(`✅ Загружен журнал: ${log.length} записей для equipmentId="${equipmentId}"`);
       return log;
@@ -153,12 +172,12 @@ export async function addMaintenanceEntry(
     throw new Error('Не все обязательные поля заполнены');
   }
 
-  console.log('📤 Добавление записи через GAS:', { equipmentId, type: entry.type });
+  console.log('📤 Добавление записи через backend proxy:', { equipmentId, type: entry.type });
 
   const body: Record<string, unknown> = { equipmentId, ...entry };
   if (maintenanceSheetId) body.maintenanceSheetId = maintenanceSheetId;
-  const result = await apiRequest<MaintenanceEntry>('addMaintenanceEntry', 'POST', body);
-  const newEntry = result.data as MaintenanceEntry | undefined;
+
+  const newEntry = await postToBackend<MaintenanceEntry>('/api/equipment/maintenance/add', body);
   if (!newEntry) throw new Error('Не удалось добавить запись');
   maintenanceLogCache.clear();
   console.log('✅ Запись добавлена:', newEntry.id);
@@ -202,8 +221,8 @@ export async function updateMaintenanceEntry(
     throw new Error('ID записи не указан');
   }
 
-  console.log('📤 Обновление записи через GAS:', { entryId });
-  const result = await apiRequest<MaintenanceEntry>('updateMaintenanceEntry', 'POST', { entryId, ...entry });
+  console.log('📤 Обновление записи через backend proxy:', { entryId });
+  const updated = await postToBackend<MaintenanceEntry>('/api/equipment/maintenance/update', { entryId, ...entry });
 
   console.log('✅ Запись обновлена:', entryId);
 
@@ -217,12 +236,9 @@ export async function updateMaintenanceEntry(
     }
   );
 
-  if (!result.data) {
-    throw new Error('Не удалось обновить запись');
-  }
   maintenanceLogCache.clear();
 
-  return result.data;
+  return updated;
 }
 
 /**
@@ -245,8 +261,8 @@ export async function deleteMaintenanceEntry(
     throw new Error('ID записи не указан');
   }
 
-  console.log('🗑️ Удаление записи через GAS:', { entryId });
-  await apiRequest('deleteMaintenanceEntry', 'POST', { entryId });
+  console.log('🗑️ Удаление записи через backend proxy:', { entryId });
+  await postToBackend<Record<string, unknown>>('/api/equipment/maintenance/delete', { entryId });
   maintenanceLogCache.clear();
 
   console.log('✅ Запись удалена:', entryId);
@@ -297,21 +313,20 @@ export async function uploadMaintenanceFile(
 ): Promise<MaintenanceFile> {
   const base64 = await fileToBase64(file);
 
-  console.log('📤 Загрузка файла через GAS:', {
+  console.log('📤 Загрузка файла через backend proxy:', {
     equipmentId,
     entryId,
     fileName: file.name,
     mimeType: file.type,
   });
 
-  const result = await apiRequest<{
-    success?: boolean;
+  const result = await postToBackend<{
     fileId: string;
     fileUrl: string;
     fileName: string;
     mimeType?: string;
     size?: number;
-  }>('uploadMaintenanceDocument', 'POST', {
+  }>('/api/equipment/upload-file', {
     equipmentId,
     entryId,
     fileBase64: base64,
@@ -320,19 +335,16 @@ export async function uploadMaintenanceFile(
     date,
   });
 
-  if (!result.data) {
-    throw new Error('Не удалось загрузить файл');
-  }
   maintenanceLogCache.clear();
 
-  console.log('✅ Файл загружен:', result.data.fileName);
+  console.log('✅ Файл загружен:', result.fileName);
 
   return {
-    id: result.data.fileId,
-    name: result.data.fileName,
-    url: result.data.fileUrl,
-    mimeType: result.data.mimeType,
-    size: result.data.size,
+    id: result.fileId,
+    name: result.fileName,
+    url: result.fileUrl,
+    mimeType: result.mimeType,
+    size: result.size,
   };
 }
 
@@ -349,13 +361,12 @@ export async function attachFilesToEntry(
   entryId: string,
   files: MaintenanceFile[]
 ): Promise<MaintenanceEntry> {
-  console.log('📎 Прикрепление файлов через GAS:', { entryId, filesCount: files.length });
-  const result = await apiRequest<MaintenanceEntry>('attachFilesToEntry', 'POST', { entryId, files });
-  if (!result.data) throw new Error('Не удалось прикрепить файлы к записи');
+  console.log('📎 Прикрепление файлов через backend proxy:', { entryId, filesCount: files.length });
+  const updated = await postToBackend<MaintenanceEntry>('/api/equipment/attach-files', { entryId, files });
   maintenanceLogCache.clear();
 
   console.log('✅ Файлы прикреплены к записи:', entryId);
 
-  return result.data;
+  return updated;
 }
 
