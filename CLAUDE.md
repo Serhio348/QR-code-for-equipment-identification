@@ -81,17 +81,22 @@ alwaysApply: true
 
 ## Git коммиты
 
-Формат: `тип(scope): описание на русском`
+- **Язык:** только английский (subject и body). Заголовок и описание коммита не писать по-русски.
+- **Формат:** [Conventional Commits](https://www.conventionalcommits.org/) — `type(scope): short imperative description`
+  - `type` в нижнем регистре: `feat`, `fix`, `docs`, `refactor`, `chore`, `test`, `ci`, `perf`, `build`, `revert`
+  - `scope` опционально; короткое существительное (`water`, `docker`, `invoices`)
+  - Subject: **повелительное наклонение** (imperative), **без точки** в конце, по возможности **≤ 72 символов**
+  - Breaking change: `!` после типа/скоупа (`feat(api)!: ...`) или футер `BREAKING CHANGE:`
 
-Типы: `feat`, `fix`, `docs`, `refactor`, `chore`
+Примеры (хорошо):
+```
+feat(invoices): add address breakdown to invoice detail
+fix(parser): strip thousands separators from numeric fields
+refactor(water): extract useDeviceArchive hook
+docs(readme): document Railway environment variables
+```
 
-Примеры:
-```
-feat(invoices): добавить детализацию по адресам
-fix(parser): убрать разделитель тысяч из чисел
-refactor(water): вынести хук useDeviceArchive
-docs(readme): обновить переменные Railway
-```
+Плохо: русский текст в сообщении, размытые формулировки (`fix stuff`), заглавный `Feat`, точка в конце subject без необходимости.
 
 ---
 
