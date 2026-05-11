@@ -24,6 +24,14 @@ export const BELOT_DEVICE_GROUPS: BeliotDeviceGroupConfig[] = [
   { name: 'Пожаротушение', deviceIds: ['11365', '11366'] },
 ];
 
+export const POSUDOTARA_DEVICE_ID = '11078';
+const POSUDOTARA_METER_REPLACEMENT_DAY = '2026-05-04';
+
+/** День замены счётчика посудо-тарного участка: расход нельзя считать от предыдущего дня. */
+export function isPosudotaraMeterReplacementDay(deviceId: string, readingDay: string): boolean {
+  return deviceId === POSUDOTARA_DEVICE_ID && readingDay === POSUDOTARA_METER_REPLACEMENT_DAY;
+}
+
 const FIRE_SUPPRESSION_GROUP = BELOT_DEVICE_GROUPS.find((g) => g.name === 'Пожаротушение');
 
 /** Подпись единого ряда пожаротушения на дашборде */

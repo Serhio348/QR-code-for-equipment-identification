@@ -8,6 +8,7 @@
     "preview": "vite preview",
     "start": "serve -s dist -l $PORT",
     "collect-readings": "tsx scripts/collect-beliot-readings.ts",
+    "inspect:posudotara": "tsx scripts/inspect-posudotara-meter.ts",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
