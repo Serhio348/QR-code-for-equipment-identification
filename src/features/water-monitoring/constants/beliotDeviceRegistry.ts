@@ -32,6 +32,21 @@ export function isPosudotaraMeterReplacementDay(deviceId: string, readingDay: st
   return deviceId === POSUDOTARA_DEVICE_ID && readingDay === POSUDOTARA_METER_REPLACEMENT_DAY;
 }
 
+const BELIOT_ARCHIVE_VOLUME_OVERRIDES: Record<string, Record<string, number>> = {
+  '11363': {
+    '2026-05-01': 0,
+  },
+  '11078': {
+    '2026-05-04': 3.48,
+  },
+};
+
+/** Ручные корректировки архивного объёма для первого дня новой шкалы счётчика. */
+export function getBeliotArchiveVolumeOverride(deviceId: string | null | undefined, dayKey: string): number | null {
+  if (!deviceId) return null;
+  return BELIOT_ARCHIVE_VOLUME_OVERRIDES[deviceId]?.[dayKey] ?? null;
+}
+
 const FIRE_SUPPRESSION_GROUP = BELOT_DEVICE_GROUPS.find((g) => g.name === 'Пожаротушение');
 
 /** Подпись единого ряда пожаротушения на дашборде */

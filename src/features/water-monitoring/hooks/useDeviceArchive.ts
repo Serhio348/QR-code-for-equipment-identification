@@ -13,6 +13,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useBeliotDeviceReadings } from './useBeliotDeviceReadings';
 import type { BeliotDeviceReading } from '../services/supabaseBeliotReadingsApi';
+import { getBeliotArchiveVolumeOverride } from '../constants/beliotDeviceRegistry';
 
 export type ArchiveGroupBy = 'hour' | 'day' | 'week' | 'month' | 'year';
 export type ArchiveViewType = 'readings' | 'volume';
@@ -82,6 +83,11 @@ function monthStartStr(): string {
   return `${ms.getFullYear()}-${String(ms.getMonth() + 1).padStart(2, '0')}-${String(ms.getDate()).padStart(2, '0')}`;
 }
 
+function yearStartStr(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-01-01`;
+}
+
 export function useDeviceArchive(deviceId: string | null) {
   const [isArchiveOpen, setIsArchiveOpen] = useState(false);
   const [archiveViewType, setArchiveViewType] = useState<ArchiveViewType>('readings');
@@ -113,8 +119,8 @@ export function useDeviceArchive(deviceId: string | null) {
 
   // ─── Callbacks ────────────────────────────────────────────────────────────
 
-  const updateDefaultDates = useCallback((_groupBy: ArchiveGroupBy) => {
-    setArchiveStartDate(monthStartStr());
+  const updateDefaultDates = useCallback((groupBy: ArchiveGroupBy) => {
+    setArchiveStartDate(groupBy === 'year' ? yearStartStr() : monthStartStr());
     setArchiveEndDate(todayStr());
     setArchiveDataLoaded(false);
   }, []);
@@ -386,7 +392,9 @@ export function useDeviceArchive(deviceId: string | null) {
     setArchiveCurrentPage(1);
   }, [archiveGroupBy, archiveDataLoaded]);
 
-  // Автозагрузка при открытии модалки, смене счётчика или периода (те же границы, что и у группировки)
+  // Автозагрузка при открытии модалки, смене счётчика, периода или группировки.
+  // Группировка сама по себе меняет клиентское представление, но после setArchiveDataLoaded(false)
+  // нужен повторный проход загрузки, иначе UI остаётся в состоянии "Загрузка архива...".
   useEffect(() => {
     if (!isArchiveOpen || !deviceId || !archiveStartDate || !archiveEndDate) return;
 
@@ -412,7 +420,7 @@ export function useDeviceArchive(deviceId: string | null) {
     return () => {
       cancelled = true;
     };
-  }, [isArchiveOpen, deviceId, archiveStartDate, archiveEndDate, loadByPeriod, refreshArchive]);
+  }, [isArchiveOpen, deviceId, archiveStartDate, archiveEndDate, archiveGroupBy, loadByPeriod, refreshArchive]);
 
   // Оформление страницы и сброс «загружено» только при закрытии
   useEffect(() => {
@@ -469,6 +477,10 @@ function computeVolume(
   rawReadings: BeliotDeviceReading[],
 ): number {
   if (!groupedReading.reading) return 0;
+  if (groupBy === 'day') {
+    const volumeOverride = getBeliotArchiveVolumeOverride(groupedReading.reading.device_id, groupedReading.groupKey);
+    if (volumeOverride !== null) return volumeOverride;
+  }
 
   if (groupBy === 'hour') {
     // Ищем следующее показание (более раннее по времени — архив в обратном порядке)
@@ -488,27 +500,30 @@ function computeVolume(
 
   // Для day/week/month/year: суммируем почасовые разницы за период
   const filterByKey = makeFilterByKey(groupedReading.groupKey, groupBy);
-  const periodRaw = rawReadings.filter(r => filterByKey(r));
+  const periodStartMs = groupedReading.groupDate.getTime();
+  const periodRaw = rawReadings.filter(r =>
+    filterByKey(r) && new Date(r.reading_date).getTime() >= periodStartMs
+  );
   if (!periodRaw.length) return 0;
 
   const sorted = [...periodRaw].sort(
     (a, b) => new Date(a.reading_date).getTime() - new Date(b.reading_date).getTime(),
   );
 
-  // Предыдущее показание: последнее за предыдущий день
-  const prevDayKey = getPreviousDayKey(sorted[0].reading_date);
-  const prevDayReadings = rawReadings.filter(r => {
-    const d = new Date(r.reading_date);
-    const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    return k === prevDayKey;
-  });
-
   let previousHourValue: number | null = null;
-  if (prevDayReadings.length > 0) {
-    const sortedPrev = [...prevDayReadings].sort(
-      (a, b) => new Date(b.reading_date).getTime() - new Date(a.reading_date).getTime(),
-    );
-    previousHourValue = Number(sortedPrev[0].reading_value);
+  const firstDayKey = getDayKey(sorted[0].reading_date);
+  const startsNewScale = getBeliotArchiveVolumeOverride(sorted[0].device_id, firstDayKey) !== null;
+  if (!startsNewScale) {
+    // Предыдущее показание: последнее за предыдущий день
+    const prevDayKey = getPreviousDayKey(sorted[0].reading_date);
+    const prevDayReadings = rawReadings.filter(r => getDayKey(r.reading_date) === prevDayKey);
+
+    if (prevDayReadings.length > 0) {
+      const sortedPrev = [...prevDayReadings].sort(
+        (a, b) => new Date(b.reading_date).getTime() - new Date(a.reading_date).getTime(),
+      );
+      previousHourValue = Number(sortedPrev[0].reading_value);
+    }
   }
 
   let total = 0;
@@ -518,10 +533,23 @@ function computeVolume(
       ? (previousHourValue !== null ? previousHourValue : Number(sorted[0].reading_value))
       : Number(sorted[i - 1].reading_value);
     if (!isNaN(current) && !isNaN(previous)) {
-      total += current - previous;
+      const currentDayKey = getDayKey(sorted[i].reading_date);
+      const previousDayKey = i === 0
+        ? getPreviousDayKey(sorted[i].reading_date)
+        : getDayKey(sorted[i - 1].reading_date);
+      const boundaryOverride = currentDayKey !== previousDayKey
+        ? getBeliotArchiveVolumeOverride(sorted[i].device_id, currentDayKey)
+        : null;
+      if (boundaryOverride !== null) {
+        total += boundaryOverride;
+        continue;
+      }
+
+      const delta = current - previous;
+      if (delta > 0) total += delta;
     }
   }
-  return Math.max(0, total);
+  return total;
 }
 
 function makeFilterByKey(groupKey: string, groupBy: ArchiveGroupBy): (r: BeliotDeviceReading) => boolean {
@@ -561,5 +589,10 @@ function makeFilterByKey(groupKey: string, groupBy: ArchiveGroupBy): (r: BeliotD
 function getPreviousDayKey(dateStr: string): string {
   const d = new Date(dateStr);
   d.setDate(d.getDate() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function getDayKey(dateStr: string): string {
+  const d = new Date(dateStr);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }

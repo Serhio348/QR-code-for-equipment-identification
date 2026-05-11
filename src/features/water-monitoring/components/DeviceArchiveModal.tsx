@@ -15,6 +15,7 @@ import {
   ArchiveChartPoint,
   GroupedReading,
 } from '../hooks/useDeviceArchive';
+import { getBeliotArchiveVolumeOverride } from '../constants/beliotDeviceRegistry';
 import DeviceArchiveChart from './DeviceArchiveChart';
 
 interface DeviceArchiveModalProps {
@@ -54,6 +55,36 @@ interface DeviceArchiveModalProps {
   handlePreviousPage: () => void;
   handleNextPage: () => void;
   onClose: () => void;
+}
+
+function getReadingDayKey(readingDate: string): string {
+  const d = new Date(readingDate);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function getPreviousReadingDayKey(readingDate: string): string {
+  const d = new Date(readingDate);
+  d.setDate(d.getDate() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function getArchiveConsumptionDelta(
+  reading: BeliotDeviceReading,
+  previousValue: number,
+  previousDayKey: string,
+): number {
+  const current = Number(reading.reading_value);
+  if (isNaN(current) || isNaN(previousValue)) return 0;
+
+  const currentDayKey = getReadingDayKey(reading.reading_date);
+  const boundaryOverride = currentDayKey !== previousDayKey
+    ? getBeliotArchiveVolumeOverride(reading.device_id, currentDayKey)
+    : null;
+
+  if (boundaryOverride !== null) return boundaryOverride;
+
+  const delta = current - previousValue;
+  return delta > 0 ? delta : 0;
 }
 
 const DeviceArchiveModal: React.FC<DeviceArchiveModalProps> = ({
@@ -304,35 +335,42 @@ const DeviceArchiveModal: React.FC<DeviceArchiveModalProps> = ({
                               }
                             } else if (archiveGroupBy === 'day') {
                               const dayKey = groupedReading.groupKey;
-                              const dayReadings = archiveReadingsRaw?.filter(r => {
-                                const d = new Date(r.reading_date);
-                                const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-                                return k === dayKey;
-                              }) || [];
-                              if (dayReadings.length > 0) {
-                                const sorted = [...dayReadings].sort((a, b) =>
-                                  new Date(a.reading_date).getTime() - new Date(b.reading_date).getTime(),
-                                );
-                                let prevVal: number | null = null;
-                                if (archiveReadingsRaw) {
-                                  const d0 = new Date(sorted[0].reading_date);
-                                  d0.setDate(d0.getDate() - 1);
-                                  const prevKey = `${d0.getFullYear()}-${String(d0.getMonth() + 1).padStart(2, '0')}-${String(d0.getDate()).padStart(2, '0')}`;
-                                  const prevDay = archiveReadingsRaw
-                                    .filter(r => {
-                                      const d = new Date(r.reading_date);
-                                      const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-                                      return k === prevKey;
-                                    })
-                                    .sort((a, b) => new Date(b.reading_date).getTime() - new Date(a.reading_date).getTime());
-                                  if (prevDay.length > 0) prevVal = Number(prevDay[0].reading_value);
-                                }
-                                for (let i = 0; i < sorted.length; i++) {
-                                  const cur = Number(sorted[i].reading_value);
-                                  const prev = i === 0
-                                    ? (prevVal !== null ? prevVal : Number(sorted[0].reading_value))
-                                    : Number(sorted[i - 1].reading_value);
-                                  if (!isNaN(cur) && !isNaN(prev)) consumption += cur - prev;
+                              const volumeOverride = getBeliotArchiveVolumeOverride(groupedReading.reading.device_id, dayKey);
+                              if (volumeOverride !== null) {
+                                consumption = volumeOverride;
+                              } else {
+                                const dayReadings = archiveReadingsRaw?.filter(r => {
+                                  const d = new Date(r.reading_date);
+                                  const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                                  return k === dayKey;
+                                }) || [];
+                                if (dayReadings.length > 0) {
+                                  const sorted = [...dayReadings].sort((a, b) =>
+                                    new Date(a.reading_date).getTime() - new Date(b.reading_date).getTime(),
+                                  );
+                                  let prevVal: number | null = null;
+                                  if (archiveReadingsRaw) {
+                                    const d0 = new Date(sorted[0].reading_date);
+                                    d0.setDate(d0.getDate() - 1);
+                                    const prevKey = `${d0.getFullYear()}-${String(d0.getMonth() + 1).padStart(2, '0')}-${String(d0.getDate()).padStart(2, '0')}`;
+                                    const prevDay = archiveReadingsRaw
+                                      .filter(r => {
+                                        const d = new Date(r.reading_date);
+                                        const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                                        return k === prevKey;
+                                      })
+                                      .sort((a, b) => new Date(b.reading_date).getTime() - new Date(a.reading_date).getTime());
+                                    if (prevDay.length > 0) prevVal = Number(prevDay[0].reading_value);
+                                  }
+                                  for (let i = 0; i < sorted.length; i++) {
+                                    const prev = i === 0
+                                      ? (prevVal !== null ? prevVal : Number(sorted[0].reading_value))
+                                      : Number(sorted[i - 1].reading_value);
+                                    const prevDayKey = i === 0
+                                      ? getPreviousReadingDayKey(sorted[i].reading_date)
+                                      : getReadingDayKey(sorted[i - 1].reading_date);
+                                    consumption += getArchiveConsumptionDelta(sorted[i], prev, prevDayKey);
+                                  }
                                 }
                               }
                             } else if (archiveGroupBy === 'week') {
@@ -345,14 +383,18 @@ const DeviceArchiveModal: React.FC<DeviceArchiveModalProps> = ({
                                 return d.getFullYear() === parseInt(year) &&
                                   d.getMonth() + 1 === monthNum &&
                                   d.getDate() >= weekStartDay &&
-                                  d.getDate() <= weekEndDay;
+                                  d.getDate() <= weekEndDay &&
+                                  d.getTime() >= readingDate.getTime();
                               }) || [];
                               if (weekReadings.length > 0) {
                                 const sorted = [...weekReadings].sort((a, b) =>
                                   new Date(a.reading_date).getTime() - new Date(b.reading_date).getTime(),
                                 );
                                 let prevVal: number | null = null;
-                                if (archiveReadingsRaw) {
+                                const firstDay = new Date(sorted[0].reading_date);
+                                const firstDayKey = `${firstDay.getFullYear()}-${String(firstDay.getMonth() + 1).padStart(2, '0')}-${String(firstDay.getDate()).padStart(2, '0')}`;
+                                const startsNewScale = getBeliotArchiveVolumeOverride(sorted[0].device_id, firstDayKey) !== null;
+                                if (archiveReadingsRaw && !startsNewScale) {
                                   const ws = new Date(parseInt(year), monthNum - 1, weekStartDay);
                                   ws.setDate(ws.getDate() - 1);
                                   const prevKey = `${ws.getFullYear()}-${String(ws.getMonth() + 1).padStart(2, '0')}-${String(ws.getDate()).padStart(2, '0')}`;
@@ -366,25 +408,32 @@ const DeviceArchiveModal: React.FC<DeviceArchiveModalProps> = ({
                                   if (prevDay.length > 0) prevVal = Number(prevDay[0].reading_value);
                                 }
                                 for (let i = 0; i < sorted.length; i++) {
-                                  const cur = Number(sorted[i].reading_value);
                                   const prev = i === 0
                                     ? (prevVal !== null ? prevVal : Number(sorted[0].reading_value))
                                     : Number(sorted[i - 1].reading_value);
-                                  if (!isNaN(cur) && !isNaN(prev)) consumption += cur - prev;
+                                  const prevDayKey = i === 0
+                                    ? getPreviousReadingDayKey(sorted[i].reading_date)
+                                    : getReadingDayKey(sorted[i - 1].reading_date);
+                                  consumption += getArchiveConsumptionDelta(sorted[i], prev, prevDayKey);
                                 }
                               }
                             } else if (archiveGroupBy === 'month') {
                               const [year, month] = groupedReading.groupKey.split('-');
                               const monthReadings = archiveReadingsRaw?.filter(r => {
                                 const d = new Date(r.reading_date);
-                                return d.getFullYear() === parseInt(year) && d.getMonth() + 1 === parseInt(month);
+                                return d.getFullYear() === parseInt(year) &&
+                                  d.getMonth() + 1 === parseInt(month) &&
+                                  d.getTime() >= readingDate.getTime();
                               }) || [];
                               if (monthReadings.length > 0) {
                                 const sorted = [...monthReadings].sort((a, b) =>
                                   new Date(a.reading_date).getTime() - new Date(b.reading_date).getTime(),
                                 );
                                 let prevVal: number | null = null;
-                                if (archiveReadingsRaw) {
+                                const firstDay = new Date(sorted[0].reading_date);
+                                const firstDayKey = `${firstDay.getFullYear()}-${String(firstDay.getMonth() + 1).padStart(2, '0')}-${String(firstDay.getDate()).padStart(2, '0')}`;
+                                const startsNewScale = getBeliotArchiveVolumeOverride(sorted[0].device_id, firstDayKey) !== null;
+                                if (archiveReadingsRaw && !startsNewScale) {
                                   const ms = new Date(parseInt(year), parseInt(month) - 1, 1);
                                   ms.setDate(ms.getDate() - 1);
                                   const prevKey = `${ms.getFullYear()}-${String(ms.getMonth() + 1).padStart(2, '0')}-${String(ms.getDate()).padStart(2, '0')}`;
@@ -398,25 +447,31 @@ const DeviceArchiveModal: React.FC<DeviceArchiveModalProps> = ({
                                   if (prevDay.length > 0) prevVal = Number(prevDay[0].reading_value);
                                 }
                                 for (let i = 0; i < sorted.length; i++) {
-                                  const cur = Number(sorted[i].reading_value);
                                   const prev = i === 0
                                     ? (prevVal !== null ? prevVal : Number(sorted[0].reading_value))
                                     : Number(sorted[i - 1].reading_value);
-                                  if (!isNaN(cur) && !isNaN(prev)) consumption += cur - prev;
+                                  const prevDayKey = i === 0
+                                    ? getPreviousReadingDayKey(sorted[i].reading_date)
+                                    : getReadingDayKey(sorted[i - 1].reading_date);
+                                  consumption += getArchiveConsumptionDelta(sorted[i], prev, prevDayKey);
                                 }
                               }
                             } else if (archiveGroupBy === 'year') {
                               const yearKey = groupedReading.groupKey;
                               const yearReadings = archiveReadingsRaw?.filter(r => {
                                 const d = new Date(r.reading_date);
-                                return d.getFullYear() === parseInt(yearKey);
+                                return d.getFullYear() === parseInt(yearKey) &&
+                                  d.getTime() >= readingDate.getTime();
                               }) || [];
                               if (yearReadings.length > 0) {
                                 const sorted = [...yearReadings].sort((a, b) =>
                                   new Date(a.reading_date).getTime() - new Date(b.reading_date).getTime(),
                                 );
                                 let prevVal: number | null = null;
-                                if (archiveReadingsRaw) {
+                                const firstDay = new Date(sorted[0].reading_date);
+                                const firstDayKey = `${firstDay.getFullYear()}-${String(firstDay.getMonth() + 1).padStart(2, '0')}-${String(firstDay.getDate()).padStart(2, '0')}`;
+                                const startsNewScale = getBeliotArchiveVolumeOverride(sorted[0].device_id, firstDayKey) !== null;
+                                if (archiveReadingsRaw && !startsNewScale) {
                                   const ys = new Date(parseInt(yearKey), 0, 1);
                                   ys.setDate(ys.getDate() - 1);
                                   const prevKey = `${ys.getFullYear()}-${String(ys.getMonth() + 1).padStart(2, '0')}-${String(ys.getDate()).padStart(2, '0')}`;
@@ -430,11 +485,13 @@ const DeviceArchiveModal: React.FC<DeviceArchiveModalProps> = ({
                                   if (prevDay.length > 0) prevVal = Number(prevDay[0].reading_value);
                                 }
                                 for (let i = 0; i < sorted.length; i++) {
-                                  const cur = Number(sorted[i].reading_value);
                                   const prev = i === 0
                                     ? (prevVal !== null ? prevVal : Number(sorted[0].reading_value))
                                     : Number(sorted[i - 1].reading_value);
-                                  if (!isNaN(cur) && !isNaN(prev)) consumption += cur - prev;
+                                  const prevDayKey = i === 0
+                                    ? getPreviousReadingDayKey(sorted[i].reading_date)
+                                    : getReadingDayKey(sorted[i - 1].reading_date);
+                                  consumption += getArchiveConsumptionDelta(sorted[i], prev, prevDayKey);
                                 }
                               }
                             }
