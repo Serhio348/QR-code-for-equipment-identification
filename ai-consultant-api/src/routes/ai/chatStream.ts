@@ -9,6 +9,7 @@ import { tools } from '../../tools/index.js';
 import { authMiddleware, AuthenticatedRequest } from '../../middleware/auth.js';
 import { getOrCreateSession, saveMessages, updateSessionTitle } from '../../services/ai/chatMemoryService.js';
 import { loadFactsForPrompt } from '../../services/ai/agentMemoryService.js';
+import { buildDriveFileContext } from '../../services/ai/driveFileContextService.js';
 import { StreamEvent } from '../../services/ai/types.js';
 import rateLimit from 'express-rate-limit';
 import { config } from '../../config/env.js';
@@ -68,7 +69,11 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
         // вложения сериализуются как Base64 и DeepSeek сможет загрузить их через tools.
         const preferredProvider = hasImages && config.aiProvider !== 'deepseek' ? 'claude' : undefined;
         const provider = await ProviderFactory.create(preferredProvider);
-        const factsPrompt = await loadFactsForPrompt().catch(() => '');
+        const [factsPrompt, driveFileContext] = await Promise.all([
+            loadFactsForPrompt().catch(() => ''),
+            buildDriveFileContext(messages, equipmentContext).catch(() => ''),
+        ]);
+        const promptContext = [factsPrompt, driveFileContext].filter(Boolean).join('\n');
 
         const onEvent = (event: StreamEvent): void => {
             if (event.type === 'text_delta') {
@@ -86,7 +91,7 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
             onEvent,
             equipmentContext,
             waterContext,
-            factsPrompt ? { factsPrompt } : undefined,
+            promptContext ? { factsPrompt: promptContext } : undefined,
         );
 
         const lastUserMessage = messages[messages.length - 1];

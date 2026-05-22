@@ -15,6 +15,7 @@ import {
     updateSessionTitle,
 } from '../../services/ai/chatMemoryService.js';
 import { loadFactsForPrompt } from '../../services/ai/agentMemoryService.js';
+import { buildDriveFileContext } from '../../services/ai/driveFileContextService.js';
 import { config } from '../../config/env.js';
 
 const router = Router();
@@ -83,7 +84,11 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
         // чтобы он мог загрузить их через tools.
         const preferredProvider = hasImages && config.aiProvider !== 'deepseek' ? 'claude' : undefined;
         const provider = await ProviderFactory.create(preferredProvider);
-        const factsPrompt = await loadFactsForPrompt().catch(() => '');
+        const [factsPrompt, driveFileContext] = await Promise.all([
+            loadFactsForPrompt().catch(() => ''),
+            buildDriveFileContext(messages, equipmentContext).catch(() => ''),
+        ]);
+        const promptContext = [factsPrompt, driveFileContext].filter(Boolean).join('\n');
 
         const response = await provider.chat(
             messagesWithHistory,
@@ -91,7 +96,7 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
             userId,
             equipmentContext,
             waterContext,
-            factsPrompt ? { factsPrompt } : undefined
+            promptContext ? { factsPrompt: promptContext } : undefined
         );
 
         const lastUserMessage = messages[messages.length - 1];
