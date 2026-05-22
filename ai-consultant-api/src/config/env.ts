@@ -60,7 +60,7 @@ export const config = {
   sessionSecret: process.env.SESSION_SECRET || 'default-secret-change-in-prod',
 
   // Безопасность циклов
-  maxAgentIterations: parseInt(process.env.MAX_AGENT_ITERATIONS || '15', 15),
+  maxAgentIterations: parseInt(process.env.MAX_AGENT_ITERATIONS || '15', 10),
 
   // Web Push уведомления (VAPID)
   vapidPublicKey:     process.env.VAPID_PUBLIC_KEY  || '',

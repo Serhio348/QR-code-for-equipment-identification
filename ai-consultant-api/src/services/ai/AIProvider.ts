@@ -7,6 +7,7 @@ import {
   MemoryContext,
   StreamEvent,
 } from './types.js';
+import { config } from '../../config/env.js';
 
 /**
  * Базовый интерфейс для всех AI провайдеров.
@@ -108,7 +109,7 @@ export abstract class BaseAIProvider implements AIProvider {
   /**
    * Защита от бесконечного цикла в агентном цикле
    */
-  protected readonly MAX_ITERATIONS = 10;
+  protected readonly MAX_ITERATIONS = config.maxAgentIterations;
 
   /**
    * Логирование с именем провайдера

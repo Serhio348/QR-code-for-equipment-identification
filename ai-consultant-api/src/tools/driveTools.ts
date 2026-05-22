@@ -71,7 +71,7 @@ export const driveTools: Anthropic.Tool[] = [
     // - Перед чтением файла — чтобы узнать его ID
     {
         name: 'search_files_in_folder',
-        description: 'Поиск файлов и вложенных папок в папке оборудования на Google Drive. По умолчанию возвращает файлы. Для поиска вложенных папок (например, папка с фото) передай mime_type: "application/vnd.google-apps.folder". Чтобы показать всё содержимое, делай два запроса: один без mime_type (файлы), второй с mime_type="application/vnd.google-apps.folder" (папки).',
+        description: 'Поиск файлов и вложенных папок в папке оборудования на Google Drive. По умолчанию возвращает файлы. Для надёжного поиска сначала вызывай без query, чтобы увидеть общий список, затем уточняй query. Для поиска вложенных папок передай mime_type: "application/vnd.google-apps.folder". Если файл не найден по точному имени, повтори поиск без query и проверь подпапки.',
         input_schema: {
             type: 'object' as const,
             properties: {
@@ -97,6 +97,10 @@ export const driveTools: Anthropic.Tool[] = [
                 mime_type: {
                     type: 'string',
                     description: 'Фильтр по типу: application/pdf, image/jpeg, application/vnd.google-apps.folder (для вложенных папок) и т.д.',
+                },
+                max_results: {
+                    type: 'number',
+                    description: 'Максимум результатов. Используй 50-100 для обзорного поиска по папке.',
                 },
             },
             // folder_url обязателен — без него непонятно, где искать
@@ -206,6 +210,7 @@ export async function executeDriveTool(
                 folderId: extractDriveId(input.folder_url as string),
                 query: input.query as string | undefined,
                 mimeType: input.mime_type as string | undefined,
+                maxResults: input.max_results ? String(input.max_results) : undefined,
             });
 
         // ----------------------------------------
