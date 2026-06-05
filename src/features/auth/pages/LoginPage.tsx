@@ -14,6 +14,8 @@ import { resetPassword } from '../services/supabaseAuthApi';
 import { showError, showSuccess } from '@/shared/utils/toast';
 import './LoginPage.css';
 
+const DEMO_ACCESS_EMAIL = 'serhiosidorovich@gmail.com';
+
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -191,6 +193,16 @@ export default function LoginPage() {
         </form>
 
         <div className="login-footer">
+            <p className="demo-access-note">
+              Нужен тестовый доступ для просмотра демо? Напишите на{' '}
+              <a
+                href={`mailto:${DEMO_ACCESS_EMAIL}?subject=${encodeURIComponent('Запрос тестового доступа к демо')}`}
+                className="link"
+              >
+                {DEMO_ACCESS_EMAIL}
+              </a>
+              {' '}— вышлю логин и пароль.
+            </p>
             <p>
               Нет аккаунта?{' '}
               <Link to="/register" className="link">
