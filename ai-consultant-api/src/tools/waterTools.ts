@@ -26,6 +26,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@supabase/supabase-js';
 import { config } from '../config/env.js';
+import { fetchWaterAlertsSummary } from '../services/water/waterAlertsService.js';
 
 // ============================================
 // Supabase клиент (service role — полный доступ)
@@ -201,11 +202,24 @@ export const waterTools: Anthropic.Tool[] = [
     },
 
     // ----------------------------------------
-    // Tool 5: Превышения норм качества воды
+    // Tool 5: Все активные алерты по воде
+    // ----------------------------------------
+    {
+        name: 'get_all_water_alerts',
+        description: 'Получить все активные алерты по воде: превышения норм качества И предупреждения о поверке счётчиков (просрочена или истекает в ближайшие 30 дней). Используй когда пользователь просит "все алерты по воде", "активные предупреждения", "что требует внимания по воде" или нажимает "Подробнее" в баннере алертов.',
+        input_schema: {
+            type: 'object' as const,
+            properties: {},
+            required: [],
+        },
+    },
+
+    // ----------------------------------------
+    // Tool 6: Превышения норм качества воды
     // ----------------------------------------
     {
         name: 'get_water_quality_alerts',
-        description: 'Получить список превышений норм качества воды. По умолчанию возвращает активные алерты. Используй для вопросов "есть ли превышения норм?" или "какие параметры воды вне нормы?".',
+        description: 'Получить только превышения норм качества воды (без алертов по поверке счётчиков). Используй для узких вопросов "есть ли превышения норм?" или "какие параметры воды вне нормы?".',
         input_schema: {
             type: 'object' as const,
             properties: {
@@ -229,7 +243,7 @@ export const waterTools: Anthropic.Tool[] = [
     },
 
     // ----------------------------------------
-    // Tool 6: Паспорт счётчика воды
+    // Tool 7: Паспорт счётчика воды
     // ----------------------------------------
     {
         name: 'get_water_meter_passport',
@@ -251,7 +265,7 @@ export const waterTools: Anthropic.Tool[] = [
     },
 
     // ----------------------------------------
-    // Tool 7: Создание записи анализа
+    // Tool 8: Создание записи анализа
     // ----------------------------------------
     {
         name: 'add_water_quality_analysis',
@@ -796,7 +810,19 @@ export async function executeWaterTool(
         }
 
         // ----------------------------------------
-        // Алерты превышения норм
+        // Все алерты по воде (качество + поверка)
+        // ----------------------------------------
+        case 'get_all_water_alerts': {
+            const summary = await fetchWaterAlertsSummary();
+            return {
+                ...summary,
+                quality_alerts_count: summary.items.filter(i => i.type === 'water_quality').length,
+                meter_verification_alerts_count: summary.items.filter(i => i.type === 'meter_verification').length,
+            };
+        }
+
+        // ----------------------------------------
+        // Алерты превышения норм качества
         // ----------------------------------------
         case 'get_water_quality_alerts': {
             const limit = Math.min(Number(input.limit) || 20, 100);
