@@ -207,6 +207,18 @@
   cursor: not-allowed;
 }
 
+.demo-access-note {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: center;
+}
+
 /* Стили для формы "Забыли пароль" */
 .forgot-password-section {
   margin-top: 24px;

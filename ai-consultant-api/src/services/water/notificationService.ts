@@ -31,17 +31,29 @@ export interface WaterNotification {
 
 async function createNotification(type: NotificationType, title: string, body: string, payload: Record<string, unknown> = {}): Promise<void> {
     const userIds = config.notificationUserIds;
-    if (userIds.length === 0) return;
+    if (userIds.length === 0) {
+        console.warn('[notifications] NOTIFICATION_USER_IDS is empty — skip createNotification');
+        return;
+    }
     const rows = userIds.map(user_id => ({ user_id, type, title, body, payload }));
     const { error } = await supabase.from('water_notifications').insert(rows);
-    if (error) return;
+    if (error) {
+        console.error('[notifications] Failed to insert water_notifications:', error.message);
+        return;
+    }
     await Promise.allSettled(userIds.map(uid => sendPushToUser(uid, title, body, { type, ...payload })));
 }
 
 async function sendPushToUser(userId: string, title: string, body: string, payload: Record<string, unknown> = {}): Promise<void> {
-    if (!config.vapidPublicKey || !config.vapidPrivateKey) return;
+    if (!config.vapidPublicKey || !config.vapidPrivateKey) {
+        console.warn('[notifications] VAPID keys missing — skip Web Push');
+        return;
+    }
     const { data: subs } = await supabase.from('push_subscriptions').select('id, endpoint, p256dh, auth_key').eq('user_id', userId);
-    if (!subs || subs.length === 0) return;
+    if (!subs || subs.length === 0) {
+        console.warn(`[notifications] No push_subscriptions for user ${userId}`);
+        return;
+    }
     const staleIds: string[] = [];
     await Promise.allSettled(
         subs.map(async (sub) => {
@@ -49,7 +61,12 @@ async function sendPushToUser(userId: string, title: string, body: string, paylo
                 await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth_key } }, JSON.stringify({ title, body, payload }));
             } catch (err: unknown) {
                 const status = (err as { statusCode?: number }).statusCode;
-                if (status === 410 || status === 404) staleIds.push(sub.id);
+                const bodyText = (err as { body?: string }).body;
+                if (status === 410 || status === 404) {
+                    staleIds.push(sub.id);
+                } else {
+                    console.error(`[notifications] Web Push failed for user ${userId}:`, status, bodyText || err);
+                }
             }
         })
     );

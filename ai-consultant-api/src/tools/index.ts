@@ -109,7 +109,8 @@ import { memoryTools, executeMemoryTool } from './memoryTools.js';
  * - analyze_water_consumption      — анализ потребления воды за период
  * - save_manual_meter_reading      — сохранение показания с фото счётчика
  * - get_water_quality_analyses     — журнал анализов качества воды
- * - get_water_quality_alerts       — превышения норм качества воды
+ * - get_all_water_alerts           — все алерты: качество + поверка счётчиков
+ * - get_water_quality_alerts       — только превышения норм качества воды
  * - add_water_quality_analysis     — создание записи анализа
  * - get_water_meter_passport       — паспорт счётчика (производитель, поверка, серийный номер)
  * - portal_login                  — вход на портал bvod.by
@@ -176,6 +177,7 @@ const toolExecutors: Record<string, (name: string, input: Record<string, unknown
     'analyze_water_consumption': executeWaterTool,
     'save_manual_meter_reading': executeWaterTool,
     'get_water_quality_analyses': executeWaterTool,
+    'get_all_water_alerts': executeWaterTool,
     'get_water_quality_alerts': executeWaterTool,
     'add_water_quality_analysis': executeWaterTool,
     'get_water_meter_passport': executeWaterTool,
@@ -206,7 +208,7 @@ const CACHEABLE_TOOLS = new Set([
     'search_files_in_folder', 'read_file_content',
     'get_maintenance_photos', 'search_maintenance_photos',
     'get_water_devices', 'get_water_readings', 'analyze_water_consumption',
-    'get_water_quality_analyses', 'get_water_quality_alerts', 'get_water_meter_passport',
+    'get_water_quality_analyses', 'get_all_water_alerts', 'get_water_quality_alerts', 'get_water_meter_passport',
     'get_invoices', 'get_memory',
     'portal_list_invoices', 'portal_list_downloaded',
 ]);
