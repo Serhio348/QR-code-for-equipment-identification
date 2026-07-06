@@ -132,21 +132,45 @@ const applyExportSettings = (element: HTMLElement, settings: PlateExportSettings
       const qrSectionChromePx = isCompact ? clamp(Math.round(exportPaddingPx * 0.6), 2, 10) : exportPaddingPx;
       const qrLabelReservePx = isCompact ? clamp(Math.round(qrLabelFontPx * 4.0), 16, 60) : 0;
       const plateWidthPx = plateWidthMm * mmToPx;
-      const availableQrPx = isCompact
-        ? clamp(
-            Math.round(minSidePx - exportPaddingPx * 2 - headerReservePx - exportGapPx - qrSectionChromePx * 2 - qrLabelReservePx),
-            40,
-            300,
-          )
-        : clamp(
-            Math.round(settings.showSpecs ? plateWidthPx * 0.32 : plateWidthPx * 0.55),
-            80,
-            settings.showSpecs ? 180 : 280,
-          );
+      const contentWidthPx = plateWidthPx - exportPaddingPx * 2;
+      const qrSectionPaddingPx = isCompact ? qrSectionChromePx : 8;
 
-      const qrSizePx = !settings.qrCodeAuto && settings.qrCodeSize
-        ? settings.qrCodeSize
-        : clamp(Math.round(availableQrPx * (isCompact ? 1.10 : 1.05)), 40, 320);
+      let qrSizePx: number;
+      if (!settings.qrCodeAuto && settings.qrCodeSize) {
+        qrSizePx = settings.qrCodeSize;
+        if (!isCompact && settings.showSpecs) {
+          const qrColumnWidthPx = qrSizePx + qrSectionPaddingPx * 2;
+          element.style.setProperty('--plate-export-qr-column-width', `${qrColumnWidthPx}px`);
+          element.style.setProperty(
+            '--plate-export-specs-max-width',
+            `${Math.max(120, Math.round(contentWidthPx - qrColumnWidthPx - exportGapPx))}px`,
+          );
+        }
+      } else if (isCompact) {
+        const availableQrPx = clamp(
+          Math.round(minSidePx - exportPaddingPx * 2 - headerReservePx - exportGapPx - qrSectionChromePx * 2 - qrLabelReservePx),
+          40,
+          300,
+        );
+        qrSizePx = clamp(Math.round(availableQrPx * 1.10), 40, 320);
+      } else if (settings.showSpecs) {
+        // Колонка QR ~34% контента; размер QR не должен вылезать за колонку
+        const qrColumnWidthPx = clamp(
+          Math.round(contentWidthPx * 0.34 - exportGapPx),
+          100,
+          Math.round(contentWidthPx * 0.38),
+        );
+        const maxQrInColumn = qrColumnWidthPx - qrSectionPaddingPx * 2;
+        qrSizePx = clamp(Math.round(maxQrInColumn * 0.92), 72, 130);
+        element.style.setProperty('--plate-export-qr-column-width', `${qrColumnWidthPx}px`);
+        element.style.setProperty(
+          '--plate-export-specs-max-width',
+          `${Math.round(contentWidthPx - qrColumnWidthPx - exportGapPx)}px`,
+        );
+      } else {
+        const availableQrPx = clamp(Math.round(plateWidthPx * 0.55), 120, 280);
+        qrSizePx = clamp(Math.round(availableQrPx * 1.05), 100, 280);
+      }
 
       element.style.setProperty('--plate-export-qr-size', `${qrSizePx}px`);
       const qrCodeSvg = qrSection.querySelector('svg');
