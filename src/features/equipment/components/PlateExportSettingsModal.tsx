@@ -69,10 +69,12 @@ const PlateExportSettingsModal: React.FC<PlateExportSettingsModalProps> = ({
 
   const handleTemplateChange = (template: PlateTemplate) => {
     const templateSettings = PLATE_TEMPLATES[template];
+    const allFieldKeys = visibleSpecFields.map(f => f.key);
     setSettings((prev) => ({
       ...prev,
       ...templateSettings,
       template,
+      selectedSpecFields: templateSettings.showSpecs === false ? [] : allFieldKeys,
     }));
   };
 
@@ -126,8 +128,17 @@ const PlateExportSettingsModal: React.FC<PlateExportSettingsModalProps> = ({
   };
 
   const handleExport = () => {
+    const allFieldKeys = visibleSpecFields.map(f => f.key);
+    let selectedSpecFields = settings.selectedSpecFields;
+    if (settings.showSpecs) {
+      if (!selectedSpecFields || selectedSpecFields.length === 0) {
+        selectedSpecFields = allFieldKeys;
+      }
+    }
+
     const finalSettings = {
       ...settings,
+      selectedSpecFields,
       customWidth: settings.size === 'custom' ? customWidth : undefined,
       customHeight: settings.size === 'custom' ? customHeight : undefined,
     };
@@ -281,7 +292,16 @@ const PlateExportSettingsModal: React.FC<PlateExportSettingsModalProps> = ({
                 <input
                   type="checkbox"
                   checked={settings.showSpecs}
-                  onChange={(e) => setSettings((prev) => ({ ...prev, showSpecs: e.target.checked }))}
+                  onChange={(e) => {
+                    const showSpecs = e.target.checked;
+                    setSettings((prev) => ({
+                      ...prev,
+                      showSpecs,
+                      selectedSpecFields: showSpecs
+                        ? (prev.selectedSpecFields?.length ? prev.selectedSpecFields : visibleSpecFields.map(f => f.key))
+                        : prev.selectedSpecFields,
+                    }));
+                  }}
                 />
                 <span>Характеристики</span>
               </label>
