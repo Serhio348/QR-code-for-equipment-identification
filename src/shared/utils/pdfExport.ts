@@ -61,8 +61,13 @@ const applyExportSettings = (element: HTMLElement, settings: PlateExportSettings
 
   element.style.width = `${plateWidthMm * mmToPx}px`;
   element.style.minHeight = `${plateHeightMm * mmToPx}px`;
-  element.style.height = `${plateHeightMm * mmToPx}px`;
-  element.style.overflow = 'hidden';
+  if (isCompact) {
+    element.style.height = `${plateHeightMm * mmToPx}px`;
+    element.style.overflow = 'hidden';
+  } else {
+    element.style.height = 'auto';
+    element.style.overflow = 'visible';
+  }
 
   // Скрываем/показываем элементы
   const header = element.querySelector('[data-plate-element="header"]') as HTMLElement;
@@ -94,15 +99,20 @@ const applyExportSettings = (element: HTMLElement, settings: PlateExportSettings
         maintenanceRow.style.display = settings.showLastMaintenanceDate ? '' : 'none';
       }
       
-      // Скрываем/показываем конкретные поля характеристик
+      // Скрываем/показываем конкретные поля характеристик.
+      // undefined/null → все поля; [] → ни одного; массив → только выбранные.
       const selectedFields = settings.selectedSpecFields;
-      if (selectedFields !== undefined && selectedFields !== null) {
+      if (Array.isArray(selectedFields)) {
         const allSpecRows = specsTable.querySelectorAll('[data-plate-field]');
         allSpecRows.forEach((row) => {
           const fieldKey = (row as HTMLElement).getAttribute('data-plate-field');
-          if (fieldKey && fieldKey !== 'inventoryNumber' && fieldKey !== 'commissioningDate' && fieldKey !== 'lastMaintenanceDate') {
-            (row as HTMLElement).style.display = selectedFields.includes(fieldKey) ? '' : 'none';
+          if (!fieldKey || fieldKey === 'commissioningDate' || fieldKey === 'lastMaintenanceDate') {
+            return;
           }
+          if (fieldKey === 'inventoryNumber') {
+            return; // управляется showInventoryNumber выше
+          }
+          (row as HTMLElement).style.display = selectedFields.includes(fieldKey) ? '' : 'none';
         });
       }
     }
@@ -121,11 +131,18 @@ const applyExportSettings = (element: HTMLElement, settings: PlateExportSettings
         : 0;
       const qrSectionChromePx = isCompact ? clamp(Math.round(exportPaddingPx * 0.6), 2, 10) : exportPaddingPx;
       const qrLabelReservePx = isCompact ? clamp(Math.round(qrLabelFontPx * 4.0), 16, 60) : 0;
-      const availableQrPx = clamp(
-        Math.round(minSidePx - exportPaddingPx * 2 - headerReservePx - exportGapPx - qrSectionChromePx * 2 - qrLabelReservePx),
-        40,
-        300,
-      );
+      const plateWidthPx = plateWidthMm * mmToPx;
+      const availableQrPx = isCompact
+        ? clamp(
+            Math.round(minSidePx - exportPaddingPx * 2 - headerReservePx - exportGapPx - qrSectionChromePx * 2 - qrLabelReservePx),
+            40,
+            300,
+          )
+        : clamp(
+            Math.round(settings.showSpecs ? plateWidthPx * 0.32 : plateWidthPx * 0.55),
+            80,
+            settings.showSpecs ? 180 : 280,
+          );
 
       const qrSizePx = !settings.qrCodeAuto && settings.qrCodeSize
         ? settings.qrCodeSize
@@ -217,6 +234,9 @@ export const exportToPDF = async (
   const isPlateExport = !isInspectionSettings;
 
   try {
+    const minSideMm = Math.min(plateWidthMm, plateHeightMm);
+    const isCompactPlate = minSideMm <= 60;
+
     // КРИТИЧНО: Ждем готовности элемента
     await waitForElementReady(element);
 
@@ -231,8 +251,7 @@ export const exportToPDF = async (
     const exportWidthPx = isPlateExport ? Math.round(plateWidthMm * mmToPx) : element.offsetWidth;
     const exportHeightPx = isPlateExport ? Math.round(plateHeightMm * mmToPx) : element.scrollHeight;
 
-    const minSideMm = Math.min(plateWidthMm, plateHeightMm);
-    const exportScale = isPlateExport && minSideMm <= 60 ? 5 : 2;
+    const exportScale = isPlateExport && isCompactPlate ? 5 : 2;
 
     const canvas = await html2canvas(element, {
       scale: exportScale,
@@ -241,10 +260,8 @@ export const exportToPDF = async (
       logging: false,
       backgroundColor: '#ffffff',
       width: exportWidthPx,
-      height: exportHeightPx,
-      windowWidth: exportWidthPx,
+      ...(isPlateExport && isCompactPlate ? { height: exportHeightPx, windowWidth: exportWidthPx } : { windowWidth: exportWidthPx }),
       onclone: (clonedDoc) => {
-        // Убеждаемся, что цвета сохраняются при клонировании
         const clonedElement = clonedDoc.getElementById(elementId);
         if (clonedElement && settings) {
           if (isInspectionSettings) {
@@ -464,10 +481,13 @@ export const exportToPDF = async (
       const imgHeightMm = (imgHeight / scale) * pxToMm;
 
       if (isPlateExport && plateSettings) {
-        // Для таблички: кладём картинку размером таблички (мм) на лист A4 без растягивания.
-        const x = Math.max(0, (actualPdfWidth - plateWidthMm) / 2);
-        const y = Math.max(0, (actualPdfHeight - plateHeightMm) / 2);
-        pdf.addImage(imgData, 'PNG', x, y, plateWidthMm, plateHeightMm);
+        const renderWidthMm = plateWidthMm;
+        const renderHeightMm = isCompactPlate
+          ? plateHeightMm
+          : Math.max(plateHeightMm, imgHeightMm);
+        const x = Math.max(0, (actualPdfWidth - renderWidthMm) / 2);
+        const y = Math.max(0, (actualPdfHeight - renderHeightMm) / 2);
+        pdf.addImage(imgData, 'PNG', x, y, renderWidthMm, renderHeightMm);
       } else {
         const ratio = Math.min(actualPdfWidth / imgWidthMm, actualPdfHeight / imgHeightMm);
         const scaledWidthMm = imgWidthMm * ratio;
