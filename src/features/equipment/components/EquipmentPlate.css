@@ -176,19 +176,24 @@
 /* Экспорт: всегда горизонтальная раскладка (таблица слева, QR справа), игнорируя mobile CSS */
 .equipment-plate[data-export-mode="true"]:not([data-export-compact="true"]) .plate-content {
   flex-direction: row !important;
+  flex-wrap: nowrap !important;
   align-items: flex-start !important;
-  justify-content: space-between !important;
+  justify-content: flex-start !important;
 }
 
 .equipment-plate[data-export-mode="true"]:not([data-export-compact="true"]) .specs-table {
-  flex: 1 1 auto !important;
+  flex: 1 1 0 !important;
   min-width: 0 !important;
+  max-width: var(--plate-export-specs-max-width, 62%) !important;
+  width: auto !important;
   display: block !important;
+  overflow: hidden !important;
 }
 
 .equipment-plate[data-export-mode="true"]:not([data-export-compact="true"]) .specs-table table {
   display: table !important;
   width: 100% !important;
+  table-layout: fixed !important;
 }
 
 .equipment-plate[data-export-mode="true"]:not([data-export-compact="true"]) .specs-table tr {
@@ -201,11 +206,25 @@
   width: 50% !important;
   font-size: 11px !important;
   padding: 6px 8px !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
 }
 
 .equipment-plate[data-export-mode="true"]:not([data-export-compact="true"]) .qr-section {
-  flex: 0 0 auto !important;
-  max-width: 38% !important;
+  flex: 0 0 var(--plate-export-qr-column-width, 130px) !important;
+  width: var(--plate-export-qr-column-width, 130px) !important;
+  min-width: 0 !important;
+  max-width: var(--plate-export-qr-column-width, 130px) !important;
+  padding: 8px !important;
+  box-sizing: border-box !important;
+  align-self: flex-start !important;
+}
+
+.equipment-plate[data-export-mode="true"]:not([data-export-compact="true"]) .qr-code-container svg,
+.equipment-plate[data-export-mode="true"]:not([data-export-compact="true"]) .qr-code-clickable svg {
+  width: var(--plate-export-qr-size, 110px) !important;
+  height: var(--plate-export-qr-size, 110px) !important;
+  max-width: 100% !important;
 }
 
 .equipment-plate[data-export-mode="true"] .equipment-name {
