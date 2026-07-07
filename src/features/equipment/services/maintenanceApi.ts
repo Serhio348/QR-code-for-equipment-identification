@@ -9,6 +9,7 @@ import { MaintenanceEntry, MaintenanceEntryInput, MaintenanceFile } from '../typ
 import { logUserActivity } from '../../user-activity/services/activityLogsApi';
 import { API_CONFIG } from '@/shared/config/api';
 import { ApiResponse } from '@/shared/services/api/types';
+import { MAX_MAINTENANCE_FILE_SIZE_BYTES } from '../constants/maintenanceFiles';
 
 const maintenanceLogInFlight = new Map<string, Promise<MaintenanceEntry[]>>();
 const maintenanceLogCache = new Map<string, { data: MaintenanceEntry[]; timestamp: number }>();
@@ -311,6 +312,12 @@ export async function uploadMaintenanceFile(
   file: File,
   date: string
 ): Promise<MaintenanceFile> {
+  if (file.size > MAX_MAINTENANCE_FILE_SIZE_BYTES) {
+    throw new Error(
+      `Размер файла «${file.name}» превышает ${MAX_MAINTENANCE_FILE_SIZE_BYTES / 1024 / 1024} МБ`
+    );
+  }
+
   const base64 = await fileToBase64(file);
 
   console.log('📤 Загрузка файла через backend proxy:', {

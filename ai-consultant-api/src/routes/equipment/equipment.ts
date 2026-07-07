@@ -9,11 +9,14 @@ import multer from 'multer';
 import { authMiddleware, type AuthenticatedRequest } from '../../middleware/auth.js';
 
 const router = Router();
+const MAX_MAINTENANCE_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_MAINTENANCE_FILES_PER_ENTRY = 20;
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    files: 10,
-    fileSize: 10 * 1024 * 1024, // 10MB на файл
+    files: MAX_MAINTENANCE_FILES_PER_ENTRY,
+    fileSize: MAX_MAINTENANCE_FILE_BYTES,
   },
 });
 
@@ -114,6 +117,16 @@ router.post('/upload-file', async (req: Request, res: Response) => {
       });
       return;
     }
+
+    const approxFileBytes = Math.floor(String(fileBase64).length * 3 / 4);
+    if (approxFileBytes > MAX_MAINTENANCE_FILE_BYTES) {
+      res.status(400).json({
+        success: false,
+        error: `Размер файла не должен превышать ${MAX_MAINTENANCE_FILE_BYTES / 1024 / 1024} МБ`,
+      });
+      return;
+    }
+
     const result = await gasClient.post<{
       success: boolean;
       fileId: string;
@@ -146,6 +159,20 @@ router.post('/attach-files', async (req: Request, res: Response) => {
       });
       return;
     }
+
+    const filesList = typeof files === 'string' ? JSON.parse(files) : files;
+    if (!Array.isArray(filesList)) {
+      res.status(400).json({ success: false, error: 'files должен быть массивом' });
+      return;
+    }
+    if (filesList.length > MAX_MAINTENANCE_FILES_PER_ENTRY) {
+      res.status(400).json({
+        success: false,
+        error: `Максимум ${MAX_MAINTENANCE_FILES_PER_ENTRY} файлов на одну запись`,
+      });
+      return;
+    }
+
     const result = await gasClient.post<Record<string, unknown>>('attachFilesToEntry', {
       entryId,
       files: typeof files === 'string' ? files : JSON.stringify(files),
