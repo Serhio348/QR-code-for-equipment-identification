@@ -8,6 +8,9 @@ import { PlateExportSettings } from '@/shared/types/plateExport';
 
 export const MM_TO_PX = 3.78;
 
+/** Множитель шрифта только для полей таблицы характеристик */
+export const EXPORT_SPEC_FONT_SCALE = 1.5;
+
 export type PlateExportLayoutMode = 'compact' | 'standard' | 'qr-only' | 'specs-only';
 
 export interface PlateExportLayout {
@@ -61,9 +64,10 @@ export const computePlateExportLayout = (
   const paddingPx = clamp(Math.round(minSidePx * (isCompact ? 0.02 : 0.08)), 1, 16);
   const gapPx = clamp(Math.round(minSidePx * (isCompact ? 0.015 : 0.06)), 1, 14);
   const titleFontPx = clamp(Math.round(minSidePx * (isCompact ? 0.055 : 0.10)), 5, 22);
-  const specFontPx = isCompact
+  const baseSpecFontPx = isCompact
     ? clamp(Math.round(minSidePx * 0.04), 4, 10)
     : isNarrow ? 10 : 11;
+  const specFontPx = Math.round(baseSpecFontPx * EXPORT_SPEC_FONT_SCALE);
   const qrLabelFontPx = clamp(Math.round(minSidePx * (isCompact ? 0.042 : 0.055)), 4, 11);
 
   let mode: PlateExportLayoutMode;
@@ -118,10 +122,13 @@ export const computePlateExportLayout = (
     }
   }
 
-  const rowHeightPx = mode === 'standard' && rowCount > 0
-    ? clamp(Math.round(specFontPx * 2.6 + 14), 28, 52)
-    : null;
-  const contentBlockHeightPx = rowHeightPx ? rowCount * rowHeightPx : null;
+  let rowHeightPx: number | null = null;
+  let contentBlockHeightPx: number | null = null;
+
+  if (mode === 'standard' && rowCount > 0) {
+    rowHeightPx = clamp(Math.round(specFontPx * 2.6 + 14), 32, 72);
+    contentBlockHeightPx = rowHeightPx * rowCount;
+  }
 
   if (mode === 'standard' && rowCount > 0 && contentBlockHeightPx && qrSizePx > 0) {
     const qrLabelBlockPx = Math.round(qrLabelFontPx * 3.2) + 10;
@@ -154,9 +161,15 @@ export const applyPlateExportElementStyles = (
   layout: PlateExportLayout,
 ): void => {
   element.style.width = `${layout.widthPx}px`;
-  element.style.minHeight = `${layout.heightPx}px`;
-  element.style.height = layout.isCompact ? `${layout.heightPx}px` : 'auto';
-  element.style.overflow = layout.isCompact ? 'hidden' : 'visible';
+  if (layout.isCompact) {
+    element.style.minHeight = `${layout.heightPx}px`;
+    element.style.height = `${layout.heightPx}px`;
+    element.style.overflow = 'hidden';
+  } else {
+    element.style.minHeight = 'auto';
+    element.style.height = 'auto';
+    element.style.overflow = 'visible';
+  }
   element.style.setProperty('--plate-export-padding', `${layout.paddingPx}px`);
   element.style.setProperty('--plate-export-gap', `${layout.gapPx}px`);
   element.style.setProperty('--plate-export-title-font-size', `${layout.titleFontPx}px`);

@@ -101,7 +101,7 @@ export const exportEquipmentPlateToPDF = async (
     applyPlateExportElementStyles(plateElement, layout);
     await waitForElementReady(plateElement);
 
-    const exportScale = layout.isCompact ? 5 : 2;
+    const exportScale = layout.isCompact ? 5 : 3;
     const canvas = await html2canvas(plateElement, {
       scale: exportScale,
       useCORS: true,
@@ -125,15 +125,14 @@ export const exportEquipmentPlateToPDF = async (
     const pageWidthMm = pdf.internal.pageSize.getWidth();
     const pageHeightMm = pdf.internal.pageSize.getHeight();
     const pxToMm = 25.4 / 96;
-    const imgHeightMm = (canvas.height / exportScale) * pxToMm;
     const renderWidthMm = layout.widthMm;
     const renderHeightMm = layout.isCompact
       ? layout.heightMm
-      : Math.max(layout.heightMm, imgHeightMm);
+      : (canvas.height / exportScale) * pxToMm;
     const x = Math.max(0, (pageWidthMm - renderWidthMm) / 2);
     const y = Math.max(0, (pageHeightMm - renderHeightMm) / 2);
 
-    pdf.addImage(imgData, 'PNG', x, y, renderWidthMm, renderHeightMm);
+    pdf.addImage(imgData, 'PNG', x, y, renderWidthMm, renderHeightMm, undefined, 'SLOW');
     pdf.save(filename);
   } finally {
     root.unmount();

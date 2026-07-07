@@ -6,7 +6,10 @@
   padding: var(--plate-export-padding, 12px);
   margin: 0;
   font-family: Arial, Helvetica, sans-serif;
-  color: #333333;
+  color: #111111;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: geometricPrecision;
 }
 
 .plate-export-header {
@@ -40,21 +43,6 @@
   justify-content: flex-start;
 }
 
-.plate-export-content--row .plate-export-specs {
-  display: flex;
-  flex-direction: column;
-  align-self: stretch;
-}
-
-.plate-export-content--row .plate-export-specs table {
-  height: 100%;
-  flex: 1;
-}
-
-.plate-export-content--row .plate-export-specs tbody {
-  height: 100%;
-}
-
 .plate-export-content--row .plate-export-specs tr {
   height: var(--plate-export-row-height, auto);
 }
@@ -62,7 +50,6 @@
 .plate-export-content--row .plate-export-specs,
 .plate-export-content--row .plate-export-qr {
   min-height: var(--plate-export-content-height, auto);
-  max-height: var(--plate-export-content-height, none);
 }
 
 .plate-export-content--row .plate-export-label,
@@ -72,7 +59,6 @@
 
 .plate-export-content--row .plate-export-qr {
   align-self: stretch;
-  height: auto;
   justify-content: center;
 }
 
@@ -92,20 +78,25 @@
 .plate-export-label,
 .plate-export-value {
   border-bottom: 1px solid #e0e0e0;
-  padding: 6px 8px;
+  padding: calc(var(--plate-export-spec-font-size, 11px) * 0.3)
+    calc(var(--plate-export-spec-font-size, 11px) * 0.35);
   font-size: var(--plate-export-spec-font-size, 11px);
-  vertical-align: top;
-  width: 50%;
-  word-break: break-word;
-  overflow-wrap: anywhere;
+  line-height: 1.2;
+  vertical-align: middle;
+  word-break: normal;
+  overflow-wrap: break-word;
 }
 
 .plate-export-label {
+  width: 56%;
   font-weight: 700;
+  color: #111111;
 }
 
 .plate-export-value {
-  color: #555555;
+  width: 44%;
+  color: #333333;
+  font-weight: 500;
 }
 
 .plate-export-notes {
@@ -140,8 +131,9 @@
 .plate-export-qr-label {
   margin: 0;
   font-size: var(--plate-export-qr-label-font-size, 11px);
-  line-height: 1.15;
-  color: #666666;
+  line-height: 1.2;
+  font-weight: 500;
+  color: #333333;
   text-align: center;
   max-width: calc(100% - 8px);
   word-break: break-word;
