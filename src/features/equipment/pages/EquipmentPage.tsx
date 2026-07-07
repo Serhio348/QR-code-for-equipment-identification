@@ -18,7 +18,6 @@ import { PlateExportSettings } from '@/shared/types/plateExport';
 import { deleteEquipment } from '../services/equipmentApi';
 import { useEquipmentData, clearEquipmentCache } from '../hooks/useEquipmentData';
 import { useEquipmentDates } from '../hooks/useEquipmentDates';
-import { exportToPDF } from '@/shared/utils/pdfExport';
 import { ROUTES } from '@/shared/utils/routes';
 import { logUserActivity } from '@/features/user-activity/services/activityLogsApi';
 import './EquipmentPage.css';
@@ -151,35 +150,45 @@ const EquipmentPage: React.FC = () => {
    * Экспорт таблички в PDF с настройками
    */
   const handleExportWithSettings = async (settings: PlateExportSettings) => {
+    if (!currentEquipment) {
+      return;
+    }
+
     setIsExportSettingsOpen(false);
 
-    // Небольшая задержка для закрытия модального окна
-    setTimeout(async () => {
-      try {
-        const filename = `${currentEquipment?.name || 'Оборудование'}-табличка.pdf`;
-        await exportToPDF('equipment-plate', filename, settings);
+    try {
+      const filename = `${currentEquipment.name || 'Оборудование'}-табличка.pdf`;
+      const { exportEquipmentPlateToPDF } = await import('../utils/exportEquipmentPlatePdf');
+      await exportEquipmentPlateToPDF(
+        {
+          specs: currentEquipment.specs,
+          equipmentName: currentEquipment.name,
+          equipmentType: currentEquipment.type,
+          commissioningDate,
+          lastMaintenanceDate,
+          qrCodeUrl: currentEquipment.qrCodeUrl,
+        },
+        settings,
+        filename,
+      );
 
-        // Логируем успешный экспорт
-        if (currentEquipment) {
-          logUserActivity(
-            'equipment_export_pdf',
-            `Экспорт паспорта оборудования в PDF: "${currentEquipment.name}"`,
-            {
-              entityType: 'equipment',
-              entityId: currentEquipment.id,
-              metadata: {
-                equipmentName: currentEquipment.name,
-                equipmentType: currentEquipment.type,
-                exportSettings: settings,
-              },
-            }
-          ).catch(() => {});
-        }
-      } catch (error) {
-        alert('Ошибка при экспорте в PDF. Попробуйте еще раз.');
-        console.error(error);
-      }
-    }, 100);
+      logUserActivity(
+        'equipment_export_pdf',
+        `Экспорт паспорта оборудования в PDF: "${currentEquipment.name}"`,
+        {
+          entityType: 'equipment',
+          entityId: currentEquipment.id,
+          metadata: {
+            equipmentName: currentEquipment.name,
+            equipmentType: currentEquipment.type,
+            exportSettings: settings,
+          },
+        },
+      ).catch(() => {});
+    } catch (error) {
+      alert('Ошибка при экспорте в PDF. Попробуйте еще раз.');
+      console.error(error);
+    }
   };
 
   return (

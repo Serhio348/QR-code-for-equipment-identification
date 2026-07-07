@@ -71,13 +71,13 @@ const EquipmentPlate: React.FC<EquipmentPlateProps> = ({
   }, [isQRModalOpen]);
 
   return (
-    <div className="equipment-plate" id="equipment-plate" data-plate-element="container" lang="ru">
-      <div className="plate-header" data-plate-element="header">
+    <div className="equipment-plate" id="equipment-plate" lang="ru">
+      <div className="plate-header">
         <h1 className="equipment-name">{displayName}</h1>
       </div>
       
       <div className="plate-content">
-        <div className="specs-table" data-plate-element="specs-table">
+        <div className="specs-table">
           <table>
             <tbody>
               {/* Динамически рендерим все поля из конфигурации для текущего типа оборудования */}
@@ -91,7 +91,7 @@ const EquipmentPlate: React.FC<EquipmentPlateProps> = ({
                 // Специальная обработка для даты следующего испытания
                 if (field.key === 'nextTestDate') {
                   return value ? (
-                    <tr key={field.key} data-plate-field={field.key}>
+                    <tr key={field.key}>
                       <td className="spec-label">{field.label}:</td>
                       <td className="spec-value">{formatDate(value as string)}</td>
                     </tr>
@@ -100,7 +100,7 @@ const EquipmentPlate: React.FC<EquipmentPlateProps> = ({
                 
                 // Обычные поля
                 return (
-                  <tr key={field.key} data-plate-field={field.key}>
+                  <tr key={field.key}>
                     <td className="spec-label">{field.label}:</td>
                     <td className="spec-value" style={field.key === 'additionalNotes' ? { whiteSpace: 'pre-wrap', wordBreak: 'break-word' } : undefined}>
                       {String(value)}
@@ -111,13 +111,13 @@ const EquipmentPlate: React.FC<EquipmentPlateProps> = ({
               
               {/* Даты ввода в эксплуатацию и последнего обслуживания (всегда показываются, если есть) */}
               {commissioningDate && (
-                <tr className="date-row" data-plate-field="commissioningDate">
+                <tr className="date-row">
                   <td className="spec-label">Дата ввода в эксплуатацию:</td>
                   <td className="spec-value">{formatDate(commissioningDate)}</td>
                 </tr>
               )}
               {lastMaintenanceDate && (
-                <tr className="date-row" data-plate-field="lastMaintenanceDate">
+                <tr className="date-row">
                   <td className="spec-label">Дата последнего обслуживания:</td>
                   <td className="spec-value">{formatDate(lastMaintenanceDate)}</td>
                 </tr>
@@ -126,7 +126,7 @@ const EquipmentPlate: React.FC<EquipmentPlateProps> = ({
           </table>
         </div>
         
-        <div className="qr-section" data-plate-element="qr-section">
+        <div className="qr-section">
           <div className="qr-code-clickable" onClick={handleQRClick}>
             <QRCodeComponent url={urlForQR} />
           </div>
