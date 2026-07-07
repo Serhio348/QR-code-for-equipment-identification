@@ -133,16 +133,12 @@ function createDriveFolder(equipmentName, parentFolderId) {
     const folderUrl = folder.getUrl();
     const folderId = folder.getId();
 
-    // Открываем папку по ссылке: любой пользователь, имеющий ссылку, может просматривать.
-    // Это надёжнее, чем addViewer(email), который требует наличия Google-аккаунта с точным
-    // совпадением email и может тихо падать при корпоративных ограничениях Workspace.
-    // Безопасность обеспечивается приложением — ссылка видна только авторизованным пользователям.
+    // Папка приватная: доступ только владельцу и явно добавленным пользователям.
+    // Без доступа Google Drive покажет «Запросить доступ» — админ выдаст viewer или editor вручную.
     try {
-      folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-      Logger.log('✅ Папка открыта для просмотра по ссылке (ANYONE_WITH_LINK)');
+      applyEquipmentFolderAccessPolicy(folder, true);
     } catch (sharingError) {
-      Logger.log('⚠️ Не удалось настроить доступ по ссылке: ' + sharingError);
-      // Продолжаем выполнение, папка создана
+      Logger.log('⚠️ Не удалось настроить доступ к папке: ' + sharingError);
     }
 
     // Логируем для отладки
@@ -541,6 +537,53 @@ function extractDriveIdFromUrl(urlOrId) {
 // ============================================================================
 
 /**
+ * Отключить публичный доступ по ссылке (ANYONE_WITH_LINK).
+ *
+ * @param {GoogleAppsScript.Drive.Folder} folder - Папка Google Drive
+ * @returns {boolean} true если доступ по ссылке отключён
+ */
+function revokePublicLinkSharing(folder) {
+  try {
+    folder.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.VIEW);
+    Logger.log('🔒 Доступ по ссылке отключён (PRIVATE)');
+    return true;
+  } catch (error) {
+    Logger.log('⚠️ Не удалось отключить доступ по ссылке: ' + error.toString());
+    return false;
+  }
+}
+
+/**
+ * Применить политику доступа к папке оборудования:
+ * 1) без публичной ссылки;
+ * 2) viewer для пользователей с доступом к разделу «Оборудование» в приложении.
+ *
+ * Роль editor админ по-прежнему выдаёт вручную в Google Drive при обработке запроса доступа.
+ *
+ * @param {GoogleAppsScript.Drive.Folder} folder - Папка Google Drive
+ * @param {boolean} addDefaultViewers - Добавить viewer для пользователей с доступом к оборудованию
+ */
+function applyEquipmentFolderAccessPolicy(folder, addDefaultViewers) {
+  revokePublicLinkSharing(folder);
+
+  if (addDefaultViewers === false) {
+    return;
+  }
+
+  var usersWithAccess = getUsersWithEquipmentAccess();
+  Logger.log('📋 Пользователей с доступом к оборудованию: ' + usersWithAccess.length);
+
+  for (var i = 0; i < usersWithAccess.length; i++) {
+    try {
+      folder.addViewer(usersWithAccess[i]);
+      Logger.log('  ✅ Добавлен viewer: ' + usersWithAccess[i]);
+    } catch (viewerError) {
+      Logger.log('  ⚠️ Не удалось добавить viewer ' + usersWithAccess[i] + ': ' + viewerError);
+    }
+  }
+}
+
+/**
  * Получить список email пользователей с доступом к разделу "Оборудование"
  *
  * Читает данные из листа "Доступ к приложениям" и возвращает email
@@ -631,6 +674,9 @@ function syncFolderAccess(folderUrlOrId) {
     const folder = DriveApp.getFolderById(folderId);
     const folderName = folder.getName();
     Logger.log('📁 Папка: "' + folderName + '"');
+
+    // Публичная ссылка отключена — доступ только по email (viewer/editor).
+    revokePublicLinkSharing(folder);
 
     // Получаем текущих viewers (getViewers возвращает массив User[], а не итератор)
     const currentViewers = folder.getViewers();
@@ -787,10 +833,9 @@ function syncAllEquipmentFoldersAccess() {
 }
 
 /**
- * Установить доступ "по ссылке" (ANYONE_WITH_LINK) для всех папок оборудования.
- *
- * Запускается один раз вручную из редактора GAS для исправления существующих папок,
- * созданных до изменения политики доступа.
+ * УСТАРЕЛО: открывало все папки по ссылке (ANYONE_WITH_LINK).
+ * Используйте restorePrivateFolderAccessOnAllEquipment() для возврата к модели
+ * «запрос доступа у администратора».
  *
  * @returns {Object} {success, processedCount, errorCount, message}
  */
@@ -845,6 +890,88 @@ function setAllFoldersPublicLink() {
     Logger.log('❌ setAllFoldersPublicLink: ' + error.toString());
     return { success: false, message: 'Ошибка: ' + error.toString(), processedCount: 0, errorCount: 0 };
   }
+}
+
+/**
+ * Отключить публичный доступ по ссылке для всех папок оборудования.
+ *
+ * @returns {Object} {success, processedCount, errorCount, message}
+ */
+function revokeAllFoldersPublicLink() {
+  try {
+    Logger.log('🔒 Отключение доступа по ссылке для всех папок оборудования...');
+
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    const equipmentSheet = spreadsheet.getSheetByName('Оборудование');
+
+    if (!equipmentSheet) {
+      return { success: false, message: 'Лист "Оборудование" не найден', processedCount: 0, errorCount: 0 };
+    }
+
+    const data = equipmentSheet.getDataRange().getValues();
+    if (data.length < 2) {
+      return { success: true, message: 'Нет записей оборудования', processedCount: 0, errorCount: 0 };
+    }
+
+    const headers = data[0];
+    const driveUrlIndex = headers.indexOf('Google Drive URL');
+    if (driveUrlIndex === -1) {
+      return { success: false, message: 'Колонка "Google Drive URL" не найдена', processedCount: 0, errorCount: 0 };
+    }
+
+    let processedCount = 0;
+    let errorCount = 0;
+
+    for (let i = 1; i < data.length; i++) {
+      const driveUrl = data[i][driveUrlIndex];
+      if (!driveUrl || !driveUrl.toString().trim()) continue;
+
+      try {
+        const folderId = extractDriveIdFromUrl(driveUrl.toString().trim());
+        if (!folderId) { errorCount++; continue; }
+
+        const folder = DriveApp.getFolderById(folderId);
+        if (revokePublicLinkSharing(folder)) {
+          Logger.log('  ✅ [' + i + '] ' + folder.getName());
+          processedCount++;
+        } else {
+          errorCount++;
+        }
+      } catch (err) {
+        Logger.log('  ⚠️ [' + i + '] Ошибка: ' + err.toString());
+        errorCount++;
+      }
+    }
+
+    const message = 'Готово: закрыто по ссылке ' + processedCount + ' папок, ошибок: ' + errorCount;
+    Logger.log('✅ ' + message);
+    return { success: true, message: message, processedCount: processedCount, errorCount: errorCount };
+  } catch (error) {
+    Logger.log('❌ revokeAllFoldersPublicLink: ' + error.toString());
+    return { success: false, message: 'Ошибка: ' + error.toString(), processedCount: 0, errorCount: 0 };
+  }
+}
+
+/**
+ * Восстановить приватный доступ ко всем папкам оборудования:
+ * 1) отключить ANYONE_WITH_LINK;
+ * 2) синхронизировать viewer по списку пользователей с доступом к «Оборудование».
+ *
+ * Запустить один раз из редактора GAS или через API после отката политики доступа.
+ *
+ * @returns {Object} {success, processedCount, errorCount, syncResult, message}
+ */
+function restorePrivateFolderAccessOnAllEquipment() {
+  const revokeResult = revokeAllFoldersPublicLink();
+  const syncResult = syncAllEquipmentFoldersAccess();
+
+  return {
+    success: revokeResult.success && syncResult.success,
+    message: revokeResult.message + ' | ' + syncResult.message,
+    processedCount: revokeResult.processedCount,
+    errorCount: revokeResult.errorCount,
+    syncResult: syncResult
+  };
 }
 
 /**
