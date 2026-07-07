@@ -233,9 +233,11 @@ const DriveFilesList: React.FC<DriveFilesListProps> = ({ folderUrl, equipmentNam
           <div className="checking-spinner">⏳</div>
           <p>⏳ Ожидание доступа к папке...</p>
           <p className="checking-hint">
-            Администратор должен предоставить доступ к папке в Google Drive.
+            Запросите доступ в Google Drive (кнопка «Запросить доступ») или обратитесь к администратору.
             <br />
-            Папка откроется автоматически после получения доступа.
+            Администратор может выдать «Только просмотр» или «Редактор» в настройках общего доступа Drive.
+            <br />
+            После выдачи доступа папка откроется автоматически.
           </p>
           <button 
             onClick={() => {
@@ -273,7 +275,9 @@ const DriveFilesList: React.FC<DriveFilesListProps> = ({ folderUrl, equipmentNam
       {files.length === 0 ? (
         <div className="files-empty">
           <p>В папке пока нет файлов</p>
-          <p className="files-empty-hint">Откройте папку в Google Drive для загрузки файлов</p>
+          <p className="files-empty-hint">
+            Для загрузки файлов нужны права редактора в Google Drive (выдаёт администратор)
+          </p>
         </div>
       ) : (
         <div className="files-grid">

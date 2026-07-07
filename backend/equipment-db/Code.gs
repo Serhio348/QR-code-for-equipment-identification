@@ -324,9 +324,17 @@ function doGet(e) {
         return handleSyncFolderAccess({ folderUrl: syncFolderUrl });
 
       case 'setAllFoldersPublicLink':
-        // Открыть все папки оборудования для просмотра по ссылке (ANYONE_WITH_LINK)
-        Logger.log('🔓 [doGet] Обработка setAllFoldersPublicLink');
+        // УСТАРЕЛО: открывало все папки по ссылке (ANYONE_WITH_LINK)
+        Logger.log('🔓 [doGet] Обработка setAllFoldersPublicLink (deprecated)');
         return createJsonResponse(setAllFoldersPublicLink());
+
+      case 'revokeAllFoldersPublicLink':
+        Logger.log('🔒 [doGet] Обработка revokeAllFoldersPublicLink');
+        return createJsonResponse(revokeAllFoldersPublicLink());
+
+      case 'restorePrivateFolderAccess':
+        Logger.log('🔒 [doGet] Обработка restorePrivateFolderAccess');
+        return createJsonResponse(restorePrivateFolderAccessOnAllEquipment());
 
       // ========================================================================
       // ДЕЙСТВИЯ ДЛЯ СЧЕТЧИКОВ BELIOT (GET)
