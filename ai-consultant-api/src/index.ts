@@ -136,9 +136,13 @@ app.use(helmet({
 }));
 
 // --- Парсинг JSON ---
-// Автоматически парсит тело запроса с Content-Type: application/json.
-// limit: '5mb' — максимальный размер тела запроса (фото + текст, но не гигантские данные)
-app.use(express.json({ limit: '5mb' }));
+// Для загрузки вложений журнала ТО нужен больший лимит (Base64 фото).
+// Остальные маршруты остаются на 5mb.
+app.use((req, res, next) => {
+  const isMaintenanceFileUpload =
+    req.method === 'POST' && req.path === '/api/equipment/upload-file';
+  express.json({ limit: isMaintenanceFileUpload ? '15mb' : '5mb' })(req, res, next);
+});
 
 // --- Логирование запросов ---
 // Простой request logger — записывает каждый входящий запрос.

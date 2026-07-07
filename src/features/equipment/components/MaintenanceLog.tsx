@@ -24,6 +24,11 @@ import { TechnicalInspectionForm } from './TechnicalInspectionForm';
 import { TechnicalInspectionPDF } from './TechnicalInspectionPDF';
 import InspectionExportSettingsModal from './InspectionExportSettingsModal';
 import { showSuccess } from '@/shared/utils/toast';
+import {
+  appendMaintenanceFiles,
+  MAX_MAINTENANCE_FILES,
+  MAX_MAINTENANCE_FILE_SIZE_BYTES,
+} from '../constants/maintenanceFiles';
 import './MaintenanceLog.css';
 
 const MAINTENANCE_TYPE_OPTIONS = [
@@ -78,6 +83,23 @@ const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanc
   });
 
   const effectiveMaintenanceSheetId = maintenanceSheetId || equipment?.maintenanceSheetId;
+  const maxMaintenanceFileSizeMb = MAX_MAINTENANCE_FILE_SIZE_BYTES / 1024 / 1024;
+
+  const handlePickMaintenanceFiles = (
+    picked: File[],
+    current: File[],
+    setFiles: React.Dispatch<React.SetStateAction<File[]>>,
+    maxTotal: number
+  ): void => {
+    if (picked.length === 0) return;
+
+    const { files, rejected } = appendMaintenanceFiles(current, picked, maxTotal);
+    setFiles(files);
+
+    if (rejected.length > 0) {
+      setError(rejected.join('. '));
+    }
+  };
 
   /**
    * Загрузка журнала обслуживания и информации об оборудовании при монтировании компонента
@@ -650,18 +672,33 @@ ${data.notes ? `Примечания: ${data.notes}` : ''}`;
         </div>
 
         <div className="form-group">
-          <label>Документы (PDF, Word, Excel и др.) или фото:</label>
+          <label>
+            Документы (PDF, Word, Excel и др.) или фото (до {MAX_MAINTENANCE_FILES} файлов, по{' '}
+            {maxMaintenanceFileSizeMb} МБ):
+          </label>
+          <p className="maintenance-files-hint">
+            Можно выбирать файлы несколько раз — они добавятся к списку (
+            {selectedFiles.length}/{MAX_MAINTENANCE_FILES}).
+          </p>
           <input
             type="file"
             multiple
             accept={MAINTENANCE_FILE_ACCEPT}
-            onChange={(e) => setSelectedFiles(Array.from(e.target.files || []))}
-            disabled={saving || uploadingFiles}
+            onChange={(e) => {
+              handlePickMaintenanceFiles(
+                Array.from(e.target.files || []),
+                selectedFiles,
+                setSelectedFiles,
+                MAX_MAINTENANCE_FILES
+              );
+              e.target.value = '';
+            }}
+            disabled={saving || uploadingFiles || selectedFiles.length >= MAX_MAINTENANCE_FILES}
           />
           {selectedFiles.length > 0 && (
             <div className="selected-files-preview">
               {selectedFiles.map((f, i) => (
-                <span key={i} className="selected-file-chip">
+                <span key={`${f.name}-${f.lastModified}-${f.size}-${i}`} className="selected-file-chip">
                   {f.name} ({(f.size / 1024).toFixed(0)} KB)
                   <button type="button" onClick={() => setSelectedFiles(files => files.filter((_, idx) => idx !== i))}>×</button>
                 </span>
@@ -851,19 +888,37 @@ ${data.notes ? `Примечания: ${data.notes}` : ''}`;
                         />
                       </div>
                       <div className="form-group entry-edit-files">
-                        <label>Добавить документы или фото:</label>
+                        <label>
+                          Добавить документы или фото (до {MAX_MAINTENANCE_FILES} на запись, по{' '}
+                          {maxMaintenanceFileSizeMb} МБ):
+                        </label>
+                        <p className="maintenance-files-hint">
+                          Уже прикреплено: {entry.files?.length ?? 0}. Новых выбрано:{' '}
+                          {editSelectedFiles.length}. Можно добавлять файлы несколько раз.
+                        </p>
                         <input
                           type="file"
                           multiple
                           accept={MAINTENANCE_FILE_ACCEPT}
                           onChange={(e) => {
-                            const picked = Array.from(e.target.files || []);
-                            if (picked.length > 0) {
-                              setEditSelectedFiles((prev) => [...prev, ...picked]);
-                            }
+                            const existingAttached = entry.files?.length ?? 0;
+                            const maxNewFiles = Math.max(
+                              0,
+                              MAX_MAINTENANCE_FILES - existingAttached
+                            );
+                            handlePickMaintenanceFiles(
+                              Array.from(e.target.files || []),
+                              editSelectedFiles,
+                              setEditSelectedFiles,
+                              maxNewFiles
+                            );
                             e.target.value = '';
                           }}
-                          disabled={!!savingEditId}
+                          disabled={
+                            !!savingEditId ||
+                            (entry.files?.length ?? 0) + editSelectedFiles.length >=
+                              MAX_MAINTENANCE_FILES
+                          }
                         />
                         {editSelectedFiles.length > 0 && (
                           <div className="selected-files-preview">
