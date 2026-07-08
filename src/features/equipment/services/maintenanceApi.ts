@@ -97,24 +97,40 @@ export async function getMaintenanceLog(
       const url = new URL(backendUrl('/api/equipment/maintenance/log'), window.location.origin);
       url.searchParams.set('equipmentId', equipmentId);
 
-      const response = await fetch(url.toString(), {
-        method: 'GET',
-        headers: { 'Accept': 'application/json' },
-        signal: AbortSignal.timeout(MAINTENANCE_LOG_TIMEOUT_MS),
-        cache: 'no-store',
-      });
+      const fetchLog = async (): Promise<MaintenanceEntry[]> => {
+        const response = await fetch(url.toString(), {
+          method: 'GET',
+          headers: { Accept: 'application/json' },
+          signal: AbortSignal.timeout(MAINTENANCE_LOG_TIMEOUT_MS),
+          cache: 'no-store',
+        });
 
-      if (!response.ok) {
-        const errorText = await response.text().catch(() => '');
-        throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => '');
+          throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
+        }
+
+        const payload = (await response.json()) as ApiResponse<MaintenanceEntry[]>;
+        if (!payload.success) {
+          throw new Error(payload.error || 'Не удалось загрузить журнал');
+        }
+
+        return payload.data || [];
+      };
+
+      let log: MaintenanceEntry[];
+      try {
+        log = await fetchLog();
+      } catch (firstError) {
+        const message = firstError instanceof Error ? firstError.message : String(firstError);
+        const isGatewayTimeout = message.includes('504') || message.includes('Gateway Timeout');
+        if (!isGatewayTimeout) {
+          throw firstError;
+        }
+        console.warn('⚠️ Журнал: повтор запроса после 504...', { equipmentId });
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        log = await fetchLog();
       }
-
-      const payload = await response.json() as ApiResponse<MaintenanceEntry[]>;
-      if (!payload.success) {
-        throw new Error(payload.error || 'Не удалось загрузить журнал');
-      }
-
-      const log = payload.data || [];
       maintenanceLogCache.set(requestKey, { data: log, timestamp: Date.now() });
       console.log(`✅ Загружен журнал: ${log.length} записей для equipmentId="${equipmentId}"`);
       return log;

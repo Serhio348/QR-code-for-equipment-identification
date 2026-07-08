@@ -76,11 +76,15 @@ self.addEventListener('fetch', (event) => {
     return; // Пропускаем запросы от расширений без обработки
   }
   
-  // Пропускаем запросы к API (они должны идти на сервер)
+  // Пропускаем запросы к API (они должны идти на сервер без перехвата SW).
+  // На iOS PWA SW раньше возвращал ложный 504 «Offline and no cached response».
   if (event.request.url.includes('/exec') || 
       event.request.url.includes('script.google.com') ||
       event.request.url.includes('beliot.by') ||
-      event.request.url.includes('supabase.co')) {
+      event.request.url.includes('supabase.co') ||
+      requestUrl.pathname.startsWith('/api/') ||
+      requestUrl.hostname.includes('railway.app') ||
+      requestUrl.hostname === 'localhost' && requestUrl.port === '3001') {
     return; // Не кэшируем API запросы
   }
   
