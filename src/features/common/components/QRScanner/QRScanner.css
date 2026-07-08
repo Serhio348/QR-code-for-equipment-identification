@@ -22,6 +22,7 @@
   flex-direction: column;
   overflow: hidden;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  position: relative;
 }
 
 .qr-scanner-header {
@@ -101,6 +102,18 @@
   align-items: center;
   justify-content: center;
   min-height: 400px;
+}
+
+.qr-scanner-loading-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  top: 61px;
+  background: rgba(0, 0, 0, 0.75);
+  min-height: 0;
+  z-index: 2;
+  pointer-events: none;
 }
 
 .qr-scanner-spinner {

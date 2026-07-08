@@ -47,7 +47,7 @@ export const config = {
   
   // Таймауты API
   apiTimeout: parseInt(process.env.API_TIMEOUT || '30000', 10),
-  gasApiTimeout: parseInt(process.env.GAS_API_TIMEOUT || '30000', 10),
+  gasApiTimeout: parseInt(process.env.GAS_API_TIMEOUT || '60000', 10),
 
   // Retry при 5xx ошибках GAS (exponential backoff)
   gasApiRetryCount: parseInt(process.env.GAS_API_RETRY_COUNT || '3', 10),

@@ -4,8 +4,9 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Html5Qrcode } from 'html5-qrcode';
+import { Html5Qrcode, type CameraDevice } from 'html5-qrcode';
 import { parseEquipmentId } from '../../../../shared/utils/qrCodeParser';
+import { isIOS } from '@/shared/utils/deviceDetection';
 import './QRScanner.css';
 
 interface QRScannerProps {
@@ -19,6 +20,54 @@ interface QRScannerProps {
   isOpen: boolean;
 }
 
+const SCANNER_CONFIG = {
+  fps: 10,
+  qrbox: { width: 250, height: 250 },
+  disableFlip: false,
+} as const;
+
+const SCANNER_CONTAINER_ID = 'qr-scanner-container';
+
+/** Дождаться отрисовки контейнера (критично для iOS Safari). */
+function waitForPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve());
+    });
+  });
+}
+
+/** Выбрать заднюю камеру — на iOS facingMode ненадёжен. */
+function pickRearCameraId(cameras: CameraDevice[]): string | null {
+  const back = cameras.find((camera) =>
+    /back|rear|environment|задн/i.test(camera.label)
+  );
+  if (back) {
+    return back.id;
+  }
+  if (cameras.length > 1) {
+    return cameras[cameras.length - 1].id;
+  }
+  return cameras[0]?.id ?? null;
+}
+
+async function resolveCameraConfig(): Promise<string | MediaTrackConstraints> {
+  try {
+    const cameras = await Html5Qrcode.getCameras();
+    if (cameras.length === 0) {
+      throw new Error('Камеры не найдены на устройстве');
+    }
+    const cameraId = pickRearCameraId(cameras);
+    if (cameraId) {
+      return cameraId;
+    }
+  } catch (err) {
+    console.warn('[QRScanner] getCameras failed, fallback to facingMode:', err);
+  }
+
+  return { facingMode: 'environment' };
+}
+
 const QRScanner: React.FC<QRScannerProps> = ({
   onScanSuccess,
   onScanError,
@@ -26,138 +75,40 @@ const QRScanner: React.FC<QRScannerProps> = ({
   isOpen,
 }) => {
   const scannerRef = useRef<Html5Qrcode | null>(null);
-  const [isScanning, setIsScanning] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const scannerContainerId = 'qr-scanner-container';
   const isProcessingRef = useRef(false);
 
-  // Инициализация и остановка сканера
-  useEffect(() => {
-    if (!isOpen) {
-      // Если сканер закрыт, останавливаем его
-      stopScanning();
+  const stopScanning = async (): Promise<void> => {
+    if (!scannerRef.current) {
       return;
     }
 
-    // Если сканер открыт, запускаем его
-    if (isOpen && !scannerRef.current) {
-      startScanning();
-    }
-
-    // Очистка при размонтировании
-    return () => {
-      stopScanning();
-    };
-  }, [isOpen]);
-
-  /**
-   * Начинает сканирование QR-кодов
-   */
-  const startScanning = async () => {
-    if (scannerRef.current) {
-      return; // Уже запущен
-    }
+    const scanner = scannerRef.current;
+    scannerRef.current = null;
 
     try {
-      setIsScanning(true);
-      setError(null);
-      isProcessingRef.current = false;
-
-      // Проверяем поддержку камеры
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error('Ваш браузер не поддерживает доступ к камере');
-      }
-
-      // Создаем экземпляр сканера
-      const scanner = new Html5Qrcode(scannerContainerId);
-      scannerRef.current = scanner;
-
-      // Конфигурация сканера
-      const config = {
-        fps: 10, // Кадров в секунду
-        qrbox: { width: 250, height: 250 }, // Размер области сканирования
-        aspectRatio: 1.0, // Соотношение сторон
-        disableFlip: false, // Разрешить переворот изображения
-      };
-
-      // Начинаем сканирование с задней камеры (если доступна)
-      try {
-        await scanner.start(
-          { facingMode: 'environment' }, // Задняя камера
-          config,
-          (decodedText) => {
-            // Успешное сканирование
-            if (!isProcessingRef.current) {
-              handleScanSuccess(decodedText);
-            }
-          },
-          () => {
-            // Игнорируем ошибки сканирования (они нормальны, пока не найден QR-код)
-          }
-        );
-      } catch (err: any) {
-        // Если не удалось использовать заднюю камеру, пробуем переднюю
-        if (err.message && err.message.includes('environment')) {
-          await scanner.start(
-            { facingMode: 'user' }, // Передняя камера
-            config,
-            (decodedText) => {
-              if (!isProcessingRef.current) {
-                handleScanSuccess(decodedText);
-              }
-            },
-            () => {}
-          );
-        } else {
-          throw err;
-        }
-      }
-    } catch (err: any) {
-      const errorMessage = err.message || 'Ошибка при запуске сканера';
-      setError(errorMessage);
-      setIsScanning(false);
-      onScanError?.(errorMessage);
+      await scanner.stop();
+      await scanner.clear();
+    } catch {
+      console.log('[QRScanner] Сканер уже остановлен');
     }
   };
 
-  /**
-   * Останавливает сканирование
-   */
-  const stopScanning = async () => {
-    if (scannerRef.current) {
-      try {
-        await scannerRef.current.stop();
-        await scannerRef.current.clear();
-      } catch (err) {
-        // Игнорируем ошибки остановки
-        console.log('[QRScanner] Сканер уже остановлен');
-      }
-      scannerRef.current = null;
-      setIsScanning(false);
-    }
-  };
-
-  /**
-   * Обрабатывает успешное сканирование QR-кода
-   */
-  const handleScanSuccess = (decodedText: string) => {
+  const handleScanSuccess = (decodedText: string): void => {
     if (isProcessingRef.current) {
-      return; // Уже обрабатывается
+      return;
     }
 
     console.log('[QRScanner] Отсканированный QR-код:', decodedText);
-    
     isProcessingRef.current = true;
 
-    // Парсим ID оборудования из QR-кода
     const equipmentId = parseEquipmentId(decodedText);
-    
+
     if (!equipmentId) {
       const errorMsg = `QR-код не содержит информацию об оборудовании.\n\nОтсканировано: ${decodedText}`;
       setError(errorMsg);
       onScanError?.(errorMsg);
-      
-      // Сбрасываем флаг через 2 секунды, чтобы можно было попробовать снова
       setTimeout(() => {
         isProcessingRef.current = false;
       }, 2000);
@@ -165,21 +116,88 @@ const QRScanner: React.FC<QRScannerProps> = ({
     }
 
     console.log('[QRScanner] Распознан ID оборудования:', equipmentId);
-
-    // Останавливаем сканирование
-    stopScanning();
-
-    // Вызываем callback с ID оборудования
+    void stopScanning();
     onScanSuccess(equipmentId);
   };
 
-  /**
-   * Обрабатывает закрытие сканера
-   */
-  const handleClose = async () => {
+  const startScanning = async (): Promise<void> => {
+    if (scannerRef.current) {
+      return;
+    }
+
+    setIsInitializing(true);
+    setError(null);
+    isProcessingRef.current = false;
+
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error(
+          isIOS()
+            ? 'Разрешите доступ к камере: Настройки → Safari → Камера'
+            : 'Ваш браузер не поддерживает доступ к камере'
+        );
+      }
+
+      await waitForPaint();
+
+      const scanner = new Html5Qrcode(SCANNER_CONTAINER_ID);
+      scannerRef.current = scanner;
+
+      const onDecode = (decodedText: string): void => {
+        if (!isProcessingRef.current) {
+          handleScanSuccess(decodedText);
+        }
+      };
+
+      const cameraConfig = await resolveCameraConfig();
+
+      try {
+        await scanner.start(cameraConfig, SCANNER_CONFIG, onDecode, () => {});
+      } catch (startErr: unknown) {
+        const message = startErr instanceof Error ? startErr.message : String(startErr);
+        if (/environment|facing|camera/i.test(message)) {
+          await scanner.start({ facingMode: 'user' }, SCANNER_CONFIG, onDecode, () => {});
+        } else {
+          throw startErr;
+        }
+      }
+    } catch (err: unknown) {
+      const errorMessage =
+        err instanceof Error ? err.message : 'Ошибка при запуске сканера';
+      setError(errorMessage);
+      onScanError?.(errorMessage);
+      await stopScanning();
+    } finally {
+      setIsInitializing(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isOpen) {
+      void stopScanning();
+      setError(null);
+      setIsInitializing(false);
+      isProcessingRef.current = false;
+      return;
+    }
+
+    void startScanning();
+
+    return () => {
+      void stopScanning();
+    };
+  }, [isOpen]);
+
+  const handleClose = async (): Promise<void> => {
     await stopScanning();
     isProcessingRef.current = false;
     onClose?.();
+  };
+
+  const handleRetry = async (): Promise<void> => {
+    await stopScanning();
+    isProcessingRef.current = false;
+    void startScanning();
   };
 
   if (!isOpen) {
@@ -187,13 +205,13 @@ const QRScanner: React.FC<QRScannerProps> = ({
   }
 
   return (
-    <div className="qr-scanner-overlay" onClick={handleClose}>
+    <div className="qr-scanner-overlay" onClick={() => void handleClose()}>
       <div className="qr-scanner-modal" onClick={(e) => e.stopPropagation()}>
         <div className="qr-scanner-header">
           <h2 className="qr-scanner-title">Сканирование QR-кода</h2>
           <button
             className="qr-scanner-close-button"
-            onClick={handleClose}
+            onClick={() => void handleClose()}
             type="button"
             aria-label="Закрыть сканер"
           >
@@ -204,23 +222,17 @@ const QRScanner: React.FC<QRScannerProps> = ({
         {error && (
           <div className="qr-scanner-error">
             <p>{error}</p>
-            <button onClick={startScanning} className="qr-scanner-retry-button">
+            <button onClick={() => void handleRetry()} className="qr-scanner-retry-button" type="button">
               Попробовать снова
             </button>
           </div>
         )}
 
-        <div 
-          id={scannerContainerId} 
-          className="qr-scanner-container"
-          style={{ 
-            display: isScanning && !error ? 'block' : 'none' 
-          }}
-        />
+        <div id={SCANNER_CONTAINER_ID} className="qr-scanner-container" />
 
-        {!isScanning && !error && (
-          <div className="qr-scanner-loading">
-            <div className="qr-scanner-spinner"></div>
+        {isInitializing && !error && (
+          <div className="qr-scanner-loading qr-scanner-loading-overlay">
+            <div className="qr-scanner-spinner" />
             <p>Инициализация камеры...</p>
           </div>
         )}
@@ -230,4 +242,3 @@ const QRScanner: React.FC<QRScannerProps> = ({
 };
 
 export default QRScanner;
-
