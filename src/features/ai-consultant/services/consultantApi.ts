@@ -249,3 +249,37 @@ export async function fetchChatHistory(limit = 20): Promise<ChatMessage[]> {
   const data: HistoryResponse = await response.json();
   return data.data?.messages || [];
 }
+
+/**
+ * Transcribe voice audio (iOS MediaRecorder ? /api/transcribe).
+ */
+export async function transcribeAudio(audio: File, signal?: AbortSignal): Promise<string> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) {
+    throw new Error('?? ???????????');
+  }
+
+  const form = new FormData();
+  form.append('audio', audio);
+
+  const response = await fetch(`${API_URL}/api/transcribe`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: form,
+    signal,
+  });
+
+  const payload = (await response.json().catch(() => ({}))) as {
+    success?: boolean;
+    text?: string;
+    error?: string;
+  };
+
+  if (!response.ok || !payload.success) {
+    throw new Error(payload.error || `HTTP ${response.status}`);
+  }
+
+  return (payload.text || '').trim();
+}
