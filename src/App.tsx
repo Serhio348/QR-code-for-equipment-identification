@@ -435,9 +435,11 @@ const App: React.FC = () => {
         pauseOnHover
         theme="light"
       />
-      <Suspense fallback={null}>
-        <ChatWidget />
-      </Suspense>
+      {!loading && isAuthenticated && !isAuthPage && (
+        <Suspense fallback={null}>
+          <ChatWidget />
+        </Suspense>
+      )}
     </div>
   );
 };
