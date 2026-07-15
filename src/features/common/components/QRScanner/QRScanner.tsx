@@ -2,30 +2,25 @@
  * Компонент сканера QR-кодов
  * Использует библиотеку html5-qrcode для сканирования QR-кодов с камеры
  *
- * Важно: пути камеры разделены по платформам.
- * - Android/desktop: facingMode (как до iOS-фикса — рабочий путь)
- * - iOS: waitForPaint + getCameras()/deviceId + пауза после enumerate
- *   (facingMode на Safari ненадёжен; aspectRatio в конфиге на iOS не ставим)
+ * Важно:
+ * - Android/desktop: facingMode + aspectRatio (рабочий путь)
+ * - iOS: только facingMode после primeCameraPermission() в клике открытия
+ *   (getCameras()/deviceId на Safari часто ломает повторный start)
  */
 
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { Html5Qrcode, type CameraDevice } from 'html5-qrcode';
+import { Html5Qrcode } from 'html5-qrcode';
 import { parseEquipmentId } from '../../../../shared/utils/qrCodeParser';
 import { isIOS } from '@/shared/utils/deviceDetection';
 import './QRScanner.css';
 
 interface QRScannerProps {
-  /** Callback при успешном сканировании QR-кода с ID оборудования */
   onScanSuccess: (equipmentId: string) => void;
-  /** Callback при ошибке сканирования */
   onScanError?: (error: string) => void;
-  /** Callback при закрытии сканера */
   onClose?: () => void;
-  /** Открыт ли сканер */
   isOpen: boolean;
 }
 
-/** Конфиг Android/desktop — как в рабочей версии до 6805a1c. */
 const ANDROID_SCANNER_CONFIG = {
   fps: 10,
   qrbox: { width: 250, height: 250 },
@@ -33,18 +28,14 @@ const ANDROID_SCANNER_CONFIG = {
   disableFlip: false,
 } as const;
 
-/** Конфиг iOS — без aspectRatio (на Safari часто ломает старт). */
 const IOS_SCANNER_CONFIG = {
   fps: 10,
   qrbox: { width: 250, height: 250 },
   disableFlip: false,
 } as const;
 
-/** Дать React.StrictMode отменить первый mount до getUserMedia. */
+/** StrictMode: отменить первый mount до getUserMedia. */
 const START_ABORT_MS = 120;
-
-/** iOS: после getCameras() камера ещё занята — нужна пауза перед start(). */
-const IOS_CAMERA_RELEASE_MS = 350;
 
 function waitForPaint(): Promise<void> {
   return new Promise((resolve) => {
@@ -58,19 +49,6 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
-}
-
-function pickRearCameraId(cameras: CameraDevice[]): string | null {
-  const back = cameras.find((camera) =>
-    /back|rear|environment|задн/i.test(camera.label)
-  );
-  if (back) {
-    return back.id;
-  }
-  if (cameras.length > 1) {
-    return cameras[cameras.length - 1].id;
-  }
-  return cameras[0]?.id ?? null;
 }
 
 function normalizeCameraError(err: unknown): string {
@@ -97,26 +75,6 @@ function normalizeCameraError(err: unknown): string {
   }
 
   return message || 'Ошибка при запуске сканера';
-}
-
-/** Только для iOS: deviceId через enumerate + пауза на освобождение камеры. */
-async function resolveIosCameraConfig(): Promise<string | MediaTrackConstraints> {
-  try {
-    const cameras = await Html5Qrcode.getCameras();
-    if (cameras.length === 0) {
-      throw new Error('Камеры не найдены на устройстве');
-    }
-    const cameraId = pickRearCameraId(cameras);
-    // getCameras() кратко держит поток — на iOS без паузы start() даёт NotReadableError / чёрный экран.
-    await delay(IOS_CAMERA_RELEASE_MS);
-    if (cameraId) {
-      return cameraId;
-    }
-  } catch (err) {
-    console.warn('[QRScanner] iOS getCameras failed, fallback to facingMode:', err);
-  }
-
-  return { facingMode: 'environment' };
 }
 
 const QRScanner: React.FC<QRScannerProps> = ({
@@ -192,7 +150,6 @@ const QRScanner: React.FC<QRScannerProps> = ({
         );
       }
 
-      // Контейнер должен быть в DOM и отрисован до new Html5Qrcode (критично для iOS).
       await waitForPaint();
 
       if (generation !== startGenerationRef.current) {
@@ -204,6 +161,15 @@ const QRScanner: React.FC<QRScannerProps> = ({
         throw new Error('Контейнер сканера не найден');
       }
 
+      // Дать контейнеру ненулевой размер на iOS (после открытия модалки).
+      if (container.clientWidth === 0 || container.clientHeight === 0) {
+        await delay(50);
+      }
+
+      if (generation !== startGenerationRef.current) {
+        return;
+      }
+
       const scanner = new Html5Qrcode(containerId);
       scannerRef.current = scanner;
 
@@ -213,57 +179,28 @@ const QRScanner: React.FC<QRScannerProps> = ({
         }
       };
 
-      if (isIOS()) {
-        const cameraConfig = await resolveIosCameraConfig();
+      const config = isIOS() ? IOS_SCANNER_CONFIG : ANDROID_SCANNER_CONFIG;
+
+      try {
+        await scanner.start(
+          { facingMode: 'environment' },
+          config,
+          onDecode,
+          () => {}
+        );
+      } catch (err: unknown) {
         if (generation !== startGenerationRef.current) {
-          await stopScanning();
           return;
         }
-        try {
-          await scanner.start(cameraConfig, IOS_SCANNER_CONFIG, onDecode, () => {});
-        } catch (startErr: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (/environment|facing|camera|device|notreadable|readable/i.test(message)) {
+          await delay(isIOS() ? 300 : 0);
           if (generation !== startGenerationRef.current) {
             return;
           }
-          const message = startErr instanceof Error ? startErr.message : String(startErr);
-          if (/environment|facing|camera|device|notreadable|readable/i.test(message)) {
-            await delay(IOS_CAMERA_RELEASE_MS);
-            if (generation !== startGenerationRef.current) {
-              return;
-            }
-            await scanner.start(
-              { facingMode: 'user' },
-              IOS_SCANNER_CONFIG,
-              onDecode,
-              () => {}
-            );
-          } else {
-            throw startErr;
-          }
-        }
-      } else {
-        try {
-          await scanner.start(
-            { facingMode: 'environment' },
-            ANDROID_SCANNER_CONFIG,
-            onDecode,
-            () => {}
-          );
-        } catch (err: unknown) {
-          if (generation !== startGenerationRef.current) {
-            return;
-          }
-          const message = err instanceof Error ? err.message : String(err);
-          if (message.includes('environment')) {
-            await scanner.start(
-              { facingMode: 'user' },
-              ANDROID_SCANNER_CONFIG,
-              onDecode,
-              () => {}
-            );
-          } else {
-            throw err;
-          }
+          await scanner.start({ facingMode: 'user' }, config, onDecode, () => {});
+        } else {
+          throw err;
         }
       }
     } catch (err: unknown) {
@@ -348,7 +285,6 @@ const QRScanner: React.FC<QRScannerProps> = ({
           </div>
         )}
 
-        {/* Контейнер всегда в DOM — Safari не стартует камеру в display:none */}
         <div id={containerId} className="qr-scanner-container" />
 
         {isInitializing && !error && (

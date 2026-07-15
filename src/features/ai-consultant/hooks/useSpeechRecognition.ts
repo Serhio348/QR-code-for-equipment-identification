@@ -1,22 +1,14 @@
 /**
  * useSpeechRecognition.ts
  *
- * React-хук для голосового ввода через Web Speech API.
- *
- * Возможности:
- * - Распознавание речи на русском языке (ru-RU)
- * - Режим одной фразы (continuous=false) — без дублей на русском
- * - Preflight getUserMedia перед start() — критично для iOS Safari/PWA
- * - Понятные ошибки на русском
- *
- * Совместимость:
- * - Chrome, Edge — webkitSpeechRecognition
- * - Safari iOS 14.5+ / macOS 14.1+ — частичная поддержка
- * - Требуется HTTPS и Permissions-Policy: microphone=(self)
+ * Голосовой ввод:
+ * - Android/desktop Chrome: Web Speech API
+ * - iOS / без SpeechRecognition: MediaRecorder → POST /api/transcribe
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { isIOS } from '@/shared/utils/deviceDetection';
+import { transcribeAudio } from '../services/consultantApi';
 
 interface SpeechRecognitionEvent {
   results: SpeechRecognitionResultList;
@@ -48,19 +40,14 @@ declare global {
 }
 
 export interface UseSpeechRecognitionReturn {
-  /** Поддерживает ли текущий браузер Web Speech API */
   isSupported: boolean;
-  /** true пока микрофон активен и идёт запись */
   isListening: boolean;
-  /** Накопленный распознанный текст (только финальные результаты) */
+  /** true пока аудио отправляется на сервер (только MediaRecorder-путь) */
+  isTranscribing: boolean;
   transcript: string;
-  /** Текст ошибки на русском или null */
   error: string | null;
-  /** Начать запись — сбрасывает transcript и ошибку */
   startListening: () => void;
-  /** Остановить запись (graceful — дожидается последнего результата) */
   stopListening: () => void;
-  /** Очистить transcript и ошибку без остановки записи */
   resetTranscript: () => void;
 }
 
@@ -87,11 +74,34 @@ function mapSpeechError(code: string): string {
   }
 }
 
+function pickRecorderMimeType(): string {
+  const candidates = [
+    'audio/mp4',
+    'audio/aac',
+    'audio/webm;codecs=opus',
+    'audio/webm',
+  ];
+  for (const type of candidates) {
+    if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(type)) {
+      return type;
+    }
+  }
+  return '';
+}
+
+function extensionForMime(mimeType: string): string {
+  if (mimeType.includes('webm')) return 'webm';
+  if (mimeType.includes('wav')) return 'wav';
+  if (mimeType.includes('ogg')) return 'ogg';
+  return 'mp4';
+}
+
 /**
- * Хук для голосового ввода через Web Speech API.
+ * Хук голосового ввода: Web Speech или MediaRecorder+API на iOS.
  */
 export function useSpeechRecognition(): UseSpeechRecognitionReturn {
   const [isListening, setIsListening] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -99,12 +109,27 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
   const isListeningRef = useRef(false);
   const startingRef = useRef(false);
 
-  const isSupported =
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const chunksRef = useRef<BlobPart[]>([]);
+  const mimeTypeRef = useRef('');
+
+  const hasSpeechApi =
     typeof window !== 'undefined' &&
     !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+  const hasMediaRecorder =
+    typeof window !== 'undefined' &&
+    typeof MediaRecorder !== 'undefined' &&
+    !!navigator.mediaDevices?.getUserMedia;
+
+  // Только iOS: MediaRecorder + API. Android остаётся на Web Speech как раньше.
+  const useMediaRecorderPath = isIOS();
+  const isSupported = useMediaRecorderPath ? hasMediaRecorder : hasSpeechApi;
 
   useEffect(() => {
-    if (!isSupported) return;
+    if (useMediaRecorderPath || !hasSpeechApi) {
+      return;
+    }
 
     const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognitionAPI) return;
@@ -145,9 +170,130 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
       recognition.abort();
       recognitionRef.current = null;
     };
-  }, [isSupported]);
+  }, [useMediaRecorderPath, hasSpeechApi]);
+
+  useEffect(() => {
+    return () => {
+      mediaRecorderRef.current?.stop();
+      mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
+    };
+  }, []);
+
+  const stopMediaTracks = (): void => {
+    mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
+    mediaStreamRef.current = null;
+    mediaRecorderRef.current = null;
+  };
+
+  const finishMediaRecording = useCallback(async (blob: Blob): Promise<void> => {
+    if (blob.size < 100) {
+      setError('Запись слишком короткая. Удерживайте кнопку дольше.');
+      return;
+    }
+
+    setIsTranscribing(true);
+    setError(null);
+    try {
+      const ext = extensionForMime(blob.type || mimeTypeRef.current);
+      const file = new File([blob], `voice.${ext}`, {
+        type: blob.type || mimeTypeRef.current || 'audio/mp4',
+      });
+      const text = await transcribeAudio(file);
+      if (!text) {
+        setError('Речь не распознана. Попробуйте ещё раз.');
+        return;
+      }
+      setTranscript((prev) => (prev ? `${prev} ${text}` : text));
+    } catch (err) {
+      console.error('Transcription failed:', err);
+      setError(err instanceof Error ? err.message : 'Не удалось распознать речь');
+    } finally {
+      setIsTranscribing(false);
+    }
+  }, []);
+
+  const startMediaRecording = useCallback(async (): Promise<void> => {
+    if (startingRef.current || isListeningRef.current) {
+      return;
+    }
+    startingRef.current = true;
+    setError(null);
+    setTranscript('');
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: false,
+      });
+      mediaStreamRef.current = stream;
+
+      const mimeType = pickRecorderMimeType();
+      mimeTypeRef.current = mimeType;
+      chunksRef.current = [];
+
+      const recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
+
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (event: BlobEvent) => {
+        if (event.data.size > 0) {
+          chunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        const type = mimeTypeRef.current || recorder.mimeType || 'audio/mp4';
+        const blob = new Blob(chunksRef.current, { type });
+        chunksRef.current = [];
+        stopMediaTracks();
+        void finishMediaRecording(blob);
+      };
+
+      recorder.start();
+      isListeningRef.current = true;
+      setIsListening(true);
+    } catch (err) {
+      console.error('Microphone permission failed:', err);
+      const name =
+        err && typeof err === 'object' && 'name' in err
+          ? String((err as { name: string }).name)
+          : '';
+      if (name === 'NotAllowedError') {
+        setError(mapSpeechError('not-allowed'));
+      } else if (name === 'NotFoundError') {
+        setError(mapSpeechError('audio-capture'));
+      } else {
+        setError('Не удалось получить доступ к микрофону');
+      }
+      stopMediaTracks();
+      isListeningRef.current = false;
+      setIsListening(false);
+    } finally {
+      startingRef.current = false;
+    }
+  }, [finishMediaRecording]);
+
+  const stopMediaRecording = useCallback((): void => {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || recorder.state === 'inactive') {
+      stopMediaTracks();
+      isListeningRef.current = false;
+      setIsListening(false);
+      return;
+    }
+    recorder.stop();
+    isListeningRef.current = false;
+    setIsListening(false);
+  }, []);
 
   const startListening = useCallback(() => {
+    if (useMediaRecorderPath) {
+      void startMediaRecording();
+      return;
+    }
+
     if (!recognitionRef.current || isListeningRef.current || startingRef.current) {
       return;
     }
@@ -155,60 +301,29 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
     setError(null);
     setTranscript('');
 
-    const startRecognition = (): void => {
-      try {
-        recognitionRef.current?.start();
-        isListeningRef.current = true;
-        setIsListening(true);
-      } catch (err) {
-        console.error('Failed to start recognition:', err);
-        setError('Не удалось запустить распознавание речи');
-        isListeningRef.current = false;
-        setIsListening(false);
-      }
-    };
+    try {
+      recognitionRef.current.start();
+      isListeningRef.current = true;
+      setIsListening(true);
+    } catch (err) {
+      console.error('Failed to start recognition:', err);
+      setError('Не удалось запустить распознавание речи');
+      isListeningRef.current = false;
+      setIsListening(false);
+    }
+  }, [useMediaRecorderPath, startMediaRecording]);
 
-    // iOS Safari: явный getUserMedia в обработчике клика перед SpeechRecognition.
-    if (isIOS() && navigator.mediaDevices?.getUserMedia) {
-      startingRef.current = true;
-      void navigator.mediaDevices
-        .getUserMedia({ audio: true, video: false })
-        .then((stream) => {
-          for (const track of stream.getTracks()) {
-            track.stop();
-          }
-          startRecognition();
-        })
-        .catch((err: unknown) => {
-          console.error('Microphone permission failed:', err);
-          const name =
-            err && typeof err === 'object' && 'name' in err
-              ? String((err as { name: string }).name)
-              : '';
-          if (name === 'NotAllowedError') {
-            setError(mapSpeechError('not-allowed'));
-          } else if (name === 'NotFoundError') {
-            setError(mapSpeechError('audio-capture'));
-          } else {
-            setError('Не удалось получить доступ к микрофону');
-          }
-        })
-        .finally(() => {
-          startingRef.current = false;
-        });
+  const stopListening = useCallback(() => {
+    if (useMediaRecorderPath) {
+      stopMediaRecording();
       return;
     }
 
-    startRecognition();
-  }, []);
-
-  const stopListening = useCallback(() => {
     if (!recognitionRef.current || !isListeningRef.current) return;
-
     recognitionRef.current.stop();
     isListeningRef.current = false;
     setIsListening(false);
-  }, []);
+  }, [useMediaRecorderPath, stopMediaRecording]);
 
   const resetTranscript = useCallback(() => {
     setTranscript('');
@@ -218,6 +333,7 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
   return {
     isSupported,
     isListening,
+    isTranscribing,
     transcript,
     error,
     startListening,

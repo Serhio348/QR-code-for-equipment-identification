@@ -17,6 +17,11 @@ import { isDriveId } from '@/shared/utils/qrCodeParser';
 import StatusBadge from '../../common/components/StatusBadge';
 import QRScanner from '../../common/components/QRScanner/QRScanner';
 import { logUserActivity } from '@/features/user-activity/services/activityLogsApi';
+import { isIOS } from '@/shared/utils/deviceDetection';
+import {
+  getCameraPermissionErrorMessage,
+  primeCameraPermission,
+} from '@/shared/utils/mediaPermissions';
 import './EquipmentList.css';
 
 interface EquipmentListProps {
@@ -309,7 +314,21 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
 
           <button
             className="qr-scanner-button"
-            onClick={() => setIsScannerOpen(true)}
+            onClick={() => {
+              void (async () => {
+                if (isIOS()) {
+                  try {
+                    await primeCameraPermission();
+                  } catch (err) {
+                    console.warn(
+                      '[EquipmentList] iOS camera permission:',
+                      getCameraPermissionErrorMessage(err)
+                    );
+                  }
+                }
+                setIsScannerOpen(true);
+              })();
+            }}
             type="button"
             title="Сканировать QR-код"
           >

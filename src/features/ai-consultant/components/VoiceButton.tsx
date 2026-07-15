@@ -11,6 +11,7 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({ disabled, onTranscript
   const {
     isSupported,
     isListening,
+    isTranscribing,
     transcript,
     error,
     startListening,
@@ -18,7 +19,6 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({ disabled, onTranscript
     resetTranscript,
   } = useSpeechRecognition();
 
-  // Вызываем callback при получении транскрипции
   React.useEffect(() => {
     if (transcript && onTranscript) {
       onTranscript(transcript);
@@ -27,10 +27,13 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({ disabled, onTranscript
   }, [transcript, onTranscript, resetTranscript]);
 
   if (!isSupported) {
-    return null; // Скрываем кнопку, если браузер не поддерживает
+    return null;
   }
 
   const handleClick = () => {
+    if (isTranscribing) {
+      return;
+    }
     if (isListening) {
       stopListening();
     } else {
@@ -38,15 +41,23 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({ disabled, onTranscript
     }
   };
 
+  const busy = isListening || isTranscribing;
+  const title = isTranscribing
+    ? 'Распознавание...'
+    : isListening
+      ? 'Остановить запись'
+      : 'Голосовой ввод';
+
   return (
     <button
       type="button"
       onClick={handleClick}
-      disabled={disabled}
-      className={`ai-chat-voice-btn ${isListening ? 'ai-chat-voice-btn--listening' : ''}`}
-      title={isListening ? 'Остановить запись' : 'Голосовой ввод'}
+      disabled={disabled || isTranscribing}
+      className={`ai-chat-voice-btn ${busy ? 'ai-chat-voice-btn--listening' : ''}`}
+      title={title}
+      aria-label={title}
     >
-      {isListening ? '🔴' : '🎤'}
+      {isTranscribing ? '⏳' : isListening ? '🔴' : '🎤'}
       {error && <span className="ai-chat-voice-error">{error}</span>}
     </button>
   );

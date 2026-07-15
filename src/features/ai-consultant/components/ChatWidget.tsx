@@ -9,6 +9,11 @@ import { useEquipmentData } from '../../equipment/hooks/useEquipmentData';
 import { logUserActivity } from '../../user-activity/services/activityLogsApi';
 import { SET_WATER_CONTEXT_EVENT, type WaterDashboardContext } from '../events/chatEvents';
 import type { Equipment } from '../../equipment/types/equipment';
+import { isIOS } from '@/shared/utils/deviceDetection';
+import {
+  getCameraPermissionErrorMessage,
+  primeCameraPermission,
+} from '@/shared/utils/mediaPermissions';
 import './ChatWidget.css';
 
 interface ChatWidgetProps {
@@ -60,9 +65,18 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({ initialOpen = false }) =
     resetTranscript();
   };
 
-  // Обработка открытия QR-сканера
+  // Обработка открытия QR-сканера (на iOS сначала permission в том же клике)
   const handleQRScanClick = () => {
-    setIsQRScannerOpen(true);
+    void (async () => {
+      if (isIOS()) {
+        try {
+          await primeCameraPermission();
+        } catch (err) {
+          console.warn('[ChatWidget] iOS camera permission:', getCameraPermissionErrorMessage(err));
+        }
+      }
+      setIsQRScannerOpen(true);
+    })();
   };
 
   // Обработка успешного сканирования QR-кода

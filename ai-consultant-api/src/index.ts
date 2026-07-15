@@ -64,7 +64,7 @@ import { config, validateConfig, logProviderConfig } from './config/env.js';
 import healthRouter from './routes/health.js';
 
 // Доменные роуты
-import { chatRouter, chatStreamRouter } from './routes/ai/index.js';
+import { chatRouter, chatStreamRouter, transcribeRouter } from './routes/ai/index.js';
 import { equipmentRouter } from './routes/equipment/index.js';
 import { alertsRouter, invoicesRouter, notificationsRouter, pushRouter } from './routes/water/index.js';
 import { repairRequestsRouter } from './routes/repairs/index.js';
@@ -169,6 +169,9 @@ app.use('/api/chat', chatRouter);
 
 // Стриминг чата — POST /api/chat/stream (SSE)
 app.use('/api/chat/stream', chatStreamRouter);
+
+// Транскрипция голоса — POST /api/transcribe (iOS MediaRecorder fallback)
+app.use('/api/transcribe', transcribeRouter);
 
 // Прокси для загрузки файлов — POST /api/equipment/*
 // Фронтенд не может напрямую отправлять POST на GAS (CORS preflight блокируется).
