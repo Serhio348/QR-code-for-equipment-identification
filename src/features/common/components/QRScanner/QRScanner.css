@@ -20,8 +20,7 @@
   max-height: 90vh;
   display: flex;
   flex-direction: column;
-  /* overflow:hidden ломает <video> на iOS Safari (чёрный экран / камера «не открывается») */
-  overflow: visible;
+  overflow: hidden;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
   position: relative;
 }
@@ -32,6 +31,7 @@
   align-items: center;
   padding: 20px;
   border-bottom: 1px solid #e0e0e0;
+  flex-shrink: 0;
 }
 
 .qr-scanner-title {
@@ -64,25 +64,31 @@
 
 .qr-scanner-container {
   width: 100%;
+  flex: 1;
   min-height: 400px;
   position: relative;
   background: #000;
-  overflow: visible;
-  -webkit-transform: translateZ(0);
-  transform: translateZ(0);
+  overflow: hidden;
 }
 
-/* html5-qrcode вставляет video — на iOS нужен playsinline (библиотека ставит сама) */
+/* Заполняем контейнер целиком — иначе video с height:auto даёт чёрную полосу и вытянутый qrbox */
 .qr-scanner-container video {
   width: 100% !important;
-  height: auto !important;
+  height: 100% !important;
   object-fit: cover;
   display: block;
+}
+
+.qr-scanner-container img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
 }
 
 .qr-scanner-error {
   padding: 20px;
   text-align: center;
+  flex-shrink: 0;
 }
 
 .qr-scanner-error p {
@@ -161,12 +167,14 @@
   .qr-scanner-modal {
     max-width: 100%;
     max-height: 100vh;
+    max-height: 100dvh;
     border-radius: 0;
     height: 100vh;
+    height: 100dvh;
   }
 
   .qr-scanner-container {
-    min-height: calc(100vh - 120px);
+    flex: 1;
+    min-height: 0;
   }
 }
-
