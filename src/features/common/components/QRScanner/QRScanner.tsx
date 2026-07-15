@@ -5,7 +5,7 @@
  * Важно: пути камеры разделены по платформам.
  * - Android/desktop: facingMode (как до iOS-фикса — рабочий путь)
  * - iOS: waitForPaint + getCameras()/deviceId + пауза после enumerate
- *   (facingMode на Safari ненадёжен; aspectRatio и overflow:hidden ломают video)
+ *   (facingMode на Safari ненадёжен; aspectRatio в конфиге на iOS не ставим)
  */
 
 import React, { useEffect, useId, useRef, useState } from 'react';
