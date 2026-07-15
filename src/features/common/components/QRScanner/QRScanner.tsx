@@ -1,10 +1,11 @@
 /**
  * Компонент сканера QR-кодов
  *
- * Критично для Android:
- * 1) getUserMedia вызывается сразу в обработчике клика (без await до него),
- *    иначе браузер «теряет» user gesture и камера падает с NotReadableError.
- * 2) Если live-камера недоступна — запасной путь: снимок через capture + decode.
+ * UX: открыл → сразу камера → навёл на QR → распознал.
+ * Без кнопки «Включить камеру».
+ *
+ * Android + React.StrictMode: первый mount эффекта отменяется через короткий
+ * delay до getUserMedia, иначе двойной старт даёт NotReadableError.
  */
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -28,10 +29,19 @@ type BarcodeDetectorConstructor = new (options?: {
   formats?: string[];
 }) => BarcodeDetectorLike;
 
+/** Дать StrictMode отменить первый mount до открытия камеры. */
+const STRICT_MODE_ABORT_MS = 120;
+
 function getBarcodeDetectorConstructor(): BarcodeDetectorConstructor | null {
   const ctor = (window as unknown as { BarcodeDetector?: BarcodeDetectorConstructor })
     .BarcodeDetector;
   return ctor ?? null;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 function stopMediaStream(stream: MediaStream | null): void {
@@ -56,19 +66,38 @@ function normalizeScannerError(err: unknown): string {
   const blob = `${name} ${message}`;
 
   if (/notallowed|permission|denied|разреш/i.test(blob)) {
-    return 'Нет доступа к камере. Разрешите камеру для этого сайта в настройках браузера.';
+    return 'Нет доступа к камере. Разрешите камеру для этого сайта и откройте сканер снова.';
   }
   if (/notfound|devicesnotfound/i.test(blob)) {
     return 'Камера не найдена на устройстве.';
   }
   if (/notreadable|could not start video source|track start error|abort/i.test(blob)) {
-    return 'Не удалось открыть live-камеру. Используйте кнопку «Сфотографировать QR» ниже — это работает без постоянного доступа к камере.';
+    return 'Не удалось открыть камеру. Полностью закройте браузер и откройте приложение снова.';
   }
   if (/secure|https|insecure context/i.test(blob)) {
     return 'Сканер камеры работает только в HTTPS-режиме.';
   }
 
   return message || 'Ошибка при запуске сканера';
+}
+
+async function requestCameraStream(): Promise<MediaStream> {
+  const attempts: MediaStreamConstraints[] = [
+    { audio: false, video: { facingMode: { ideal: 'environment' } } },
+    { audio: false, video: { facingMode: 'environment' } },
+    { audio: false, video: true },
+    { audio: false, video: { facingMode: 'user' } },
+  ];
+
+  let lastError: unknown = null;
+  for (const constraints of attempts) {
+    try {
+      return await navigator.mediaDevices.getUserMedia(constraints);
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError ?? new Error('Не удалось получить доступ к камере');
 }
 
 async function decodeQrFromFile(file: File): Promise<string> {
@@ -86,7 +115,6 @@ async function decodeQrFromFile(file: File): Promise<string> {
     }
   }
 
-  // Fallback: html5-qrcode умеет декодировать из файла без live-камеры.
   const scanner = new Html5Qrcode('qr-scanner-file-decode-host');
   try {
     return await scanner.scanFile(file, false);
@@ -110,11 +138,9 @@ const QRScanner: React.FC<QRScannerProps> = ({
   const scanTimerRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const isProcessingRef = useRef(false);
-  const aliveRef = useRef(false);
-  /** Promise getUserMedia, запущенный синхронно из onClick. */
-  const pendingStreamRef = useRef<Promise<MediaStream> | null>(null);
+  const sessionRef = useRef(0);
 
-  const [isStarting, setIsStarting] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(false);
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [isDecodingFile, setIsDecodingFile] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -128,8 +154,6 @@ const QRScanner: React.FC<QRScannerProps> = ({
 
   const releaseCamera = (): void => {
     clearScanTimer();
-    aliveRef.current = false;
-    pendingStreamRef.current = null;
 
     const video = videoRef.current;
     if (video) {
@@ -164,13 +188,17 @@ const QRScanner: React.FC<QRScannerProps> = ({
     }
 
     console.log('[QRScanner] Распознан ID оборудования:', equipmentId);
+    sessionRef.current += 1;
     releaseCamera();
     onScanSuccess(equipmentId);
   };
 
-  const startBarcodeDetectorLoop = (detector: BarcodeDetectorLike): void => {
+  const startBarcodeDetectorLoop = (
+    detector: BarcodeDetectorLike,
+    session: number
+  ): void => {
     const tick = async (): Promise<void> => {
-      if (!aliveRef.current || isProcessingRef.current) {
+      if (session !== sessionRef.current || isProcessingRef.current) {
         return;
       }
 
@@ -195,51 +223,13 @@ const QRScanner: React.FC<QRScannerProps> = ({
     void tick();
   };
 
-  /**
-   * Важно: этот вызов должен происходить синхронно в стеке click-обработчика,
-   * до любых await — иначе Android Chrome часто отдаёт NotReadableError.
-   */
-  const beginGetUserMediaFromUserGesture = (): Promise<MediaStream> => {
-    const attempts: MediaStreamConstraints[] = [
-      { audio: false, video: true },
-      { audio: false, video: { facingMode: 'environment' } },
-      { audio: false, video: { facingMode: { ideal: 'environment' } } },
-      { audio: false, video: { facingMode: 'user' } },
-    ];
-
-    const tryNext = async (index: number): Promise<MediaStream> => {
-      if (index >= attempts.length) {
-        throw new Error('Не удалось получить доступ к камере');
-      }
-      try {
-        return await navigator.mediaDevices.getUserMedia(attempts[index]);
-      } catch (err) {
-        // NotReadable на одной камере — пробуем следующий constraint без паузы.
-        if (index === attempts.length - 1) {
-          throw err;
-        }
-        return tryNext(index + 1);
-      }
-    };
-
-    return tryNext(0);
-  };
-
-  const handleEnableCamera = (): void => {
-    if (isStarting || isCameraActive) {
-      return;
-    }
-
-    setError(null);
-    isProcessingRef.current = false;
-
+  const startLiveCamera = async (session: number): Promise<void> => {
     if (!navigator.mediaDevices?.getUserMedia) {
-      const msg = isIOS()
-        ? 'Разрешите доступ к камере: Настройки → Safari → Камера'
-        : 'Ваш браузер не поддерживает доступ к камере. Используйте «Сфотографировать QR».';
-      setError(msg);
-      onScanError?.(msg);
-      return;
+      throw new Error(
+        isIOS()
+          ? 'Разрешите доступ к камере: Настройки → Safari → Камера'
+          : 'Ваш браузер не поддерживает доступ к камере'
+      );
     }
 
     const isLocalhost =
@@ -247,61 +237,129 @@ const QRScanner: React.FC<QRScannerProps> = ({
       window.location.hostname === '127.0.0.1' ||
       window.location.hostname === '[::1]';
     if (!window.isSecureContext && !isLocalhost) {
-      const msg = 'Сканер камеры работает только в HTTPS-режиме.';
-      setError(msg);
-      onScanError?.(msg);
+      throw new Error('Сканер камеры работает только в HTTPS-режиме');
+    }
+
+    // Ждём paint + abort-окно для StrictMode, только потом getUserMedia.
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    });
+    await delay(STRICT_MODE_ABORT_MS);
+    if (session !== sessionRef.current) {
       return;
     }
 
-    // Сразу из click — до await release/delay.
-    releaseCamera();
-    aliveRef.current = true;
-    setIsStarting(true);
-    const streamPromise = beginGetUserMediaFromUserGesture();
-    pendingStreamRef.current = streamPromise;
+    const stream = await requestCameraStream();
+    if (session !== sessionRef.current) {
+      stopMediaStream(stream);
+      return;
+    }
+
+    streamRef.current = stream;
+    const video = videoRef.current;
+    if (!video) {
+      stopMediaStream(stream);
+      throw new Error('Видеоэлемент сканера не готов');
+    }
+
+    video.srcObject = stream;
+    video.muted = true;
+    video.setAttribute('playsinline', 'true');
+    await video.play();
+
+    if (session !== sessionRef.current) {
+      releaseCamera();
+      return;
+    }
+
+    const BarcodeDetectorCtor = getBarcodeDetectorConstructor();
+    if (!BarcodeDetectorCtor) {
+      // Без BarcodeDetector live-decode нестабилен — оставляем preview и просим фото.
+      setIsCameraActive(true);
+      setError(
+        'Автораспознавание в этом браузере недоступно. Нажмите «Сфотографировать QR».'
+      );
+      return;
+    }
+
+    const detector = new BarcodeDetectorCtor({ formats: ['qr_code'] });
+    setIsCameraActive(true);
+    startBarcodeDetectorLoop(detector, session);
+  };
+
+  useEffect(() => {
+    if (!isOpen) {
+      sessionRef.current += 1;
+      releaseCamera();
+      setError(null);
+      setIsInitializing(false);
+      setIsDecodingFile(false);
+      isProcessingRef.current = false;
+      return;
+    }
+
+    const session = ++sessionRef.current;
+    isProcessingRef.current = false;
+    setError(null);
+    setIsInitializing(true);
+    setIsCameraActive(false);
 
     void (async () => {
       try {
-        const stream = await streamPromise;
-        if (!aliveRef.current || pendingStreamRef.current !== streamPromise) {
-          stopMediaStream(stream);
-          return;
-        }
-
-        streamRef.current = stream;
-        const video = videoRef.current;
-        if (!video) {
-          throw new Error('Видеоэлемент сканера не готов');
-        }
-
-        video.srcObject = stream;
-        video.muted = true;
-        video.setAttribute('playsinline', 'true');
-        await video.play();
-
-        const BarcodeDetectorCtor = getBarcodeDetectorConstructor();
-        if (!BarcodeDetectorCtor) {
-          // Live-decode без BarcodeDetector на части Safari — надёжнее фото.
-          stopMediaStream(stream);
-          streamRef.current = null;
-          video.srcObject = null;
-          setError(
-            'Live-распознавание в этом браузере недоступно. Нажмите «Сфотографировать QR» — так сканер работает стабильно.'
-          );
-          return;
-        }
-
-        const detector = new BarcodeDetectorCtor({ formats: ['qr_code'] });
-        setIsCameraActive(true);
-        startBarcodeDetectorLoop(detector);
+        await startLiveCamera(session);
       } catch (err) {
+        if (session !== sessionRef.current) {
+          return;
+        }
         console.error('[QRScanner] live camera failed:', getErrorName(err), err);
         releaseCamera();
         const errorMessage = normalizeScannerError(err);
         setError(errorMessage);
         onScanError?.(errorMessage);
       } finally {
-        setIsStarting(false);
+        if (session === sessionRef.current) {
+          setIsInitializing(false);
+        }
+      }
+    })();
+
+    return () => {
+      sessionRef.current += 1;
+      releaseCamera();
+    };
+  }, [isOpen]);
+
+  const handleRetry = (): void => {
+    if (!isOpen || isInitializing) {
+      return;
+    }
+
+    const session = ++sessionRef.current;
+    releaseCamera();
+    isProcessingRef.current = false;
+    setError(null);
+    setIsInitializing(true);
+
+    void (async () => {
+      try {
+        // Небольшая пауза, чтобы ОС отпустила камеру после ошибки.
+        await delay(400);
+        if (session !== sessionRef.current) {
+          return;
+        }
+        await startLiveCamera(session);
+      } catch (err) {
+        if (session !== sessionRef.current) {
+          return;
+        }
+        releaseCamera();
+        const errorMessage = normalizeScannerError(err);
+        setError(errorMessage);
+        onScanError?.(errorMessage);
+      } finally {
+        if (session === sessionRef.current) {
+          setIsInitializing(false);
+        }
       }
     })();
   };
@@ -320,14 +378,13 @@ const QRScanner: React.FC<QRScannerProps> = ({
     }
 
     setIsDecodingFile(true);
-    setError(null);
     try {
       const text = await decodeQrFromFile(file);
       finishWithEquipmentId(text);
     } catch (err) {
       console.error('[QRScanner] file decode failed:', err);
       const msg =
-        'Не удалось распознать QR на фото. Сделайте снимок ближе и ровнее, чтобы код был в кадре.';
+        'Не удалось распознать QR на фото. Сделайте снимок ближе, чтобы код был в кадре.';
       setError(msg);
       onScanError?.(msg);
     } finally {
@@ -335,22 +392,8 @@ const QRScanner: React.FC<QRScannerProps> = ({
     }
   };
 
-  useEffect(() => {
-    if (!isOpen) {
-      releaseCamera();
-      setError(null);
-      setIsStarting(false);
-      setIsDecodingFile(false);
-      isProcessingRef.current = false;
-      return;
-    }
-
-    return () => {
-      releaseCamera();
-    };
-  }, [isOpen]);
-
   const handleClose = (): void => {
+    sessionRef.current += 1;
     releaseCamera();
     isProcessingRef.current = false;
     onClose?.();
@@ -389,33 +432,16 @@ const QRScanner: React.FC<QRScannerProps> = ({
             muted
             autoPlay
           />
-
-          {/* Скрытый host для html5-qrcode.scanFile */}
           <div id="qr-scanner-file-decode-host" className="qr-scanner-file-host" />
 
-          {!isCameraActive && !isStarting && (
-            <div className="qr-scanner-start-panel">
-              <p className="qr-scanner-start-hint">
-                Нажмите «Включить камеру» для live-сканирования или сделайте фото QR-кода
-              </p>
-              <button
-                type="button"
-                className="qr-scanner-start-button"
-                onClick={handleEnableCamera}
-              >
-                Включить камеру
-              </button>
-              <button
-                type="button"
-                className="qr-scanner-secondary-button"
-                onClick={handlePhotoCaptureClick}
-              >
-                Сфотографировать QR
-              </button>
+          {isCameraActive && !error && (
+            <div className="qr-scanner-aim" aria-hidden="true">
+              <div className="qr-scanner-aim-frame" />
+              <p className="qr-scanner-aim-hint">Наведите камеру на QR-код</p>
             </div>
           )}
 
-          {(isStarting || isDecodingFile) && (
+          {(isInitializing || isDecodingFile) && (
             <div className="qr-scanner-loading qr-scanner-loading-overlay">
               <div className="qr-scanner-spinner" />
               <p>{isDecodingFile ? 'Распознаём QR на фото...' : 'Запуск камеры...'}</p>
@@ -423,21 +449,19 @@ const QRScanner: React.FC<QRScannerProps> = ({
           )}
         </div>
 
-        {(error || isCameraActive) && (
+        {error && (
           <div className="qr-scanner-footer-actions">
-            {error && (
-              <button
-                type="button"
-                className="qr-scanner-retry-button"
-                onClick={handleEnableCamera}
-                disabled={isStarting}
-              >
-                Повторить live-камеру
-              </button>
-            )}
             <button
               type="button"
-              className="qr-scanner-secondary-button"
+              className="qr-scanner-retry-button"
+              onClick={handleRetry}
+              disabled={isInitializing}
+            >
+              Повторить
+            </button>
+            <button
+              type="button"
+              className="qr-scanner-secondary-button qr-scanner-secondary-button-light"
               onClick={handlePhotoCaptureClick}
               disabled={isDecodingFile}
             >
