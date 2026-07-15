@@ -1,12 +1,15 @@
 /**
  * Компонент сканера QR-кодов
  * Использует библиотеку html5-qrcode для сканирования QR-кодов с камеры
+ *
+ * Android: сначала facingMode / warmup deviceId — getCameras() на Android нестабилен.
+ * iOS: deviceId через getCameras() + waitForPaint — facingMode на Safari ненадёжен.
  */
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Html5Qrcode, type CameraDevice } from 'html5-qrcode';
 import { parseEquipmentId } from '../../../../shared/utils/qrCodeParser';
-import { isIOS } from '@/shared/utils/deviceDetection';
+import { isAndroid, isIOS } from '@/shared/utils/deviceDetection';
 import './QRScanner.css';
 
 interface QRScannerProps {
@@ -38,6 +41,12 @@ function waitForPaint(): Promise<void> {
   });
 }
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 /** Выбрать заднюю камеру — на iOS facingMode ненадёжен. */
 function pickRearCameraId(cameras: CameraDevice[]): string | null {
   const back = cameras.find((camera) =>
@@ -59,6 +68,19 @@ function cameraConfigKey(cameraConfig: CameraConfig): string {
   return `constraints:${JSON.stringify(cameraConfig)}`;
 }
 
+function stopMediaStream(stream: MediaStream): void {
+  for (const track of stream.getTracks()) {
+    track.stop();
+  }
+}
+
+function resetScannerContainer(): void {
+  const el = document.getElementById(SCANNER_CONTAINER_ID);
+  if (el) {
+    el.innerHTML = '';
+  }
+}
+
 async function stopAndClearScanner(scanner: Html5Qrcode): Promise<void> {
   try {
     await scanner.stop();
@@ -71,18 +93,8 @@ async function stopAndClearScanner(scanner: Html5Qrcode): Promise<void> {
   } catch {
     // clear() может падать, если DOM уже размонтирован — игнорируем
   }
-}
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
-
-function stopMediaStream(stream: MediaStream): void {
-  for (const track of stream.getTracks()) {
-    track.stop();
-  }
+  resetScannerContainer();
 }
 
 function normalizeScannerError(err: unknown): string {
@@ -104,43 +116,102 @@ function normalizeScannerError(err: unknown): string {
   return message || 'Ошибка при запуске сканера';
 }
 
-async function ensureCameraPermission(): Promise<void> {
-  let stream: MediaStream | null = null;
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      audio: false,
-      video: true,
-    });
-  } finally {
-    if (stream) {
-      stopMediaStream(stream);
-      // На некоторых Android-устройствах нужно немного времени,
-      // чтобы освободить камеру перед следующим открытием.
-      await delay(120);
+/**
+ * Прогревает доступ к камере и возвращает deviceId активного трека.
+ * На Android это стабильнее, чем сразу стартовать html5-qrcode по getCameras().
+ */
+async function warmupCameraAccess(): Promise<string | null> {
+  const attempts: Array<MediaTrackConstraints | boolean> = [
+    { facingMode: { ideal: 'environment' } },
+    { facingMode: { ideal: 'user' } },
+    true,
+  ];
+
+  let lastError: unknown = null;
+  for (const videoConstraints of attempts) {
+    let stream: MediaStream | null = null;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: videoConstraints,
+      });
+      const videoTrack = stream.getVideoTracks()[0];
+      const deviceId = videoTrack?.getSettings()?.deviceId ?? null;
+      return deviceId;
+    } catch (err: unknown) {
+      lastError = err;
+    } finally {
+      if (stream) {
+        stopMediaStream(stream);
+        // Android часто держит камеру занятой ещё короткое время после stop().
+        await delay(isAndroid() ? 250 : 120);
+      }
     }
   }
+
+  throw lastError ?? new Error('Не удалось получить доступ к камере');
+}
+
+/** iOS / desktop: deviceId через enumerate, иначе facingMode. */
+async function resolveCameraConfig(): Promise<CameraConfig> {
+  try {
+    const cameras = await Html5Qrcode.getCameras();
+    if (cameras.length === 0) {
+      throw new Error('Камеры не найдены на устройстве');
+    }
+    const cameraId = pickRearCameraId(cameras);
+    if (cameraId) {
+      return cameraId;
+    }
+  } catch (err) {
+    console.warn('[QRScanner] getCameras failed, fallback to facingMode:', err);
+  }
+
+  return { facingMode: 'environment' };
 }
 
 async function getCandidateCameraConfigs(): Promise<CameraConfig[]> {
   const cameraConfigs: CameraConfig[] = [];
 
-  try {
-    const cameras = await Html5Qrcode.getCameras();
-    if (cameras.length > 0) {
-      const rearCameraId = pickRearCameraId(cameras);
-      if (rearCameraId) {
-        cameraConfigs.push(rearCameraId);
+  if (isAndroid()) {
+    // Android: НЕ начинать с getCameras() deviceId — часто ломает старт.
+    // Порядок: warmup deviceId → facingMode → enumerate fallback.
+    try {
+      const warmedDeviceId = await warmupCameraAccess();
+      if (warmedDeviceId) {
+        cameraConfigs.push(warmedDeviceId);
       }
-      for (const camera of cameras) {
-        cameraConfigs.push(camera.id);
+    } catch (warmupErr: unknown) {
+      const message = warmupErr instanceof Error ? warmupErr.message : String(warmupErr);
+      if (/denied|permission|notallowed|разреш/i.test(message)) {
+        throw new Error('Нет доступа к камере. Разрешите камеру в настройках браузера.');
       }
+      console.warn('[QRScanner] Android warmup failed, continue with facingMode:', warmupErr);
     }
-  } catch (err) {
-    console.warn('[QRScanner] getCameras failed, will use facingMode fallback:', err);
-  }
 
-  cameraConfigs.push({ facingMode: 'environment' });
-  cameraConfigs.push({ facingMode: 'user' });
+    cameraConfigs.push({ facingMode: 'environment' });
+    cameraConfigs.push({ facingMode: 'user' });
+    cameraConfigs.push(await resolveCameraConfig());
+  } else {
+    // iOS / desktop: сначала конкретный deviceId (Safari), затем user.
+    try {
+      await warmupCameraAccess();
+    } catch (warmupErr: unknown) {
+      const message = warmupErr instanceof Error ? warmupErr.message : String(warmupErr);
+      if (/denied|permission|notallowed|разреш/i.test(message)) {
+        throw new Error(
+          isIOS()
+            ? 'Нет доступа к камере. Разрешите камеру: Настройки → Safari → Камера'
+            : 'Нет доступа к камере. Разрешите камеру в настройках браузера.'
+        );
+      }
+      console.warn('[QRScanner] permission warmup failed:', warmupErr);
+    }
+
+    cameraConfigs.push(await resolveCameraConfig());
+    cameraConfigs.push({ facingMode: 'environment' });
+    cameraConfigs.push({ facingMode: 'user' });
+  }
 
   const uniqueCameraConfigs: CameraConfig[] = [];
   const seenConfigs = new Set<string>();
@@ -162,12 +233,14 @@ const QRScanner: React.FC<QRScannerProps> = ({
   isOpen,
 }) => {
   const scannerRef = useRef<Html5Qrcode | null>(null);
+  const startGenerationRef = useRef(0);
   const [isInitializing, setIsInitializing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isProcessingRef = useRef(false);
 
   const stopScanning = async (): Promise<void> => {
     if (!scannerRef.current) {
+      resetScannerContainer();
       return;
     }
 
@@ -207,6 +280,8 @@ const QRScanner: React.FC<QRScannerProps> = ({
       return;
     }
 
+    const generation = ++startGenerationRef.current;
+
     setIsInitializing(true);
     setError(null);
     isProcessingRef.current = false;
@@ -227,8 +302,10 @@ const QRScanner: React.FC<QRScannerProps> = ({
         throw new Error('Сканер камеры работает только в HTTPS-режиме');
       }
 
-      await ensureCameraPermission();
       await waitForPaint();
+      if (generation !== startGenerationRef.current) {
+        return;
+      }
 
       const onDecode = (decodedText: string): void => {
         if (!isProcessingRef.current) {
@@ -237,9 +314,17 @@ const QRScanner: React.FC<QRScannerProps> = ({
       };
 
       const uniqueCameraConfigs = await getCandidateCameraConfigs();
+      if (generation !== startGenerationRef.current) {
+        return;
+      }
 
       let lastStartError: unknown = null;
       for (const cameraConfig of uniqueCameraConfigs) {
+        if (generation !== startGenerationRef.current) {
+          return;
+        }
+
+        resetScannerContainer();
         const scanner = new Html5Qrcode(SCANNER_CONTAINER_ID);
         scannerRef.current = scanner;
         try {
@@ -253,24 +338,36 @@ const QRScanner: React.FC<QRScannerProps> = ({
           if (scannerRef.current === scanner) {
             scannerRef.current = null;
           }
+          // Дать камере освободиться перед следующей попыткой (критично на Android).
+          await delay(isAndroid() ? 200 : 50);
         }
+      }
+
+      if (generation !== startGenerationRef.current) {
+        return;
       }
 
       if (lastStartError) {
         throw lastStartError;
       }
     } catch (err: unknown) {
+      if (generation !== startGenerationRef.current) {
+        return;
+      }
       const errorMessage = normalizeScannerError(err);
       setError(errorMessage);
       onScanError?.(errorMessage);
       await stopScanning();
     } finally {
-      setIsInitializing(false);
+      if (generation === startGenerationRef.current) {
+        setIsInitializing(false);
+      }
     }
   };
 
   useEffect(() => {
     if (!isOpen) {
+      startGenerationRef.current += 1;
       void stopScanning();
       setError(null);
       setIsInitializing(false);
@@ -281,17 +378,20 @@ const QRScanner: React.FC<QRScannerProps> = ({
     void startScanning();
 
     return () => {
+      startGenerationRef.current += 1;
       void stopScanning();
     };
   }, [isOpen]);
 
   const handleClose = async (): Promise<void> => {
+    startGenerationRef.current += 1;
     await stopScanning();
     isProcessingRef.current = false;
     onClose?.();
   };
 
   const handleRetry = async (): Promise<void> => {
+    startGenerationRef.current += 1;
     await stopScanning();
     isProcessingRef.current = false;
     void startScanning();
