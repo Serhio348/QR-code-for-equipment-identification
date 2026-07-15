@@ -27,6 +27,7 @@ const SCANNER_CONFIG = {
 } as const;
 
 const SCANNER_CONTAINER_ID = 'qr-scanner-container';
+type CameraConfig = string | MediaTrackConstraints;
 
 /** Дождаться отрисовки контейнера (критично для iOS Safari). */
 function waitForPaint(): Promise<void> {
@@ -66,6 +67,13 @@ async function resolveCameraConfig(): Promise<string | MediaTrackConstraints> {
   }
 
   return { facingMode: 'environment' };
+}
+
+function cameraConfigKey(cameraConfig: CameraConfig): string {
+  if (typeof cameraConfig === 'string') {
+    return `id:${cameraConfig}`;
+  }
+  return `constraints:${JSON.stringify(cameraConfig)}`;
 }
 
 const QRScanner: React.FC<QRScannerProps> = ({
@@ -140,48 +148,52 @@ const QRScanner: React.FC<QRScannerProps> = ({
 
       await waitForPaint();
 
-      const scanner = new Html5Qrcode(SCANNER_CONTAINER_ID);
-      scannerRef.current = scanner;
-
       const onDecode = (decodedText: string): void => {
         if (!isProcessingRef.current) {
           handleScanSuccess(decodedText);
         }
       };
 
+      const cameraConfigs: CameraConfig[] = [];
+
       if (isAndroid()) {
-        // На Android getCameras() может давать нестабильные результаты,
-        // поэтому сначала пробуем прямой запуск через facingMode.
-        let androidStartError: unknown;
-        try {
-          await scanner.start({ facingMode: 'environment' }, SCANNER_CONFIG, onDecode, () => {});
-        } catch (environmentErr: unknown) {
-          androidStartError = environmentErr;
-          try {
-            await scanner.start({ facingMode: 'user' }, SCANNER_CONFIG, onDecode, () => {});
-            androidStartError = null;
-          } catch (userErr: unknown) {
-            androidStartError = userErr;
-          }
-        }
-
-        if (androidStartError) {
-          const cameraConfig = await resolveCameraConfig();
-          await scanner.start(cameraConfig, SCANNER_CONFIG, onDecode, () => {});
-        }
+        // На Android после неуспешного старта scanner может застревать в промежуточном состоянии.
+        // Поэтому пробуем несколько конфигов последовательно, создавая новый экземпляр на каждую попытку.
+        cameraConfigs.push({ facingMode: 'environment' });
+        cameraConfigs.push({ facingMode: 'user' });
+        cameraConfigs.push(await resolveCameraConfig());
       } else {
-        const cameraConfig = await resolveCameraConfig();
+        cameraConfigs.push(await resolveCameraConfig());
+        cameraConfigs.push({ facingMode: 'user' });
+      }
 
+      const uniqueCameraConfigs: CameraConfig[] = [];
+      const seenConfigs = new Set<string>();
+      for (const cameraConfig of cameraConfigs) {
+        const key = cameraConfigKey(cameraConfig);
+        if (!seenConfigs.has(key)) {
+          uniqueCameraConfigs.push(cameraConfig);
+          seenConfigs.add(key);
+        }
+      }
+
+      let lastStartError: unknown = null;
+      for (const cameraConfig of uniqueCameraConfigs) {
+        const scanner = new Html5Qrcode(SCANNER_CONTAINER_ID);
+        scannerRef.current = scanner;
         try {
           await scanner.start(cameraConfig, SCANNER_CONFIG, onDecode, () => {});
+          lastStartError = null;
+          break;
         } catch (startErr: unknown) {
-          const message = startErr instanceof Error ? startErr.message : String(startErr);
-          if (/environment|facing|camera/i.test(message)) {
-            await scanner.start({ facingMode: 'user' }, SCANNER_CONFIG, onDecode, () => {});
-          } else {
-            throw startErr;
-          }
+          lastStartError = startErr;
+          console.warn('[QRScanner] start failed for config:', cameraConfig, startErr);
+          await stopScanning();
         }
+      }
+
+      if (lastStartError) {
+        throw lastStartError;
       }
     } catch (err: unknown) {
       const errorMessage =
