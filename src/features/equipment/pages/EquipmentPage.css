@@ -1,11 +1,10 @@
 .equipment-page {
-  background: var(--gradient-background, linear-gradient(135deg, rgba(102, 126, 234, 0.30) 0%, rgba(118, 75, 162, 0.30) 100%));
+  background: transparent;
   padding-bottom: 40px;
   overflow: visible;
   overflow-x: visible;
   overflow-y: visible;
-  min-height: auto;
-  padding-bottom: 40px; /* Обычный отступ снизу */
+  min-height: calc(100vh - 80px - 60px);
   height: auto;
   width: 100%;
   box-sizing: border-box;
