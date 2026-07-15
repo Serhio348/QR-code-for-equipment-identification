@@ -141,7 +141,8 @@ app.use(helmet({
 app.use((req, res, next) => {
   const isMaintenanceFileUpload =
     req.method === 'POST' && req.path === '/api/equipment/upload-file';
-  express.json({ limit: isMaintenanceFileUpload ? '15mb' : '5mb' })(req, res, next);
+  // 25 МБ файла ≈ ~34 МБ Base64; берём запас 40mb
+  express.json({ limit: isMaintenanceFileUpload ? '40mb' : '5mb' })(req, res, next);
 });
 
 // --- Логирование запросов ---

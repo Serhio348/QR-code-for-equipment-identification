@@ -9,7 +9,7 @@ import multer from 'multer';
 import { authMiddleware, type AuthenticatedRequest } from '../../middleware/auth.js';
 
 const router = Router();
-const MAX_MAINTENANCE_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_MAINTENANCE_FILE_BYTES = 25 * 1024 * 1024;
 const MAX_MAINTENANCE_FILES_PER_ENTRY = 20;
 
 const upload = multer({
