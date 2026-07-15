@@ -1,9 +1,13 @@
 /**
  * Компонент списка оборудования
  * Отображает все оборудование из базы данных в виде списка
+ *
+ * Пагинация и фильтры в URL (?page=&type=&status=&workshop=&q=),
+ * чтобы при возврате с карточки открывалась та же страница списка.
  */
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Equipment } from '../types/equipment';
 import { formatDate } from '@/shared/utils/dateFormatting';
 import { EQUIPMENT_TYPE_OPTIONS } from '../constants/equipmentTypes';
@@ -19,59 +23,96 @@ interface EquipmentListProps {
   onSelectEquipment?: (equipment: Equipment) => void;
 }
 
+function parsePositivePage(value: string | null): number {
+  const page = Number.parseInt(value || '1', 10);
+  return Number.isFinite(page) && page > 0 ? page : 1;
+}
+
 const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
-  // Используем хук для загрузки данных (с кешированием)
+  const [searchParams, setSearchParams] = useSearchParams();
   const { data: equipmentListData, loading, error, refetch } = useEquipmentData();
   const { workshops: workshopOptions = [] } = useWorkshops();
-  
-  // Преобразуем данные в массив (если это список)
+
   const equipmentList = useMemo(() => {
     if (!equipmentListData) return [];
     return Array.isArray(equipmentListData) ? equipmentListData : [];
   }, [equipmentListData]);
-  
-  const [filterType, setFilterType] = useState<string>('all');
-  const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [filterWorkshop, setFilterWorkshop] = useState<string>('all');
-  const [searchQuery, setSearchQuery] = useState<string>('');
+
+  const filterType = searchParams.get('type') || 'all';
+  const filterStatus = searchParams.get('status') || 'all';
+  const filterWorkshop = searchParams.get('workshop') || 'all';
+  const searchQuery = searchParams.get('q') || '';
+  const currentPage = parsePositivePage(searchParams.get('page'));
+
   const [isScannerOpen, setIsScannerOpen] = useState(false);
-  const [currentPage, setCurrentPage] = useState<number>(1);
   const itemsPerPage = 6;
 
-  /**
-   * Поиск оборудования по ID или Google Drive URL
-   */
-  const findEquipmentById = (id: string): Equipment | null => {
-    if (isDriveId(id)) {
-      // Поиск по Google Drive ID
-      const driveFolderId = id.replace('DRIVE:', '');
-      return equipmentList.find(eq => {
-        if (!eq.googleDriveUrl) return false;
-        const url = eq.googleDriveUrl.toLowerCase();
-        const searchId = driveFolderId.toLowerCase();
-        return url.includes(searchId) || 
-               url.includes(`folders/${searchId}`) ||
-               url.includes(`id=${searchId}`);
-      }) || null;
-    } else {
-      // Поиск по прямому ID
-      return equipmentList.find(eq => eq.id === id) || null;
-    }
+  const updateListParams = useCallback(
+    (patch: Record<string, string | null>): void => {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        for (const [key, value] of Object.entries(patch)) {
+          if (value === null || value === '' || value === 'all') {
+            next.delete(key);
+          } else {
+            next.set(key, value);
+          }
+        }
+        return next;
+      }, { replace: true });
+    },
+    [setSearchParams]
+  );
+
+  const setFilterType = (value: string): void => {
+    updateListParams({ type: value, page: '1' });
   };
 
-  /**
-   * Обработка успешного сканирования QR-кода
-   */
-  const handleScanSuccess = (scannedId: string) => {
+  const setFilterStatus = (value: string): void => {
+    updateListParams({ status: value, page: '1' });
+  };
+
+  const setFilterWorkshop = (value: string): void => {
+    updateListParams({ workshop: value, page: '1' });
+  };
+
+  const setSearchQuery = (value: string): void => {
+    updateListParams({ q: value.trim() ? value : null, page: '1' });
+  };
+
+  const setCurrentPage = (pageOrUpdater: number | ((prev: number) => number)): void => {
+    const nextPage =
+      typeof pageOrUpdater === 'function' ? pageOrUpdater(currentPage) : pageOrUpdater;
+    updateListParams({ page: String(Math.max(1, nextPage)) });
+  };
+
+  const findEquipmentById = (id: string): Equipment | null => {
+    if (isDriveId(id)) {
+      const driveFolderId = id.replace('DRIVE:', '');
+      return (
+        equipmentList.find((eq) => {
+          if (!eq.googleDriveUrl) return false;
+          const url = eq.googleDriveUrl.toLowerCase();
+          const searchId = driveFolderId.toLowerCase();
+          return (
+            url.includes(searchId) ||
+            url.includes(`folders/${searchId}`) ||
+            url.includes(`id=${searchId}`)
+          );
+        }) || null
+      );
+    }
+    return equipmentList.find((eq) => eq.id === id) || null;
+  };
+
+  const handleScanSuccess = (scannedId: string): void => {
     console.debug('[EquipmentList] Отсканирован ID:', scannedId);
 
-    // Ищем оборудование в списке
     const equipment = findEquipmentById(scannedId);
 
     if (equipment) {
       console.debug('[EquipmentList] Оборудование найдено:', equipment.name);
 
-      // Логируем успешное сканирование
       logUserActivity(
         'qr_code_scan',
         `Сканирование QR-кода: "${equipment.name}"`,
@@ -86,15 +127,9 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
         }
       ).catch(() => {});
 
-      // Закрываем сканер
       setIsScannerOpen(false);
-
-      // Автоматически открываем карточку оборудования
-      if (onSelectEquipment) {
-        onSelectEquipment(equipment);
-      }
+      onSelectEquipment?.(equipment);
     } else {
-      // Логируем неудачное сканирование
       logUserActivity(
         'qr_code_scan',
         `Сканирование QR-кода: оборудование не найдено (ID: ${scannedId})`,
@@ -107,77 +142,68 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
         }
       ).catch(() => {});
 
-      // Оборудование не найдено - показываем сообщение
-      alert(`Оборудование с ID "${scannedId}" не найдено в списке.\n\nВозможно, список нужно обновить.`);
+      alert(
+        `Оборудование с ID "${scannedId}" не найдено в списке.\n\nВозможно, список нужно обновить.`
+      );
       setIsScannerOpen(false);
     }
   };
 
-  /**
-   * Обработка ошибки сканирования
-   */
-  const handleScanError = (error: string) => {
-    console.error('[EquipmentList] Ошибка сканирования:', error);
+  const handleScanError = (errorMessage: string): void => {
+    console.error('[EquipmentList] Ошибка сканирования:', errorMessage);
   };
 
-  // Фильтрация оборудования
   const filteredEquipment = useMemo(() => {
-    return equipmentList.filter(eq => {
-      // Фильтр по типу
+    return equipmentList.filter((eq) => {
       if (filterType !== 'all' && eq.type !== filterType) {
         return false;
       }
-      
-      // Фильтр по статусу
+
       if (filterStatus !== 'all' && eq.status !== filterStatus) {
         return false;
       }
-      
-      // Фильтр по участку
+
       if (filterWorkshop !== 'all') {
         const equipmentWorkshop = eq.specs?.workshop || eq.specs?.location || '';
         if (equipmentWorkshop !== filterWorkshop) {
           return false;
         }
       }
-      
-      // Исключаем архивные из списка
+
       if (eq.status === 'archived') {
         return false;
       }
-      
-      // Поиск по названию
+
       if (searchQuery && !eq.name.toLowerCase().includes(searchQuery.toLowerCase())) {
         return false;
       }
-      
+
       return true;
     });
   }, [equipmentList, filterType, filterStatus, filterWorkshop, searchQuery]);
 
-  // Пагинация
-  const totalPages = Math.ceil(filteredEquipment.length / itemsPerPage);
+  const totalPages = Math.max(1, Math.ceil(filteredEquipment.length / itemsPerPage) || 1);
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+
   const paginatedEquipment = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
+    const startIndex = (safeCurrentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     return filteredEquipment.slice(startIndex, endIndex);
-  }, [filteredEquipment, currentPage, itemsPerPage]);
+  }, [filteredEquipment, safeCurrentPage, itemsPerPage]);
 
-  // Сброс страницы при изменении фильтров
-  React.useEffect(() => {
-    setCurrentPage(1);
-  }, [filterType, filterStatus, searchQuery]);
+  useEffect(() => {
+    if (currentPage !== safeCurrentPage) {
+      updateListParams({ page: String(safeCurrentPage) });
+    }
+  }, [currentPage, safeCurrentPage, updateListParams]);
 
-  // Логирование поиска (с задержкой для debounce)
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (searchQuery) {
-      // Очищаем предыдущий таймаут
       if (searchTimeoutRef.current) {
         clearTimeout(searchTimeoutRef.current);
       }
 
-      // Устанавливаем новый таймаут (1 секунда)
       searchTimeoutRef.current = setTimeout(() => {
         logUserActivity(
           'equipment_search',
@@ -200,7 +226,6 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
     };
   }, [searchQuery, filteredEquipment.length]);
 
-  // Логирование фильтрации
   const prevFilterRef = useRef({ type: filterType, status: filterStatus, workshop: filterWorkshop });
   useEffect(() => {
     const hasFilterChanged =
@@ -208,7 +233,10 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
       prevFilterRef.current.status !== filterStatus ||
       prevFilterRef.current.workshop !== filterWorkshop;
 
-    if (hasFilterChanged && (filterType !== 'all' || filterStatus !== 'all' || filterWorkshop !== 'all')) {
+    if (
+      hasFilterChanged &&
+      (filterType !== 'all' || filterStatus !== 'all' || filterWorkshop !== 'all')
+    ) {
       logUserActivity(
         'equipment_filter',
         'Фильтрация списка оборудования',
@@ -227,22 +255,23 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
     }
   }, [filterType, filterStatus, filterWorkshop, filteredEquipment.length]);
 
-
-
   if (loading) {
     return (
       <div className="equipment-list">
         <div className="loading-message">
           <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-            <div className="spinner" style={{ 
-              width: '40px', 
-              height: '40px', 
-              border: '4px solid #f3f3f3', 
-              borderTop: '4px solid #667eea', 
-              borderRadius: '50%', 
-              animation: 'spin 1s linear infinite',
-              margin: '0 auto 20px'
-            }}></div>
+            <div
+              className="spinner"
+              style={{
+                width: '40px',
+                height: '40px',
+                border: '4px solid #f3f3f3',
+                borderTop: '4px solid #667eea',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite',
+                margin: '0 auto 20px',
+              }}
+            />
             <p>Загрузка списка оборудования...</p>
           </div>
         </div>
@@ -257,8 +286,8 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
           <p style={{ marginBottom: '10px', fontWeight: '600' }}>Ошибка загрузки данных</p>
           <p style={{ marginBottom: '20px' }}>{error}</p>
           <button onClick={refetch} className="retry-button">
-          Попробовать снова
-        </button>
+            Попробовать снова
+          </button>
         </div>
       </div>
     );
@@ -268,7 +297,6 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
     <div className="equipment-list">
       <div className="list-header">
         <div className="list-controls">
-          {/* Поиск */}
           <div className="search-box">
             <input
               type="text"
@@ -278,8 +306,7 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
               className="search-input"
             />
           </div>
-          
-          {/* Кнопка сканера QR-кода - только на мобильных */}
+
           <button
             className="qr-scanner-button"
             onClick={() => setIsScannerOpen(true)}
@@ -288,8 +315,7 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
           >
             📱 Сканировать QR
           </button>
-          
-          {/* Фильтр по участку */}
+
           <select
             value={filterWorkshop}
             onChange={(e) => setFilterWorkshop(e.target.value)}
@@ -306,8 +332,7 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
               <option disabled>Загрузка участков...</option>
             )}
           </select>
-          
-          {/* Фильтр по типу */}
+
           <select
             value={filterType}
             onChange={(e) => setFilterType(e.target.value)}
@@ -320,8 +345,7 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
               </option>
             ))}
           </select>
-          
-          {/* Фильтр по статусу */}
+
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
@@ -334,7 +358,6 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
         </div>
       </div>
 
-      {/* Сканер QR-кодов */}
       <QRScanner
         isOpen={isScannerOpen}
         onScanSuccess={handleScanSuccess}
@@ -344,12 +367,12 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
 
       <div className="list-info">
         Найдено: {filteredEquipment.length} из {equipmentList.length}
-        {totalPages > 1 && ` (Страница ${currentPage} из ${totalPages})`}
+        {totalPages > 1 && ` (Страница ${safeCurrentPage} из ${totalPages})`}
       </div>
 
       {filteredEquipment.length === 0 ? (
         <div className="empty-message">
-          {equipmentList.length === 0 
+          {equipmentList.length === 0
             ? 'Оборудование не найдено. Добавьте новое оборудование.'
             : 'Нет оборудования, соответствующего фильтрам.'}
         </div>
@@ -357,63 +380,64 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
         <>
           <div className="equipment-cards">
             {paginatedEquipment.map((equipment) => (
-            <div
-              key={equipment.id}
-              className="equipment-card"
-              onClick={() => onSelectEquipment?.(equipment)}
-            >
-              <div className="card-header">
-                <h3 className="equipment-card-name">{equipment.name}</h3>
-                <StatusBadge status={equipment.status} />
+              <div
+                key={equipment.id}
+                className="equipment-card"
+                onClick={() => onSelectEquipment?.(equipment)}
+              >
+                <div className="card-header">
+                  <h3 className="equipment-card-name">{equipment.name}</h3>
+                  <StatusBadge status={equipment.status} />
+                </div>
+
+                <div className="card-body">
+                  {equipment.specs?.inventoryNumber && (
+                    <div className="card-info">
+                      <span className="info-label">Инвентарный номер:</span>
+                      <span className="info-value">{equipment.specs.inventoryNumber}</span>
+                    </div>
+                  )}
+
+                  {equipment.commissioningDate && (
+                    <div className="card-info">
+                      <span className="info-label">Ввод в эксплуатацию:</span>
+                      <span className="info-value">{formatDate(equipment.commissioningDate)}</span>
+                    </div>
+                  )}
+
+                  {equipment.lastMaintenanceDate && (
+                    <div className="card-info">
+                      <span className="info-label">Последнее обслуживание:</span>
+                      <span className="info-value">{formatDate(equipment.lastMaintenanceDate)}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="card-footer">
+                  <span className="equipment-id">ID: {equipment.id.substring(0, 8)}...</span>
+                </div>
               </div>
-              
-              <div className="card-body">
-                {equipment.specs?.inventoryNumber && (
-                  <div className="card-info">
-                    <span className="info-label">Инвентарный номер:</span>
-                    <span className="info-value">{equipment.specs.inventoryNumber}</span>
-                  </div>
-                )}
-                
-                {equipment.commissioningDate && (
-                  <div className="card-info">
-                    <span className="info-label">Ввод в эксплуатацию:</span>
-                    <span className="info-value">{formatDate(equipment.commissioningDate)}</span>
-                  </div>
-                )}
-                
-                {equipment.lastMaintenanceDate && (
-                  <div className="card-info">
-                    <span className="info-label">Последнее обслуживание:</span>
-                    <span className="info-value">{formatDate(equipment.lastMaintenanceDate)}</span>
-                  </div>
-                )}
-              </div>
-              
-              <div className="card-footer">
-                <span className="equipment-id">ID: {equipment.id.substring(0, 8)}...</span>
-              </div>
-            </div>
             ))}
           </div>
 
-          {/* Пагинация */}
           {totalPages > 1 && (
             <div className="pagination">
               <button
-                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
+                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                disabled={safeCurrentPage === 1}
                 className="pagination-button"
+                type="button"
               >
                 ← Назад
               </button>
               <span className="pagination-info">
-                Страница {currentPage} из {totalPages}
+                Страница {safeCurrentPage} из {totalPages}
               </span>
               <button
-                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                disabled={safeCurrentPage === totalPages}
                 className="pagination-button"
+                type="button"
               >
                 Вперед →
               </button>
@@ -426,4 +450,3 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
 };
 
 export default EquipmentList;
-

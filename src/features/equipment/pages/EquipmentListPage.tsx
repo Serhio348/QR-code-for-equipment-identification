@@ -5,7 +5,7 @@
  */
 
 import React, { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../auth/contexts/AuthContext';
 import EquipmentList from '../components/EquipmentList';
 import { Equipment } from '../types/equipment';
@@ -15,9 +15,9 @@ import './EquipmentListPage.css';
 
 const EquipmentListPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { isAdmin, loading } = useAuth();
 
-  // Логирование просмотра списка оборудования
   useEffect(() => {
     if (!loading) {
       logUserActivity(
@@ -33,9 +33,11 @@ const EquipmentListPage: React.FC = () => {
     }
   }, [loading, isAdmin]);
 
-  const handleSelectEquipment = (equipment: Equipment) => {
-    // Переход на страницу оборудования
-    navigate(getEquipmentViewUrl(equipment.id));
+  const handleSelectEquipment = (equipment: Equipment): void => {
+    const returnTo = `${location.pathname}${location.search}`;
+    navigate(getEquipmentViewUrl(equipment.id), {
+      state: { returnTo },
+    });
   };
 
 
