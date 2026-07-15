@@ -76,6 +76,20 @@ function cameraConfigKey(cameraConfig: CameraConfig): string {
   return `constraints:${JSON.stringify(cameraConfig)}`;
 }
 
+async function stopAndClearScanner(scanner: Html5Qrcode): Promise<void> {
+  try {
+    await scanner.stop();
+  } catch {
+    // stop() ожидаемо падает, если сканер не успел перейти в running state
+  }
+
+  try {
+    await scanner.clear();
+  } catch {
+    // clear() может падать, если DOM уже размонтирован — игнорируем
+  }
+}
+
 const QRScanner: React.FC<QRScannerProps> = ({
   onScanSuccess,
   onScanError,
@@ -95,12 +109,7 @@ const QRScanner: React.FC<QRScannerProps> = ({
     const scanner = scannerRef.current;
     scannerRef.current = null;
 
-    try {
-      await scanner.stop();
-      await scanner.clear();
-    } catch {
-      console.log('[QRScanner] Сканер уже остановлен');
-    }
+    await stopAndClearScanner(scanner);
   };
 
   const handleScanSuccess = (decodedText: string): void => {
@@ -188,7 +197,10 @@ const QRScanner: React.FC<QRScannerProps> = ({
         } catch (startErr: unknown) {
           lastStartError = startErr;
           console.warn('[QRScanner] start failed for config:', cameraConfig, startErr);
-          await stopScanning();
+          await stopAndClearScanner(scanner);
+          if (scannerRef.current === scanner) {
+            scannerRef.current = null;
+          }
         }
       }
 
