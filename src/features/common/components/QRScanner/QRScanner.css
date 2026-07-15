@@ -125,6 +125,39 @@
   background: #5568d3;
 }
 
+.qr-scanner-secondary-button {
+  background: transparent;
+  color: #f5f5f5;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  padding: 12px 22px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.qr-scanner-secondary-button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.qr-scanner-secondary-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.qr-scanner-file-input {
+  display: none;
+}
+
+.qr-scanner-file-host {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .qr-scanner-error {
   padding: 16px 20px 0;
   text-align: center;
@@ -139,7 +172,18 @@
 .qr-scanner-footer-actions {
   padding: 16px 20px 20px;
   display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
   justify-content: center;
+}
+
+.qr-scanner-footer-actions .qr-scanner-secondary-button {
+  color: #333;
+  border-color: #c5c5c5;
+}
+
+.qr-scanner-start-panel {
+  gap: 12px;
 }
 
 .qr-scanner-retry-button {
