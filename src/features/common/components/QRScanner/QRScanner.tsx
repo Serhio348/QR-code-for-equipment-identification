@@ -6,7 +6,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Html5Qrcode, type CameraDevice } from 'html5-qrcode';
 import { parseEquipmentId } from '../../../../shared/utils/qrCodeParser';
-import { isAndroid, isIOS } from '@/shared/utils/deviceDetection';
+import { isIOS } from '@/shared/utils/deviceDetection';
 import './QRScanner.css';
 
 interface QRScannerProps {
@@ -149,38 +149,16 @@ const QRScanner: React.FC<QRScannerProps> = ({
         }
       };
 
-      if (isAndroid()) {
-        // На Android getCameras() может давать нестабильные результаты,
-        // поэтому сначала пробуем прямой запуск через facingMode.
-        let androidStartError: unknown;
-        try {
-          await scanner.start({ facingMode: 'environment' }, SCANNER_CONFIG, onDecode, () => {});
-        } catch (environmentErr: unknown) {
-          androidStartError = environmentErr;
-          try {
-            await scanner.start({ facingMode: 'user' }, SCANNER_CONFIG, onDecode, () => {});
-            androidStartError = null;
-          } catch (userErr: unknown) {
-            androidStartError = userErr;
-          }
-        }
+      const cameraConfig = await resolveCameraConfig();
 
-        if (androidStartError) {
-          const cameraConfig = await resolveCameraConfig();
-          await scanner.start(cameraConfig, SCANNER_CONFIG, onDecode, () => {});
-        }
-      } else {
-        const cameraConfig = await resolveCameraConfig();
-
-        try {
-          await scanner.start(cameraConfig, SCANNER_CONFIG, onDecode, () => {});
-        } catch (startErr: unknown) {
-          const message = startErr instanceof Error ? startErr.message : String(startErr);
-          if (/environment|facing|camera/i.test(message)) {
-            await scanner.start({ facingMode: 'user' }, SCANNER_CONFIG, onDecode, () => {});
-          } else {
-            throw startErr;
-          }
+      try {
+        await scanner.start(cameraConfig, SCANNER_CONFIG, onDecode, () => {});
+      } catch (startErr: unknown) {
+        const message = startErr instanceof Error ? startErr.message : String(startErr);
+        if (/environment|facing|camera/i.test(message)) {
+          await scanner.start({ facingMode: 'user' }, SCANNER_CONFIG, onDecode, () => {});
+        } else {
+          throw startErr;
         }
       }
     } catch (err: unknown) {
