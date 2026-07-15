@@ -1,23 +1,17 @@
 /**
  * Компонент сканера QR-кодов
  *
- * Android/Chrome: свой getUserMedia + BarcodeDetector (без html5-qrcode start),
- * чтобы не ловить NotReadableError от двойного открытия камеры.
+ * UX: открыл → сразу камера → навёл на QR → распознал.
+ * Без кнопки «Включить камеру».
  *
- * Старт только по кнопке (user gesture) — обходит React StrictMode double-mount
- * и требования мобильных браузеров к жесту для камеры.
- *
- * Fallback (Safari и др.): html5-qrcode, тоже только по кнопке, одна попытка за раз.
+ * Android + React.StrictMode: первый mount эффекта отменяется через короткий
+ * delay до getUserMedia, иначе двойной старт даёт NotReadableError.
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  Html5Qrcode,
-  Html5QrcodeScannerState,
-  type CameraDevice,
-} from 'html5-qrcode';
+import { Html5Qrcode } from 'html5-qrcode';
 import { parseEquipmentId } from '../../../../shared/utils/qrCodeParser';
-import { isAndroid, isIOS } from '@/shared/utils/deviceDetection';
+import { isIOS } from '@/shared/utils/deviceDetection';
 import './QRScanner.css';
 
 interface QRScannerProps {
@@ -27,8 +21,6 @@ interface QRScannerProps {
   isOpen: boolean;
 }
 
-const HTML5_SCANNER_ID = 'qr-scanner-html5-region';
-
 type BarcodeDetectorLike = {
   detect: (source: ImageBitmapSource) => Promise<Array<{ rawValue: string }>>;
 };
@@ -36,6 +28,9 @@ type BarcodeDetectorLike = {
 type BarcodeDetectorConstructor = new (options?: {
   formats?: string[];
 }) => BarcodeDetectorLike;
+
+/** Дать StrictMode отменить первый mount до открытия камеры. */
+const STRICT_MODE_ABORT_MS = 120;
 
 function getBarcodeDetectorConstructor(): BarcodeDetectorConstructor | null {
   const ctor = (window as unknown as { BarcodeDetector?: BarcodeDetectorConstructor })
@@ -58,57 +53,77 @@ function stopMediaStream(stream: MediaStream | null): void {
   }
 }
 
-function pickRearCameraId(cameras: CameraDevice[]): string | null {
-  const back = cameras.find((camera) =>
-    /back|rear|environment|задн/i.test(camera.label)
-  );
-  if (back) {
-    return back.id;
+function getErrorName(err: unknown): string {
+  if (err && typeof err === 'object' && 'name' in err) {
+    return String((err as { name: string }).name);
   }
-  if (cameras.length > 1) {
-    return cameras[cameras.length - 1].id;
-  }
-  return cameras[0]?.id ?? null;
+  return '';
 }
 
 function normalizeScannerError(err: unknown): string {
+  const name = getErrorName(err);
   const message = err instanceof Error ? err.message : String(err);
+  const blob = `${name} ${message}`;
 
-  if (/notallowed|permission|denied|разреш/i.test(message)) {
-    return 'Нет доступа к камере. Разрешите камеру в настройках браузера для этого сайта и нажмите «Включить камеру».';
+  if (/notallowed|permission|denied|разреш/i.test(blob)) {
+    return 'Нет доступа к камере. Разрешите камеру для этого сайта и откройте сканер снова.';
   }
-  if (/notfound|devicesnotfound|камера.*не найд/i.test(message)) {
-    return 'Камера не найдена на устройстве';
+  if (/notfound|devicesnotfound/i.test(blob)) {
+    return 'Камера не найдена на устройстве.';
   }
-  if (/notreadable|could not start video source|track start error|abort/i.test(message)) {
-    return 'Камера занята или не освободилась. Закройте другие вкладки с камерой, полностью закройте приложение браузера и откройте снова, затем нажмите «Включить камеру».';
+  if (/notreadable|could not start video source|track start error|abort/i.test(blob)) {
+    return 'Не удалось открыть камеру. Полностью закройте браузер и откройте приложение снова.';
   }
-  if (/secure|https|insecure context/i.test(message)) {
-    return 'Сканер камеры работает только в HTTPS-режиме';
+  if (/secure|https|insecure context/i.test(blob)) {
+    return 'Сканер камеры работает только в HTTPS-режиме.';
   }
 
   return message || 'Ошибка при запуске сканера';
 }
 
-async function stopHtml5Scanner(scanner: Html5Qrcode | null): Promise<void> {
-  if (!scanner) {
-    return;
-  }
-  try {
-    const state = scanner.getState();
-    if (
-      state === Html5QrcodeScannerState.SCANNING ||
-      state === Html5QrcodeScannerState.PAUSED
-    ) {
-      await scanner.stop();
+async function requestCameraStream(): Promise<MediaStream> {
+  const attempts: MediaStreamConstraints[] = [
+    { audio: false, video: { facingMode: { ideal: 'environment' } } },
+    { audio: false, video: { facingMode: 'environment' } },
+    { audio: false, video: true },
+    { audio: false, video: { facingMode: 'user' } },
+  ];
+
+  let lastError: unknown = null;
+  for (const constraints of attempts) {
+    try {
+      return await navigator.mediaDevices.getUserMedia(constraints);
+    } catch (err) {
+      lastError = err;
     }
-  } catch {
-    // ignore
   }
+  throw lastError ?? new Error('Не удалось получить доступ к камере');
+}
+
+async function decodeQrFromFile(file: File): Promise<string> {
+  const BarcodeDetectorCtor = getBarcodeDetectorConstructor();
+  if (BarcodeDetectorCtor && typeof createImageBitmap === 'function') {
+    const bitmap = await createImageBitmap(file);
+    try {
+      const detector = new BarcodeDetectorCtor({ formats: ['qr_code'] });
+      const codes = await detector.detect(bitmap);
+      if (codes[0]?.rawValue) {
+        return codes[0].rawValue;
+      }
+    } finally {
+      bitmap.close();
+    }
+  }
+
+  const scanner = new Html5Qrcode('qr-scanner-file-decode-host');
   try {
-    scanner.clear();
-  } catch {
-    // ignore
+    return await scanner.scanFile(file, false);
+  } finally {
+    try {
+      scanner.clear();
+    } catch {
+      // ignore
+    }
   }
 }
 
@@ -120,15 +135,15 @@ const QRScanner: React.FC<QRScannerProps> = ({
 }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const html5ScannerRef = useRef<Html5Qrcode | null>(null);
   const scanTimerRef = useRef<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const isProcessingRef = useRef(false);
-  const aliveRef = useRef(false);
+  const sessionRef = useRef(0);
 
-  const [isStarting, setIsStarting] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(false);
   const [isCameraActive, setIsCameraActive] = useState(false);
+  const [isDecodingFile, setIsDecodingFile] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [useHtml5Fallback, setUseHtml5Fallback] = useState(false);
 
   const clearScanTimer = (): void => {
     if (scanTimerRef.current !== null) {
@@ -137,27 +152,26 @@ const QRScanner: React.FC<QRScannerProps> = ({
     }
   };
 
-  const releaseCamera = async (): Promise<void> => {
+  const releaseCamera = (): void => {
     clearScanTimer();
-    aliveRef.current = false;
 
     const video = videoRef.current;
     if (video) {
-      video.pause();
+      try {
+        video.pause();
+      } catch {
+        // ignore
+      }
       video.srcObject = null;
     }
 
     stopMediaStream(streamRef.current);
     streamRef.current = null;
-
-    await stopHtml5Scanner(html5ScannerRef.current);
-    html5ScannerRef.current = null;
-
     setIsCameraActive(false);
   };
 
-  const finishWithEquipmentId = async (decodedText: string): Promise<void> => {
-    if (isProcessingRef.current || !aliveRef.current) {
+  const finishWithEquipmentId = (decodedText: string): void => {
+    if (isProcessingRef.current) {
       return;
     }
     isProcessingRef.current = true;
@@ -174,13 +188,17 @@ const QRScanner: React.FC<QRScannerProps> = ({
     }
 
     console.log('[QRScanner] Распознан ID оборудования:', equipmentId);
-    await releaseCamera();
+    sessionRef.current += 1;
+    releaseCamera();
     onScanSuccess(equipmentId);
   };
 
-  const startBarcodeDetectorLoop = (detector: BarcodeDetectorLike): void => {
+  const startBarcodeDetectorLoop = (
+    detector: BarcodeDetectorLike,
+    session: number
+  ): void => {
     const tick = async (): Promise<void> => {
-      if (!aliveRef.current || isProcessingRef.current) {
+      if (session !== sessionRef.current || isProcessingRef.current) {
         return;
       }
 
@@ -189,7 +207,7 @@ const QRScanner: React.FC<QRScannerProps> = ({
         try {
           const codes = await detector.detect(video);
           if (codes.length > 0 && codes[0]?.rawValue) {
-            await finishWithEquipmentId(codes[0].rawValue);
+            finishWithEquipmentId(codes[0].rawValue);
             return;
           }
         } catch (err) {
@@ -205,226 +223,178 @@ const QRScanner: React.FC<QRScannerProps> = ({
     void tick();
   };
 
-  const openNativeCamera = async (): Promise<void> => {
-    const BarcodeDetectorCtor = getBarcodeDetectorConstructor();
-    if (!BarcodeDetectorCtor) {
-      throw new Error('NO_BARCODE_DETECTOR');
+  const startLiveCamera = async (session: number): Promise<void> => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error(
+        isIOS()
+          ? 'Разрешите доступ к камере: Настройки → Safari → Камера'
+          : 'Ваш браузер не поддерживает доступ к камере'
+      );
     }
 
-    const constraintAttempts: MediaStreamConstraints[] = [
-      {
-        audio: false,
-        video: {
-          facingMode: { ideal: 'environment' },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-      },
-      {
-        audio: false,
-        video: { facingMode: 'environment' },
-      },
-      {
-        audio: false,
-        video: true,
-      },
-    ];
-
-    let stream: MediaStream | null = null;
-    let lastError: unknown = null;
-
-    for (const constraints of constraintAttempts) {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia(constraints);
-        lastError = null;
-        break;
-      } catch (err) {
-        lastError = err;
-      }
+    const isLocalhost =
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1' ||
+      window.location.hostname === '[::1]';
+    if (!window.isSecureContext && !isLocalhost) {
+      throw new Error('Сканер камеры работает только в HTTPS-режиме');
     }
 
-    if (!stream) {
-      throw lastError ?? new Error('Не удалось получить доступ к камере');
+    // Ждём paint + abort-окно для StrictMode, только потом getUserMedia.
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    });
+    await delay(STRICT_MODE_ABORT_MS);
+    if (session !== sessionRef.current) {
+      return;
+    }
+
+    const stream = await requestCameraStream();
+    if (session !== sessionRef.current) {
+      stopMediaStream(stream);
+      return;
     }
 
     streamRef.current = stream;
-
     const video = videoRef.current;
     if (!video) {
       stopMediaStream(stream);
-      streamRef.current = null;
       throw new Error('Видеоэлемент сканера не готов');
     }
 
     video.srcObject = stream;
-    video.setAttribute('playsinline', 'true');
     video.muted = true;
+    video.setAttribute('playsinline', 'true');
     await video.play();
 
-    const detector = new BarcodeDetectorCtor({ formats: ['qr_code'] });
-    setIsCameraActive(true);
-    startBarcodeDetectorLoop(detector);
-  };
-
-  const openHtml5Camera = async (): Promise<void> => {
-    setUseHtml5Fallback(true);
-    // Дождаться, пока React покажет контейнер #qr-scanner-html5-region
-    await delay(100);
-    await new Promise<void>((resolve) => {
-      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-    });
-
-    const region = document.getElementById(HTML5_SCANNER_ID);
-    if (!region) {
-      throw new Error('Контейнер сканера не готов');
-    }
-
-    const scanner = new Html5Qrcode(HTML5_SCANNER_ID, {
-      verbose: false,
-      useBarCodeDetectorIfSupported: true,
-    });
-    html5ScannerRef.current = scanner;
-
-    const onDecode = (decodedText: string): void => {
-      void finishWithEquipmentId(decodedText);
-    };
-
-    const configs: Array<string | MediaTrackConstraints> = [];
-
-    if (isAndroid()) {
-      configs.push({ facingMode: 'environment' });
-      configs.push({ facingMode: 'user' });
-    } else {
-      try {
-        const cameras = await Html5Qrcode.getCameras();
-        const rearId = pickRearCameraId(cameras);
-        if (rearId) {
-          configs.push(rearId);
-        }
-      } catch (err) {
-        console.warn('[QRScanner] getCameras failed:', err);
-      }
-      configs.push({ facingMode: 'environment' });
-      configs.push({ facingMode: 'user' });
-    }
-
-    let lastError: unknown = null;
-    for (let i = 0; i < configs.length; i += 1) {
-      if (!aliveRef.current) {
-        return;
-      }
-      try {
-        await scanner.start(
-          configs[i],
-          {
-            fps: 10,
-            qrbox: (w, h) => {
-              const edge = Math.min(w, h);
-              const size = Math.max(160, Math.floor(edge * 0.72));
-              return { width: size, height: size };
-            },
-          },
-          onDecode,
-          () => {}
-        );
-        setIsCameraActive(true);
-        return;
-      } catch (err) {
-        lastError = err;
-        console.warn('[QRScanner] html5 start failed:', configs[i], err);
-        try {
-          const state = scanner.getState();
-          if (
-            state === Html5QrcodeScannerState.SCANNING ||
-            state === Html5QrcodeScannerState.PAUSED
-          ) {
-            await scanner.stop();
-          }
-        } catch {
-          // ignore
-        }
-        await delay(isAndroid() ? 600 : 200);
-      }
-    }
-
-    throw lastError ?? new Error('Не удалось запустить камеру');
-  };
-
-  const handleEnableCamera = async (): Promise<void> => {
-    if (isStarting) {
+    if (session !== sessionRef.current) {
+      releaseCamera();
       return;
     }
 
-    setIsStarting(true);
-    setError(null);
-    isProcessingRef.current = false;
-
-    // Полный сброс перед новой попыткой (важно после NotReadableError).
-    await releaseCamera();
-    setUseHtml5Fallback(false);
-    await delay(isAndroid() ? 400 : 100);
-    aliveRef.current = true;
-
-    try {
-      if (!navigator.mediaDevices?.getUserMedia) {
-        throw new Error(
-          isIOS()
-            ? 'Разрешите доступ к камере: Настройки → Safari → Камера'
-            : 'Ваш браузер не поддерживает доступ к камере'
-        );
-      }
-
-      const isLocalhost =
-        window.location.hostname === 'localhost' ||
-        window.location.hostname === '127.0.0.1' ||
-        window.location.hostname === '[::1]';
-      if (!window.isSecureContext && !isLocalhost) {
-        throw new Error('Сканер камеры работает только в HTTPS-режиме');
-      }
-
-      // Предпочитаем native path: один getUserMedia без html5-qrcode.
-      try {
-        await openNativeCamera();
-      } catch (nativeErr) {
-        const message =
-          nativeErr instanceof Error ? nativeErr.message : String(nativeErr);
-        if (message !== 'NO_BARCODE_DETECTOR') {
-          console.warn('[QRScanner] native camera path failed, fallback html5:', nativeErr);
-        }
-        await releaseCamera();
-        await delay(isAndroid() ? 400 : 100);
-        aliveRef.current = true;
-        await openHtml5Camera();
-      }
-    } catch (err) {
-      const errorMessage = normalizeScannerError(err);
-      setError(errorMessage);
-      onScanError?.(errorMessage);
-      await releaseCamera();
-    } finally {
-      setIsStarting(false);
+    const BarcodeDetectorCtor = getBarcodeDetectorConstructor();
+    if (!BarcodeDetectorCtor) {
+      // Без BarcodeDetector live-decode нестабилен — оставляем preview и просим фото.
+      setIsCameraActive(true);
+      setError(
+        'Автораспознавание в этом браузере недоступно. Нажмите «Сфотографировать QR».'
+      );
+      return;
     }
+
+    const detector = new BarcodeDetectorCtor({ formats: ['qr_code'] });
+    setIsCameraActive(true);
+    startBarcodeDetectorLoop(detector, session);
   };
 
   useEffect(() => {
     if (!isOpen) {
-      void releaseCamera();
+      sessionRef.current += 1;
+      releaseCamera();
       setError(null);
-      setIsStarting(false);
-      setUseHtml5Fallback(false);
+      setIsInitializing(false);
+      setIsDecodingFile(false);
       isProcessingRef.current = false;
       return;
     }
 
-    // Камеру НЕ стартуем автоматически — только UI.
-    // Auto-start + React.StrictMode на Android = NotReadableError.
+    const session = ++sessionRef.current;
+    isProcessingRef.current = false;
+    setError(null);
+    setIsInitializing(true);
+    setIsCameraActive(false);
+
+    void (async () => {
+      try {
+        await startLiveCamera(session);
+      } catch (err) {
+        if (session !== sessionRef.current) {
+          return;
+        }
+        console.error('[QRScanner] live camera failed:', getErrorName(err), err);
+        releaseCamera();
+        const errorMessage = normalizeScannerError(err);
+        setError(errorMessage);
+        onScanError?.(errorMessage);
+      } finally {
+        if (session === sessionRef.current) {
+          setIsInitializing(false);
+        }
+      }
+    })();
+
     return () => {
-      void releaseCamera();
+      sessionRef.current += 1;
+      releaseCamera();
     };
   }, [isOpen]);
 
-  const handleClose = async (): Promise<void> => {
-    await releaseCamera();
+  const handleRetry = (): void => {
+    if (!isOpen || isInitializing) {
+      return;
+    }
+
+    const session = ++sessionRef.current;
+    releaseCamera();
+    isProcessingRef.current = false;
+    setError(null);
+    setIsInitializing(true);
+
+    void (async () => {
+      try {
+        // Небольшая пауза, чтобы ОС отпустила камеру после ошибки.
+        await delay(400);
+        if (session !== sessionRef.current) {
+          return;
+        }
+        await startLiveCamera(session);
+      } catch (err) {
+        if (session !== sessionRef.current) {
+          return;
+        }
+        releaseCamera();
+        const errorMessage = normalizeScannerError(err);
+        setError(errorMessage);
+        onScanError?.(errorMessage);
+      } finally {
+        if (session === sessionRef.current) {
+          setIsInitializing(false);
+        }
+      }
+    })();
+  };
+
+  const handlePhotoCaptureClick = (): void => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelected = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ): Promise<void> => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) {
+      return;
+    }
+
+    setIsDecodingFile(true);
+    try {
+      const text = await decodeQrFromFile(file);
+      finishWithEquipmentId(text);
+    } catch (err) {
+      console.error('[QRScanner] file decode failed:', err);
+      const msg =
+        'Не удалось распознать QR на фото. Сделайте снимок ближе, чтобы код был в кадре.';
+      setError(msg);
+      onScanError?.(msg);
+    } finally {
+      setIsDecodingFile(false);
+    }
+  };
+
+  const handleClose = (): void => {
+    sessionRef.current += 1;
+    releaseCamera();
     isProcessingRef.current = false;
     onClose?.();
   };
@@ -434,13 +404,13 @@ const QRScanner: React.FC<QRScannerProps> = ({
   }
 
   return (
-    <div className="qr-scanner-overlay" onClick={() => void handleClose()}>
+    <div className="qr-scanner-overlay" onClick={handleClose}>
       <div className="qr-scanner-modal" onClick={(e) => e.stopPropagation()}>
         <div className="qr-scanner-header">
           <h2 className="qr-scanner-title">Сканирование QR-кода</h2>
           <button
             className="qr-scanner-close-button"
-            onClick={() => void handleClose()}
+            onClick={handleClose}
             type="button"
             aria-label="Закрыть сканер"
           >
@@ -461,33 +431,20 @@ const QRScanner: React.FC<QRScannerProps> = ({
             playsInline
             muted
             autoPlay
-            style={{ display: useHtml5Fallback ? 'none' : 'block' }}
           />
-          <div
-            id={HTML5_SCANNER_ID}
-            className="qr-scanner-container"
-            style={{ display: useHtml5Fallback ? 'block' : 'none' }}
-          />
+          <div id="qr-scanner-file-decode-host" className="qr-scanner-file-host" />
 
-          {!isCameraActive && !isStarting && (
-            <div className="qr-scanner-start-panel">
-              <p className="qr-scanner-start-hint">
-                Нажмите кнопку, чтобы открыть камеру и отсканировать QR-код оборудования
-              </p>
-              <button
-                type="button"
-                className="qr-scanner-start-button"
-                onClick={() => void handleEnableCamera()}
-              >
-                Включить камеру
-              </button>
+          {isCameraActive && !error && (
+            <div className="qr-scanner-aim" aria-hidden="true">
+              <div className="qr-scanner-aim-frame" />
+              <p className="qr-scanner-aim-hint">Наведите камеру на QR-код</p>
             </div>
           )}
 
-          {isStarting && (
+          {(isInitializing || isDecodingFile) && (
             <div className="qr-scanner-loading qr-scanner-loading-overlay">
               <div className="qr-scanner-spinner" />
-              <p>Запуск камеры...</p>
+              <p>{isDecodingFile ? 'Распознаём QR на фото...' : 'Запуск камеры...'}</p>
             </div>
           )}
         </div>
@@ -497,13 +454,30 @@ const QRScanner: React.FC<QRScannerProps> = ({
             <button
               type="button"
               className="qr-scanner-retry-button"
-              onClick={() => void handleEnableCamera()}
-              disabled={isStarting}
+              onClick={handleRetry}
+              disabled={isInitializing}
             >
-              Попробовать снова
+              Повторить
+            </button>
+            <button
+              type="button"
+              className="qr-scanner-secondary-button qr-scanner-secondary-button-light"
+              onClick={handlePhotoCaptureClick}
+              disabled={isDecodingFile}
+            >
+              Сфотографировать QR
             </button>
           </div>
         )}
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="qr-scanner-file-input"
+          onChange={(e) => void handleFileSelected(e)}
+        />
       </div>
     </div>
   );
