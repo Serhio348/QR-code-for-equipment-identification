@@ -20,7 +20,8 @@
   max-height: 90vh;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  /* overflow:hidden ломает <video> на iOS Safari (чёрный экран / камера «не открывается») */
+  overflow: visible;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
   position: relative;
 }
@@ -66,6 +67,17 @@
   min-height: 400px;
   position: relative;
   background: #000;
+  overflow: visible;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+}
+
+/* html5-qrcode вставляет video — на iOS нужен playsinline (библиотека ставит сама) */
+.qr-scanner-container video {
+  width: 100% !important;
+  height: auto !important;
+  object-fit: cover;
+  display: block;
 }
 
 .qr-scanner-error {

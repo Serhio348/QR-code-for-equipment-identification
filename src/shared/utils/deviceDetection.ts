@@ -25,11 +25,16 @@ export function isPWA(): boolean {
 }
 
 /**
- * Проверяет, является ли устройство iOS
- * @returns true если устройство iOS
+ * Проверяет, является ли устройство iOS / iPadOS
+ * iPadOS 13+ часто отдаёт desktop UA (Macintosh) — учитываем touch.
  */
 export function isIOS(): boolean {
-  return /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const ua = navigator.userAgent;
+  if (/iPad|iPhone|iPod/.test(ua)) {
+    return true;
+  }
+  // iPadOS «Request Desktop Website» / desktop UA
+  return navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
 }
 
 /**
