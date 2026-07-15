@@ -1,8 +1,12 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Equipment } from '../../types/equipment';
 import { ROUTES } from '../../../../shared/utils/routes';
 import './EquipmentPageHeader.css';
+
+interface EquipmentLocationState {
+  returnTo?: string;
+}
 
 interface EquipmentPageHeaderProps {
   equipment: Equipment | null;
@@ -30,8 +34,19 @@ export const EquipmentPageHeader: React.FC<EquipmentPageHeaderProps> = ({
   deleting = false
 }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const title = loading ? 'Загрузка...' : (equipment?.name || '');
+
+  const handleBackToList = (): void => {
+    const state = location.state as EquipmentLocationState | null;
+    const returnTo = state?.returnTo;
+    if (returnTo && returnTo.startsWith(ROUTES.EQUIPMENT)) {
+      navigate(returnTo);
+      return;
+    }
+    navigate(ROUTES.EQUIPMENT);
+  };
 
   const handleMenuToggle = () => {
     setIsMenuOpen(!isMenuOpen);
@@ -48,9 +63,10 @@ export const EquipmentPageHeader: React.FC<EquipmentPageHeaderProps> = ({
     <div className="page-header">
       <button
         className="header-back-button"
-        onClick={() => navigate(ROUTES.EQUIPMENT)}
+        onClick={handleBackToList}
         title="Назад к списку оборудования"
         disabled={loading}
+        type="button"
       >
         ← Назад
       </button>

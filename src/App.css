@@ -439,10 +439,12 @@
   margin: 0 !important;
 }
 
-/* Разрешаем скролл для страницы оборудования */
+/* Разрешаем скролл для страницы оборудования;
+   фон страницы — на весь viewport контента, без белой полосы над футером */
 .app-content:has(.equipment-page) {
   overflow-y: auto;
   overflow-x: hidden;
+  background: var(--gradient-background, linear-gradient(135deg, rgba(102, 126, 234, 0.30) 0%, rgba(118, 75, 162, 0.30) 100%));
 }
 
 /* Убираем скролл для PWA меню */
