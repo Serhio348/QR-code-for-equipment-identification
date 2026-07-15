@@ -90,6 +90,47 @@ async function stopAndClearScanner(scanner: Html5Qrcode): Promise<void> {
   }
 }
 
+function stopMediaStream(stream: MediaStream): void {
+  for (const track of stream.getTracks()) {
+    track.stop();
+  }
+}
+
+/**
+ * Прогревает доступ к камере и возвращает deviceId активного трека.
+ * Это повышает стабильность старта html5-qrcode на Android.
+ */
+async function warmupCameraAccess(): Promise<string | null> {
+  const attempts: Array<MediaTrackConstraints | boolean> = [
+    { facingMode: { ideal: 'environment' } },
+    { facingMode: { ideal: 'user' } },
+    true,
+  ];
+
+  let lastError: unknown = null;
+  for (const videoConstraints of attempts) {
+    let stream: MediaStream | null = null;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: videoConstraints,
+      });
+      const videoTrack = stream.getVideoTracks()[0];
+      const settings = videoTrack?.getSettings();
+      const deviceId = settings?.deviceId;
+      return deviceId ?? null;
+    } catch (err: unknown) {
+      lastError = err;
+    } finally {
+      if (stream) {
+        stopMediaStream(stream);
+      }
+    }
+  }
+
+  throw lastError ?? new Error('Не удалось получить доступ к камере');
+}
+
 const QRScanner: React.FC<QRScannerProps> = ({
   onScanSuccess,
   onScanError,
@@ -154,6 +195,13 @@ const QRScanner: React.FC<QRScannerProps> = ({
             : 'Ваш браузер не поддерживает доступ к камере'
         );
       }
+      const isLocalhost =
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname === '[::1]';
+      if (!window.isSecureContext && !isLocalhost) {
+        throw new Error('Сканер камеры работает только в HTTPS-режиме');
+      }
 
       await waitForPaint();
 
@@ -166,6 +214,19 @@ const QRScanner: React.FC<QRScannerProps> = ({
       const cameraConfigs: CameraConfig[] = [];
 
       if (isAndroid()) {
+        try {
+          const warmedDeviceId = await warmupCameraAccess();
+          if (warmedDeviceId) {
+            cameraConfigs.push(warmedDeviceId);
+          }
+        } catch (warmupErr: unknown) {
+          const message = warmupErr instanceof Error ? warmupErr.message : String(warmupErr);
+          if (/denied|permission|notallowed|разреш/i.test(message)) {
+            throw new Error('Нет доступа к камере. Разрешите камеру в настройках браузера.');
+          }
+          console.warn('[QRScanner] warmup failed, continue with fallback configs:', warmupErr);
+        }
+
         // На Android после неуспешного старта scanner может застревать в промежуточном состоянии.
         // Поэтому пробуем несколько конфигов последовательно, создавая новый экземпляр на каждую попытку.
         cameraConfigs.push({ facingMode: 'environment' });
