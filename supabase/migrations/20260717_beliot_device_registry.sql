@@ -111,4 +111,3 @@ CREATE TRIGGER update_beliot_devices_updated_at
   BEFORE UPDATE ON public.beliot_devices
   FOR EACH ROW
   EXECUTE FUNCTION public.handle_updated_at();
-
