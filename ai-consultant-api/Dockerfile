@@ -6,7 +6,7 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-COPY package.json package-lock.json* ./
+COPY ai-consultant-api/package.json ai-consultant-api/package-lock.json* ./
 
 # Отключаем автозагрузку браузеров Playwright при npm install.
 # Браузеры в Docker не нужны на этапе сборки — только при запуске.
@@ -14,8 +14,8 @@ ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
 RUN npm ci
 
-COPY tsconfig.json ./
-COPY src/ ./src/
+COPY ai-consultant-api/tsconfig.json ./
+COPY ai-consultant-api/src/ ./src/
 
 RUN npm run build
 
@@ -27,7 +27,7 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-COPY package.json package-lock.json* ./
+COPY ai-consultant-api/package.json ai-consultant-api/package-lock.json* ./
 
 # Отключаем автозагрузку браузеров — используем системный Chromium
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
