@@ -41,11 +41,11 @@ import {
   FIRE_SUPPRESSION_DEVICE_IDS,
   FIRE_SUPPRESSION_DISPLAY_LABEL,
   HVO_AGGREGATE_WATER_DEVICE_IDS,
-  getProductionNeedsKpiDeviceIds,
   isPosudotaraMeterReplacementDay,
   mergeBeliotOverridesForDashboard,
 } from '../constants/beliotDeviceRegistry';
 import { buildMeterLabelColorMap } from '../constants/meterSeriesColors';
+import { getTrackedBeliotRegistry } from '../services/beliotRegistryApi';
 import { useDeviceDetection } from '@/shared/hooks/useDeviceDetection';
 import './WaterDashboard.css';
 
@@ -631,12 +631,24 @@ const WaterDashboard: React.FC = () => {
       const monthEndDate = `${nextYear}-${pad(nextMonth)}-01`;
       const prevMonthStartTs = prevMonthStart.toISOString();
 
-      const { data: monthData } = await supabase
-        .from('beliot_daily_readings_agg')
-        .select('device_id, reading_day, min_value, max_value')
-        .gte('reading_day', prevMonthStartDate)
-        .lt('reading_day', monthEndDate)
-        .order('reading_day', { ascending: true });
+      const sourceIds = sourceDeviceIdsRef.current;
+      const prodDevs = prodDevicesRef.current;
+      const domDevs = domDevicesRef.current;
+      const meterGroups = meterGroupsRef.current;
+      const allDeviceIds = [...new Set([
+        ...sourceIds,
+        ...prodDevs.map(d => d.device_id),
+        ...domDevs.map(d => d.device_id),
+      ])];
+      const { data: monthData } = allDeviceIds.length > 0
+        ? await supabase
+          .from('beliot_daily_readings_agg')
+          .select('device_id, reading_day, min_value, max_value')
+          .in('device_id', allDeviceIds)
+          .gte('reading_day', prevMonthStartDate)
+          .lt('reading_day', monthEndDate)
+          .order('reading_day', { ascending: true })
+        : { data: [] };
 
       // Строим byDeviceDay из агрегированного view
       const byDeviceDay: Record<string, Record<string, MinMax>> = {};
@@ -647,24 +659,12 @@ const WaterDashboard: React.FC = () => {
         byDeviceDay[did][day] = { min: Number(r.min_value), max: Number(r.max_value) };
       }
 
-      const sourceIds = sourceDeviceIdsRef.current;
-      const prodDevs  = prodDevicesRef.current;
-      const domDevs   = domDevicesRef.current;
-      const meterGroups = meterGroupsRef.current;
-
       const aggDevs = prodDevs.filter(isHvoAggregateProductionMeter);
       const leafDevs = prodDevs.filter(d => !isHvoAggregateProductionMeter(d));
       const aggIds = aggDevs.map(d => d.device_id);
-      const kpiIdsFromRegistry = getProductionNeedsKpiDeviceIds();
-      const productionNeedsIds =
-        kpiIdsFromRegistry.length > 0 ? kpiIdsFromRegistry : prodDevs.map(d => d.device_id);
+      const productionNeedsIds = leafDevs.map(d => d.device_id);
 
       // Загружаем baseline до прошлого месяца — этого хватит и для прошлого, и для текущего месяца
-      const allDeviceIds = [...new Set([
-        ...sourceIds,
-        ...prodDevs.map(d => d.device_id),
-        ...domDevs.map(d => d.device_id),
-      ])];
       const baselineByDevice: Record<string, number> = {};
       if (allDeviceIds.length > 0) {
         const { data: baselineData } = await supabase
@@ -907,6 +907,7 @@ const WaterDashboard: React.FC = () => {
         lastAnalysisRes,
         samplingPointsRes,
         deviceOverridesRes,
+        registryRes,
       ] = await Promise.all([
         supabase
           .from('water_analysis')
@@ -922,10 +923,18 @@ const WaterDashboard: React.FC = () => {
         supabase
           .from('beliot_device_overrides')
           .select('device_id, name, object_name, address, device_role'),
+        getTrackedBeliotRegistry(),
       ]);
 
       // ── Карта устройств ──────────────────────────────────────────────────
-      const overrides = mergeBeliotOverridesForDashboard(deviceOverridesRes.data || []);
+      const trackedIds = new Set(registryRes.devices.map(device => device.deviceId));
+      const sourceOverrides = registryRes.usedFallback
+        ? deviceOverridesRes.data || []
+        : (deviceOverridesRes.data || []).filter(row => trackedIds.has(String(row.device_id)));
+      const mergedOverrides = mergeBeliotOverridesForDashboard(sourceOverrides);
+      const overrides = registryRes.usedFallback
+        ? mergedOverrides
+        : mergedOverrides.filter(row => trackedIds.has(String(row.device_id)));
       const anyRole = overrides.some(d => d.device_role === 'source' || d.device_role === 'production');
       setHasRoles(anyRole);
 

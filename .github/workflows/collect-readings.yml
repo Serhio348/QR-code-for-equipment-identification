@@ -3,6 +3,7 @@ name: Sync Beliot Readings
 on:
   schedule:
     - cron: '50 * * * *'  # Каждый час в 50 минут (00:50, 01:50, 02:50, ...)
+    - cron: '20 1 * * *'  # Ежедневное обновление реестра Beliot
     # Синхронизация показаний за последние 24 часа (сутки)
     # 
     # НОВАЯ ЛОГИКА:
@@ -26,6 +27,7 @@ on:
         type: choice
         options:
           - collect_readings
+          - scan_devices
           - export_devices
 
 jobs:
@@ -45,14 +47,25 @@ jobs:
         run: npm ci
       
       - name: Run collection script
-        if: github.event_name != 'workflow_dispatch' || inputs.task == 'collect_readings'
+        if: (github.event_name == 'schedule' && github.event.schedule == '50 * * * *') || (github.event_name == 'workflow_dispatch' && inputs.task == 'collect_readings')
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           BELIOT_LOGIN: ${{ secrets.BELIOT_LOGIN }}
           BELIOT_PASSWORD: ${{ secrets.BELIOT_PASSWORD }}
           BELIOT_API_BASE_URL: ${{ secrets.BELIOT_API_BASE_URL }}
+          WATER_DEVICE_REGISTRY_ENABLED: ${{ fromJSON(toJSON(vars))['WATER_DEVICE_REGISTRY_ENABLED'] || 'false' }}
         run: npm run collect-readings
+
+      - name: Scan Beliot device registry
+        if: (github.event_name == 'schedule' && github.event.schedule == '20 1 * * *') || (github.event_name == 'workflow_dispatch' && inputs.task == 'scan_devices')
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BELIOT_LOGIN: ${{ secrets.BELIOT_LOGIN }}
+          BELIOT_PASSWORD: ${{ secrets.BELIOT_PASSWORD }}
+          BELIOT_API_BASE_URL: ${{ secrets.BELIOT_API_BASE_URL }}
+        run: npm run scan-beliot-devices
 
       - name: Export devices list (JSON/CSV)
         if: github.event_name == 'workflow_dispatch' && inputs.task == 'export_devices'

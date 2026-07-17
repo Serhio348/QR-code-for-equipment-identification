@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import type { BeliotDevice } from '../services/beliotDeviceApi';
+import type { BeliotDevice } from '../types/beliotDevice';
 import { getBeliotDevicesOverrides } from '@/shared/services/api/supabaseBeliotOverridesApi';
 import { useDeviceOverrides } from '../hooks/useDeviceOverrides';
 import { useDevicePassport } from '../hooks/useDevicePassport';
@@ -13,7 +13,7 @@ import { getBeliotReadings, getLastBeliotReading } from '../services/supabaseBel
 import { useDeviceArchive } from '../hooks/useDeviceArchive';
 import DeviceArchiveModal from './DeviceArchiveModal';
 import DevicePassportModal from './DevicePassportModal';
-import { BELOT_DEVICE_GROUPS, getBeliotUiDeviceIds } from '../constants/beliotDeviceRegistry';
+import { getTrackedBeliotRegistry } from '../services/beliotRegistryApi';
 import './BeliotDevicesTest.css';
 
 interface StateTableRow {
@@ -42,6 +42,7 @@ const BeliotDevicesTest: React.FC = () => {
   const [deviceReadings, setDeviceReadings] = useState<DeviceReadings | null>(null);
   const [loadingState, setLoadingState] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [deviceGroups, setDeviceGroups] = useState<DeviceGroup[]>([]);
 
   // Идентификатор выбранного устройства
   const currentDeviceId = selectedDevice ? String(selectedDevice.device_id || selectedDevice.id || selectedDevice._id) : null;
@@ -154,11 +155,23 @@ const BeliotDevicesTest: React.FC = () => {
 
     try {
       console.log('🔄 Загрузка метаданных счетчиков из Supabase...');
-      const overridesById = await getBeliotDevicesOverrides();
+      const [overridesById, registry] = await Promise.all([
+        getBeliotDevicesOverrides(),
+        getTrackedBeliotRegistry(),
+      ]);
 
-      // Список счетчиков — из общего реестра групп (см. beliotDeviceRegistry).
-      // Важно: фронтенд не делает запросов к Beliot API (ограничения внутренней сети).
-      const uniqueIds = getBeliotUiDeviceIds();
+      const uniqueIds = registry.devices.map(device => device.deviceId);
+      const idsByGroup = new Map<string, string[]>();
+      for (const device of registry.devices) {
+        const groupIds = idsByGroup.get(device.groupName) ?? [];
+        groupIds.push(device.deviceId);
+        idsByGroup.set(device.groupName, groupIds);
+      }
+      setDeviceGroups([...idsByGroup.entries()].map(([name, deviceIds]) => ({
+        name,
+        deviceIds,
+        devices: [],
+      })));
 
       const devicesFromSupabase: BeliotDevice[] = uniqueIds.map((id) => {
         const ov = overridesById[id];
@@ -209,11 +222,6 @@ const BeliotDevicesTest: React.FC = () => {
       setLoading(false);
     }
   };
-
-  const deviceGroups: DeviceGroup[] = useMemo(
-    () => BELOT_DEVICE_GROUPS.map((g) => ({ name: g.name, deviceIds: g.deviceIds, devices: [] })),
-    [],
-  );
 
   // Группировка устройств по заданным группам
   const groupedDevices = useMemo(() => {

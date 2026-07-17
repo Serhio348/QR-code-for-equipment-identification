@@ -7,7 +7,7 @@
  */
 
 import React from 'react';
-import { BeliotDevice } from '../services/beliotDeviceApi';
+import type { BeliotDevice } from '../types/beliotDevice';
 import { PassportData } from '../hooks/useDevicePassport';
 
 interface DevicePassportModalProps {

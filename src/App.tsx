@@ -25,6 +25,7 @@ const AccessSettingsPage = lazy(() => import('./features/access-management/pages
 const ErrorLogsPage = lazy(() => import('./features/error-logging/pages/ErrorLogsPage'));
 const ActivityLogsPage = lazy(() => import('./features/user-activity/pages/ActivityLogsPage'));
 const WorkshopSettingsPage = lazy(() => import('./features/workshops/pages/WorkshopSettingsPage'));
+const BeliotDeviceRegistryPage = lazy(() => import('./features/beliot-device-registry/pages/BeliotDeviceRegistryPage'));
 const WaterAnalysisFormPage = lazy(() => import('./features/water-quality/pages/WaterAnalysisFormPage'));
 const WaterAnalysisViewPage = lazy(() => import('./features/water-quality/pages/WaterAnalysisViewPage'));
 const WaterQualityAlertsPage = lazy(() => import('./features/water-quality/pages/WaterQualityAlertsPage'));
@@ -43,7 +44,9 @@ const App: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const isEquipmentPage = isEquipmentRoute(location.pathname);
-  const isWaterPage = location.pathname === ROUTES.WATER || location.pathname === ROUTES.BELIOT_TEST;
+  const isWaterPage = location.pathname === ROUTES.WATER
+    || location.pathname === ROUTES.BELIOT_TEST
+    || location.pathname === ROUTES.BELIOT_DEVICES;
   const isMainMenuPage = location.pathname === ROUTES.HOME;
   const isAuthPage = location.pathname === ROUTES.LOGIN || location.pathname === ROUTES.REGISTER || location.pathname === ROUTES.RESET_PASSWORD;
   const { isAuthenticated, user, logout, loading } = useAuth();
@@ -375,6 +378,16 @@ const App: React.FC = () => {
                 <WorkshopSettingsPage />
               </ProtectedRoute>
             } 
+          />
+
+          {/* Реестр счётчиков Beliot - только для администраторов */}
+          <Route
+            path={ROUTES.BELIOT_DEVICES}
+            element={
+              <ProtectedRoute requireAdmin>
+                <BeliotDeviceRegistryPage />
+              </ProtectedRoute>
+            }
           />
           
           {/* Создание нового анализа качества воды */}

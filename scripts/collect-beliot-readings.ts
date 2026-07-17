@@ -89,6 +89,7 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.
 const beliotLogin = process.env.BELIOT_LOGIN || process.env.VITE_BELIOT_LOGIN || 'energo@brestvodka.by';
 const beliotPassword = process.env.BELIOT_PASSWORD || process.env.VITE_BELIOT_PASSWORD;
 const beliotApiBaseUrl = process.env.BELIOT_API_BASE_URL || process.env.VITE_BELIOT_API_BASE_URL || 'https://beliot.by:4443/api';
+const useDeviceRegistry = process.env.WATER_DEVICE_REGISTRY_ENABLED === 'true';
 
 // Проверка переменных окружения
 console.log('🔍 Проверка переменных окружения:');
@@ -299,6 +300,40 @@ async function getCompanyDevices(token: string): Promise<BeliotDevice[]> {
     console.error('❌ Ошибка получения устройств:', error.message);
     throw error;
   }
+}
+
+/**
+ * Ограничить список устройствами со статусом tracked.
+ * При недоступности реестра сохраняет прежнее поведение и возвращает все устройства Beliot.
+ */
+async function filterTrackedDevices(devices: BeliotDevice[]): Promise<{
+  devices: BeliotDevice[];
+  usedRegistry: boolean;
+  usedFallback: boolean;
+}> {
+  if (!useDeviceRegistry) {
+    return { devices, usedRegistry: false, usedFallback: false };
+  }
+
+  const { data, error } = await supabase.rpc('get_tracked_beliot_device_ids');
+  if (error || !Array.isArray(data)) {
+    console.error(
+      `⚠️ Реестр Beliot недоступен, используется прежний сбор всех устройств: ${error?.message ?? 'нет данных'}`,
+    );
+    return { devices, usedRegistry: false, usedFallback: true };
+  }
+
+  const trackedIds = new Set(
+    data
+      .map((row: { device_id?: unknown }) => String(row.device_id ?? '').trim())
+      .filter(Boolean),
+  );
+  const trackedDevices = devices.filter((device) => {
+    const deviceId = String(device.device_id || device.id || device._id || '').trim();
+    return trackedIds.has(deviceId);
+  });
+  console.log(`📋 Реестр Beliot: выбрано ${trackedDevices.length} из ${devices.length} устройств`);
+  return { devices: trackedDevices, usedRegistry: true, usedFallback: false };
 }
 
 /**
@@ -829,7 +864,9 @@ async function collectReadings(): Promise<void> {
     const token = await getBeliotToken();
 
     // 2. Получаем список всех устройств
-    const devices = await getCompanyDevices(token);
+    const allDevices = await getCompanyDevices(token);
+    const registrySelection = await filterTrackedDevices(allDevices);
+    const devices = registrySelection.devices;
 
     if (devices.length === 0) {
       console.log('⚠️ Устройства не найдены');
@@ -855,6 +892,8 @@ async function collectReadings(): Promise<void> {
     console.log(`   Конец: ${endDate.toISOString()}`);
     console.log(`   Длительность: ${((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60)).toFixed(1)} часов`);
     console.log(`📋 Всего устройств: ${devices.length}`);
+    console.log(`   Реестр включён: ${registrySelection.usedRegistry ? 'да' : 'нет'}`);
+    console.log(`   Использован fallback: ${registrySelection.usedFallback ? 'да' : 'нет'}`);
 
     let totalSuccess = 0;
     let totalErrors = 0;

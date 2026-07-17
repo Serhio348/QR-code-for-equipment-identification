@@ -66,7 +66,7 @@ import healthRouter from './routes/health.js';
 // Доменные роуты
 import { chatRouter, chatStreamRouter, transcribeRouter } from './routes/ai/index.js';
 import { equipmentRouter } from './routes/equipment/index.js';
-import { alertsRouter, invoicesRouter, notificationsRouter, pushRouter } from './routes/water/index.js';
+import { alertsRouter, beliotRouter, invoicesRouter, notificationsRouter, pushRouter } from './routes/water/index.js';
 import { repairRequestsRouter } from './routes/repairs/index.js';
 
 // ============================================
@@ -181,6 +181,9 @@ app.use('/api/equipment', equipmentRouter);
 // Проактивные алерты по воде — GET /api/alerts
 // Возвращает активные превышения качества воды и просроченные поверки счётчиков.
 app.use('/api/alerts', alertsRouter);
+
+// Административный реестр и сканирование устройств Beliot
+app.use('/api/water/beliot', beliotRouter);
 
 // Синхронизация счетов bvod.by — POST /api/invoices/sync, POST /api/invoices/sync-all
 // Защищён заголовком X-Sync-Secret. Используется GitHub Actions cron.
