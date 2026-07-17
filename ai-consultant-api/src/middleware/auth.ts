@@ -24,25 +24,6 @@ import { createClient } from '@supabase/supabase-js';
 // Конфигурация приложения (URL Supabase, ключи)
 import { config } from '../config/env.js';
 
-// ============================================
-// Инициализация Supabase клиента
-// ============================================
-
-/**
- * Декодирует payload JWT без проверки подписи.
- * Используется как fallback когда токен отклонён из-за истёкшего exp.
- */
-function decodeJwtPayload(token: string): { sub?: string; email?: string } | null {
-    try {
-        const parts = token.split('.');
-        if (parts.length !== 3) return null;
-        const payload = Buffer.from(parts[1], 'base64url').toString('utf-8');
-        return JSON.parse(payload) as { sub?: string; email?: string };
-    } catch {
-        return null;
-    }
-}
-
 /**
  * Создаём Supabase клиент с service_role ключом.
  *
@@ -84,6 +65,20 @@ export interface AuthenticatedRequest extends Request {
     };
 }
 
+interface AuthClient {
+    auth: {
+        getUser(token: string): Promise<{
+            data: {
+                user: {
+                    id: string;
+                    email?: string;
+                } | null;
+            };
+            error: unknown;
+        }>;
+    };
+}
+
 // ============================================
 // Middleware функция
 // ============================================
@@ -104,81 +99,78 @@ export interface AuthenticatedRequest extends Request {
  * @param res - HTTP ответ
  * @param next - Функция для передачи управления следующему middleware
  */
+export function createAuthMiddleware(client: AuthClient) {
+    return async function authenticate(
+        req: AuthenticatedRequest,
+        res: Response,
+        next: NextFunction
+    ): Promise<void> {
+        try {
+            // ----------------------------------------
+            // Шаг 1: Извлекаем токен из заголовка
+            // ----------------------------------------
+
+            // Заголовок имеет формат: "Authorization: Bearer eyJhbGciOi..."
+            const authHeader = req.headers.authorization;
+
+            // Проверяем наличие заголовка и правильный формат
+            if (!authHeader || !authHeader.startsWith('Bearer ')) {
+                res.status(401).json({ error: 'Отсутствует токен авторизации' });
+                return;
+            }
+
+            // Извлекаем сам токен (убираем "Bearer " — 7 символов)
+            // "Bearer eyJhbGciOi..." → "eyJhbGciOi..."
+            const token = authHeader.substring(7);
+
+            // ----------------------------------------
+            // Шаг 2: Проверяем токен через Supabase
+            // ----------------------------------------
+
+            // supabase.auth.getUser(token) отправляет запрос к Supabase Auth,
+            // который проверяет:
+            // - Не истёк ли срок действия токена
+            // - Не был ли токен отозван (logout)
+            // - Подпись токена корректна
+            //
+            // Возвращает объект пользователя или ошибку
+            const { data: { user }, error } = await client.auth.getUser(token);
+
+            if (error || !user) {
+                res.status(401).json({ error: 'Недействительный токен авторизации' });
+                return;
+            }
+
+            // ----------------------------------------
+            // Шаг 3: Добавляем пользователя в request
+            // ----------------------------------------
+
+            // Записываем данные пользователя в req.user,
+            // чтобы следующие обработчики могли их использовать
+            // (например, для логирования или проверки прав)
+            req.user = {
+                id: user.id,
+                email: user.email || '',
+            };
+
+            // Передаём управление следующему middleware/обработчику
+            // Без вызова next() запрос "зависнет" и не дойдёт до обработчика
+            next();
+
+        } catch (error) {
+            // Ловим непредвиденные ошибки (проблемы сети, Supabase недоступен и т.д.)
+            console.error('Ошибка в authMiddleware:', error);
+            res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+        }
+    };
+}
+
+const defaultAuthMiddleware = createAuthMiddleware(supabase);
+
 export async function authMiddleware(
     req: AuthenticatedRequest,
     res: Response,
     next: NextFunction
 ): Promise<void> {
-    try {
-        // ----------------------------------------
-        // Шаг 1: Извлекаем токен из заголовка
-        // ----------------------------------------
-
-        // Заголовок имеет формат: "Authorization: Bearer eyJhbGciOi..."
-        const authHeader = req.headers.authorization;
-
-        // Проверяем наличие заголовка и правильный формат
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            res.status(401).json({ error: 'Отсутствует токен авторизации' });
-            return;
-        }
-
-        // Извлекаем сам токен (убираем "Bearer " — 7 символов)
-        // "Bearer eyJhbGciOi..." → "eyJhbGciOi..."
-        const token = authHeader.substring(7);
-
-        // ----------------------------------------
-        // Шаг 2: Проверяем токен через Supabase
-        // ----------------------------------------
-
-        // supabase.auth.getUser(token) отправляет запрос к Supabase Auth,
-        // который проверяет:
-        // - Не истёк ли срок действия токена
-        // - Не был ли токен отозван (logout)
-        // - Подпись токена корректна
-        //
-        // Возвращает объект пользователя или ошибку
-        const { data: { user }, error } = await supabase.auth.getUser(token);
-
-        // Если Supabase отклонил токен (например, exp истёк) — пробуем fallback:
-        // декодируем JWT вручную и проверяем пользователя в profiles
-        if (error || !user) {
-            const decoded = decodeJwtPayload(token);
-            if (decoded?.sub) {
-                const { data: profile } = await supabase
-                    .from('profiles')
-                    .select('id, email')
-                    .eq('id', decoded.sub)
-                    .single();
-                if (profile) {
-                    req.user = { id: profile.id, email: profile.email };
-                    next();
-                    return;
-                }
-            }
-            res.status(401).json({ error: 'Недействительный токен авторизации' });
-            return;
-        }
-
-        // ----------------------------------------
-        // Шаг 3: Добавляем пользователя в request
-        // ----------------------------------------
-
-        // Записываем данные пользователя в req.user,
-        // чтобы следующие обработчики могли их использовать
-        // (например, для логирования или проверки прав)
-        req.user = {
-            id: user.id,
-            email: user.email || '',
-        };
-
-        // Передаём управление следующему middleware/обработчику
-        // Без вызова next() запрос "зависнет" и не дойдёт до обработчика
-        next();
-
-    } catch (error) {
-        // Ловим непредвиденные ошибки (проблемы сети, Supabase недоступен и т.д.)
-        console.error('Ошибка в authMiddleware:', error);
-        res.status(500).json({ error: 'Внутренняя ошибка сервера' });
-    }
+    await defaultAuthMiddleware(req, res, next);
 }

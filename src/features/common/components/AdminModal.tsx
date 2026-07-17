@@ -98,6 +98,18 @@ const AdminModal: React.FC<AdminModalProps> = ({ onClose }) => {
                 <span className="admin-option-subtitle">Добавление и редактирование участков</span>
               </div>
             </button>
+
+            <button
+              className="admin-option"
+              onClick={() => handleNavigate(ROUTES.BELIOT_DEVICES)}
+              type="button"
+            >
+              <div className="admin-option-icon">💧</div>
+              <div className="admin-option-text">
+                <span className="admin-option-title">Счётчики Beliot</span>
+                <span className="admin-option-subtitle">Реестр устройств и статусы отслеживания</span>
+              </div>
+            </button>
           </div>
         </div>
       </div>

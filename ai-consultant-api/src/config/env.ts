@@ -28,7 +28,7 @@ export const config = {
 
   // Supabase (для проверки токенов)
   supabaseUrl: process.env.SUPABASE_URL || '',
-  supabaseServiceKey: process.env.SUPABASE_SERVICE_KEY || '',
+  supabaseServiceKey: process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '',
 
   // GAS API (для работы с оборудованием)
   gasApiUrl: process.env.GAS_API_URL || '',
@@ -37,6 +37,12 @@ export const config = {
   bvodLogin: process.env.BVOD_LOGIN || '',
   bvodPassword: process.env.BVOD_PASSWORD || '',
 
+  // Beliot API (только backend)
+  beliotApiBaseUrl: process.env.BELIOT_API_BASE_URL || 'https://beliot.by:4443/api',
+  beliotLogin: process.env.BELIOT_LOGIN || '',
+  beliotPassword: process.env.BELIOT_PASSWORD || '',
+  beliotApiTimeout: parseInt(process.env.BELIOT_API_TIMEOUT || '30000', 10),
+  waterDeviceRegistryEnabled: process.env.WATER_DEVICE_REGISTRY_ENABLED === 'true',
 
   // CORS
   allowedOrigins: (process.env.ALLOWED_ORIGINS || 'http://localhost:5173').split(','),

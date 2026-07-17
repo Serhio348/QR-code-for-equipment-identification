@@ -33,32 +33,6 @@ export const API_CONFIG = {
     '',
 
   /**
-   * Beliot API конфигурация
-   * 
-   * API для работы с оборудованием через beliot.by
-   * Swagger документация: https://beliot.by:4443/api/documentation
-   * 
-   * Примечание: API может быть доступен только из внутренней сети или через VPN
-   */
-  BELIOT_API_BASE_URL: import.meta.env.VITE_BELIOT_API_BASE_URL || 'https://beliot.by:4443/api',
-  BELIOT_API_KEY: import.meta.env.VITE_BELIOT_API_KEY || '',
-  
-  /**
-   * Учетные данные для Beliot API
-   * 
-   * Используются для автоматической аутентификации и получения Bearer token
-   */
-  BELIOT_LOGIN: import.meta.env.VITE_BELIOT_LOGIN || '',
-  BELIOT_PASSWORD: import.meta.env.VITE_BELIOT_PASSWORD || '',
-  
-  /**
-   * Использовать beliot API вместо Google Apps Script
-   * 
-   * Если true, приложение будет использовать beliot API как основной источник данных
-   */
-  USE_BELIOT_API: import.meta.env.VITE_USE_BELIOT_API === 'true' || false,
-
-  /**
    * Таймаут запросов в миллисекундах
    * Если запрос не выполнится за это время, будет ошибка таймаута
    * Google Apps Script может работать медленно при большом количестве данных

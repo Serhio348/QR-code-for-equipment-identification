@@ -1,6 +1,6 @@
 /**
- * Реестр счётчиков Beliot на клиенте: ID и группы для вкладки «Счётчики воды».
- * Синхронизируйте с фактическим списком в Beliot / GitHub Action export.
+ * Legacy fallback и безопасные defaults специальных правил Beliot.
+ * Основной реестр, группы и runtime-правила загружаются из Supabase.
  */
 
 export type BeliotDeviceGroupConfig = {
@@ -26,13 +26,16 @@ export const BELOT_DEVICE_GROUPS: BeliotDeviceGroupConfig[] = [
 
 export const POSUDOTARA_DEVICE_ID = '11078';
 const POSUDOTARA_METER_REPLACEMENT_DAY = '2026-05-04';
+let meterReplacementDays = new Map<string, string>([
+  [POSUDOTARA_DEVICE_ID, POSUDOTARA_METER_REPLACEMENT_DAY],
+]);
 
 /** День замены счётчика посудо-тарного участка: расход нельзя считать от предыдущего дня. */
 export function isPosudotaraMeterReplacementDay(deviceId: string, readingDay: string): boolean {
-  return deviceId === POSUDOTARA_DEVICE_ID && readingDay === POSUDOTARA_METER_REPLACEMENT_DAY;
+  return meterReplacementDays.get(deviceId) === readingDay;
 }
 
-const BELIOT_ARCHIVE_VOLUME_OVERRIDES: Record<string, Record<string, number>> = {
+let archiveVolumeOverrides: Record<string, Record<string, number>> = {
   '11363': {
     '2026-05-01': 0,
   },
@@ -44,13 +47,13 @@ const BELIOT_ARCHIVE_VOLUME_OVERRIDES: Record<string, Record<string, number>> = 
 /** Ручные корректировки архивного объёма для первого дня новой шкалы счётчика. */
 export function getBeliotArchiveVolumeOverride(deviceId: string | null | undefined, dayKey: string): number | null {
   if (!deviceId) return null;
-  return BELIOT_ARCHIVE_VOLUME_OVERRIDES[deviceId]?.[dayKey] ?? null;
+  return archiveVolumeOverrides[deviceId]?.[dayKey] ?? null;
 }
 
 const FIRE_SUPPRESSION_GROUP = BELOT_DEVICE_GROUPS.find((g) => g.name === 'Пожаротушение');
 
 /** Подпись единого ряда пожаротушения на дашборде */
-export const FIRE_SUPPRESSION_DISPLAY_LABEL = FIRE_SUPPRESSION_GROUP?.name ?? 'Пожаротушение';
+export let FIRE_SUPPRESSION_DISPLAY_LABEL = FIRE_SUPPRESSION_GROUP?.name ?? 'Пожаротушение';
 
 /** device_id пожаротушения — на дашборде один ряд, расход суммируется */
 export const FIRE_SUPPRESSION_DEVICE_IDS = new Set<string>(FIRE_SUPPRESSION_GROUP?.deviceIds ?? []);
@@ -93,6 +96,34 @@ export type BeliotDashboardOverrideRow = {
  */
 /** Счётчики на границе ХВО (умягчённая вода): роль production, но не суммируются с ЛУ/АЛПО/сортировкой в распределении */
 export const HVO_AGGREGATE_WATER_DEVICE_IDS = new Set<string>(['11363']);
+
+export interface BeliotRuntimeRules {
+  hvoAggregateIds: string[];
+  combinedGroups: Array<{ deviceId: string; key: string; label: string }>;
+  replacements: Array<{ deviceId: string; day: string }>;
+  corrections: Array<{ deviceId: string; day: string; volumeM3: number }>;
+}
+
+/**
+ * Заменить legacy-правила значениями из Supabase.
+ * Вызывается после успешной загрузки реестра; при ошибке остаются безопасные defaults.
+ */
+export function configureBeliotRuntimeRules(rules: BeliotRuntimeRules): void {
+  HVO_AGGREGATE_WATER_DEVICE_IDS.clear();
+  rules.hvoAggregateIds.forEach(id => HVO_AGGREGATE_WATER_DEVICE_IDS.add(id));
+
+  FIRE_SUPPRESSION_DEVICE_IDS.clear();
+  const combined = rules.combinedGroups.filter(item => item.key === 'fire-suppression');
+  combined.forEach(item => FIRE_SUPPRESSION_DEVICE_IDS.add(item.deviceId));
+  FIRE_SUPPRESSION_DISPLAY_LABEL = combined[0]?.label ?? 'Пожаротушение';
+
+  meterReplacementDays = new Map(rules.replacements.map(item => [item.deviceId, item.day]));
+  archiveVolumeOverrides = {};
+  for (const correction of rules.corrections) {
+    archiveVolumeOverrides[correction.deviceId] ??= {};
+    archiveVolumeOverrides[correction.deviceId][correction.day] = correction.volumeM3;
+  }
+}
 
 /**
  * Счётчики ЛУ / АЛПО / сортировка / очистное и др. — группа «ХВО» в {@link BELOT_DEVICE_GROUPS}

@@ -84,6 +84,9 @@ export const ROUTES = {
 
   /** Страница управления участками (только для администраторов) */
   WORKSHOP_SETTINGS: '/admin/workshop-settings',
+
+  /** Административный реестр счётчиков Beliot */
+  BELIOT_DEVICES: '/admin/beliot-devices',
   
   /** Тестирование Beliot API (устаревший маршрут, используйте WATER) */
   BELIOT_TEST: '/beliot-test',

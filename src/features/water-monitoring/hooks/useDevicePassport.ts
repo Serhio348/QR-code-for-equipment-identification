@@ -9,7 +9,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import { BeliotDevice } from '../services/beliotDeviceApi';
+import type { BeliotDevice } from '../types/beliotDevice';
 import {
   BeliotDeviceOverride,
   saveBeliotDeviceOverride,

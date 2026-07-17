@@ -22,6 +22,7 @@ describe('routes utilities', () => {
       expect(ROUTES.EQUIPMENT_NEW).toBe('/equipment/new');
       expect(ROUTES.WATER).toBe('/water');
       expect(ROUTES.ACCESS_SETTINGS).toBe('/admin/access-settings');
+      expect(ROUTES.BELIOT_DEVICES).toBe('/admin/beliot-devices');
     });
 
     it('should generate dynamic routes correctly', () => {
