@@ -2,6 +2,11 @@
 -- Автообнаружение и подтверждение замен счётчиков Beliot
 -- ============================================================================
 
+-- Старый device-specific guard ошибочно блокирует новую шкалу 11363 (< 20000).
+-- Теперь границы замен хранятся в событиях и beliot_device_rules.
+DROP TRIGGER IF EXISTS trg_block_old_meter_11363 ON public.beliot_device_readings;
+DROP FUNCTION IF EXISTS public.block_old_meter_11363();
+
 CREATE TABLE IF NOT EXISTS public.beliot_meter_replacement_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   device_id TEXT NOT NULL REFERENCES public.beliot_devices(device_id) ON DELETE CASCADE,

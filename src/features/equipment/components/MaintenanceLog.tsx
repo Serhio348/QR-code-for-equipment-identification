@@ -1,6 +1,6 @@
 /**
  * Компонент журнала обслуживания оборудования
- * 
+ *
  * Отображает и позволяет управлять записями журнала обслуживания
  * для конкретного оборудования через API
  */
@@ -29,6 +29,7 @@ import {
   MAX_MAINTENANCE_FILES,
   MAX_MAINTENANCE_FILE_SIZE_BYTES,
 } from '../constants/maintenanceFiles';
+import { updateEquipmentCache } from '../hooks/useEquipmentData';
 import './MaintenanceLog.css';
 
 const MAINTENANCE_TYPE_OPTIONS = [
@@ -177,7 +178,7 @@ const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanc
       console.log('📋 loadMaintenanceLog: получено записей:', log.length);
       console.log('📋 loadMaintenanceLog: записи:', log);
       setEntries(log);
-      
+
       if (log.length === 0) {
         console.warn('⚠️ loadMaintenanceLog: журнал пустой. Проверьте:');
         console.warn('  1. Есть ли записи в Google Sheets таблице');
@@ -283,9 +284,11 @@ const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanc
         if (sortedEntries.length > 0) {
           const lastMaintenanceDate = sortedEntries[0].date;
           try {
-            await updateEquipment(equipmentId, {
+            const updatedEquipment = await updateEquipment(equipmentId, {
               lastMaintenanceDate: lastMaintenanceDate
             });
+            updateEquipmentCache(updatedEquipment);
+            setEquipment(updatedEquipment);
           } catch (updateError) {
             console.warn('Не удалось обновить дату последнего обслуживания:', updateError);
           }
@@ -304,7 +307,7 @@ const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanc
       console.error('Ошибка добавления записи:', err);
       const errorMessage = err.message || 'Неизвестная ошибка';
       setError(`Не удалось добавить запись: ${errorMessage}`);
-      
+
       // Все равно пытаемся обновить журнал на случай, если запись добавилась
       setTimeout(() => {
         loadMaintenanceLog();
@@ -372,12 +375,15 @@ ${data.notes ? `Примечания: ${data.notes}` : ''}`;
       // Обновляем дату следующего испытания в характеристиках оборудования
       // Автоматически устанавливаем дату следующего освидетельствования (текущая дата + 1 год)
       try {
-        await updateEquipment(equipmentId, {
+        const updatedEquipment = await updateEquipment(equipmentId, {
+          lastMaintenanceDate: data.inspectionDate,
           specs: {
             ...equipment.specs,
             nextTestDate: nextInspectionDateStr
           }
         });
+        updateEquipmentCache(updatedEquipment);
+        setEquipment(updatedEquipment);
         console.log('✅ Дата следующего испытания обновлена:', nextInspectionDateStr);
       } catch (updateError) {
         console.warn('⚠️ Не удалось обновить дату следующего испытания:', updateError);
@@ -547,9 +553,11 @@ ${data.notes ? `Примечания: ${data.notes}` : ''}`;
 
       if (sortedCompleted.length > 0) {
         try {
-          await updateEquipment(equipmentId, {
+          const updatedEquipment = await updateEquipment(equipmentId, {
             lastMaintenanceDate: sortedCompleted[0].date,
           });
+          updateEquipmentCache(updatedEquipment);
+          setEquipment(updatedEquipment);
         } catch (updateError) {
           console.warn('Не удалось обновить дату последнего обслуживания:', updateError);
         }
@@ -596,14 +604,14 @@ ${data.notes ? `Примечания: ${data.notes}` : ''}`;
             type="button"
             onClick={() => setShowInspectionForm(true)}
             className="inspection-form-button"
-            style={{ 
-              background: '#2196F3', 
-              color: 'white', 
-              border: 'none', 
-              padding: '14px 28px', 
-              borderRadius: '6px', 
-              fontSize: '16px', 
-              fontWeight: '600', 
+            style={{
+              background: '#2196F3',
+              color: 'white',
+              border: 'none',
+              padding: '14px 28px',
+              borderRadius: '6px',
+              fontSize: '16px',
+              fontWeight: '600',
               cursor: 'pointer',
               boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
               transition: 'background 0.3s'
