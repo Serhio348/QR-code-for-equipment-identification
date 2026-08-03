@@ -25,6 +25,10 @@ export function RegistrySummary({ summary, scan }: RegistrySummaryProps): React.
         <div><strong>{summary.ignored}</strong><span>Игнорируются</span></div>
         <div><strong>{summary.retired}</strong><span>Выведены</span></div>
         <div><strong>{summary.missing}</strong><span>Не найдены</span></div>
+        <div>
+          <strong>{summary.replacementPending}</strong>
+          <span>Замены на проверке</span>
+        </div>
       </div>
       <div className="registry-summary__scan">
         <span>Последнее сканирование</span>

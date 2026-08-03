@@ -5,7 +5,10 @@ import type {
   BeliotScanResponse,
   BeliotTrackingUpdateResponse,
   BeliotDeviceRole,
+  ConfirmMeterReplacementInput,
   DeviceTrackingStatus,
+  MeterReplacementEvent,
+  MeterReplacementStatus,
 } from '../types/beliotDeviceRegistry';
 
 const API_URL = import.meta.env.VITE_AI_CONSULTANT_API_URL || '';
@@ -106,4 +109,41 @@ export async function updateBeliotDeviceConfiguration(
       body: JSON.stringify(configuration),
     },
   );
+}
+
+export async function getMeterReplacementEvents(
+  status: MeterReplacementStatus = 'pending_review',
+): Promise<MeterReplacementEvent[]> {
+  const response = await authenticatedRequest<{ events: MeterReplacementEvent[] }>(
+    `/replacements?status=${encodeURIComponent(status)}`,
+  );
+  return response.events;
+}
+
+export async function confirmMeterReplacement(
+  eventId: string,
+  input: ConfirmMeterReplacementInput,
+): Promise<MeterReplacementEvent> {
+  const response = await authenticatedRequest<{ event: MeterReplacementEvent }>(
+    `/replacements/${encodeURIComponent(eventId)}/confirm`,
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+    },
+  );
+  return response.event;
+}
+
+export async function dismissMeterReplacement(
+  eventId: string,
+  reason: string | null,
+): Promise<MeterReplacementEvent> {
+  const response = await authenticatedRequest<{ event: MeterReplacementEvent }>(
+    `/replacements/${encodeURIComponent(eventId)}/dismiss`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    },
+  );
+  return response.event;
 }

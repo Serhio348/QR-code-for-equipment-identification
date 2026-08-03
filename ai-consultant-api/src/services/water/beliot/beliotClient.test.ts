@@ -58,4 +58,13 @@ describe('normalizeDevice', () => {
 
     expect(device?.deviceId).toBe('11363');
   });
+
+  it('normalizes a serial number embedded in the provider name', () => {
+    const device = normalizeDevice({
+      id: 11078,
+      name: 'MTK-40N №13001699',
+    });
+
+    expect(device?.serialNumber).toBe('13001699');
+  });
 });
