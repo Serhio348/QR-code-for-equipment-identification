@@ -66,9 +66,11 @@ function DeviceRegistryRow({
 
   const hasRole = Boolean(device.user?.role);
   const disabledTitle = hasRole ? undefined : 'Для отслеживания сначала назначьте роль';
+  const trackedButMissing = device.trackingStatus === 'tracked'
+    && device.providerStatus === 'missing';
 
   return (
-    <tr>
+    <tr className={trackedButMissing ? 'device-registry-table__row--warning' : undefined}>
       <td className="device-registry-table__check" data-label="Выбор">
         <input
           type="checkbox"
@@ -130,6 +132,11 @@ function DeviceRegistryRow({
         <span className={`device-badge device-badge--${device.trackingStatus}`}>
           {TRACKING_LABELS[device.trackingStatus]}
         </span>
+        {trackedButMissing && (
+          <small className="device-registry-table__warning">
+            Отслеживается, но не найден в Beliot
+          </small>
+        )}
         <select
           value={device.trackingStatus}
           onChange={(event) => onTrackingChange(

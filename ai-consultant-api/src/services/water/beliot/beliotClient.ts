@@ -52,6 +52,8 @@ export function extractDevicesFromResponse(payload: unknown): JsonObject[] {
   const candidates = [
     nested(payload, ['data', 'data', 'metering_devices', 'data']),
     nested(payload, ['data', 'metering_devices', 'data']),
+    nested(payload, ['data', 'data', 'metering_devices']),
+    nested(payload, ['data', 'metering_devices']),
     nested(payload, ['data', 'devices_list']),
     nested(payload, ['data', 'devices']),
     nested(payload, ['devices']),
@@ -68,7 +70,7 @@ export function extractDevicesFromResponse(payload: unknown): JsonObject[] {
 }
 
 function normalizeDevice(raw: JsonObject): BeliotProviderDevice | null {
-  const deviceId = firstString(raw, ['device_id', 'id', '_id']);
+  const deviceId = firstString(raw, ['device_id', 'deviceID', 'id', '_id']);
   if (!deviceId) return null;
 
   const model = asObject(raw.model);
@@ -81,6 +83,22 @@ function normalizeDevice(raw: JsonObject): BeliotProviderDevice | null {
     objectName: firstString(raw, ['object_name', 'facility_name', 'object']),
     providerData: raw,
   };
+}
+
+function getLastPage(payload: unknown): number | null {
+  const candidates = [
+    nested(payload, ['data', 'data', 'metering_devices']),
+    nested(payload, ['data', 'metering_devices']),
+    nested(payload, ['metering_devices']),
+  ];
+
+  for (const candidate of candidates) {
+    const pagination = asObject(candidate);
+    if (!pagination) continue;
+    const value = Number(pagination.last_page);
+    if (Number.isInteger(value) && value > 0) return value;
+  }
+  return null;
 }
 
 async function postBeliot(endpoint: string, body: JsonObject, token?: string): Promise<unknown> {
@@ -136,7 +154,6 @@ export async function fetchAllDevices(): Promise<BeliotProviderDevice[]> {
   const token = await login();
   const devices = new Map<string, BeliotProviderDevice>();
   const perPage = 100;
-  let firstPageFailed = false;
 
   for (let page = 1; page <= 200; page += 1) {
     try {
@@ -147,23 +164,31 @@ export async function fetchAllDevices(): Promise<BeliotProviderDevice[]> {
       }, token);
       const rows = extractDevicesFromResponse(payload);
       if (rows.length === 0) break;
+      const previousDeviceCount = devices.size;
       for (const row of rows) {
         const device = normalizeDevice(row);
         if (device) devices.set(device.deviceId, device);
       }
-      if (rows.length < perPage) break;
+      const lastPage = getLastPage(payload);
+      if (lastPage !== null && page >= lastPage) break;
+      if (lastPage === null && devices.size === previousDeviceCount) {
+        console.warn(`[Beliot] Страница ${page} не содержит новых устройств, пагинация остановлена`);
+        break;
+      }
     } catch (error) {
-      if (page === 1) firstPageFailed = true;
-      else console.warn(`[Beliot] Страница ${page} пропущена:`, error);
+      console.warn(`[Beliot] Не удалось загрузить страницу ${page}:`, error);
       break;
     }
   }
 
   if (devices.size > 0) return [...devices.values()];
-  if (!firstPageFailed) return [];
 
   const fallback = await postBeliot('abonent/main/data', {}, token);
-  return extractDevicesFromResponse(fallback)
+  const fallbackDevices = extractDevicesFromResponse(fallback)
     .map(normalizeDevice)
     .filter((device): device is BeliotProviderDevice => device !== null);
+  if (fallbackDevices.length === 0) {
+    throw new Error('Beliot не вернул ни одного распознанного устройства');
+  }
+  return fallbackDevices;
 }

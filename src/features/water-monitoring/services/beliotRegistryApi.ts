@@ -30,6 +30,7 @@ export async function getTrackedBeliotRegistry(): Promise<TrackedBeliotRegistryR
     .from('beliot_devices')
     .select('device_id, bootstrap_group_name')
     .eq('tracking_status', 'tracked')
+    .eq('provider_status', 'available')
     .order('device_id');
 
   if (!error && data) {
