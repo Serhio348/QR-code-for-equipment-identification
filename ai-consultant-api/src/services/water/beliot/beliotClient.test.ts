@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { extractDevicesFromResponse } from './beliotClient.js';
+import { extractDevicesFromResponse, normalizeDevice } from './beliotClient.js';
 
 describe('extractDevicesFromResponse', () => {
   it('extracts nested paginated devices', () => {
@@ -45,5 +45,17 @@ describe('extractDevicesFromResponse', () => {
 
   it('returns an empty list for an unknown response', () => {
     expect(extractDevicesFromResponse({ status: 'ok' })).toEqual([]);
+  });
+});
+
+describe('normalizeDevice', () => {
+  it('uses the provider record id before the input channel deviceID', () => {
+    const device = normalizeDevice({
+      id: 11363,
+      deviceID: '1',
+      name: 'MTK-40N',
+    });
+
+    expect(device?.deviceId).toBe('11363');
   });
 });
