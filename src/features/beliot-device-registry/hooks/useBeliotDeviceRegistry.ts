@@ -55,13 +55,15 @@ export function useBeliotDeviceRegistry(): UseBeliotDeviceRegistryResult {
   const [error, setError] = useState<string | null>(null);
   const requestIdRef = useRef<number>(0);
 
-  const loadDevices = useCallback(async (): Promise<void> => {
+  const loadDevices = useCallback(async (
+    requestedFilters: BeliotDeviceFilters = filters,
+  ): Promise<void> => {
     const requestId = ++requestIdRef.current;
     setLoading(true);
     setError(null);
 
     try {
-      const response = await getBeliotDevices(filters);
+      const response = await getBeliotDevices(requestedFilters);
       if (requestId === requestIdRef.current) {
         setData(response);
         setScan(response.lastScan);
@@ -110,12 +112,19 @@ export function useBeliotDeviceRegistry(): UseBeliotDeviceRegistryResult {
     try {
       const response = await startBeliotScan();
       setScan(response.scan);
+      const refreshedFilters: BeliotDeviceFilters = {
+        ...filters,
+        status: 'all',
+        page: 1,
+      };
+      setFilters(refreshedFilters);
+      await loadDevices(refreshedFilters);
     } catch (requestError: unknown) {
       setError(getErrorMessage(requestError));
     } finally {
       setActionLoading(false);
     }
-  }, []);
+  }, [filters, loadDevices]);
 
   const handleUpdateTracking = useCallback(async (
     deviceId: string,

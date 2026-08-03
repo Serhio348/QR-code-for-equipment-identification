@@ -36,6 +36,14 @@
   background: #f9fafb;
 }
 
+.device-registry-table tbody tr.device-registry-table__row--warning {
+  background: #fff7ed;
+}
+
+.device-registry-table tbody tr.device-registry-table__row--warning:hover {
+  background: #ffedd5;
+}
+
 .device-registry-table td strong,
 .device-registry-table td small {
   display: block;
@@ -44,6 +52,12 @@
 .device-registry-table td small {
   margin-top: 3px;
   color: #6b7280;
+}
+
+.device-registry-table td small.device-registry-table__warning {
+  max-width: 190px;
+  color: #c2410c;
+  font-weight: 700;
 }
 
 .device-registry-table__check {

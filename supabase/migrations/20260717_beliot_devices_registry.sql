@@ -293,11 +293,12 @@ AS $$
   SELECT devices.device_id
   FROM public.beliot_devices AS devices
   WHERE devices.tracking_status = 'tracked'
+    AND devices.provider_status = 'available'
   ORDER BY devices.device_id;
 $$;
 
 COMMENT ON FUNCTION public.get_tracked_beliot_device_ids() IS
-  'Возвращает ID отслеживаемых устройств Beliot только серверной роли';
+  'Возвращает ID доступных отслеживаемых устройств Beliot только серверной роли';
 
 REVOKE ALL ON FUNCTION public.get_tracked_beliot_device_ids() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.get_tracked_beliot_device_ids() FROM anon;

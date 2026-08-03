@@ -23,6 +23,16 @@ describe('extractDevicesFromResponse', () => {
     expect(devices[0].device_id).toBe(11015);
   });
 
+  it('extracts a direct metering devices array', () => {
+    const devices = extractDevicesFromResponse({
+      data: {
+        metering_devices: [{ deviceID: 12001 }, { deviceID: 12002 }],
+      },
+    });
+
+    expect(devices).toEqual([{ deviceID: 12001 }, { deviceID: 12002 }]);
+  });
+
   it('extracts fallback abonent devices', () => {
     const devices = extractDevicesFromResponse({
       data: {
