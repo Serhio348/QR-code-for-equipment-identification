@@ -69,8 +69,8 @@ export function extractDevicesFromResponse(payload: unknown): JsonObject[] {
   return [];
 }
 
-function normalizeDevice(raw: JsonObject): BeliotProviderDevice | null {
-  const deviceId = firstString(raw, ['device_id', 'deviceID', 'id', '_id']);
+export function normalizeDevice(raw: JsonObject): BeliotProviderDevice | null {
+  const deviceId = firstString(raw, ['device_id', 'id', '_id', 'deviceID']);
   if (!deviceId) return null;
 
   const model = asObject(raw.model);
