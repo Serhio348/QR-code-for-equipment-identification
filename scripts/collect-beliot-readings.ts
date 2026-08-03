@@ -141,6 +141,21 @@ interface DeviceReadings {
   previous?: DeviceReading;
 }
 
+async function detectMeterReplacement(
+  deviceId: string,
+  readingDate: Date,
+  readingValue: number,
+): Promise<void> {
+  const { error } = await supabase.rpc('detect_beliot_meter_reading_drop', {
+    p_device_id: deviceId,
+    p_reading_date: readingDate.toISOString(),
+    p_reading_value: readingValue,
+  });
+  if (error) {
+    console.warn(`   ⚠️ Не удалось проверить замену счётчика ${deviceId}:`, error.message);
+  }
+}
+
 /**
  * Получить токен Beliot API
  */
@@ -796,6 +811,7 @@ async function syncDeviceReadingsForPeriod(
           console.error(`   ❌ Ошибка сохранения показания за ${readingDate.toISOString()}:`, error.message);
           } else {
           success++;
+          await detectMeterReplacement(String(deviceId), readingDate, Number(value));
         }
       } catch (error: any) {
         errors++;
@@ -835,6 +851,7 @@ async function syncDeviceReadingsForPeriod(
           } else {
             success++;
             total++;
+            await detectMeterReplacement(String(deviceId), currentDate, Number(currentValue));
           }
         }
       }

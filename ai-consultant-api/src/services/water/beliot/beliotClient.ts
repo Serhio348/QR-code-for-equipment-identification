@@ -10,6 +10,7 @@
  */
 
 import { config } from '../../../config/env.js';
+import { extractBeliotSerialNumber } from './beliotSerialExtractor.js';
 import type { BeliotProviderDevice } from './beliotTypes.js';
 
 // ============================================
@@ -73,12 +74,10 @@ export function normalizeDevice(raw: JsonObject): BeliotProviderDevice | null {
   const deviceId = firstString(raw, ['device_id', 'id', '_id', 'deviceID']);
   if (!deviceId) return null;
 
-  const model = asObject(raw.model);
   return {
     deviceId,
     name: firstString(raw, ['name', 'device_name', 'title']),
-    serialNumber: firstString(raw, ['serial_number', 'serialNumber'])
-      ?? (model ? firstString(model, ['serial_number', 'serialNumber']) : null),
+    serialNumber: extractBeliotSerialNumber(raw),
     address: firstString(raw, ['address', 'installation_address']),
     objectName: firstString(raw, ['object_name', 'facility_name', 'object']),
     providerData: raw,

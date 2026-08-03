@@ -3,6 +3,8 @@
  */
 export type DeviceTrackingStatus = 'discovered' | 'tracked' | 'ignored' | 'retired';
 export type BeliotDeviceRole = 'source' | 'production' | 'domestic';
+export type MeterReplacementStatus = 'suspected' | 'pending_review' | 'confirmed' | 'dismissed';
+export type MeterReplacementSource = 'reading_drop' | 'serial_mismatch' | 'manual';
 
 /**
  * Состояние серверного сканирования устройств Beliot.
@@ -39,6 +41,7 @@ export interface BeliotRegistryDevice {
   serialNumber: string | null;
   name: string | null;
   trackingStatus: DeviceTrackingStatus;
+  replacementPending: boolean;
   user: BeliotDeviceUser | null;
   lastReading: BeliotDeviceReading | null;
 }
@@ -53,6 +56,7 @@ export interface BeliotRegistrySummary {
   ignored: number;
   retired: number;
   missing: number;
+  replacementPending: number;
 }
 
 /**
@@ -106,4 +110,35 @@ export interface BeliotScanResponse {
 export interface BeliotTrackingUpdateResponse {
   updatedCount: number;
   devices: BeliotRegistryDevice[];
+}
+
+/**
+ * Событие возможной замены физического счётчика при сохранении Beliot ID.
+ */
+export interface MeterReplacementEvent {
+  id: string;
+  deviceId: string;
+  deviceName: string | null;
+  status: MeterReplacementStatus;
+  detectionSource: MeterReplacementSource;
+  oldReadingValue: number | null;
+  oldReadingAt: string | null;
+  newReadingValue: number | null;
+  newReadingAt: string | null;
+  dropM3: number | null;
+  dropRatio: number | null;
+  suggestedReplacementDay: string | null;
+  oldSerialNumber: string | null;
+  providerSerialNumber: string | null;
+  confirmedSerialNumber: string | null;
+  firstDayVolumeM3: number | null;
+  reason: string | null;
+  detectedAt: string;
+}
+
+export interface ConfirmMeterReplacementInput {
+  replacementDay: string;
+  newSerialNumber: string;
+  firstDayVolumeM3: number | null;
+  reason: string | null;
 }

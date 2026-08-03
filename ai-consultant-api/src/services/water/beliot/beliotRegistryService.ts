@@ -126,6 +126,20 @@ export async function scanBeliotDevices(
         ignoreDuplicates: false,
       });
       if (error) throw new Error(error.message);
+
+      for (const device of devices) {
+        if (!device.serialNumber) continue;
+        const { error: detectionError } = await supabase.rpc('detect_beliot_serial_mismatch', {
+          p_device_id: device.deviceId,
+          p_provider_serial_number: device.serialNumber,
+        });
+        if (detectionError) {
+          console.warn(
+            `[Beliot scan] Не удалось сверить заводской номер ${device.deviceId}:`,
+            detectionError.message,
+          );
+        }
+      }
     }
 
     let missing = 0;
@@ -209,8 +223,17 @@ export async function listBeliotDevices(
     .order('device_id');
   if (error) throw new Error(error.message);
 
-  const { data: overrides } = await supabase.from('beliot_device_overrides').select('*');
+  const [{ data: overrides }, { data: replacementEvents }] = await Promise.all([
+    supabase.from('beliot_device_overrides').select('*'),
+    supabase
+      .from('beliot_meter_replacement_events')
+      .select('device_id')
+      .eq('status', 'pending_review'),
+  ]);
   const overrideMap = new Map((overrides ?? []).map(row => [String(row.device_id), row]));
+  const replacementDeviceIds = new Set(
+    (replacementEvents ?? []).map(row => String(row.device_id)),
+  );
 
   const allDevices: BeliotRegistryDevice[] = (registry ?? []).map(row => {
     const id = String(row.device_id);
@@ -234,6 +257,7 @@ export async function listBeliotDevices(
       object_name: override?.object_name ?? null,
       device_group: override?.device_group ?? null,
       device_role: override?.device_role ?? null,
+      replacement_pending: replacementDeviceIds.has(id),
       last_reading_at: null,
       last_reading_value: null,
     };

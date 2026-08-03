@@ -3,15 +3,21 @@ import { useNavigate } from 'react-router-dom';
 import LoadingSpinner from '@/features/common/components/LoadingSpinner';
 import { ROUTES } from '@/shared/utils/routes';
 import { DeviceRegistryTable } from '../components/DeviceRegistryTable';
+import { ReplacementReviewPanel } from '../components/ReplacementReviewPanel';
 import { RegistryFilters } from '../components/RegistryFilters';
 import { RegistrySummary } from '../components/RegistrySummary';
 import { useBeliotDeviceRegistry } from '../hooks/useBeliotDeviceRegistry';
-import type { DeviceTrackingStatus } from '../types/beliotDeviceRegistry';
+import { useMeterReplacementReview } from '../hooks/useMeterReplacementReview';
+import type {
+  ConfirmMeterReplacementInput,
+  DeviceTrackingStatus,
+} from '../types/beliotDeviceRegistry';
 import './BeliotDeviceRegistryPage.css';
 
 export default function BeliotDeviceRegistryPage(): React.ReactElement {
   const navigate = useNavigate();
   const registry = useBeliotDeviceRegistry();
+  const replacements = useMeterReplacementReview();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const devices = useMemo(() => registry.data?.devices ?? [], [registry.data]);
   const scanRunning = registry.scan?.status === 'queued' || registry.scan?.status === 'running';
@@ -44,6 +50,24 @@ export default function BeliotDeviceRegistryPage(): React.ReactElement {
     if (updated) {
       setSelectedIds(new Set());
     }
+  };
+
+  const handleReplacementConfirm = async (
+    eventId: string,
+    input: ConfirmMeterReplacementInput,
+  ): Promise<boolean> => {
+    const confirmed = await replacements.confirm(eventId, input);
+    if (confirmed) await registry.reload();
+    return confirmed;
+  };
+
+  const handleReplacementDismiss = async (
+    eventId: string,
+    reason: string | null,
+  ): Promise<boolean> => {
+    const dismissed = await replacements.dismiss(eventId, reason);
+    if (dismissed) await registry.reload();
+    return dismissed;
   };
 
   if (registry.loading && !registry.data) {
@@ -85,6 +109,15 @@ export default function BeliotDeviceRegistryPage(): React.ReactElement {
         {registry.data && (
           <RegistrySummary summary={registry.data.summary} scan={registry.scan} />
         )}
+
+        <ReplacementReviewPanel
+          events={replacements.events}
+          loading={replacements.loading}
+          busyEventId={replacements.busyEventId}
+          error={replacements.error}
+          onConfirm={handleReplacementConfirm}
+          onDismiss={handleReplacementDismiss}
+        />
 
         <RegistryFilters
           filters={registry.filters}

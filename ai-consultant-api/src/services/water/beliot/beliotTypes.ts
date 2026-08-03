@@ -15,6 +15,8 @@
 
 export type BeliotTrackingStatus = 'discovered' | 'tracked' | 'ignored' | 'retired';
 export type BeliotProviderStatus = 'available' | 'missing';
+export type BeliotReplacementStatus = 'suspected' | 'pending_review' | 'confirmed' | 'dismissed';
+export type BeliotReplacementSource = 'reading_drop' | 'serial_mismatch' | 'manual';
 
 export interface BeliotProviderDevice {
   deviceId: string;
@@ -44,6 +46,7 @@ export interface BeliotRegistryDevice {
   object_name: string | null;
   device_group: string | null;
   device_role: 'source' | 'production' | 'domestic' | null;
+  replacement_pending: boolean;
   last_reading_at: string | null;
   last_reading_value: number | null;
 }
@@ -55,4 +58,26 @@ export interface BeliotScanResult {
   updated: number;
   missing: number;
   scannedAt: string;
+}
+
+export interface BeliotMeterReplacementEvent {
+  id: string;
+  device_id: string;
+  status: BeliotReplacementStatus;
+  detection_source: BeliotReplacementSource;
+  old_reading_value: number | null;
+  old_reading_at: string | null;
+  new_reading_value: number | null;
+  new_reading_at: string | null;
+  drop_m3: number | null;
+  drop_ratio: number | null;
+  suggested_replacement_day: string | null;
+  old_serial_number: string | null;
+  provider_serial_number: string | null;
+  confirmed_serial_number: string | null;
+  first_day_volume_m3: number | null;
+  reason: string | null;
+  detected_at: string;
+  provider_name: string | null;
+  override_name: string | null;
 }

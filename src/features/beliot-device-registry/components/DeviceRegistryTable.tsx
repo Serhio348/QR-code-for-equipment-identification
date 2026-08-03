@@ -68,9 +68,10 @@ function DeviceRegistryRow({
   const disabledTitle = hasRole ? undefined : 'Для отслеживания сначала назначьте роль';
   const trackedButMissing = device.trackingStatus === 'tracked'
     && device.providerStatus === 'missing';
+  const hasWarning = trackedButMissing || device.replacementPending;
 
   return (
-    <tr className={trackedButMissing ? 'device-registry-table__row--warning' : undefined}>
+    <tr className={hasWarning ? 'device-registry-table__row--warning' : undefined}>
       <td className="device-registry-table__check" data-label="Выбор">
         <input
           type="checkbox"
@@ -135,6 +136,11 @@ function DeviceRegistryRow({
         {trackedButMissing && (
           <small className="device-registry-table__warning">
             Отслеживается, но не найден в Beliot
+          </small>
+        )}
+        {device.replacementPending && (
+          <small className="device-registry-table__warning">
+            Возможная замена требует подтверждения
           </small>
         )}
         <select
