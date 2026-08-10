@@ -8,12 +8,65 @@ on:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - name: Sync new invoices
         env:
           AI_API_URL: ${{ secrets.AI_API_URL }}
           INVOICE_SYNC_SECRET: ${{ secrets.INVOICE_SYNC_SECRET }}
         run: |
+          set -euo pipefail
+
+          if [ -z "${AI_API_URL:-}" ] || [ -z "${INVOICE_SYNC_SECRET:-}" ]; then
+            echo "AI_API_URL or INVOICE_SYNC_SECRET is missing"
+            exit 1
+          fi
+
+          cat > /tmp/check_sync_status.py <<'PY'
+          import json
+          import sys
+
+          with open("/tmp/sync_status.json") as f:
+              d = json.load(f)
+
+          in_progress = bool(d.get("inProgress"))
+          finished_at = d.get("finishedAt")
+          last_error = d.get("lastError")
+          result = d.get("lastResult") or {}
+
+          if in_progress:
+              print("SYNC_STATE=running")
+              sys.exit(10)
+
+          if last_error:
+              print("Sync failed:", last_error)
+              sys.exit(1)
+
+          if not finished_at and not result:
+              print("SYNC_STATE=waiting_first_result")
+              sys.exit(10)
+
+          saved = int(result.get("saved") or 0)
+          skipped = int(result.get("skipped") or 0)
+          total = int(result.get("total") or 0)
+          errors = result.get("errors") or []
+          print(
+              f"Sync complete: total={total}, saved={saved}, "
+              f"skipped={skipped}, errors={len(errors)}"
+          )
+          if errors:
+              print("Errors:")
+              for err in errors[:20]:
+                  print(f"  - {err}")
+          if total == 0:
+              print("No downloadable invoices found on portal")
+              sys.exit(1)
+          if errors and saved == 0:
+              print("All invoice saves failed")
+              sys.exit(1)
+          sys.exit(0)
+          PY
+
           HTTP_CODE=$(curl -sS -L --connect-timeout 15 --max-time 60 -o /tmp/sync_response.json -w "%{http_code}" \
             -X POST "${AI_API_URL}/api/invoices/sync?async=1" \
             -H "X-Sync-Secret: ${INVOICE_SYNC_SECRET}" \
@@ -29,8 +82,39 @@ jobs:
             exit 1
           fi
 
-          STARTED=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(str(d.get('started', False)).lower())" 2>/dev/null || echo "false")
-          IN_PROGRESS=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(str(d.get('inProgress', False)).lower())" 2>/dev/null || echo "false")
-          MODE=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('mode','incremental'))" 2>/dev/null || echo "incremental")
+          STARTED=$(python3 -c "import json; d=json.load(open('/tmp/sync_response.json')); print(str(d.get('started', False)).lower())")
+          MODE=$(python3 -c "import json; d=json.load(open('/tmp/sync_response.json')); print(d.get('mode','incremental'))")
+          echo "Sync accepted: mode=$MODE, started=$STARTED"
 
-          echo "Sync accepted: mode=$MODE, started=$STARTED, inProgress=$IN_PROGRESS"
+          MAX_ATTEMPTS=80
+          SLEEP_SECONDS=15
+          for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
+            sleep "$SLEEP_SECONDS"
+
+            STATUS_CODE=$(curl -sS -L --connect-timeout 15 --max-time 60 -o /tmp/sync_status.json -w "%{http_code}" \
+              "${AI_API_URL}/api/invoices/sync/status" \
+              -H "X-Sync-Secret: ${INVOICE_SYNC_SECRET}")
+            STATUS_BODY=$(cat /tmp/sync_status.json)
+            echo "Poll #$attempt HTTP=$STATUS_CODE body=$STATUS_BODY"
+
+            if [ "$STATUS_CODE" != "200" ]; then
+              echo "Status check failed with HTTP $STATUS_CODE"
+              continue
+            fi
+
+            set +e
+            python3 /tmp/check_sync_status.py
+            rc=$?
+            set -e
+
+            if [ "$rc" -eq 0 ]; then
+              exit 0
+            fi
+            if [ "$rc" -eq 10 ]; then
+              continue
+            fi
+            exit "$rc"
+          done
+
+          echo "Timed out waiting for invoice sync to finish"
+          exit 1

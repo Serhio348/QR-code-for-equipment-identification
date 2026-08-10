@@ -123,6 +123,11 @@ export function parseInvoiceText(text: string, fileName: string): ParsedInvoice 
   if (accountMatch) {
     account_number = accountMatch[1].replace(/\s+/g, '').replace(/\.$/, '');
   }
+  // Fallback: 107.00-2026-01.pdf / 2026-01_107.09.pdf
+  if (!account_number) {
+    const fromName = fileName.match(/\b(\d{3}\.\d{2})\b/);
+    if (fromName) account_number = fromName[1];
+  }
 
   // --- СЕКЦИИ (детализация по точкам подключения) ---
   // Заголовок секции: "10700010-   Ввод с ул.Мицкевича   | Адрес-   Советская  1"

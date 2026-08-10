@@ -416,13 +416,19 @@ export async function getInvoicesList(): Promise<InvoicesResult> {
         const invoices: InvoiceInfo[] = fileLinks.map(link => {
             const label = link.text || path.basename(link.href);
 
-            // Расширение: ищем в тексте (107.00-2026-01.pdf) затем в href
+            // Расширение: ищем в тексте (107.00-2026-01.pdf) затем в href.
+            // Если расширения нет, но ссылка похожа на счёт — считаем PDF
+            // (на bvod.by href часто без .pdf, а download отдаёт PDF).
             const extMatch = label.match(/\.(pdf|xlsx|xls|csv|txt|zip)$/i)
                           || link.href.match(/\.(pdf|xlsx|xls|csv|txt|zip)/i);
-            const ext = extMatch ? extMatch[1].toLowerCase() : 'file';
+            let ext = extMatch ? extMatch[1].toLowerCase() : 'file';
+            if (ext === 'file' && /счёт|счет|фактур|invoice|квитанция|скачать|download|\d{3}\.\d{2}|20\d{2}[-_.](0[1-9]|1[0-2])/i.test(label)) {
+                ext = 'pdf';
+            }
 
             // Дата из имени файла вида 107.00-YYYY-MM.ext
-            const dateMatch = label.match(/[_-](\d{4})[_-](\d{2})\./);
+            const dateMatch = label.match(/[_-](\d{4})[_-](\d{2})\./)
+                           || label.match(/(20\d{2})[-_.](0[1-9]|1[0-2])/);
             const date = dateMatch ? `${dateMatch[1]}-${dateMatch[2]}` : '';
 
             return {
