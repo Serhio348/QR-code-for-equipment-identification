@@ -4,117 +4,65 @@ on:
   schedule:
     - cron: '0 6 * * *'
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Sync mode'
+        required: true
+        default: 'incremental'
+        type: choice
+        options:
+          - incremental
+          - full
 
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: ai-consultant-api
     steps:
-      - name: Sync new invoices
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: ai-consultant-api/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Sync invoices
         env:
-          AI_API_URL: ${{ secrets.AI_API_URL }}
-          INVOICE_SYNC_SECRET: ${{ secrets.INVOICE_SYNC_SECRET }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BVOD_LOGIN: ${{ secrets.BVOD_LOGIN }}
+          BVOD_PASSWORD: ${{ secrets.BVOD_PASSWORD }}
+          BVOD_HTTP_PROXY: ${{ secrets.BVOD_HTTP_PROXY }}
+          FORCE_ALL: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'full' && '1' || '' }}
         run: |
           set -euo pipefail
 
-          if [ -z "${AI_API_URL:-}" ] || [ -z "${INVOICE_SYNC_SECRET:-}" ]; then
-            echo "AI_API_URL or INVOICE_SYNC_SECRET is missing"
+          if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
+            echo "SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is missing"
+            exit 1
+          fi
+          if [ -z "${BVOD_LOGIN:-}" ] || [ -z "${BVOD_PASSWORD:-}" ]; then
+            echo "BVOD_LOGIN or BVOD_PASSWORD is missing"
+            echo "Add them as GitHub Actions secrets (same values as on Railway)."
             exit 1
           fi
 
-          cat > /tmp/check_sync_status.py <<'PY'
-          import json
-          import sys
-
-          with open("/tmp/sync_status.json") as f:
-              d = json.load(f)
-
-          in_progress = bool(d.get("inProgress"))
-          finished_at = d.get("finishedAt")
-          last_error = d.get("lastError")
-          result = d.get("lastResult") or {}
-
-          if in_progress:
-              print("SYNC_STATE=running")
-              sys.exit(10)
-
-          if last_error:
-              print("Sync failed:", last_error)
-              sys.exit(1)
-
-          if not finished_at and not result:
-              print("SYNC_STATE=waiting_first_result")
-              sys.exit(10)
-
-          saved = int(result.get("saved") or 0)
-          skipped = int(result.get("skipped") or 0)
-          total = int(result.get("total") or 0)
-          errors = result.get("errors") or []
-          print(
-              f"Sync complete: total={total}, saved={saved}, "
-              f"skipped={skipped}, errors={len(errors)}"
-          )
-          if errors:
-              print("Errors:")
-              for err in errors[:20]:
-                  print(f"  - {err}")
-          if total == 0:
-              print("No downloadable invoices found on portal")
-              sys.exit(1)
-          if errors and saved == 0:
-              print("All invoice saves failed")
-              sys.exit(1)
-          sys.exit(0)
-          PY
-
-          HTTP_CODE=$(curl -sS -L --connect-timeout 15 --max-time 60 -o /tmp/sync_response.json -w "%{http_code}" \
-            -X POST "${AI_API_URL}/api/invoices/sync?async=1" \
-            -H "X-Sync-Secret: ${INVOICE_SYNC_SECRET}" \
-            -H "Content-Type: application/json")
-
-          BODY=$(cat /tmp/sync_response.json)
-
-          echo "HTTP Status: $HTTP_CODE"
-          echo "Response: $BODY"
-
-          if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "202" ]; then
-            echo "Sync start failed with HTTP $HTTP_CODE"
-            exit 1
+          if [ -n "${BVOD_HTTP_PROXY:-}" ]; then
+            echo "Using BVOD_HTTP_PROXY for portal access"
+          else
+            echo "No BVOD_HTTP_PROXY set — direct access to bvod.by"
           fi
 
-          STARTED=$(python3 -c "import json; d=json.load(open('/tmp/sync_response.json')); print(str(d.get('started', False)).lower())")
-          MODE=$(python3 -c "import json; d=json.load(open('/tmp/sync_response.json')); print(d.get('mode','incremental'))")
-          echo "Sync accepted: mode=$MODE, started=$STARTED"
-
-          MAX_ATTEMPTS=80
-          SLEEP_SECONDS=15
-          for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
-            sleep "$SLEEP_SECONDS"
-
-            STATUS_CODE=$(curl -sS -L --connect-timeout 15 --max-time 60 -o /tmp/sync_status.json -w "%{http_code}" \
-              "${AI_API_URL}/api/invoices/sync/status" \
-              -H "X-Sync-Secret: ${INVOICE_SYNC_SECRET}")
-            STATUS_BODY=$(cat /tmp/sync_status.json)
-            echo "Poll #$attempt HTTP=$STATUS_CODE body=$STATUS_BODY"
-
-            if [ "$STATUS_CODE" != "200" ]; then
-              echo "Status check failed with HTTP $STATUS_CODE"
-              continue
-            fi
-
-            set +e
-            python3 /tmp/check_sync_status.py
-            rc=$?
-            set -e
-
-            if [ "$rc" -eq 0 ]; then
-              exit 0
-            fi
-            if [ "$rc" -eq 10 ]; then
-              continue
-            fi
-            exit "$rc"
-          done
-
-          echo "Timed out waiting for invoice sync to finish"
-          exit 1
+          npm run sync-invoices
