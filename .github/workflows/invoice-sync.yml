@@ -1,8 +1,10 @@
 name: Sync bvod.by Invoices
 
+# Daily sync runs on the local Windows Task Scheduler
+# (ai-consultant-api/scripts/sync-invoices-scheduled.ps1) because bvod.by
+# resets TLS from GitHub-hosted / Railway cloud IPs.
+# Keep this workflow for manual runs only when BVOD_HTTP_PROXY is configured.
 on:
-  schedule:
-    - cron: '0 6 * * *'
   workflow_dispatch:
     inputs:
       mode:
@@ -62,7 +64,8 @@ jobs:
           if [ -n "${BVOD_HTTP_PROXY:-}" ]; then
             echo "Using BVOD_HTTP_PROXY for portal access"
           else
-            echo "No BVOD_HTTP_PROXY set — direct access to bvod.by"
+            echo "No BVOD_HTTP_PROXY set — hosted runners usually cannot open bvod.by"
+            echo "Prefer local Windows Task Scheduler sync-invoices-scheduled.ps1"
           fi
 
           npm run sync-invoices

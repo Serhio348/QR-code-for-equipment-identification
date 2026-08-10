@@ -13,6 +13,9 @@
  *   BVOD_HTTP_PROXY (опционально)
  *   FORCE_ALL=1 — пересохранить все счета
  */
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 function requireEnv(): void {
     if (!process.env.SUPABASE_URL) {
