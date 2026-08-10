@@ -36,6 +36,8 @@ export const config = {
   // Портал bvod.by (скачивание счетов)
   bvodLogin: process.env.BVOD_LOGIN || '',
   bvodPassword: process.env.BVOD_PASSWORD || '',
+  // Опциональный HTTP(S) proxy: bvod.by часто рвёт TLS с зарубежных cloud IP
+  bvodHttpProxy: process.env.BVOD_HTTP_PROXY || process.env.HTTPS_PROXY || process.env.HTTP_PROXY || '',
 
   // Beliot API (только backend)
   beliotApiBaseUrl: process.env.BELIOT_API_BASE_URL || 'https://beliot.by:4443/api',
