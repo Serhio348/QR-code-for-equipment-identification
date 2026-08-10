@@ -45,6 +45,64 @@ const SESSION_FILE = path.resolve(process.cwd(), 'downloads', '.session.json');
 const PORTAL_BASE_URL = 'https://www.bvod.by';
 const PORTAL_LOGIN_URL = 'https://www.bvod.by/index.php/325-brestvodokanal/icefilter-homepage/lichnyj-kabinet-yuridicheskikh-lits/654-lichnyj-kabinet-yuridicheskikh-lits';
 
+const NETWORK_RETRY_RE = /ERR_CONNECTION_RESET|ERR_CONNECTION_CLOSED|ERR_CONNECTION_REFUSED|ERR_CONNECTION_TIMED_OUT|ERR_SSL|ERR_NETWORK|ERR_NAME_NOT_RESOLVED|SSL_ERROR|net::ERR_/i;
+
+function getProxyConfig(): { server: string } | undefined {
+    const server = (config.bvodHttpProxy || '').trim();
+    return server ? { server } : undefined;
+}
+
+function formatPortalNetworkError(err: unknown): Error {
+    const message = err instanceof Error ? err.message : String(err);
+    if (!NETWORK_RETRY_RE.test(message)) {
+        return err instanceof Error ? err : new Error(message);
+    }
+    return new Error(
+        `Не удалось открыть bvod.by (${message.split('\n')[0]}). ` +
+        'Портал часто сбрасывает TLS с зарубежных cloud IP (Railway/GHA). ' +
+        'Задайте BVOD_HTTP_PROXY (прокси в Беларуси/с доступом к bvod.by) ' +
+        'в Railway и/или GitHub Secrets и повторите sync.'
+    );
+}
+
+async function gotoWithRetry(
+    page: Page,
+    url: string,
+    options: { waitUntil?: 'domcontentloaded' | 'commit' | 'load'; timeout?: number } = {}
+): Promise<void> {
+    const timeout = options.timeout ?? 60000;
+    const waitUntil = options.waitUntil ?? 'domcontentloaded';
+    const maxAttempts = 3;
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+            await page.goto(url, { waitUntil, timeout });
+            return;
+        } catch (err) {
+            lastError = err;
+            const msg = err instanceof Error ? err.message : String(err);
+            const retryable = NETWORK_RETRY_RE.test(msg);
+            console.warn(`[bvod] goto failed (${attempt}/${maxAttempts}, waitUntil=${waitUntil}): ${msg.split('\n')[0]}`);
+            if (!retryable || attempt === maxAttempts) break;
+            await page.waitForTimeout(2000 * attempt);
+        }
+    }
+
+    // Последняя попытка с более слабым waitUntil — иногда помогает на медленных ответах.
+    if (waitUntil !== 'commit') {
+        try {
+            await page.goto(url, { waitUntil: 'commit', timeout });
+            await page.waitForTimeout(3000);
+            return;
+        } catch (err) {
+            lastError = err;
+        }
+    }
+
+    throw formatPortalNetworkError(lastError);
+}
+
 // ============================================
 // Singleton браузера
 // ============================================
@@ -165,6 +223,11 @@ export async function loginToPortal(): Promise<{
     isNewLogin: boolean;
 }> {
     const browser = await getBrowser();
+    const proxy = getProxyConfig();
+    if (proxy) {
+        console.log(`[bvod] Using proxy: ${proxy.server}`);
+    }
+
     const context = await browser.newContext({
         acceptDownloads: true,
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -174,6 +237,7 @@ export async function loginToPortal(): Promise<{
         extraHTTPHeaders: {
             'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
         },
+        ...(proxy ? { proxy } : {}),
     });
 
     const page = await context.newPage();
@@ -192,29 +256,25 @@ export async function loginToPortal(): Promise<{
 
     if (sessionLoaded) {
         // Проверяем что сессия рабочая — заходим в кабинет
-        await page.goto(PORTAL_LOGIN_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
-
-        // Проверяем: если видим форму входа — сессия устарела
-        const loginForm = await page.$('input[name="username"], input[type="password"]');
-        if (!loginForm) {
-            // Сессия рабочая
-            return { context, page, isNewLogin: false };
+        try {
+            await gotoWithRetry(page, PORTAL_LOGIN_URL);
+            // Проверяем: если видим форму входа — сессия устарела
+            const loginForm = await page.$('input[name="username"], input[type="password"]');
+            if (!loginForm) {
+                // Сессия рабочая
+                return { context, page, isNewLogin: false };
+            }
+            await clearSession();
+        } catch (err) {
+            // Сеть/сессия битая — чистим cookies и пробуем полный логин ниже
+            console.warn('[bvod] Session restore failed, doing full login:', err instanceof Error ? err.message : err);
+            await clearSession();
         }
-
-        // Сессия устарела — удаляем и входим заново
-        await clearSession();
     }
 
     // Выполняем вход
     console.log('[bvod] Navigating to login page...');
-    try {
-        await page.goto(PORTAL_LOGIN_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    } catch (navErr) {
-        // Таймаут на навигации — сохраняем скриншот и пробуем с меньшими требованиями
-        console.warn('[bvod] domcontentloaded timeout, retrying with commit...', navErr instanceof Error ? navErr.message : navErr);
-        await page.goto(PORTAL_LOGIN_URL, { waitUntil: 'commit', timeout: 60000 });
-        await page.waitForTimeout(3000);
-    }
+    await gotoWithRetry(page, PORTAL_LOGIN_URL);
     console.log('[bvod] Page URL after goto:', page.url());
 
     const login = config.bvodLogin;
@@ -479,7 +539,7 @@ export async function downloadInvoice(
         // page.waitForEvent (не context) — у BrowserContext нет 'download' в типах
         const [download] = await Promise.all([
             page.waitForEvent('download', { timeout: 30000 }),
-            page.goto(downloadUrl, { waitUntil: 'domcontentloaded', timeout: 60000 }),
+            gotoWithRetry(page, downloadUrl),
         ]);
 
         // Определяем имя файла
