@@ -49,19 +49,31 @@ function extractPeriodAndAccountFromFileName(fileName: string): { period: string
 }
 
 /**
- * На bvod.by href часто без .pdf (Joomla URL), а текст может быть
- * либо именем файла, либо «Скачать»/«Счёт». Раньше такие ссылки
- * получали fileType='file' и отбрасывались фильтром === 'pdf'.
+ * На bvod.by href часто без .pdf (Joomla URL), а текст — имя файла
+ * вида 107.00-2026-07.pdf. Навигационные ссылки («Выставленные счета»)
+ * не считаем инвойсами.
  */
-function isDownloadableInvoice(inv: { fileType: string; title: string; downloadUrl: string }): boolean {
+export function isDownloadableInvoice(inv: {
+    fileType: string;
+    title: string;
+    downloadUrl: string;
+}): boolean {
+    const title = (inv.title || '').trim();
+    const label = `${title} ${inv.downloadUrl || ''}`;
+    // Сначала отсекаем навигацию — browserService иногда ставит fileType=pdf по слову «счет»
+    if (/выставленные\s+счет|вывод\s+счет|распечатать\s+материал|список\s+счет/i.test(title)) {
+        return false;
+    }
+
     const type = (inv.fileType || '').toLowerCase();
     if (type === 'pdf') return true;
     if (type !== '' && type !== 'file') return false;
 
-    const label = `${inv.title || ''} ${inv.downloadUrl || ''}`;
     if (/\.pdf(\?|$)/i.test(label)) return true;
-    if (/(20\d{2})[-_.](0[1-9]|1[0-2])/.test(label)) return true;
-    if (/счёт|счет|фактур|invoice|квитанция|скачать|download/i.test(label)) return true;
+    // Имя без расширения, но с ЛС + периодом: 107.00-2026-07
+    if (/\b\d{3}\.\d{2}\b/.test(label) && /(20\d{2})[-_.](0[1-9]|1[0-2])/.test(label)) {
+        return true;
+    }
     return false;
 }
 

@@ -409,27 +409,50 @@ export async function getInvoicesList(): Promise<InvoicesResult> {
             'финансы',
         ];
 
-        const navClicked = await page.evaluate((keywords: string[]) => {
+        const navHref = await page.evaluate((keywords: string[]) => {
             const links = Array.from(document.querySelectorAll('a'));
             for (const link of links) {
                 const text = (link.textContent || '').trim().toLowerCase();
                 if (keywords.some(kw => text === kw || text.includes(kw))) {
-                    (link as HTMLAnchorElement).click();
-                    return link.textContent?.trim() || '';
+                    return (link as HTMLAnchorElement).href || null;
                 }
             }
             return null;
         }, invoiceNavKeywords);
 
-        if (navClicked) {
-            // Ждём завершения навигации или Ajax-подгрузки
-            await page.waitForLoadState('domcontentloaded').catch(() => {});
-            await page.waitForTimeout(1500);
+        if (navHref) {
+            try {
+                await gotoWithRetry(page, navHref, { waitUntil: 'domcontentloaded', timeout: 60000 });
+            } catch {
+                // Fallback: click + wait (SPA / same-document updates)
+                await Promise.all([
+                    page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {}),
+                    page.evaluate((keywords: string[]) => {
+                        const links = Array.from(document.querySelectorAll('a'));
+                        for (const link of links) {
+                            const text = (link.textContent || '').trim().toLowerCase();
+                            if (keywords.some(kw => text === kw || text.includes(kw))) {
+                                (link as HTMLAnchorElement).click();
+                                return;
+                            }
+                        }
+                    }, invoiceNavKeywords),
+                ]);
+                await page.waitForLoadState('domcontentloaded').catch(() => {});
+                await page.waitForTimeout(1500);
+            }
         }
 
         // Проверяем что сессия не истекла прямо сейчас.
         // Если видим форму входа — значит сессия устарела после навигации.
-        const loginFormNow = await page.$('input[name="username"], input[type="password"]');
+        let loginFormNow = null;
+        try {
+            loginFormNow = await page.$('input[name="username"], input[type="password"]');
+        } catch {
+            await page.waitForLoadState('domcontentloaded').catch(() => {});
+            await page.waitForTimeout(1000);
+            loginFormNow = await page.$('input[name="username"], input[type="password"]');
+        }
         if (loginFormNow) {
             await clearSession();
             throw new Error(
@@ -482,7 +505,15 @@ export async function getInvoicesList(): Promise<InvoicesResult> {
             const extMatch = label.match(/\.(pdf|xlsx|xls|csv|txt|zip)$/i)
                           || link.href.match(/\.(pdf|xlsx|xls|csv|txt|zip)/i);
             let ext = extMatch ? extMatch[1].toLowerCase() : 'file';
-            if (ext === 'file' && /счёт|счет|фактур|invoice|квитанция|скачать|download|\d{3}\.\d{2}|20\d{2}[-_.](0[1-9]|1[0-2])/i.test(label)) {
+            // Не помечаем навигацию («Выставленные счета») как PDF — только имена с ЛС/периодом
+            // или явные download-ссылки без расширения.
+            if (
+                ext === 'file' &&
+                (
+                    (/\b\d{3}\.\d{2}\b/.test(label) && /(20\d{2})[-_.](0[1-9]|1[0-2])/.test(label)) ||
+                    /скачать|download/i.test(label)
+                )
+            ) {
                 ext = 'pdf';
             }
 
