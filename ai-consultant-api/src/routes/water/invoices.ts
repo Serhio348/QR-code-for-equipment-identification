@@ -2,27 +2,77 @@
  * invoices.ts
  *
  * Маршруты для синхронизации счетов bvod.by.
+ *
+ * Структура / что умеет:
+ * 1. POST /sync — инкрементальная синхронизация (новые счета)
+ * 2. POST /sync-all — полная синхронизация
+ * 3. GET /sync/status — статус фонового sync для GitHub Actions
+ * 4. GET /download — скачать PDF из Storage
+ *
+ * Пример:
+ * POST /api/invoices/sync?async=1 → { started: true }
+ * GET  /api/invoices/sync/status → { inProgress, lastResult }
  */
 import { Router, Request, Response } from 'express';
-import { syncInvoices } from '../../services/water/index.js';
+import { syncInvoices, type SyncResult } from '../../services/water/index.js';
 import { createClient } from '@supabase/supabase-js';
 import { config } from '../../config/env.js';
 import { authMiddleware, AuthenticatedRequest } from '../../middleware/auth.js';
 
 const supabase = createClient(config.supabaseUrl, config.supabaseServiceKey);
 const router = Router();
-let syncInProgress = false;
 
-function runSyncInBackground(forceAll: boolean): void {
-    if (syncInProgress) return;
-    syncInProgress = true;
+type SyncMode = 'incremental' | 'full';
+
+interface SyncStatus {
+    inProgress: boolean;
+    mode: SyncMode | null;
+    startedAt: string | null;
+    finishedAt: string | null;
+    lastResult: SyncResult | null;
+    lastError: string | null;
+}
+
+const syncStatus: SyncStatus = {
+    inProgress: false,
+    mode: null,
+    startedAt: null,
+    finishedAt: null,
+    lastResult: null,
+    lastError: null,
+};
+
+function runSyncInBackground(forceAll: boolean): boolean {
+    if (syncStatus.inProgress) return false;
+
+    const mode: SyncMode = forceAll ? 'full' : 'incremental';
+    syncStatus.inProgress = true;
+    syncStatus.mode = mode;
+    syncStatus.startedAt = new Date().toISOString();
+    syncStatus.finishedAt = null;
+    syncStatus.lastError = null;
+
     void syncInvoices(forceAll)
+        .then((result) => {
+            syncStatus.lastResult = result;
+            syncStatus.lastError = null;
+            console.log(
+                `[Invoices background sync] done: mode=${mode}, saved=${result.saved}, ` +
+                `skipped=${result.skipped}, errors=${result.errors.length}`
+            );
+        })
         .catch((err) => {
+            const message = err instanceof Error ? err.message : String(err);
+            syncStatus.lastError = message;
+            syncStatus.lastResult = null;
             console.error('[Invoices background sync] failed:', err);
         })
         .finally(() => {
-            syncInProgress = false;
+            syncStatus.inProgress = false;
+            syncStatus.finishedAt = new Date().toISOString();
         });
+
+    return true;
 }
 
 function requireSyncSecret(req: Request, res: Response, next: () => void): void {
@@ -39,22 +89,50 @@ function requireSyncSecret(req: Request, res: Response, next: () => void): void 
     next();
 }
 
+router.get('/sync/status', requireSyncSecret, (_req: Request, res: Response) => {
+    res.json({
+        ok: true,
+        inProgress: syncStatus.inProgress,
+        mode: syncStatus.mode,
+        startedAt: syncStatus.startedAt,
+        finishedAt: syncStatus.finishedAt,
+        lastError: syncStatus.lastError,
+        lastResult: syncStatus.lastResult
+            ? {
+                total: syncStatus.lastResult.total,
+                skipped: syncStatus.lastResult.skipped,
+                downloaded: syncStatus.lastResult.downloaded,
+                saved: syncStatus.lastResult.saved,
+                errors: syncStatus.lastResult.errors,
+                details: syncStatus.lastResult.details,
+            }
+            : null,
+    });
+});
+
 router.post('/sync', requireSyncSecret, async (_req: Request, res: Response) => {
     const asyncMode = _req.query.async === '1';
     if (asyncMode) {
-        if (syncInProgress) {
-            res.status(202).json({ ok: true, started: false, inProgress: true, mode: 'incremental' });
-            return;
-        }
-        runSyncInBackground(false);
-        res.status(202).json({ ok: true, started: true, inProgress: true, mode: 'incremental' });
+        const started = runSyncInBackground(false);
+        res.status(202).json({
+            ok: true,
+            started,
+            inProgress: true,
+            mode: 'incremental',
+        });
         return;
     }
     try {
         const result = await syncInvoices(false);
+        syncStatus.lastResult = result;
+        syncStatus.lastError = null;
+        syncStatus.mode = 'incremental';
+        syncStatus.finishedAt = new Date().toISOString();
         res.json({ ok: true, ...result });
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
+        syncStatus.lastError = message;
+        syncStatus.lastResult = null;
         res.status(500).json({ ok: false, error: message });
     }
 });
@@ -62,19 +140,26 @@ router.post('/sync', requireSyncSecret, async (_req: Request, res: Response) => 
 router.post('/sync-all', requireSyncSecret, async (_req: Request, res: Response) => {
     const asyncMode = _req.query.async === '1';
     if (asyncMode) {
-        if (syncInProgress) {
-            res.status(202).json({ ok: true, started: false, inProgress: true, mode: 'full' });
-            return;
-        }
-        runSyncInBackground(true);
-        res.status(202).json({ ok: true, started: true, inProgress: true, mode: 'full' });
+        const started = runSyncInBackground(true);
+        res.status(202).json({
+            ok: true,
+            started,
+            inProgress: true,
+            mode: 'full',
+        });
         return;
     }
     try {
         const result = await syncInvoices(true);
+        syncStatus.lastResult = result;
+        syncStatus.lastError = null;
+        syncStatus.mode = 'full';
+        syncStatus.finishedAt = new Date().toISOString();
         res.json({ ok: true, ...result });
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
+        syncStatus.lastError = message;
+        syncStatus.lastResult = null;
         res.status(500).json({ ok: false, error: message });
     }
 });
