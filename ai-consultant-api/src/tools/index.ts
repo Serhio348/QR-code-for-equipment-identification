@@ -82,6 +82,11 @@ import { browserTools, executeBrowserTool } from './browserTools.js';
 // - executeMemoryTool: функция выполнения — upsert/select/update в agent_memory
 import { memoryTools, executeMemoryTool } from './memoryTools.js';
 
+// Tools для сессии чтения документов (pending intent + статус кэша):
+// - documentSessionTools: set/clear/get pending и сессии документа
+// - executeDocumentSessionTool: in-memory session на userId
+import { documentSessionTools, executeDocumentSessionTool } from './documentSessionTools.js';
+
 // ============================================
 // Объединённый массив tools
 // ============================================
@@ -128,6 +133,7 @@ export const tools: Anthropic.Tool[] = [
     ...waterTools,
     ...browserTools,
     ...memoryTools,
+    ...documentSessionTools,
 ];
 
 // ============================================
@@ -196,6 +202,11 @@ const toolExecutors: Record<string, (name: string, input: Record<string, unknown
     'save_memory': executeMemoryTool,
     'get_memory': executeMemoryTool,
     'delete_memory': executeMemoryTool,
+
+    // Document session tools → executeDocumentSessionTool (in-memory pending/cache status)
+    'set_pending_document_read': executeDocumentSessionTool,
+    'clear_pending_document_read': executeDocumentSessionTool,
+    'get_document_session': executeDocumentSessionTool,
 };
 
 // ============================================

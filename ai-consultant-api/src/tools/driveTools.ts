@@ -24,284 +24,309 @@
  * Важные особенности:
  * - Файлы читаются через GAS API, который использует Google Drive API v2
  * - Для PDF применяется OCR (распознавание текста) через Google Drive
- * - Есть лимит на длину извлекаемого текста (по умолчанию 30000 символов)
- * - Google Drive URL автоматически парсится — можно передать как URL, так и ID
+ * - Текст кэшируется в сессии пользователя; повторные чтения идут из кэша
+ * - Можно читать по section_query / offset без повторного OCR
  *
  * Файл экспортирует:
  * - driveTools — массив определений tools для Anthropic API
  * - executeDriveTool — функция выполнения tool по имени
  */
 
-// ============================================
-// Импорты
-// ============================================
-
-// Типы Anthropic SDK — используем Anthropic.Tool для типизации
-// определений инструментов, совместимых с Claude API
 import Anthropic from '@anthropic-ai/sdk';
-
-// HTTP-клиент для запросов к Google Apps Script (GAS) backend.
-// gasClient.get(action, params) отправляет GET-запрос к GAS Web App:
-// GET {GAS_URL}?action={action}&param1=val1&param2=val2
 import { gasClient } from '../services/equipment/index.js';
+import { getToolContext } from '../services/ai/toolContext.js';
+import {
+  DOCUMENT_CACHE_MAX_CHARS,
+  DOCUMENT_CHUNK_SIZE,
+  clearPendingRead,
+  getDocument,
+  getPendingRead,
+  putDocument,
+  setPendingRead,
+  sliceDocument,
+  type CachedDocument,
+} from '../services/ai/documentSessionService.js';
 
-// ============================================
-// Определения tools (инструментов)
-// ============================================
-
-/**
- * Массив инструментов для работы с Google Drive.
- *
- * Два инструмента:
- * 1. search_files_in_folder — поиск файлов в папке (список)
- * 2. read_file_content — чтение содержимого файла (текст)
- *
- * Claude использует их последовательно: сначала находит нужный файл,
- * затем читает его содержимое для ответа на вопрос пользователя.
- */
 export const driveTools: Anthropic.Tool[] = [
-
-    // ----------------------------------------
-    // Tool 1: Поиск файлов в папке
-    // ----------------------------------------
-    // Возвращает список файлов с их ID, именами, URL и размерами.
-    // Claude использует этот tool, когда:
-    // - Нужно найти конкретный документ (паспорт, инструкцию)
-    // - Пользователь просит показать, что есть в папке оборудования
-    // - Перед чтением файла — чтобы узнать его ID
-    {
-        name: 'search_files_in_folder',
-        description: 'Поиск файлов и вложенных папок в папке оборудования на Google Drive. По умолчанию возвращает файлы. Для надёжного поиска сначала вызывай без query, чтобы увидеть общий список, затем уточняй query. Для поиска вложенных папок передай mime_type: "application/vnd.google-apps.folder". Если файл не найден по точному имени, повтори поиск без query и проверь подпапки.',
-        input_schema: {
-            type: 'object' as const,
-            properties: {
-                // URL или ID папки Google Drive
-                // Может быть в любом формате:
-                //   - Полный URL: https://drive.google.com/drive/folders/ABC123
-                //   - Только ID: ABC123
-                // Парсинг выполняет функция extractDriveId()
-                folder_url: {
-                    type: 'string',
-                    description: 'URL папки Google Drive или ID папки',
-                },
-                // Фильтрация по имени файла (необязательно)
-                // Пример: "паспорт" найдёт "Паспорт_ОО_8400.pdf"
-                query: {
-                    type: 'string',
-                    description: 'Поисковый запрос по названию файла или папки',
-                },
-                // Фильтрация по MIME-типу (необязательно)
-                // Для папок: "application/vnd.google-apps.folder"
-                // Для PDF: "application/pdf"
-                // Для изображений: "image/jpeg" или "image/png"
-                mime_type: {
-                    type: 'string',
-                    description: 'Фильтр по типу: application/pdf, image/jpeg, application/vnd.google-apps.folder (для вложенных папок) и т.д.',
-                },
-                max_results: {
-                    type: 'number',
-                    description: 'Максимум результатов. Используй 50-100 для обзорного поиска по папке.',
-                },
-            },
-            // folder_url обязателен — без него непонятно, где искать
-            required: ['folder_url'],
+  {
+    name: 'search_files_in_folder',
+    description:
+      'Поиск файлов и вложенных папок в папке оборудования на Google Drive. По умолчанию возвращает файлы. Для надёжного поиска сначала вызывай без query, чтобы увидеть общий список, затем уточняй query. Для поиска вложенных папок передай mime_type: "application/vnd.google-apps.folder". Если файл не найден по точному имени, повтори поиск без query и проверь подпапки. НЕ используй, если file_url уже есть в СЕССИИ ДОКУМЕНТА.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        folder_url: {
+          type: 'string',
+          description: 'URL папки Google Drive или ID папки',
         },
-    },
-
-    // ----------------------------------------
-    // Tool 2: Чтение содержимого файла
-    // ----------------------------------------
-    // Извлекает текстовое содержимое файла с Google Drive.
-    // Поддерживаемые форматы (обработка на стороне GAS):
-    //   - PDF: конвертируется через Google Drive OCR → текст
-    //   - Google Docs: экспортируется как plain text
-    //   - Google Sheets: экспортируется как CSV
-    //   - Excel (.xls, .xlsx): конвертируется во временный Google Sheet → текст
-    //   - Word (.doc, .docx): конвертируются через Google Drive
-    //   - Текстовые файлы (.txt, .md, .csv, .json, .xml): читаются напрямую
-    //
-    // ОГРАНИЧЕНИЕ: OCR имеет квоту Google — при частых запросах
-    // может возникнуть ошибка "User rate limit exceeded for OCR"
-    {
-        name: 'read_file_content',
-        description: 'Прочитать текстовое содержимое файла из Google Drive. Поддерживает PDF (с OCR), Google Docs, текстовые файлы. Используй для чтения инструкций и паспортов оборудования.',
-        input_schema: {
-            type: 'object' as const,
-            properties: {
-                // URL или ID файла на Google Drive
-                // Парсинг URL выполняет extractDriveId()
-                // Форматы URL:
-                //   - https://drive.google.com/file/d/ABC123/view
-                //   - https://drive.google.com/open?id=ABC123
-                //   - ABC123 (просто ID)
-                file_url: {
-                    type: 'string',
-                    description: 'URL файла на Google Drive или его ID',
-                },
-                // Лимит длины возвращаемого текста (в символах)
-                // По умолчанию 30000 — достаточно для большинства паспортов
-                // Для очень больших документов можно увеличить
-                max_length: {
-                    type: 'number',
-                    description: 'Максимальная длина текста в символах (по умолчанию 30000)',
-                },
-            },
-            required: ['file_url'],
+        query: {
+          type: 'string',
+          description: 'Поисковый запрос по названию файла или папки',
         },
+        mime_type: {
+          type: 'string',
+          description:
+            'Фильтр по типу: application/pdf, image/jpeg, application/vnd.google-apps.folder (для вложенных папок) и т.д.',
+        },
+        max_results: {
+          type: 'number',
+          description: 'Максимум результатов. Используй 50-100 для обзорного поиска по папке.',
+        },
+      },
+      required: ['folder_url'],
     },
+  },
+  {
+    name: 'read_file_content',
+    description:
+      'Прочитать текстовое содержимое файла из Google Drive (PDF с OCR, Docs, Sheets/Excel с таблицами, Word, текст). Для follow-up («ок/давай/углубись») используй file_url из СЕССИИ ДОКУМЕНТА и section_query/offset — НЕ ищи файл заново. Большие документы читай чанками: смотри nextOffset/truncated/hint в ответе.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        file_url: {
+          type: 'string',
+          description: 'URL файла на Google Drive или его ID',
+        },
+        max_length: {
+          type: 'number',
+          description: `Размер окна текста в символах (по умолчанию ${DOCUMENT_CHUNK_SIZE}). Не ставь меньше 10000 для раздела.`,
+        },
+        offset: {
+          type: 'number',
+          description: 'Смещение в символах от начала документа. Для продолжения бери nextOffset из прошлого ответа.',
+        },
+        section_query: {
+          type: 'string',
+          description:
+            'Название раздела/заголовка/таблицы для поиска внутри документа (например: «Технические характеристики»).',
+        },
+        refresh: {
+          type: 'boolean',
+          description: 'true — игнорировать сессионный кэш и заново скачать/OCR файл',
+        },
+      },
+      required: ['file_url'],
+    },
+  },
 ];
 
-// ============================================
-// Функция выполнения tools
-// ============================================
-
-/**
- * Выполняет tool (инструмент) для работы с Google Drive.
- *
- * Вызывается из anthropic.ts в агентном цикле, когда Claude
- * решает использовать один из driveTools.
- *
- * Особенности:
- * - Все URL автоматически парсятся через extractDriveId()
- * - Логирует каждый вызов (имя tool + ключи параметров + время)
- * - Параметры маппятся из snake_case (Claude) в camelCase (GAS API)
- *
- * @param name - Имя tool (search_files_in_folder | read_file_content)
- * @param input - Параметры от Claude (Record<string, unknown>)
- * @returns JSON-ответ от GAS API
- * @throws Error если tool с таким именем не найден
- *
- * @example
- * // Поиск PDF в папке оборудования
- * const files = await executeDriveTool('search_files_in_folder', {
- *   folder_url: 'https://drive.google.com/drive/folders/ABC123',
- *   mime_type: 'application/pdf'
- * });
- *
- * @example
- * // Чтение содержимого PDF-файла
- * const content = await executeDriveTool('read_file_content', {
- *   file_url: '1-44iVaJjfZDbcqenE-js4vPYHfZhx1tt'
- * });
- */
 export async function executeDriveTool(
-    name: string,
-    input: Record<string, unknown>
+  name: string,
+  input: Record<string, unknown>,
 ): Promise<unknown> {
-    // Логирование вызова tool для отладки.
-    // Выводим только ключи параметров (не значения) — чтобы не засорять
-    // логи длинными URL, но при этом видеть, какие параметры были переданы
-    console.log(`[DriveTool] ${name} called:`, {
-        inputKeys: Object.keys(input),
-        timestamp: new Date().toISOString(),
-    });
-    switch (name) {
+  console.log(`[DriveTool] ${name} called:`, {
+    inputKeys: Object.keys(input),
+    timestamp: new Date().toISOString(),
+  });
 
-        // ----------------------------------------
-        // Поиск файлов в папке
-        // ----------------------------------------
-        // GAS action: 'getFolderFiles'
-        // HTTP: GET ?action=getFolderFiles&folderId=...&query=...&mimeType=...
-        //
-        // extractDriveId() извлекает чистый ID из URL/строки,
-        // чтобы GAS API получил корректный folderId
-        case 'search_files_in_folder':
-            return await gasClient.get('getFolderFiles', {
-                folderId: extractDriveId(input.folder_url as string),
-                query: input.query as string | undefined,
-                mimeType: input.mime_type as string | undefined,
-                maxResults: input.max_results ? String(input.max_results) : undefined,
-            });
+  switch (name) {
+    case 'search_files_in_folder':
+      return await gasClient.get('getFolderFiles', {
+        folderId: extractDriveId(input.folder_url as string),
+        query: input.query as string | undefined,
+        mimeType: input.mime_type as string | undefined,
+        maxResults: input.max_results ? String(input.max_results) : undefined,
+      });
 
-        // ----------------------------------------
-        // Чтение содержимого файла
-        // ----------------------------------------
-        // GAS action: 'getFileContent'
-        // HTTP: GET ?action=getFileContent&fileId=...&maxLength=...
-        //
-        // GAS backend выполняет:
-        // 1. Определяет MIME-тип файла
-        // 2. Для PDF — создаёт копию через Drive API с OCR
-        // 3. Извлекает текст из сконвертированного Google Doc
-        // 4. Обрезает до maxLength символов
-        // 5. Возвращает { content, fileName, mimeType, charCount, truncated }
-        //
-        // Особенность: maxLength передаётся как string, потому что
-        // gasClient.get() формирует URL query parameters (всегда строки)
-        case 'read_file_content':
-            return await gasClient.get('getFileContent', {
-                fileId: extractDriveId(input.file_url as string),
-                maxLength: input.max_length ? String(input.max_length) : '30000',
-            });
+    case 'read_file_content':
+      return await readFileContentWithSession(input);
 
-        // Неизвестный tool — ошибка
-        default:
-            throw new Error(`Unknown drive tool: ${name}`);
-    }
+    default:
+      throw new Error(`Unknown drive tool: ${name}`);
+  }
 }
 
 // ============================================
-// Вспомогательные функции
+// Чтение с сессионным кэшем
 // ============================================
 
-/**
- * Извлекает ID ресурса из URL Google Drive или возвращает строку как есть.
- *
- * Google Drive использует разные форматы URL для папок и файлов.
- * Claude может передать URL в любом из этих форматов (скопированный
- * из браузера или из поля googleDriveUrl оборудования).
- * Эта функция нормализует вход к чистому ID.
- *
- * Поддерживаемые форматы:
- *
- * 1. URL папки:
- *    https://drive.google.com/drive/folders/1ABC_xyz123
- *    → извлекается "1ABC_xyz123"
- *
- * 2. URL файла:
- *    https://drive.google.com/file/d/1ABC_xyz123/view
- *    → извлекается "1ABC_xyz123"
- *
- * 3. URL с параметром id:
- *    https://drive.google.com/open?id=1ABC_xyz123
- *    → извлекается "1ABC_xyz123"
- *
- * 4. Прямой ID (строка из 20+ символов [a-zA-Z0-9_-]):
- *    1ABC_xyz123-456
- *    → возвращается как есть
- *
- * 5. Прочее:
- *    Если ни один паттерн не совпал — возвращается исходная строка.
- *    GAS API сам вернёт ошибку, если ID невалидный.
- *
- * @param urlOrId - URL Google Drive или ID ресурса
- * @returns Чистый ID ресурса (папки или файла)
- */
+async function readFileContentWithSession(
+  input: Record<string, unknown>,
+): Promise<unknown> {
+  const ctx = getToolContext();
+  const userId = ctx?.userId || 'anonymous';
+  const fileUrl = String(input.file_url || '');
+  const fileId = extractDriveId(fileUrl);
+  const maxLength =
+    typeof input.max_length === 'number' && input.max_length > 0
+      ? Math.floor(input.max_length)
+      : DOCUMENT_CHUNK_SIZE;
+  const offset =
+    typeof input.offset === 'number' && input.offset >= 0
+      ? Math.floor(input.offset)
+      : undefined;
+  const sectionQuery =
+    typeof input.section_query === 'string' && input.section_query.trim()
+      ? input.section_query.trim()
+      : undefined;
+  const refresh = input.refresh === true;
+
+  if (!fileId) {
+    return { success: false, error: 'Не указан file_url' };
+  }
+
+  // Если agent не передал section/offset, но есть pending на этот файл — подставим
+  const pending = getPendingRead(userId);
+  const effectiveSection =
+    sectionQuery ||
+    (pending && pending.fileId === fileId ? pending.sectionHint : undefined);
+  const effectiveOffset =
+    offset ?? (pending && pending.fileId === fileId ? pending.offset : undefined);
+
+  let cached = !refresh ? getDocument(userId, fileId) : undefined;
+  const fromCache = Boolean(cached);
+
+  if (!cached) {
+    cached = (await fetchAndCacheDocument({
+      userId,
+      fileId,
+      fileUrl,
+      equipmentId: ctx?.equipmentId,
+    })) || undefined;
+  }
+
+  if (!cached) {
+    return { success: false, error: 'Не удалось прочитать файл' };
+  }
+
+  const slice = sliceDocument(cached, {
+    offset: effectiveOffset,
+    maxLength,
+    sectionQuery: effectiveSection,
+    fromCache,
+  });
+
+  // После успешного чтения pending на этот файл больше не нужен
+  if (pending && pending.fileId === fileId) {
+    clearPendingRead(userId);
+  }
+
+  // Если текст ещё не кончился — мягко готовим продолжение
+  if (slice.truncated) {
+    setPendingRead(userId, {
+      fileId: cached.fileId,
+      fileUrl: cached.fileUrl,
+      fileName: cached.fileName,
+      sectionHint: effectiveSection,
+      offset: slice.nextOffset,
+      note: 'auto: продолжение обрезанного фрагмента',
+    });
+  }
+
+  return {
+    success: true,
+    content: slice.content,
+    fileName: slice.fileName,
+    fileId: slice.fileId,
+    fileUrl: slice.fileUrl,
+    mimeType: slice.mimeType,
+    offset: slice.offset,
+    nextOffset: slice.nextOffset,
+    totalChars: slice.totalChars,
+    charCount: slice.content.length,
+    truncated: slice.truncated,
+    sectionFound: slice.sectionFound,
+    sectionQuery: slice.sectionQuery,
+    fromCache,
+    hint: slice.hint,
+  };
+}
+
+async function fetchAndCacheDocument(params: {
+  userId: string;
+  fileId: string;
+  fileUrl: string;
+  equipmentId?: string;
+}): Promise<CachedDocument | null> {
+  const result = await gasClient.get<unknown>('getFileContent', {
+    fileId: params.fileId,
+    maxLength: String(DOCUMENT_CACHE_MAX_CHARS),
+  });
+
+  const normalized = normalizeGasFileContent(result, params.fileId);
+  if (!normalized.success || !normalized.content) {
+    throw new Error(normalized.error || 'GAS getFileContent вернул пустой результат');
+  }
+
+  return putDocument(params.userId, {
+    fileId: params.fileId,
+    fileUrl: params.fileUrl || `https://drive.google.com/open?id=${params.fileId}`,
+    fileName: normalized.fileName || params.fileId,
+    mimeType: normalized.mimeType,
+    fullText: normalized.content,
+    totalChars: normalized.charCount || normalized.content.length,
+    truncatedOnFetch: Boolean(normalized.truncated),
+    equipmentId: params.equipmentId,
+  });
+}
+
+function normalizeGasFileContent(
+  result: unknown,
+  fileId: string,
+): {
+  success: boolean;
+  content?: string;
+  fileName?: string;
+  mimeType?: string;
+  charCount?: number;
+  truncated?: boolean;
+  error?: string;
+} {
+  if (!result || typeof result !== 'object') {
+    return { success: false, error: 'Пустой ответ GAS' };
+  }
+
+  const root = result as Record<string, unknown>;
+  const data =
+    root.data && typeof root.data === 'object'
+      ? (root.data as Record<string, unknown>)
+      : root;
+
+  const success = data.success !== false && (typeof data.content === 'string' || typeof root.content === 'string');
+  const content =
+    typeof data.content === 'string'
+      ? data.content
+      : typeof root.content === 'string'
+        ? root.content
+        : undefined;
+
+  if (!success || !content) {
+    return {
+      success: false,
+      error: String(data.error || root.error || 'Не удалось извлечь текст'),
+    };
+  }
+
+  return {
+    success: true,
+    content,
+    fileName: String(data.fileName || root.fileName || fileId),
+    mimeType: typeof data.mimeType === 'string' ? data.mimeType : undefined,
+    charCount:
+      typeof data.charCount === 'number'
+        ? data.charCount
+        : typeof root.charCount === 'number'
+          ? root.charCount
+          : content.length,
+    truncated: Boolean(data.truncated ?? root.truncated),
+  };
+}
+
 function extractDriveId(urlOrId: string): string {
-    // Защита от пустых значений
-    if (!urlOrId) return '';
+  if (!urlOrId) return '';
 
-    // Паттерн 1: URL папки — /folders/ID
-    // Пример: https://drive.google.com/drive/folders/1ABC_xyz123
-    const foldersMatch = urlOrId.match(/\/folders\/([a-zA-Z0-9_-]+)/);
-    if (foldersMatch) return foldersMatch[1];
+  const foldersMatch = urlOrId.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+  if (foldersMatch) return foldersMatch[1];
 
-    // Паттерн 2: URL файла — /file/d/ID
-    // Пример: https://drive.google.com/file/d/1ABC_xyz123/view
-    const fileMatch = urlOrId.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-    if (fileMatch) return fileMatch[1];
+  const fileMatch = urlOrId.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (fileMatch) return fileMatch[1];
 
-    // Паттерн 3: URL с query-параметром — ?id=ID или &id=ID
-    // Пример: https://drive.google.com/open?id=1ABC_xyz123
-    const idMatch = urlOrId.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-    if (idMatch) return idMatch[1];
+  const idMatch = urlOrId.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (idMatch) return idMatch[1];
 
-    // Паттерн 4: Прямой ID — строка 20+ символов из допустимых символов
-    // Google Drive ID обычно имеет длину 28-44 символа
-    if (/^[a-zA-Z0-9_-]{20,}$/.test(urlOrId)) {
-        return urlOrId;
-    }
-
-    // Fallback: возвращаем как есть, GAS API разберётся
+  if (/^[a-zA-Z0-9_-]{20,}$/.test(urlOrId)) {
     return urlOrId;
+  }
+
+  return urlOrId;
 }

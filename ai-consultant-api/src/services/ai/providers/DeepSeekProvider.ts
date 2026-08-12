@@ -7,6 +7,7 @@ import {
   formatDeepSeekToolResults,
 } from '../adapters/deepseekToolAdapter.js';
 import { executeToolCall } from '../../../tools/index.js';
+import { runWithToolContext } from '../toolContext.js';
 
 export class DeepSeekProvider extends BaseAIProvider {
   readonly name = 'DeepSeek';
@@ -26,6 +27,20 @@ export class DeepSeekProvider extends BaseAIProvider {
   }
 
   async chat(
+    messages: ChatMessage[],
+    tools: ToolDefinition[],
+    userId: string,
+    equipmentContext?: EquipmentContext,
+    waterContext?: WaterDashboardContext,
+    memoryContext?: MemoryContext
+  ): Promise<ChatResponse> {
+    return runWithToolContext(
+      { userId, equipmentId: equipmentContext?.id },
+      () => this.chatInner(messages, tools, userId, equipmentContext, waterContext, memoryContext),
+    );
+  }
+
+  private async chatInner(
     messages: ChatMessage[],
     tools: ToolDefinition[],
     userId: string,
@@ -170,6 +185,21 @@ export class DeepSeekProvider extends BaseAIProvider {
    * финальный текст отдаётся по кускам через onEvent({ type: 'text_delta' }).
    */
   async streamChat(
+    messages: ChatMessage[],
+    tools: ToolDefinition[],
+    userId: string,
+    onEvent: (event: StreamEvent) => void,
+    equipmentContext?: EquipmentContext,
+    waterContext?: WaterDashboardContext,
+    memoryContext?: MemoryContext,
+  ): Promise<void> {
+    return runWithToolContext(
+      { userId, equipmentId: equipmentContext?.id },
+      () => this.streamChatInner(messages, tools, userId, onEvent, equipmentContext, waterContext, memoryContext),
+    );
+  }
+
+  private async streamChatInner(
     messages: ChatMessage[],
     tools: ToolDefinition[],
     _userId: string,
@@ -416,6 +446,9 @@ export class DeepSeekProvider extends BaseAIProvider {
 - Если пользователь хочет ОТКРЫТЬ ПАПКУ (например, папку с фото) — найди её через search_files_in_folder с mime_type="application/vnd.google-apps.folder", затем ответь: 📁 [Название папки](url_папки)
 - Если пользователь просит показать ВСЁ СОДЕРЖИМОЕ папки — делай ДВА запроса: 1) без mime_type (файлы), 2) с mime_type="application/vnd.google-apps.folder" (вложенные папки), затем покажи всё вместе
 - Если пользователь хочет ПРОЧИТАТЬ, ИЗУЧИТЬ содержимое или найти информацию в файле — используй read_file_content
+- Перед предложением «углубиться / прочитать весь раздел X» ОБЯЗАТЕЛЬНО вызови set_pending_document_read({file_url, section_hint: "X"}).
+- Если пользователь отвечает «ок», «давай», «хорошо», «углубись», «продолжай» — СРАЗУ read_file_content по file_url из СЕССИИ ДОКУМЕНТА / pending. НЕ вызывай get_all_equipment, get_equipment_details, search_files_in_folder заново.
+- Для чтения раздела передай section_query. Для продолжения длинного текста — offset=nextOffset из прошлого ответа.
 - Для больших запросов про оборудование сначала используй предварительный индекс Drive из контекста, если он есть.
 - Если точный поиск по названию ничего не дал — повтори search_files_in_folder без query, затем отдельно найди папки через mime_type="application/vnd.google-apps.folder".
 - Если нужный файл может быть в подпапке — зайди в подходящую подпапку и повтори поиск там.

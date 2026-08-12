@@ -16,6 +16,7 @@ import {
 } from '../../services/ai/chatMemoryService.js';
 import { loadFactsForPrompt } from '../../services/ai/agentMemoryService.js';
 import { buildDriveFileContext } from '../../services/ai/driveFileContextService.js';
+import { buildDocumentSessionPrompt } from '../../services/ai/documentSessionService.js';
 import { config } from '../../config/env.js';
 
 const router = Router();
@@ -88,7 +89,8 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
             loadFactsForPrompt().catch(() => ''),
             buildDriveFileContext(messages, equipmentContext).catch(() => ''),
         ]);
-        const promptContext = [factsPrompt, driveFileContext].filter(Boolean).join('\n');
+        const documentSessionPrompt = buildDocumentSessionPrompt(userId);
+        const promptContext = [factsPrompt, driveFileContext, documentSessionPrompt].filter(Boolean).join('\n');
 
         const response = await provider.chat(
             messagesWithHistory,

@@ -14,6 +14,7 @@ import {
   formatGeminiFunctionResults,
 } from '../adapters/geminiToolAdapter.js';
 import { executeToolCall } from '../../../tools/index.js';
+import { runWithToolContext } from '../toolContext.js';
 
 export class GeminiProvider extends BaseAIProvider {
   readonly name = 'Gemini';
@@ -40,6 +41,20 @@ export class GeminiProvider extends BaseAIProvider {
     waterContext?: WaterDashboardContext,
     memoryContext?: MemoryContext
   ): Promise<ChatResponse> {
+    return runWithToolContext(
+      { userId, equipmentId: equipmentContext?.id },
+      () => this.chatInner(messages, tools, userId, equipmentContext, waterContext, memoryContext),
+    );
+  }
+
+  private async chatInner(
+    messages: ChatMessage[],
+    tools: ToolDefinition[],
+    userId: string,
+    equipmentContext?: EquipmentContext,
+    waterContext?: WaterDashboardContext,
+    memoryContext?: MemoryContext
+  ): Promise<ChatResponse> {
     try {
       // Защита от бесконечного цикла
       let iteration = 0;
@@ -54,7 +69,7 @@ export class GeminiProvider extends BaseAIProvider {
       // Создаём модель с системным промптом и tools (с учётом контекста оборудования)
       const genAI = this.client.getGenerativeModel({
         model: this.model,
-        systemInstruction: this.getSystemPrompt(equipmentContext, waterContext),
+        systemInstruction: this.getSystemPrompt(equipmentContext, waterContext, memoryContext),
       });
 
       // Конвертируем tools в формат Gemini
@@ -375,6 +390,9 @@ export class GeminiProvider extends BaseAIProvider {
 - Если пользователь хочет ОТКРЫТЬ ПАПКУ (например, папку с фото) — найди её через search_files_in_folder с mime_type="application/vnd.google-apps.folder", затем ответь: 📁 [Название папки](url_папки)
 - Если пользователь просит показать ВСЁ СОДЕРЖИМОЕ папки — делай ДВА запроса: 1) без mime_type (файлы), 2) с mime_type="application/vnd.google-apps.folder" (вложенные папки), затем покажи всё вместе
 - Если пользователь хочет ПРОЧИТАТЬ, ИЗУЧИТЬ содержимое или найти информацию в файле — используй read_file_content
+- Перед предложением «углубиться / прочитать весь раздел X» ОБЯЗАТЕЛЬНО вызови set_pending_document_read({file_url, section_hint: "X"}).
+- Если пользователь отвечает «ок», «давай», «хорошо», «углубись», «продолжай» — СРАЗУ read_file_content по file_url из СЕССИИ ДОКУМЕНТА / pending. НЕ вызывай get_all_equipment, get_equipment_details, search_files_in_folder заново.
+- Для чтения раздела передай section_query. Для продолжения длинного текста — offset=nextOffset из прошлого ответа.
 - Для больших запросов про оборудование сначала используй предварительный индекс Drive из контекста, если он есть.
 - Если точный поиск по названию ничего не дал — повтори search_files_in_folder без query, затем отдельно найди папки через mime_type="application/vnd.google-apps.folder".
 - Если нужный файл может быть в подпапке — зайди в подходящую подпапку и повтори поиск там.

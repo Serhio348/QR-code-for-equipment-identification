@@ -13,6 +13,7 @@
 
 import { gasClient } from '../equipment/index.js';
 import type { ChatMessage, EquipmentContext } from './types.js';
+import { isDocumentFollowUp } from './documentSessionService.js';
 
 // ============================================
 // Константы
@@ -26,7 +27,7 @@ const NESTED_FILE_LIMIT = 20;
 const LONG_REQUEST_THRESHOLD = 700;
 
 const DOCUMENT_INTENT_PATTERN =
-  /файл|папк|документ|документац|паспорт|инструкц|мануал|manual|pdf|схем|черт[её]ж|откр(ой|ыть)|покажи|прочитай|найди/i;
+  /файл|папк|документ|документац|паспорт|инструкц|мануал|manual|pdf|схем|черт[её]ж|откр(ой|ыть)|покажи|прочитай|найди|углуб|продолж|раздел|глав[аыу]|таблиц/i;
 
 // ============================================
 // Типы
@@ -173,6 +174,8 @@ function formatDriveItem(item: DriveItem): string {
 
 function shouldPreloadDriveIndex(userText: string): boolean {
   if (!userText.trim()) return false;
+  // Короткие подтверждения («ок/давай») обслуживает сессия документа — индекс Drive не нужен
+  if (isDocumentFollowUp(userText)) return false;
   return userText.length >= LONG_REQUEST_THRESHOLD || DOCUMENT_INTENT_PATTERN.test(userText);
 }
 
