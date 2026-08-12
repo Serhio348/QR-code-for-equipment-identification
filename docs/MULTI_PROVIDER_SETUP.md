@@ -174,7 +174,7 @@ curl -X POST http://localhost:3001/api/chat \
 ### Остальные (не изменились)
 
 - `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` - Для JWT авторизации
-- `GAS_API_URL` - URL Google Apps Script для работы с оборудованием (пример: https://script.google.com/macros/s/AKfycbxwY_gXYab9EMnpoewHLU7yrniPPRxkNEMITOc3ru-fBxxtGmUoR0WeFfbC250zrIfieQ/exec)
+- `GAS_API_URL` - URL Google Apps Script для работы с оборудованием (пример: https://script.google.com/macros/s/AKfycbzh3td00lD-AJV0q-kBu9Zoo01M-nebPH3WpISe_rj2HU-PsxEH0DDZ2VKJGIKb6nigeQ/exec)
 - `PORT`, `NODE_ENV`, `ALLOWED_ORIGINS` - Настройки сервера
 
 ## 🐛 Troubleshooting
