@@ -20,10 +20,10 @@ import { isDocumentFollowUp } from './documentSessionService.js';
 // ============================================
 
 const FOLDER_MIME_TYPE = 'application/vnd.google-apps.folder';
-const ROOT_FILE_LIMIT = 60;
-const ROOT_FOLDER_LIMIT = 30;
-const NESTED_FOLDER_LIMIT = 5;
-const NESTED_FILE_LIMIT = 20;
+const ROOT_FILE_LIMIT = 80;
+const ROOT_FOLDER_LIMIT = 40;
+const NESTED_FOLDER_LIMIT = 12;
+const NESTED_FILE_LIMIT = 30;
 const LONG_REQUEST_THRESHOLD = 700;
 
 const DOCUMENT_INTENT_PATTERN =
