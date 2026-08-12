@@ -250,42 +250,49 @@ export async function getBeliotReadingStats(
 }
 
 /**
- * Получить показания устройства за период с группировкой по дням
- * 
- * Полезно для построения графиков потребления.
- * 
- * @param device_id - ID устройства
- * @param start_date - Начальная дата (ISO строка)
- * @param end_date - Конечная дата (ISO строка)
- * @returns Promise с показаниями, отсортированными по дате
+ * Получить показания устройства за период.
+ *
+ * PostgREST/Supabase по умолчанию отдаёт не больше ~1000 строк за запрос.
+ * Один `.limit(10000)` не помогает — сервер всё равно обрезает.
+ * Без постраничной догрузки архив «по дням» берёт только начало периода
+ * и за последний день показывает утреннее показание вместо вечернего (как в Beliot).
  */
 export async function getBeliotReadingsByPeriod(
   device_id: string,
   start_date: string,
   end_date: string,
   reading_type: string = 'hourly',
-  /** PostgREST по умолчанию режет выборку; для архива нужен полный период */
-  max_rows: number = 10_000,
+  /** Верхняя граница числа строк (защита от бесконечного цикла) */
+  max_rows: number = 50_000,
 ): Promise<BeliotDeviceReading[]> {
+  /** Размер страницы ≤ типичного max_rows PostgREST (1000) */
+  const pageSize = 1000;
+  const all: BeliotDeviceReading[] = [];
+
   try {
-    let query = supabase
-      .from('beliot_device_readings')
-      .select('*')
-      .eq('device_id', device_id)
-      .eq('reading_type', reading_type)
-      .gte('reading_date', start_date)
-      .lte('reading_date', end_date)
-      .order('reading_date', { ascending: true })
-      .limit(max_rows);
+    for (let from = 0; from < max_rows; from += pageSize) {
+      const to = Math.min(from + pageSize - 1, max_rows - 1);
+      const { data, error } = await supabase
+        .from('beliot_device_readings')
+        .select('*')
+        .eq('device_id', device_id)
+        .eq('reading_type', reading_type)
+        .gte('reading_date', start_date)
+        .lte('reading_date', end_date)
+        .order('reading_date', { ascending: true })
+        .range(from, to);
 
-    const { data, error } = await query;
+      if (error) {
+        console.error('Ошибка получения показаний за период:', error);
+        throw new Error(`Ошибка получения показаний за период: ${error.message}`);
+      }
 
-    if (error) {
-      console.error('Ошибка получения показаний за период:', error);
-      throw new Error(`Ошибка получения показаний за период: ${error.message}`);
+      const chunk = (data as BeliotDeviceReading[]) || [];
+      all.push(...chunk);
+      if (chunk.length < pageSize) break;
     }
 
-    return (data as BeliotDeviceReading[]) || [];
+    return all;
   } catch (error: any) {
     console.error('Ошибка в getBeliotReadingsByPeriod:', error);
     throw error;
