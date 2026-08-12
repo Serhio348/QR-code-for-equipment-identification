@@ -5,7 +5,7 @@
  * («ок», «давай», «углубись») без повторного поиска оборудования/папки.
  *
  * Структура / что умеет:
- * 1. putDocument / getDocument — кэш полного текста файла на пользователя
+ * 1. putDocument / getDocument — кэш до MAX_CACHED_DOCUMENTS файлов на пользователя
  * 2. setPendingRead / consumePendingRead — ожидание подтверждения углубления
  * 3. sliceDocument — окно текста по offset / section_query
  * 4. buildDocumentSessionPrompt — блок для system prompt
@@ -18,8 +18,11 @@
 /** Размер окна, которое отдаём модели за один вызов (~30–40 стр.). */
 export const DOCUMENT_CHUNK_SIZE = 60_000;
 
-/** Максимум символов в сессионном кэше (~500+ стр. технического текста). */
+/** Максимум символов в сессионном кэше на один файл (~500+ стр.). */
 export const DOCUMENT_CACHE_MAX_CHARS = 1_500_000;
+
+/** Сколько разных файлов держим в кэше на пользователя (LRU). */
+export const MAX_CACHED_DOCUMENTS = 5;
 
 const SESSION_TTL_MS = 2 * 60 * 60 * 1000; // 2 часа
 
@@ -50,7 +53,8 @@ export interface PendingDocumentRead {
 }
 
 interface UserDocumentSession {
-  document?: CachedDocument;
+  /** LRU: конец массива = самый свежий / активный */
+  documents: CachedDocument[];
   pending?: PendingDocumentRead;
   updatedAt: number;
 }
@@ -90,9 +94,12 @@ function getOrCreateSession(userId: string): UserDocumentSession {
   const key = sessionKey(userId);
   const existing = sessions.get(key);
   if (existing && Date.now() - existing.updatedAt < SESSION_TTL_MS) {
+    if (!existing.documents) {
+      existing.documents = [];
+    }
     return existing;
   }
-  const created: UserDocumentSession = { updatedAt: Date.now() };
+  const created: UserDocumentSession = { documents: [], updatedAt: Date.now() };
   sessions.set(key, created);
   return created;
 }
@@ -104,6 +111,11 @@ function pruneExpired(): void {
       sessions.delete(key);
     }
   }
+}
+
+function getActiveDocument(session: UserDocumentSession): CachedDocument | undefined {
+  if (!session.documents?.length) return undefined;
+  return session.documents[session.documents.length - 1];
 }
 
 // ============================================
@@ -124,7 +136,18 @@ export function putDocument(
     truncatedOnFetch: doc.truncatedOnFetch || doc.fullText.length > DOCUMENT_CACHE_MAX_CHARS,
     updatedAt: Date.now(),
   };
-  session.document = cached;
+
+  const prevActive = getActiveDocument(session);
+  if (prevActive && prevActive.fileId !== cached.fileId) {
+    session.pending = undefined;
+  }
+
+  session.documents = session.documents.filter((d) => d.fileId !== cached.fileId);
+  session.documents.push(cached);
+  while (session.documents.length > MAX_CACHED_DOCUMENTS) {
+    session.documents.shift();
+  }
+
   touch(session);
   return cached;
 }
@@ -132,14 +155,25 @@ export function putDocument(
 export function getDocument(userId: string, fileId?: string): CachedDocument | undefined {
   pruneExpired();
   const session = sessions.get(sessionKey(userId));
-  if (!session?.document) return undefined;
+  if (!session?.documents?.length) return undefined;
   if (Date.now() - session.updatedAt >= SESSION_TTL_MS) return undefined;
-  if (fileId && session.document.fileId !== fileId) return undefined;
-  return session.document;
+
+  if (fileId) {
+    return session.documents.find((d) => d.fileId === fileId);
+  }
+  return getActiveDocument(session);
 }
 
 export function getLastDocument(userId: string): CachedDocument | undefined {
   return getDocument(userId);
+}
+
+export function listCachedDocuments(userId: string): CachedDocument[] {
+  pruneExpired();
+  const session = sessions.get(sessionKey(userId));
+  if (!session?.documents?.length) return [];
+  if (Date.now() - session.updatedAt >= SESSION_TTL_MS) return [];
+  return [...session.documents];
 }
 
 // ============================================
@@ -216,7 +250,6 @@ export function sliceDocument(
 
   let end = Math.min(doc.fullText.length, start + maxLength);
 
-  // Если читаем раздел — стараемся не обрезать посередине следующего заголовка
   if (sectionFound && end < doc.fullText.length) {
     const window = doc.fullText.slice(start, Math.min(doc.fullText.length, start + maxLength + 8_000));
     const relative = window.slice(maxLength);
@@ -261,19 +294,32 @@ export function buildDocumentSessionPrompt(userId: string): string {
   pruneExpired();
   const session = sessions.get(sessionKey(userId));
   if (!session || Date.now() - session.updatedAt >= SESSION_TTL_MS) return '';
-  if (!session.document && !session.pending) return '';
+  const docs = session.documents ?? [];
+  if (docs.length === 0 && !session.pending) return '';
 
+  const active = getActiveDocument(session);
   const parts = [
-    '\n\nСЕССИЯ ДОКУМЕНТА (уже найдено ранее — НЕ ищи оборудование/папку заново):',
+    '\n\nСЕССИЯ ДОКУМЕНТОВ (кэш чтения для текущего оборудования):',
   ];
 
-  if (session.document) {
-    const doc = session.document;
+  if (active) {
     parts.push(
-      `- Последний файл: ${doc.fileName}`,
-      `- file_id: ${doc.fileId}`,
-      `- file_url: ${doc.fileUrl}`,
-      `- В кэше: ${doc.fullText.length} символов (всего заявлено ${doc.totalChars}${doc.truncatedOnFetch ? ', при загрузке был truncated' : ''})`,
+      `- Активный файл: ${active.fileName}`,
+      `- file_id: ${active.fileId}`,
+      `- file_url: ${active.fileUrl}`,
+      `- В кэше: ${active.fullText.length} символов (всего заявлено ${active.totalChars}${active.truncatedOnFetch ? ', при загрузке был truncated' : ''})`,
+    );
+  }
+
+  if (docs.length > 1) {
+    parts.push('- Ранее в этой сессии также читались:');
+    for (const doc of docs.slice(0, -1)) {
+      parts.push(
+        `  • ${doc.fileName} | file_id=${doc.fileId} | file_url=${doc.fileUrl} | chars=${doc.fullText.length}`,
+      );
+    }
+    parts.push(
+      '- Чтобы вернуться к ранее прочитанному файлу — сразу read_file_content по его file_url (текст уже в кэше).',
     );
   }
 
@@ -289,22 +335,36 @@ export function buildDocumentSessionPrompt(userId: string): string {
 
   parts.push(
     '',
-    'Правила follow-up:',
-    '- Если пользователь пишет коротко: «ок», «давай», «хорошо», «углубись», «продолжай», «да» — СРАЗУ читай документ из этой сессии через read_file_content.',
-    '- Используй file_url из сессии/pending. НЕ вызывай get_all_equipment / get_equipment_details / search_files_in_folder, если файл уже известен.',
-    '- Для углубления в раздел: section_query = название раздела из pending или из просьбы пользователя.',
-    '- Для продолжения длинного текста: передай offset = nextOffset из прошлого ответа.',
-    '- Перед предложением «углубиться в раздел X» вызови set_pending_document_read с file_url и section_hint.',
+    'Правила:',
+    '- Follow-up («ок», «давай», «хорошо», «углубись», «продолжай», «да») — СРАЗУ read_file_content по активному/pending file_url. НЕ ищи оборудование заново.',
+    '- Если пользователь просит ДРУГОЙ документ (паспорт→акт, инструкция→схема) — это НЕ follow-up: сделай search_files_in_folder (сначала без query), затем read_file_content. Сессия не запрещает поиск другого файла.',
+    '- НЕ говори «других файлов нет / папка пуста», пока не сделал широкий поиск без query и не проверил подпапки (mime_type=folder). Пустой ответ на узкий query ≠ пустая папка.',
+    '- Для углубления в раздел: section_query. Для продолжения длинного текста: offset=nextOffset.',
+    '- Перед предложением «углубиться в раздел X» вызови set_pending_document_read.',
   );
 
   return parts.filter(Boolean).join('\n');
 }
 
+/**
+ * Короткое подтверждение углубления/продолжения чтения.
+ * Важно: «прочитай паспорт» — НЕ follow-up (новый запрос к документации).
+ */
 export function isDocumentFollowUp(text: string): boolean {
-  const normalized = text.trim().toLowerCase();
+  const normalized = text
+    .trim()
+    .toLowerCase()
+    .replace(/[.!?…]+$/g, '')
+    .trim();
   if (!normalized) return false;
-  if (normalized.length > 80) return false;
-  return /^(ок|окей|okay|ok|да|давай|хорошо|согласен|углубись|продолжай|продолжи|дальше|читай|прочитай|ага|угу|yes|yep|go)\b/i.test(
-    normalized,
-  );
+  if (normalized.length > 60) return false;
+
+  const token =
+    '(?:ок|окей|okay|ok|да|давай|хорошо|согласен|углубись|продолжай|продолжи|дальше|читай|прочитай|ага|угу|yes|yep|go|пожалуйста|pls|please)';
+  return new RegExp(`^${token}(?:[,;]?\\s+${token})*$`, 'i').test(normalized);
+}
+
+/** Сброс in-memory сессий — только для unit-тестов. */
+export function clearDocumentSessionsForTests(): void {
+  sessions.clear();
 }

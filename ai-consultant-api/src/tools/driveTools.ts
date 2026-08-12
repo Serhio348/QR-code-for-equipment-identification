@@ -51,7 +51,7 @@ export const driveTools: Anthropic.Tool[] = [
   {
     name: 'search_files_in_folder',
     description:
-      'Поиск файлов и вложенных папок в папке оборудования на Google Drive. По умолчанию возвращает файлы. Для надёжного поиска сначала вызывай без query, чтобы увидеть общий список, затем уточняй query. Для поиска вложенных папок передай mime_type: "application/vnd.google-apps.folder". Если файл не найден по точному имени, повтори поиск без query и проверь подпапки. НЕ используй, если file_url уже есть в СЕССИИ ДОКУМЕНТА.',
+      'Поиск файлов и вложенных папок в папке оборудования на Google Drive. Для надёжного поиска СНАЧАЛА вызывай без query (общий список), потом уточняй. Для подпапок: mime_type="application/vnd.google-apps.folder", затем ищи внутри. Пустой ответ на узкий query ≠ пустая папка — повтори без query и проверь подпапки. Не говори «файлов нет», пока не сделал широкий поиск. Для follow-up по УЖЕ известному file_url из сессии не нужен; если пользователь просит ДРУГОЙ документ — вызывай поиск.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -121,12 +121,7 @@ export async function executeDriveTool(
 
   switch (name) {
     case 'search_files_in_folder':
-      return await gasClient.get('getFolderFiles', {
-        folderId: extractDriveId(input.folder_url as string),
-        query: input.query as string | undefined,
-        mimeType: input.mime_type as string | undefined,
-        maxResults: input.max_results ? String(input.max_results) : undefined,
-      });
+      return await searchFilesInFolder(input);
 
     case 'read_file_content':
       return await readFileContentWithSession(input);
@@ -134,6 +129,64 @@ export async function executeDriveTool(
     default:
       throw new Error(`Unknown drive tool: ${name}`);
   }
+}
+
+// ============================================
+// Поиск файлов
+// ============================================
+
+async function searchFilesInFolder(input: Record<string, unknown>): Promise<unknown> {
+  const query = typeof input.query === 'string' ? input.query.trim() : '';
+  const mimeType =
+    typeof input.mime_type === 'string' ? input.mime_type.trim() : undefined;
+
+  const result = await gasClient.get('getFolderFiles', {
+    folderId: extractDriveId(input.folder_url as string),
+    query: query || undefined,
+    mimeType,
+    maxResults: input.max_results ? String(input.max_results) : undefined,
+  });
+
+  const items = normalizeSearchItems(result);
+  if (items.length > 0) {
+    return result;
+  }
+
+  const hints: string[] = [];
+  if (query) {
+    hints.push(
+      `По query «${query}» ничего не найдено. Это НЕ значит, что папка пуста — повтори search_files_in_folder без query.`,
+    );
+  }
+  if (mimeType && mimeType !== 'application/vnd.google-apps.folder') {
+    hints.push('Сними mime_type или проверь другой тип файла.');
+  }
+  if (!mimeType || mimeType !== 'application/vnd.google-apps.folder') {
+    hints.push(
+      'Отдельно найди подпапки: mime_type="application/vnd.google-apps.folder", затем ищи внутри подходящей.',
+    );
+  }
+  hints.push('Не отвечай пользователю «файлов нет», пока не сделал широкий поиск без query и не проверил подпапки.');
+
+  return {
+    success: true,
+    files: [],
+    count: 0,
+    empty: true,
+    query: query || null,
+    mimeType: mimeType || null,
+    hint: hints.join(' '),
+  };
+}
+
+function normalizeSearchItems(result: unknown): unknown[] {
+  if (Array.isArray(result)) return result;
+  if (result && typeof result === 'object') {
+    const record = result as Record<string, unknown>;
+    if (Array.isArray(record.files)) return record.files;
+    if (Array.isArray(record.data)) return record.data;
+  }
+  return [];
 }
 
 // ============================================

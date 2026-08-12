@@ -15,6 +15,7 @@ import {
   clearPendingRead,
   getLastDocument,
   getPendingRead,
+  listCachedDocuments,
   setPendingRead,
 } from '../services/ai/documentSessionService.js';
 
@@ -118,6 +119,16 @@ export async function executeDocumentSessionTool(
     case 'get_document_session': {
       const document = getLastDocument(userId);
       const pending = getPendingRead(userId);
+      const cached = listCachedDocuments(userId).map((doc) => ({
+        fileId: doc.fileId,
+        fileUrl: doc.fileUrl,
+        fileName: doc.fileName,
+        mimeType: doc.mimeType,
+        cachedChars: doc.fullText.length,
+        totalChars: doc.totalChars,
+        truncatedOnFetch: doc.truncatedOnFetch,
+        active: document?.fileId === doc.fileId,
+      }));
       return {
         success: true,
         document: document
@@ -131,6 +142,7 @@ export async function executeDocumentSessionTool(
               truncatedOnFetch: document.truncatedOnFetch,
             }
           : null,
+        cachedDocuments: cached,
         pending: pending || null,
       };
     }
