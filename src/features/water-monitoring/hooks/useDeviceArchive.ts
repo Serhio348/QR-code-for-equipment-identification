@@ -39,25 +39,33 @@ export interface ArchiveChartPoint {
   index: number;
 }
 
-const ARCHIVE_DATA_LIMIT = 10_000;
+const ARCHIVE_DATA_LIMIT = 50_000;
+
+/** Календарный день YYYY-MM-DD в Europe/Moscow (как beliot_daily_readings_agg и UI Beliot). */
+function moscowYmd(dateInput: string | Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Moscow',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(dateInput));
+}
 
 /**
- * Границы календарных дат YYYY-MM-DD в локальной зоне → ISO для Supabase.
- * Без привязки к UTC-полуночи строкой вида T00:00:00.000Z (иначе сдвигаются сутки).
+ * Границы календарных дат YYYY-MM-DD в Europe/Moscow → ISO для Supabase.
+ * Явный +03:00 (Москва без DST), чтобы конец «31.07» всегда включал вечерние точки 23:xx.
  */
 function localYmdBoundsToIso(startYmd: string, endYmd: string): { startIso: string; endIso: string } {
-  const [ys, ms, ds] = startYmd.split('-').map(Number);
-  const [ye, me, de] = endYmd.split('-').map(Number);
-  const start = new Date(ys, ms - 1, ds, 0, 0, 0, 0);
-  const end = new Date(ye, me - 1, de, 23, 59, 59, 999);
+  const start = new Date(`${startYmd}T00:00:00+03:00`);
+  const end = new Date(`${endYmd}T23:59:59.999+03:00`);
   return { startIso: start.toISOString(), endIso: end.toISOString() };
 }
 
-/** Предыдущий календарный день YYYY-MM-DD (локальная дата). */
+/** Предыдущий календарный день YYYY-MM-DD (календарь Europe/Moscow). */
 function previousCalendarDayYmd(ymd: string): string {
-  const [y, m, d] = ymd.split('-').map(Number);
-  const dt = new Date(y, m - 1, d - 1);
-  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+  const noonMsk = new Date(`${ymd}T12:00:00+03:00`);
+  noonMsk.setTime(noonMsk.getTime() - 24 * 60 * 60 * 1000);
+  return moscowYmd(noonMsk);
 }
 
 /**
@@ -73,19 +81,26 @@ function archiveFetchRangeIso(archiveStartYmd: string, archiveEndYmd: string): {
 }
 
 function todayStr(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return moscowYmd(new Date());
 }
 
 function monthStartStr(): string {
-  const d = new Date();
-  const ms = new Date(d.getFullYear(), d.getMonth(), 1);
-  return `${ms.getFullYear()}-${String(ms.getMonth() + 1).padStart(2, '0')}-${String(ms.getDate()).padStart(2, '0')}`;
+  const today = moscowYmd(new Date());
+  return `${today.slice(0, 8)}01`;
 }
 
-function yearStartStr(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-01-01`;
+function pickLatestReading(readings: BeliotDeviceReading[]): BeliotDeviceReading | undefined {
+  let latest: BeliotDeviceReading | undefined;
+  for (const reading of readings) {
+    if (!latest) {
+      latest = reading;
+      continue;
+    }
+    if (new Date(reading.reading_date).getTime() > new Date(latest.reading_date).getTime()) {
+      latest = reading;
+    }
+  }
+  return latest;
 }
 
 export function useDeviceArchive(deviceId: string | null) {
@@ -119,17 +134,11 @@ export function useDeviceArchive(deviceId: string | null) {
 
   // ─── Callbacks ────────────────────────────────────────────────────────────
 
-  const updateDefaultDates = useCallback((groupBy: ArchiveGroupBy) => {
-    setArchiveStartDate(groupBy === 'year' ? yearStartStr() : monthStartStr());
-    setArchiveEndDate(todayStr());
-    setArchiveDataLoaded(false);
-  }, []);
-
+  // Группировка — только клиентское представление уже загруженных hourly-данных.
+  // Период дат не трогаем: иначе при смене «по часам/дням/…» сбрасывается выбранный диапазон.
   const handleGroupByChange = useCallback((newGroupBy: ArchiveGroupBy) => {
     setArchiveGroupBy(newGroupBy);
-    setArchiveDataLoaded(false);
-    updateDefaultDates(newGroupBy);
-  }, [updateDefaultDates]);
+  }, []);
 
   const handleLoadArchiveData = useCallback(async () => {
     if (!deviceId || !archiveStartDate || !archiveEndDate) return;
@@ -143,6 +152,7 @@ export function useDeviceArchive(deviceId: string | null) {
         await refreshArchive();
       }
       setArchiveDataLoaded(true);
+      // Сворачиваем настройки только по явному «Обновить данные», не при автозагрузке
       setIsArchiveSettingsCollapsed(true);
     } catch {
       setArchiveDataLoaded(false);
@@ -169,22 +179,34 @@ export function useDeviceArchive(deviceId: string | null) {
       let key: string;
 
       switch (groupBy) {
-        case 'hour':
-          key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:00`;
-          break;
-        case 'day':
-          key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-          break;
-        case 'week': {
-          const weekOfMonth = Math.ceil(date.getDate() / 7);
-          key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-W${weekOfMonth}`;
+        case 'hour': {
+          // Часовой ключ в Europe/Moscow — совпадает с beliot / календарём объекта
+          const day = moscowYmd(date);
+          const hour = new Intl.DateTimeFormat('en-GB', {
+            timeZone: 'Europe/Moscow',
+            hour: '2-digit',
+            hour12: false,
+          }).format(date).padStart(2, '0');
+          key = `${day} ${hour}:00`;
           break;
         }
-        case 'month':
-          key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        case 'day':
+          key = moscowYmd(date);
           break;
+        case 'week': {
+          const day = moscowYmd(date);
+          const [y, m, d] = day.split('-').map(Number);
+          const weekOfMonth = Math.ceil(d / 7);
+          key = `${y}-${String(m).padStart(2, '0')}-W${weekOfMonth}`;
+          break;
+        }
+        case 'month': {
+          const day = moscowYmd(date);
+          key = day.slice(0, 7);
+          break;
+        }
         case 'year':
-          key = String(date.getFullYear());
+          key = moscowYmd(date).slice(0, 4);
           break;
         default:
           key = date.toISOString();
@@ -198,8 +220,14 @@ export function useDeviceArchive(deviceId: string | null) {
     let effectiveEnd = end;
     if (groupBy === 'hour' && readings.length > 0) {
       const maxDate = new Date(Math.max(...readings.map(r => new Date(r.reading_date).getTime())));
-      maxDate.setMinutes(0, 0, 0);
-      effectiveEnd = maxDate;
+      // Срез до начала часа по Москве
+      const maxDay = moscowYmd(maxDate);
+      const maxHour = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Europe/Moscow',
+        hour: '2-digit',
+        hour12: false,
+      }).format(maxDate).padStart(2, '0');
+      effectiveEnd = new Date(`${maxDay}T${maxHour}:00:00+03:00`);
     }
 
     const allPeriods: GroupedReading[] = [];
@@ -211,55 +239,72 @@ export function useDeviceArchive(deviceId: string | null) {
       let periodDate: Date;
 
       switch (groupBy) {
-        case 'hour':
-          key = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}-${String(current.getDate()).padStart(2, '0')} ${String(current.getHours()).padStart(2, '0')}:00`;
-          periodDate = new Date(current);
-          periodDate.setMinutes(0, 0, 0);
-          current.setHours(current.getHours() + 1);
-          break;
-        case 'day':
-          key = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}-${String(current.getDate()).padStart(2, '0')}`;
-          periodDate = new Date(current);
-          current.setDate(current.getDate() + 1);
-          break;
-        case 'week': {
-          const weekOfMonth = Math.ceil(current.getDate() / 7);
-          key = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}-W${weekOfMonth}`;
-          periodDate = new Date(current);
-          current.setDate(current.getDate() + 7);
+        case 'hour': {
+          const day = moscowYmd(current);
+          const hour = new Intl.DateTimeFormat('en-GB', {
+            timeZone: 'Europe/Moscow',
+            hour: '2-digit',
+            hour12: false,
+          }).format(current).padStart(2, '0');
+          key = `${day} ${hour}:00`;
+          periodDate = new Date(`${day}T${hour}:00:00+03:00`);
+          current.setTime(current.getTime() + 60 * 60 * 1000);
           break;
         }
-        case 'month':
-          key = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`;
-          periodDate = new Date(current);
-          current.setMonth(current.getMonth() + 1);
+        case 'day': {
+          key = moscowYmd(current);
+          periodDate = new Date(`${key}T00:00:00+03:00`);
+          current.setTime(periodDate.getTime() + 24 * 60 * 60 * 1000);
           break;
-        case 'year':
-          key = String(current.getFullYear());
-          periodDate = new Date(current);
-          current.setFullYear(current.getFullYear() + 1);
+        }
+        case 'week': {
+          const day = moscowYmd(current);
+          const [y, m, d] = day.split('-').map(Number);
+          const weekOfMonth = Math.ceil(d / 7);
+          key = `${y}-${String(m).padStart(2, '0')}-W${weekOfMonth}`;
+          periodDate = new Date(`${day}T00:00:00+03:00`);
+          current.setTime(current.getTime() + 7 * 24 * 60 * 60 * 1000);
           break;
+        }
+        case 'month': {
+          const day = moscowYmd(current);
+          key = day.slice(0, 7);
+          periodDate = new Date(`${key}-01T00:00:00+03:00`);
+          const [y, m] = key.split('-').map(Number);
+          if (m === 12) {
+            current.setTime(new Date(`${y + 1}-01-01T00:00:00+03:00`).getTime());
+          } else {
+            current.setTime(new Date(`${y}-${String(m + 1).padStart(2, '0')}-01T00:00:00+03:00`).getTime());
+          }
+          break;
+        }
+        case 'year': {
+          key = moscowYmd(current).slice(0, 4);
+          periodDate = new Date(`${key}-01-01T00:00:00+03:00`);
+          current.setTime(new Date(`${Number(key) + 1}-01-01T00:00:00+03:00`).getTime());
+          break;
+        }
         default:
           key = current.toISOString();
           periodDate = new Date(current);
-          current.setHours(current.getHours() + 1);
+          current.setTime(current.getTime() + 60 * 60 * 1000);
       }
 
       const periodReadings = grouped.get(key) || [];
-      const sortedReadings = [...periodReadings].sort(
-        (a, b) => new Date(b.reading_date).getTime() - new Date(a.reading_date).getTime(),
-      );
+      const realReading = pickLatestReading(periodReadings);
 
       let consumption = 0;
-      if (periodReadings.length > 1) {
-        const first = Number(sortedReadings[sortedReadings.length - 1].reading_value);
-        const last = Number(sortedReadings[0].reading_value);
+      if (periodReadings.length > 1 && realReading) {
+        const sortedAsc = [...periodReadings].sort(
+          (a, b) => new Date(a.reading_date).getTime() - new Date(b.reading_date).getTime(),
+        );
+        const first = Number(sortedAsc[0].reading_value);
+        const last = Number(realReading.reading_value);
         if (!isNaN(first) && !isNaN(last)) {
           consumption = Math.max(0, last - first);
         }
       }
 
-      const realReading = sortedReadings[0];
       const readingToUse =
         realReading
           ? realReading
@@ -285,11 +330,11 @@ export function useDeviceArchive(deviceId: string | null) {
       let nextKnown: BeliotDeviceReading | undefined;
       for (let i = allPeriods.length - 1; i >= 0; i--) {
         const item = allPeriods[i];
-        if (item.reading) {
+        if (item.reading && !item.isEstimated) {
           nextKnown = item.reading;
           continue;
         }
-        if (nextKnown) {
+        if (nextKnown && (!item.reading || item.isEstimated)) {
           allPeriods[i] = {
             ...item,
             reading: nextKnown,
@@ -349,7 +394,13 @@ export function useDeviceArchive(deviceId: string | null) {
         readingValue = Number(groupedReading.reading.reading_value) || 0;
 
         if (archiveViewType === 'volume') {
-          volume = computeVolume(groupedReading, index, archiveGroupBy, archiveReadings, archiveReadingsRaw);
+          volume = computeArchivePeriodVolume(
+            groupedReading,
+            index,
+            archiveGroupBy,
+            archiveReadings,
+            archiveReadingsRaw,
+          );
         }
       }
 
@@ -392,9 +443,9 @@ export function useDeviceArchive(deviceId: string | null) {
     setArchiveCurrentPage(1);
   }, [archiveGroupBy, archiveDataLoaded]);
 
-  // Автозагрузка при открытии модалки, смене счётчика, периода или группировки.
-  // Группировка сама по себе меняет клиентское представление, но после setArchiveDataLoaded(false)
-  // нужен повторный проход загрузки, иначе UI остаётся в состоянии "Загрузка архива...".
+  // Автозагрузка при открытии модалки, смене счётчика или периода.
+  // Группировку не включаем: она считается на клиенте и не должна дергать сеть / сворачивать настройки.
+  // Не сворачиваем панель настроек здесь — иначе после выбора даты в календаре настройки сразу прячутся.
   useEffect(() => {
     if (!isArchiveOpen || !deviceId || !archiveStartDate || !archiveEndDate) return;
 
@@ -410,7 +461,6 @@ export function useDeviceArchive(deviceId: string | null) {
         }
         if (!cancelled) {
           setArchiveDataLoaded(true);
-          setIsArchiveSettingsCollapsed(true);
         }
       } catch {
         if (!cancelled) setArchiveDataLoaded(false);
@@ -420,7 +470,7 @@ export function useDeviceArchive(deviceId: string | null) {
     return () => {
       cancelled = true;
     };
-  }, [isArchiveOpen, deviceId, archiveStartDate, archiveEndDate, archiveGroupBy, loadByPeriod, refreshArchive]);
+  }, [isArchiveOpen, deviceId, archiveStartDate, archiveEndDate, loadByPeriod, refreshArchive]);
 
   // Оформление страницы и сброс «загружено» только при закрытии
   useEffect(() => {
@@ -466,133 +516,55 @@ export function useDeviceArchive(deviceId: string | null) {
   };
 }
 
-// ─── Вспомогательная функция вычисления объёма ───────────────────────────────
-// Вынесена из useMemo, чтобы не раздувать хук
-
-function computeVolume(
-  groupedReading: { groupKey: string; groupDate: Date; reading?: BeliotDeviceReading; consumption: number },
-  index: number,
+/**
+ * Объём за период = показание периода − предыдущее известное показание.
+ * Как в Beliot («Показать расход») и как ручная разность колонки «Показания»:
+ * last[период] − last[предыдущий период], а не сумма часовых дельт внутри дня
+ * (иначе теряется ночной расход до первого часового замера → недоучёт).
+ *
+ * @param ascendingIndex — индекс в archiveReadingsAsc (хронологический порядок)
+ */
+export function computeArchivePeriodVolume(
+  groupedReading: GroupedReading,
+  ascendingIndex: number,
   groupBy: ArchiveGroupBy,
-  archiveReadings: { groupKey: string; groupDate: Date; reading?: BeliotDeviceReading; consumption: number }[],
+  archiveReadingsAsc: GroupedReading[],
   rawReadings: BeliotDeviceReading[],
 ): number {
   if (!groupedReading.reading) return 0;
+
   if (groupBy === 'day') {
-    const volumeOverride = getBeliotArchiveVolumeOverride(groupedReading.reading.device_id, groupedReading.groupKey);
+    const volumeOverride = getBeliotArchiveVolumeOverride(
+      groupedReading.reading.device_id,
+      groupedReading.groupKey,
+    );
     if (volumeOverride !== null) return volumeOverride;
   }
 
-  if (groupBy === 'hour') {
-    // Ищем следующее показание (более раннее по времени — архив в обратном порядке)
-    for (let i = index + 1; i < archiveReadings.length; i++) {
-      const candidate = archiveReadings[i];
-      if (candidate?.reading) {
-        const current = Number(groupedReading.reading.reading_value);
-        const previous = Number(candidate.reading.reading_value);
-        if (!isNaN(current) && !isNaN(previous)) {
-          return Math.max(0, current - previous);
-        }
-        break;
-      }
-    }
-    return 0;
+  const current = Number(groupedReading.reading.reading_value);
+  if (isNaN(current)) return 0;
+
+  for (let i = ascendingIndex - 1; i >= 0; i--) {
+    const prev = archiveReadingsAsc[i];
+    if (!prev?.reading) continue;
+    const previous = Number(prev.reading.reading_value);
+    if (isNaN(previous)) return 0;
+    return Math.max(0, current - previous);
   }
 
-  // Для day/week/month/year: суммируем почасовые разницы за период
-  const filterByKey = makeFilterByKey(groupedReading.groupKey, groupBy);
+  // Первый период выбранного диапазона: база из raw (запрос тянет день до archiveStart)
   const periodStartMs = groupedReading.groupDate.getTime();
-  const periodRaw = rawReadings.filter(r =>
-    filterByKey(r) && new Date(r.reading_date).getTime() >= periodStartMs
-  );
-  if (!periodRaw.length) return 0;
-
-  const sorted = [...periodRaw].sort(
-    (a, b) => new Date(a.reading_date).getTime() - new Date(b.reading_date).getTime(),
-  );
-
-  let previousHourValue: number | null = null;
-  const firstDayKey = getDayKey(sorted[0].reading_date);
-  const startsNewScale = getBeliotArchiveVolumeOverride(sorted[0].device_id, firstDayKey) !== null;
-  if (!startsNewScale) {
-    // Предыдущее показание: последнее за предыдущий день
-    const prevDayKey = getPreviousDayKey(sorted[0].reading_date);
-    const prevDayReadings = rawReadings.filter(r => getDayKey(r.reading_date) === prevDayKey);
-
-    if (prevDayReadings.length > 0) {
-      const sortedPrev = [...prevDayReadings].sort(
-        (a, b) => new Date(b.reading_date).getTime() - new Date(a.reading_date).getTime(),
-      );
-      previousHourValue = Number(sortedPrev[0].reading_value);
+  let baseline: BeliotDeviceReading | undefined;
+  for (const r of rawReadings) {
+    if (new Date(r.reading_date).getTime() >= periodStartMs) continue;
+    if (!baseline || new Date(r.reading_date).getTime() > new Date(baseline.reading_date).getTime()) {
+      baseline = r;
     }
   }
-
-  let total = 0;
-  for (let i = 0; i < sorted.length; i++) {
-    const current = Number(sorted[i].reading_value);
-    const previous = i === 0
-      ? (previousHourValue !== null ? previousHourValue : Number(sorted[0].reading_value))
-      : Number(sorted[i - 1].reading_value);
-    if (!isNaN(current) && !isNaN(previous)) {
-      const currentDayKey = getDayKey(sorted[i].reading_date);
-      const previousDayKey = i === 0
-        ? getPreviousDayKey(sorted[i].reading_date)
-        : getDayKey(sorted[i - 1].reading_date);
-      const boundaryOverride = currentDayKey !== previousDayKey
-        ? getBeliotArchiveVolumeOverride(sorted[i].device_id, currentDayKey)
-        : null;
-      if (boundaryOverride !== null) {
-        total += boundaryOverride;
-        continue;
-      }
-
-      const delta = current - previous;
-      if (delta > 0) total += delta;
-    }
+  if (baseline) {
+    const previous = Number(baseline.reading_value);
+    if (!isNaN(previous)) return Math.max(0, current - previous);
   }
-  return total;
-}
 
-function makeFilterByKey(groupKey: string, groupBy: ArchiveGroupBy): (r: BeliotDeviceReading) => boolean {
-  switch (groupBy) {
-    case 'day':
-      return r => {
-        const d = new Date(r.reading_date);
-        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` === groupKey;
-      };
-    case 'week': {
-      const [year, month, weekPart] = groupKey.split('-');
-      const monthNum = parseInt(month);
-      const weekNum = parseInt(weekPart.replace('W', ''));
-      const weekStartDay = (weekNum - 1) * 7 + 1;
-      const weekEndDay = Math.min(weekStartDay + 6, new Date(parseInt(year), monthNum, 0).getDate());
-      return r => {
-        const d = new Date(r.reading_date);
-        return d.getFullYear() === parseInt(year) &&
-          d.getMonth() + 1 === monthNum &&
-          d.getDate() >= weekStartDay && d.getDate() <= weekEndDay;
-      };
-    }
-    case 'month': {
-      const [year, month] = groupKey.split('-');
-      return r => {
-        const d = new Date(r.reading_date);
-        return d.getFullYear() === parseInt(year) && d.getMonth() + 1 === parseInt(month);
-      };
-    }
-    case 'year':
-      return r => new Date(r.reading_date).getFullYear() === parseInt(groupKey);
-    default:
-      return () => false;
-  }
-}
-
-function getPreviousDayKey(dateStr: string): string {
-  const d = new Date(dateStr);
-  d.setDate(d.getDate() - 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function getDayKey(dateStr: string): string {
-  const d = new Date(dateStr);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return 0;
 }
