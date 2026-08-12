@@ -10,6 +10,7 @@ import { authMiddleware, AuthenticatedRequest } from '../../middleware/auth.js';
 import { getOrCreateSession, saveMessages, updateSessionTitle } from '../../services/ai/chatMemoryService.js';
 import { loadFactsForPrompt } from '../../services/ai/agentMemoryService.js';
 import { buildDriveFileContext } from '../../services/ai/driveFileContextService.js';
+import { buildDocumentSessionPrompt } from '../../services/ai/documentSessionService.js';
 import { StreamEvent } from '../../services/ai/types.js';
 import rateLimit from 'express-rate-limit';
 import { config } from '../../config/env.js';
@@ -73,7 +74,8 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
             loadFactsForPrompt().catch(() => ''),
             buildDriveFileContext(messages, equipmentContext).catch(() => ''),
         ]);
-        const promptContext = [factsPrompt, driveFileContext].filter(Boolean).join('\n');
+        const documentSessionPrompt = buildDocumentSessionPrompt(userId);
+        const promptContext = [factsPrompt, driveFileContext, documentSessionPrompt].filter(Boolean).join('\n');
 
         const onEvent = (event: StreamEvent): void => {
             if (event.type === 'text_delta') {

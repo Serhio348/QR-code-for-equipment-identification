@@ -1015,13 +1015,14 @@ function handleSyncFolderAccess(params) {
  * @param {string} fileUrlOrId - URL файла или его ID
  * @param {Object} options - Опции (опционально)
  * @param {boolean} options.keepTempFile - Не удалять временный Google Doc (для отладки)
- * @param {number} options.maxLength - Максимальная длина текста (по умолчанию 50000)
+ * @param {number} options.maxLength - Максимальная длина текста (по умолчанию 1500000)
  * @returns {Object} {success, content, fileName, mimeType, charCount, error}
  */
 function getFileContent(fileUrlOrId, options) {
   options = options || {};
-  const maxLength = options.maxLength || 50000;
+  const maxLength = options.maxLength || 1500000;
   const keepTempFile = options.keepTempFile || false;
+  const offset = options.offset || 0;
 
   try {
     Logger.log('📄 getFileContent: начало');
@@ -1092,11 +1093,16 @@ function getFileContent(fileUrlOrId, options) {
       };
     }
 
-    // Ограничиваем длину текста
+    // Ограничиваем длину текста (с опциональным offset)
     const originalLength = content.length;
-    if (content.length > maxLength) {
-      content = content.substring(0, maxLength) + '\n\n... [текст обрезан, показано ' + maxLength + ' из ' + originalLength + ' символов]';
+    var start = Math.max(0, parseInt(offset, 10) || 0);
+    if (start > content.length) start = content.length;
+    var end = Math.min(content.length, start + maxLength);
+    var sliced = content.substring(start, end);
+    if (end < originalLength || start > 0) {
+      sliced = sliced + '\n\n... [текст обрезан, показано символы ' + start + '-' + end + ' из ' + originalLength + ']';
     }
+    content = sliced;
 
     Logger.log('✅ getFileContent: успешно извлечено ' + content.length + ' символов');
 
@@ -1106,7 +1112,9 @@ function getFileContent(fileUrlOrId, options) {
       fileName: fileName,
       mimeType: mimeType,
       charCount: originalLength,
-      truncated: originalLength > maxLength
+      truncated: end < originalLength,
+      offset: start,
+      nextOffset: end
     };
 
   } catch (error) {
@@ -1153,9 +1161,8 @@ function extractTextFromPdf(file, keepTempFile) {
 
     Logger.log('  - Создан временный документ: ' + tempDoc.id);
 
-    // Извлекаем текст из созданного документа
-    var doc = DocumentApp.openById(tempDoc.id);
-    var text = doc.getBody().getText();
+    // Извлекаем текст из созданного документа (с таблицами)
+    var text = extractTextFromGoogleDoc(tempDoc.id);
 
     Logger.log('  - Извлечено символов: ' + text.length);
 
@@ -1175,7 +1182,7 @@ function extractTextFromPdf(file, keepTempFile) {
 }
 
 /**
- * Извлечь текст из Google Docs
+ * Извлечь текст из Google Docs с сохранением таблиц в Markdown-подобном виде.
  *
  * @param {string} docId - ID документа
  * @returns {string} Текст документа
@@ -1184,11 +1191,72 @@ function extractTextFromGoogleDoc(docId) {
   Logger.log('📄 extractTextFromGoogleDoc: ' + docId);
 
   const doc = DocumentApp.openById(docId);
-  const text = doc.getBody().getText();
+  const body = doc.getBody();
+  const parts = [];
+  const numChildren = body.getNumChildren();
 
-  Logger.log('  - Извлечено символов: ' + text.length);
+  for (var i = 0; i < numChildren; i++) {
+    var child = body.getChild(i);
+    var type = child.getType();
 
-  return text;
+    if (type === DocumentApp.ElementType.TABLE) {
+      parts.push(formatDocTableAsText(child.asTable()));
+    } else if (type === DocumentApp.ElementType.PARAGRAPH) {
+      var pText = child.asParagraph().getText();
+      if (pText && pText.trim()) parts.push(pText);
+    } else if (type === DocumentApp.ElementType.LIST_ITEM) {
+      var lText = child.asListItem().getText();
+      if (lText && lText.trim()) parts.push('- ' + lText);
+    } else {
+      try {
+        var anyText = child.asText ? child.asText().getText() : '';
+        if (anyText && String(anyText).trim()) parts.push(String(anyText));
+      } catch (e) {
+        // пропускаем неподдерживаемые элементы
+      }
+    }
+  }
+
+  // Fallback: если обход детей ничего не дал
+  if (parts.length === 0) {
+    const text = body.getText();
+    Logger.log('  - Fallback getText, символов: ' + text.length);
+    return text;
+  }
+
+  var joined = parts.join('\n');
+  Logger.log('  - Извлечено символов: ' + joined.length);
+  return joined;
+}
+
+/**
+ * Форматирует таблицу Google Docs в читаемый текст с разделителями.
+ *
+ * @param {GoogleAppsScript.Document.Table} table
+ * @returns {string}
+ */
+function formatDocTableAsText(table) {
+  var rows = [];
+  var numRows = table.getNumRows();
+  rows.push('[Таблица ' + numRows + '×' + (numRows > 0 ? table.getRow(0).getNumCells() : 0) + ']');
+
+  for (var r = 0; r < numRows; r++) {
+    var row = table.getRow(r);
+    var cells = [];
+    for (var c = 0; c < row.getNumCells(); c++) {
+      var cellText = String(row.getCell(c).getText() || '')
+        .replace(/\r?\n/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      cells.push(cellText);
+    }
+    rows.push('| ' + cells.join(' | ') + ' |');
+    if (r === 0) {
+      rows.push('| ' + cells.map(function () { return '---'; }).join(' | ') + ' |');
+    }
+  }
+
+  return rows.join('\n');
 }
 
 /**
@@ -1262,9 +1330,8 @@ function extractTextFromWordFile(file, keepTempFile) {
 
     Logger.log('  - Создан временный документ: ' + tempDoc.id);
 
-    // Извлекаем текст из созданного документа
-    var doc = DocumentApp.openById(tempDoc.id);
-    var text = doc.getBody().getText();
+    // Извлекаем текст из созданного документа (с таблицами)
+    var text = extractTextFromGoogleDoc(tempDoc.id);
 
     Logger.log('  - Извлечено символов: ' + text.length);
 
@@ -1397,7 +1464,8 @@ function handleGetFileContent(params) {
     var fileUrlOrId = params.fileId || params.fileUrl;
 
     var options = {
-      maxLength: params.maxLength ? parseInt(params.maxLength, 10) : 50000,
+      maxLength: params.maxLength ? parseInt(params.maxLength, 10) : 1500000,
+      offset: params.offset ? parseInt(params.offset, 10) : 0,
       keepTempFile: params.keepTempFile === 'true' || params.keepTempFile === true
     };
 

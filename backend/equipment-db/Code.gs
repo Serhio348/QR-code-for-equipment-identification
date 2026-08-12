@@ -365,6 +365,7 @@ function doGet(e) {
         return handleGetFileContent({
           fileId: contentFileUrl,
           maxLength: e.parameter.maxLength,
+          offset: e.parameter.offset,
           keepTempFile: e.parameter.keepTempFile
         });
 
