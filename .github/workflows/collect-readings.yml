@@ -49,6 +49,7 @@ jobs:
       - name: Run collection script
         if: (github.event_name == 'schedule' && github.event.schedule == '50 * * * *') || (github.event_name == 'workflow_dispatch' && inputs.task == 'collect_readings')
         env:
+          NODE_ENV: production
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           BELIOT_LOGIN: ${{ secrets.BELIOT_LOGIN }}
@@ -60,6 +61,7 @@ jobs:
       - name: Scan Beliot device registry
         if: (github.event_name == 'schedule' && github.event.schedule == '20 1 * * *') || (github.event_name == 'workflow_dispatch' && inputs.task == 'scan_devices')
         env:
+          NODE_ENV: production
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           BELIOT_LOGIN: ${{ secrets.BELIOT_LOGIN }}
@@ -70,6 +72,7 @@ jobs:
       - name: Export devices list (JSON/CSV)
         if: github.event_name == 'workflow_dispatch' && inputs.task == 'export_devices'
         env:
+          NODE_ENV: production
           BELIOT_LOGIN: ${{ secrets.BELIOT_LOGIN }}
           BELIOT_PASSWORD: ${{ secrets.BELIOT_PASSWORD }}
           BELIOT_API_BASE_URL: ${{ secrets.BELIOT_API_BASE_URL }}
