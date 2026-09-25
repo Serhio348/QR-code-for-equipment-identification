@@ -11,6 +11,7 @@ import { Router, Response } from 'express';
 import { gasClient } from '../../services/equipment/index.js';
 import multer from 'multer';
 import { authMiddleware, type AuthenticatedRequest } from '../../middleware/auth.js';
+import { adminMiddleware } from '../../middleware/admin.js';
 
 const router = Router();
 const MAX_MAINTENANCE_FILE_BYTES = 25 * 1024 * 1024;
@@ -26,6 +27,75 @@ const upload = multer({
 
 // SEC-01: анонимные запросы к журналу/файлам отклоняются до вызова GAS.
 router.use(authMiddleware);
+
+// ============================================
+// SEC-02: мутации оборудования — только admin через backend
+// ============================================
+
+router.post('/add', adminMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const equipment = req.body;
+    if (!equipment?.name || !equipment?.type) {
+      res.status(400).json({
+        success: false,
+        error: 'Обязательные поля: name, type',
+      });
+      return;
+    }
+    const result = await gasClient.post<Record<string, unknown>>('add', equipment);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Неизвестная ошибка';
+    res.status(500).json({ success: false, error: message });
+  }
+});
+
+router.post('/update', adminMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id, ...updates } = req.body ?? {};
+    if (!id || typeof id !== 'string') {
+      res.status(400).json({ success: false, error: 'Обязательное поле: id' });
+      return;
+    }
+    const result = await gasClient.post<Record<string, unknown>>('update', { id, ...updates });
+    res.json({ success: true, data: result });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Неизвестная ошибка';
+    res.status(500).json({ success: false, error: message });
+  }
+});
+
+router.post('/delete', adminMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.body ?? {};
+    if (!id || typeof id !== 'string') {
+      res.status(400).json({ success: false, error: 'Обязательное поле: id' });
+      return;
+    }
+    const result = await gasClient.post<Record<string, unknown>>('delete', { id });
+    res.json({ success: true, data: result });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Неизвестная ошибка';
+    res.status(500).json({ success: false, error: message });
+  }
+});
+
+router.post('/create-folder', adminMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { name, parentFolderId } = req.body ?? {};
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      res.status(400).json({ success: false, error: 'Обязательное поле: name' });
+      return;
+    }
+    const payload: Record<string, unknown> = { name: name.trim() };
+    if (parentFolderId) payload.parentFolderId = parentFolderId;
+    const result = await gasClient.post<Record<string, unknown>>('createFolder', payload);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Неизвестная ошибка';
+    res.status(500).json({ success: false, error: message });
+  }
+});
 
 router.get('/maintenance/log', async (req: AuthenticatedRequest, res: Response) => {
   try {

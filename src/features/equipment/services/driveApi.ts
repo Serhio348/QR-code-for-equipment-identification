@@ -5,21 +5,20 @@
  */
 
 import { API_CONFIG } from '@/shared/config/api';
-import { apiRequest } from '@/shared/services/api/apiRequest';
-import { isCorsError } from '@/shared/services/api/corsFallback';
 import { DriveFolderResult, DriveFile } from '@/shared/services/api/types';
+import { supabase } from '@/shared/config/supabase';
+
+const BACKEND_API_URL = import.meta.env.VITE_AI_CONSULTANT_API_URL || '';
+
+function backendUrl(path: string): string {
+  if (BACKEND_API_URL) return `${BACKEND_API_URL}${path}`;
+  return path;
+}
 
 /**
  * Создать папку в Google Drive для оборудования
- * 
- * Создает новую папку в Google Drive с названием оборудования.
- * Папка будет использоваться для хранения документации и журнала обслуживания.
- * 
- * @param {string} equipmentName - Название оборудования (будет использовано как имя папки)
- * @param {string} parentFolderId - (Опционально) ID родительской папки, в которой создать папку
- * @returns {Promise<DriveFolderResult>} Объект с информацией о созданной папке
- * 
- * @throws {Error} Если не удалось создать папку
+ *
+ * SEC-02: через Express backend (auth + admin), не напрямую в GAS.
  */
 export async function createDriveFolder(
   equipmentName: string,
@@ -29,62 +28,48 @@ export async function createDriveFolder(
     throw new Error('Название оборудования не указано');
   }
 
-  try {
-    const body: any = {
-      name: equipmentName.trim()
-    };
-    
-    if (parentFolderId) {
-      body.parentFolderId = parentFolderId;
-    }
-
-    const response = await apiRequest<DriveFolderResult>('createFolder', 'POST', body);
-    
-    if (!response.data) {
-      throw new Error('Ошибка при создании папки: данные не получены');
-    }
-
-    return response.data;
-  } catch (error: any) {
-    if (isCorsError(error)) {
-      const postUrl = API_CONFIG.EQUIPMENT_API_URL;
-      const postBody = {
-        action: 'createFolder',
-        name: equipmentName.trim(),
-        ...(parentFolderId && { parentFolderId })
-      };
-      
-      try {
-        // Отправляем no-cors запрос
-        await fetch(postUrl, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(postBody)
-        }).catch(() => {
-          // Игнорируем ошибки no-cors запросов
-        });
-        
-        // Ждем немного для обработки запроса на сервере
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        // Создаем специальный тип ошибки, который не является критическим
-        const warningError: any = new Error('Папка может быть создана, но подтверждение недоступно из-за CORS. Проверьте Google Drive вручную или создайте папку позже.');
-        warningError.isWarning = true;
-        warningError.folderName = equipmentName.trim();
-        throw warningError;
-      } catch (fallbackError: any) {
-        if (fallbackError.isWarning) {
-          throw fallbackError;
-        }
-        throw new Error(`Ошибка при создании папки: ${fallbackError.message}`);
-      }
-    }
-    
-    throw error;
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) {
+    throw new Error('Не авторизован');
   }
+
+  const body: Record<string, string> = {
+    name: equipmentName.trim(),
+  };
+  if (parentFolderId) {
+    body.parentFolderId = parentFolderId;
+  }
+
+  const response = await fetch(backendUrl('/api/equipment/create-folder'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    signal: AbortSignal.timeout(API_CONFIG.TIMEOUT),
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    if (response.status === 403) {
+      throw new Error('Недостаточно прав для создания папки');
+    }
+    throw new Error(`HTTP ${response.status}: ${text || response.statusText}`);
+  }
+
+  const json = (await response.json()) as {
+    success?: boolean;
+    data?: DriveFolderResult;
+    error?: string;
+  };
+
+  if (!json.success || !json.data) {
+    throw new Error(json.error || 'Ошибка при создании папки: данные не получены');
+  }
+
+  return json.data;
 }
 
 /**

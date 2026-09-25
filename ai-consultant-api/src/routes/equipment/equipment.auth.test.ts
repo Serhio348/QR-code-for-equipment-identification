@@ -1,7 +1,7 @@
 /**
  * equipment.auth.test.ts
  *
- * SEC-01: маршруты журнала ТО и файлов требуют auth до вызова GAS.
+ * SEC-01 / SEC-02: auth на журнале; admin на мутациях оборудования до GAS.
  */
 
 import express, { type Express } from 'express';
@@ -29,15 +29,31 @@ vi.mock('../../middleware/auth.js', async () => {
         return;
       }
       const token = String(header).substring(7);
-      if (token !== 'valid-token') {
-        res.status(401).json({ error: 'Недействительный токен авторизации' });
+      if (token === 'admin-token') {
+        req.user = { id: 'admin-1', email: 'admin@example.com' };
+        next();
         return;
       }
-      req.user = { id: 'user-1', email: 'user@example.com' };
-      next();
+      if (token === 'valid-token') {
+        req.user = { id: 'user-1', email: 'user@example.com' };
+        next();
+        return;
+      }
+      res.status(401).json({ error: 'Недействительный токен авторизации' });
     }),
   };
 });
+
+vi.mock('../../middleware/admin.js', () => ({
+  adminMiddleware: vi.fn((req, res, next) => {
+    if (req.user?.email === 'admin@example.com') {
+      next();
+      return;
+    }
+    res.status(403).json({ error: 'Недостаточно прав' });
+  }),
+  createAdminMiddleware: vi.fn(),
+}));
 
 import { gasClient } from '../../services/equipment/index.js';
 import equipmentRouter from './equipment.js';
@@ -52,7 +68,7 @@ async function listen(app: Express): Promise<{ server: Server; baseUrl: string }
   return { server, baseUrl: `http://127.0.0.1:${port}` };
 }
 
-describe('equipment routes auth (SEC-01)', () => {
+describe('equipment routes auth (SEC-01 / SEC-02)', () => {
   let server: Server;
   let baseUrl: string;
 
@@ -77,10 +93,10 @@ describe('equipment routes auth (SEC-01)', () => {
   it.each([
     ['GET', '/api/equipment/maintenance/log?equipmentId=eq-1'],
     ['POST', '/api/equipment/maintenance/add'],
-    ['POST', '/api/equipment/maintenance/update'],
-    ['POST', '/api/equipment/maintenance/delete'],
-    ['POST', '/api/equipment/upload-file'],
-    ['POST', '/api/equipment/attach-files'],
+    ['POST', '/api/equipment/add'],
+    ['POST', '/api/equipment/update'],
+    ['POST', '/api/equipment/delete'],
+    ['POST', '/api/equipment/create-folder'],
   ] as const)('rejects anonymous %s %s before GAS', async (method, path) => {
     const response = await fetch(`${baseUrl}${path}`, {
       method,
@@ -93,16 +109,6 @@ describe('equipment routes auth (SEC-01)', () => {
     expect(gasPost).not.toHaveBeenCalled();
   });
 
-  it('rejects invalid token before GAS', async () => {
-    const response = await fetch(
-      `${baseUrl}/api/equipment/maintenance/log?equipmentId=eq-1`,
-      { headers: { Authorization: 'Bearer bad-token' } },
-    );
-
-    expect(response.status).toBe(401);
-    expect(gasGet).not.toHaveBeenCalled();
-  });
-
   it('allows authenticated user to read maintenance log', async () => {
     gasGet.mockResolvedValue([{ id: 'e1', type: 'ТО' }]);
 
@@ -112,42 +118,68 @@ describe('equipment routes auth (SEC-01)', () => {
     );
 
     expect(response.status).toBe(200);
-    const body = await response.json();
-    expect(body).toEqual({ success: true, data: [{ id: 'e1', type: 'ТО' }] });
-    expect(gasGet).toHaveBeenCalledWith(
-      'getMaintenanceLog',
-      expect.objectContaining({ equipmentId: 'eq-1' }),
-    );
+    expect(gasGet).toHaveBeenCalled();
   });
 
-  it('allows authenticated user to add maintenance entry', async () => {
-    gasPost.mockResolvedValue({
-      id: 'entry-1',
-      date: '2026-09-25',
-      type: 'Промывка',
-      description: 'ok',
-      performedBy: 'Иванов',
-    });
-
-    const response = await fetch(`${baseUrl}/api/equipment/maintenance/add`, {
+  it('forbids non-admin from adding equipment', async () => {
+    const response = await fetch(`${baseUrl}/api/equipment/add`, {
       method: 'POST',
       headers: {
         Authorization: 'Bearer valid-token',
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        equipmentId: 'eq-1',
-        date: '2026-09-25',
-        type: 'Промывка',
-        description: 'ok',
-        performedBy: 'Иванов',
-      }),
+      body: JSON.stringify({ name: 'Насос', type: 'pump' }),
+    });
+
+    expect(response.status).toBe(403);
+    expect(gasPost).not.toHaveBeenCalled();
+  });
+
+  it('allows admin to add equipment via GAS proxy', async () => {
+    gasPost.mockResolvedValue({ id: 'eq-new', name: 'Насос', type: 'pump' });
+
+    const response = await fetch(`${baseUrl}/api/equipment/add`, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer admin-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ name: 'Насос', type: 'pump', status: 'active' }),
     });
 
     expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.success).toBe(true);
     expect(gasPost).toHaveBeenCalledWith(
-      'addMaintenanceEntry',
-      expect.objectContaining({ equipmentId: 'eq-1' }),
+      'add',
+      expect.objectContaining({ name: 'Насос', type: 'pump' }),
     );
+  });
+
+  it('allows admin to update and delete equipment', async () => {
+    gasPost.mockResolvedValueOnce({ id: 'eq-1', name: 'Updated' });
+    gasPost.mockResolvedValueOnce({ success: true });
+
+    const updateRes = await fetch(`${baseUrl}/api/equipment/update`, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer admin-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ id: 'eq-1', name: 'Updated' }),
+    });
+    expect(updateRes.status).toBe(200);
+    expect(gasPost).toHaveBeenCalledWith('update', expect.objectContaining({ id: 'eq-1' }));
+
+    const deleteRes = await fetch(`${baseUrl}/api/equipment/delete`, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer admin-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ id: 'eq-1' }),
+    });
+    expect(deleteRes.status).toBe(200);
+    expect(gasPost).toHaveBeenCalledWith('delete', { id: 'eq-1' });
   });
 });

@@ -67,10 +67,14 @@ class GasClient {
     }
 
     async post<T>(action: string, data: Record<string, unknown>): Promise<T> {
+        const payload: Record<string, unknown> = { action, ...data };
+        if (config.gasApiSecret) {
+            payload.apiSecret = config.gasApiSecret;
+        }
         return this.fetchWithRetry<T>(this.baseUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-            body: JSON.stringify({ action, ...data }),
+            body: JSON.stringify(payload),
         }, action);
     }
 }

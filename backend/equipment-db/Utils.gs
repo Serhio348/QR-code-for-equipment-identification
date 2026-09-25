@@ -103,3 +103,64 @@ function generateId() {
   return Utilities.getUuid();
 }
 
+// ============================================================================
+// SEC-02: защита мутаций shared secret
+// ============================================================================
+
+/**
+ * Проверяет apiSecret для мутирующих action.
+ * Если Script Property API_SECRET не задан — проверка пропускается (переходный режим).
+ * Если задан — без совпадающего data.apiSecret мутация отклоняется.
+ *
+ * @param {string} action
+ * @param {Object} data
+ * @returns {*} createErrorResponse или null
+ */
+function assertMutationApiSecret(action, data) {
+  var mutatingActions = {
+    'add': true,
+    'update': true,
+    'delete': true,
+    'createFolder': true,
+    'createDocument': true,
+    'addMaintenanceEntry': true,
+    'updateMaintenanceEntry': true,
+    'deleteMaintenanceEntry': true,
+    'uploadMaintenancePhoto': true,
+    'uploadMaintenanceDocument': true,
+    'attachFilesToEntry': true,
+    'ensureDriveFolderPath': true,
+    'uploadPhotosToFolder': true
+  };
+
+  if (!mutatingActions[action]) {
+    return null;
+  }
+
+  var expected = '';
+  try {
+    expected = PropertiesService.getScriptProperties().getProperty('API_SECRET') || '';
+  } catch (propError) {
+    Logger.log('⚠️ Не удалось прочитать API_SECRET: ' + propError);
+    return null;
+  }
+
+  if (!expected) {
+    Logger.log('⚠️ API_SECRET не задан в Script Properties — мутация без shared secret (переходный режим)');
+    return null;
+  }
+
+  var provided = '';
+  if (data && typeof data === 'object') {
+    provided = String(data.apiSecret || data.api_secret || '');
+  }
+
+  if (!provided || provided !== expected) {
+    Logger.log('❌ Мутация "' + action + '" отклонена: неверный или отсутствующий apiSecret');
+    return createErrorResponse('Unauthorized: требуется apiSecret от доверенного backend');
+  }
+
+  return null;
+}
+
+
