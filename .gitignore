@@ -32,8 +32,11 @@ dist-ssr
 # Railway
 .railway
 
-# AI consultant downloads (runtime files)
+# AI consultant downloads (runtime files: portal cookies, PDFs, debug screenshots).
+# Directory is ignored; if a file was tracked earlier, remove it with:
+#   git rm --cached ai-consultant-api/downloads/.session.json
 ai-consultant-api/downloads/
+ai-consultant-api/downloads/.session.json
 
 # Claude Code local settings
 .claude/settings.local.json
