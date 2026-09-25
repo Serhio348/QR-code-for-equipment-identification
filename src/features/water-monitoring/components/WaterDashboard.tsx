@@ -49,6 +49,13 @@ import { buildMeterLabelColorMap } from '../constants/meterSeriesColors';
 import { getTrackedBeliotRegistry } from '../services/beliotRegistryApi';
 import { computeDayConsumption, readingDayKey } from '../services/dayConsumption';
 import { baselineFromLatestRows, fetchAllPages } from '../services/pagedSelect';
+import {
+  coverageNote,
+  presentLoss,
+  presentVolume,
+  roleCoverage,
+  type RoleCoverage,
+} from '../services/balanceStatus';
 import { useDeviceDetection } from '@/shared/hooks/useDeviceDetection';
 import './WaterDashboard.css';
 
@@ -559,6 +566,14 @@ const WaterDashboard: React.FC = () => {
     return { year: now.getFullYear(), month: now.getMonth() };
   });
   const [balanceLoading, setBalanceLoading] = useState(false);
+  const [balanceError, setBalanceError] = useState<string | null>(null);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
+  const [balanceLoadedAt, setBalanceLoadedAt] = useState<string | null>(null);
+  const [meterCoverage, setMeterCoverage] = useState<{
+    source: RoleCoverage;
+    production: RoleCoverage;
+    domestic: RoleCoverage;
+  }>({ source: 'none', production: 'none', domestic: 'none' });
   const [hiddenDevices, setHiddenDevices] = useState<Set<string>>(new Set());
   const [balanceMobileRange, setBalanceMobileRange] = useState<BalanceMobileRange>('7');
   const [todayTimeData, setTodayTimeData] = useState<Record<string, number | string>[]>([]);
@@ -802,13 +817,23 @@ const WaterDashboard: React.FC = () => {
         for (const [name, v] of Object.entries(domByName)) {
           row[name] = parseFloat(v.toFixed(3));
         }
-        row.losses = parseFloat(Math.max(0, srcTotal - prodTotalForLoss).toFixed(3));
+        row.losses = parseFloat((srcTotal - prodTotalForLoss).toFixed(3));
         if (gapByLabel.size > 0) {
           const spans = [...gapByLabel].map(([seriesLabel, span]) => {
             const range = span.from === span.to ? String(span.from) : `${span.from}–${span.to}`;
             return `${seriesLabel} ${range}`;
           });
           row.gapNote = `Пропуск показаний (${spans.join('; ')}): расход не распределён по суткам`;
+        }
+        const sourceDayKey = readingDayKey(year, month, d);
+        const sourceMeasured = sourceIds.some(id => Boolean(byDeviceDay[id]?.[sourceDayKey]));
+        if (!sourceMeasured && sourceIds.length > 0) {
+          row.losses = 0;
+          const missing = 'Скважина: нет измерений за этот день';
+          row.gapNote = row.gapNote ? `${row.gapNote}. ${missing}` : missing;
+        } else if (row.losses < 0) {
+          const anomaly = 'Отрицательный баланс: производство выше скважины, это не нулевые потери';
+          row.gapNote = row.gapNote ? `${row.gapNote}. ${anomaly}` : anomaly;
         }
         days.push(row);
       }
@@ -822,8 +847,10 @@ const WaterDashboard: React.FC = () => {
       const aggMonthTotal = aggIds.length > 0 ? monthTotal(aggIds) : 0;
       const productionMonth = parseFloat(monthTotal(productionNeedsIds).toFixed(2));
       const domesticMonth = parseFloat(monthTotal(domDeviceIds).toFixed(2));
-      const lossesMonth     = parseFloat(Math.max(0, sourceMonth - productionMonth).toFixed(2));
-      const lossesPct       = sourceMonth > 0 ? parseFloat(((lossesMonth / sourceMonth) * 100).toFixed(1)) : 0;
+      const lossesMonth = parseFloat((sourceMonth - productionMonth).toFixed(2));
+      const lossesPct = sourceMonth > 0 && lossesMonth > 0
+        ? parseFloat(((lossesMonth / sourceMonth) * 100).toFixed(1))
+        : 0;
       const softenedWaterMonth = parseFloat(aggMonthTotal.toFixed(2));
 
       const roleTotals: Record<'source' | 'production' | 'domestic', number> = {
@@ -883,6 +910,21 @@ const WaterDashboard: React.FC = () => {
           return b.currentMonth - a.currentMonth;
         });
 
+      const measuredIds = new Set<string>();
+      for (const id of allDeviceIds) {
+        const days = byDeviceDay[id];
+        if (!days) continue;
+        if (Object.keys(days).some(day => day >= monthStartDate && day < monthEndDate)) {
+          measuredIds.add(id);
+        }
+      }
+      setMeterCoverage({
+        source: roleCoverage(sourceIds, measuredIds),
+        production: roleCoverage(productionNeedsIds, measuredIds),
+        domestic: roleCoverage(domDeviceIds, measuredIds),
+      });
+      setBalanceError(null);
+      setBalanceLoadedAt(new Date().toISOString());
       setBalanceData(days);
       setWorkDayStats({ production: productionWorkingDays, domestic: domesticWorkingDays });
       setMonthlyMeterRows(monthlyRows);
@@ -897,6 +939,7 @@ const WaterDashboard: React.FC = () => {
       }));
     } catch (err) {
       console.error('[WaterDashboard] loadBalanceAndKpi error:', err);
+      setBalanceError(err instanceof Error ? err.message : 'Не удалось загрузить баланс');
     } finally {
       setBalanceLoading(false);
     }
@@ -979,6 +1022,7 @@ const WaterDashboard: React.FC = () => {
       }));
 
       staticDataLoadedRef.current = true;
+      setDashboardError(null);
       const prodForToday = chartProd.length > 0 ? chartProd : prodDevices;
       await Promise.all([
         loadBalanceAndKpi(selectedMonthRef.current.year, selectedMonthRef.current.month),
@@ -987,6 +1031,7 @@ const WaterDashboard: React.FC = () => {
       ]);
     } catch (err) {
       console.error('[WaterDashboard] loadDashboard error:', err);
+      setDashboardError(err instanceof Error ? err.message : 'Не удалось загрузить дашборд');
     } finally {
       setLoading(false);
     }
@@ -1620,6 +1665,31 @@ const WaterDashboard: React.FC = () => {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
+  const sourceVolumeText = presentVolume(meterCoverage.source, kpi.sourceMonth);
+  const productionVolumeText = presentVolume(meterCoverage.production, kpi.productionMonth);
+  const domesticVolumeText = presentVolume(meterCoverage.domestic, kpi.domesticMonth);
+  const sourceCoverageNote = coverageNote(meterCoverage.source);
+  const productionCoverageNote = coverageNote(meterCoverage.production);
+  const domesticCoverageNote = coverageNote(meterCoverage.domestic);
+  const lossView = presentLoss(
+    meterCoverage.source,
+    meterCoverage.production,
+    kpi.sourceMonth,
+    kpi.productionMonth,
+  );
+  const showLossSplit = !lossView.anomaly
+    && meterCoverage.source !== 'none'
+    && meterCoverage.production !== 'none'
+    && lossView.balanceM3 > 0;
+  const loadedAtLabel = balanceLoadedAt
+    ? new Date(balanceLoadedAt).toLocaleString('ru-RU', {
+      day: 'numeric',
+      month: 'long',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+    : null;
+
   if (loading) {
     return (
       <div className="wd-loading">
@@ -1631,6 +1701,32 @@ const WaterDashboard: React.FC = () => {
 
   return (
     <div className="wd">
+
+      {/* ── Ошибка загрузки и свежесть баланса ─────────────────────────── */}
+      {dashboardError || balanceError ? (
+        <div className="wd-status wd-status--error" role="alert">
+          <span>
+            {dashboardError
+              ? `Не удалось загрузить дашборд: ${dashboardError}`
+              : `Не удалось обновить баланс: ${balanceError}. Показаны предыдущие цифры.`}
+          </span>
+          <button
+            type="button"
+            className="wd-status__retry"
+            onClick={() => {
+              if (dashboardError) {
+                void loadDashboard();
+                return;
+              }
+              void loadBalanceAndKpi(selectedMonth.year, selectedMonth.month);
+            }}
+          >
+            Повторить
+          </button>
+        </div>
+      ) : loadedAtLabel ? (
+        <p className="wd-status wd-status--ok">Обновлено {loadedAtLabel}</p>
+      ) : null}
 
       {/* ── Предупреждение о ненастроенных ролях ───────────────────────── */}
       {!hasRoles && (
@@ -1651,21 +1747,24 @@ const WaterDashboard: React.FC = () => {
             <div className="wd-kpi-mobile-row wd-kpi-mobile-row--blue">
               <span className="wd-kpi-mobile-row__icon" aria-hidden>🚰</span>
               <span className="wd-kpi-mobile-row__label">Скважина (вход)</span>
-              <span className="wd-kpi-mobile-row__value">{kpi.sourceMonth.toLocaleString('ru-RU')} м³</span>
+              <span className="wd-kpi-mobile-row__value">{sourceVolumeText}</span>
+              {sourceCoverageNote ? <span className="wd-kpi__note">{sourceCoverageNote}</span> : null}
             </div>
             <div className="wd-kpi-mobile-row wd-kpi-mobile-row--teal">
               <span className="wd-kpi-mobile-row__icon" aria-hidden>🏭</span>
               <span className="wd-kpi-mobile-row__label">Производственные нужды</span>
-              <span className="wd-kpi-mobile-row__value">{kpi.productionMonth.toLocaleString('ru-RU')} м³</span>
+              <span className="wd-kpi-mobile-row__value">{productionVolumeText}</span>
+              {productionCoverageNote ? <span className="wd-kpi__note">{productionCoverageNote}</span> : null}
             </div>
             <div className="wd-kpi-mobile-row wd-kpi-mobile-row--green">
               <span className="wd-kpi-mobile-row__icon" aria-hidden>🏠</span>
               <span className="wd-kpi-mobile-row__label">Хоз-питьевое</span>
-              <span className="wd-kpi-mobile-row__value">{kpi.domesticMonth.toLocaleString('ru-RU')} м³</span>
+              <span className="wd-kpi-mobile-row__value">{domesticVolumeText}</span>
+              {domesticCoverageNote ? <span className="wd-kpi__note">{domesticCoverageNote}</span> : null}
             </div>
             <div
               className={
-                kpi.lossesPct > 15
+                lossView.anomaly || kpi.lossesPct > 15
                   ? 'wd-kpi-mobile-row wd-kpi-mobile-row--red'
                   : kpi.lossesPct > 8
                     ? 'wd-kpi-mobile-row wd-kpi-mobile-row--orange'
@@ -1674,26 +1773,24 @@ const WaterDashboard: React.FC = () => {
             >
               <span className="wd-kpi-mobile-row__icon" aria-hidden>💨</span>
               <span className="wd-kpi-mobile-row__label">Потери воды</span>
-              <span className="wd-kpi-mobile-row__value">
-                {kpi.lossesMonth.toLocaleString('ru-RU')} м³
-                <span className="wd-kpi-mobile-row__pct"> ({kpi.lossesPct}%)</span>
-              </span>
+              <span className="wd-kpi-mobile-row__value">{lossView.text}</span>
+              {lossView.note ? <span className="wd-kpi__note">{lossView.note}</span> : null}
             </div>
           </div>
           <div className="wd-kpi-mobile-card__subsection">
             <div className="wd-kpi-mobile-card__subsection-title">Структура потерь</div>
             <div className="wd-kpi-mobile-split">
               <span>Промывка</span>
-              <strong>{lossWashM3.toLocaleString('ru-RU')} м³</strong>
+              <strong>{showLossSplit ? `${lossWashM3.toLocaleString('ru-RU')} м³` : '—'}</strong>
               <span className="wd-kpi-mobile-split__pct">
-                ({kpi.lossesMonth > 0 ? ((lossWashM3 / kpi.lossesMonth) * 100).toFixed(0) : 0}%)
+                {showLossSplit ? `(${((lossWashM3 / lossView.balanceM3) * 100).toFixed(0)}%)` : ''}
               </span>
             </div>
             <div className="wd-kpi-mobile-split">
               <span>Осмос</span>
-              <strong>{lossOsmosisM3.toLocaleString('ru-RU')} м³</strong>
+              <strong>{showLossSplit ? `${lossOsmosisM3.toLocaleString('ru-RU')} м³` : '—'}</strong>
               <span className="wd-kpi-mobile-split__pct">
-                ({kpi.lossesMonth > 0 ? ((lossOsmosisM3 / kpi.lossesMonth) * 100).toFixed(0) : 0}%)
+                {showLossSplit ? `(${((lossOsmosisM3 / lossView.balanceM3) * 100).toFixed(0)}%)` : ''}
               </span>
             </div>
           </div>
@@ -1703,35 +1800,36 @@ const WaterDashboard: React.FC = () => {
           <div className="wd-kpi wd-kpi--blue">
             <div className="wd-kpi__icon">🚰</div>
             <div>
-              <div className="wd-kpi__value">{kpi.sourceMonth.toLocaleString('ru-RU')} м³</div>
+              <div className="wd-kpi__value">{sourceVolumeText}</div>
               <div className="wd-kpi__label">Скважина (вход), месяц</div>
+              {sourceCoverageNote ? <div className="wd-kpi__note">{sourceCoverageNote}</div> : null}
             </div>
           </div>
 
           <div className="wd-kpi wd-kpi--teal">
             <div className="wd-kpi__icon">🏭</div>
             <div>
-              <div className="wd-kpi__value">{kpi.productionMonth.toLocaleString('ru-RU')} м³</div>
+              <div className="wd-kpi__value">{productionVolumeText}</div>
               <div className="wd-kpi__label">Производственные нужды, месяц</div>
+              {productionCoverageNote ? <div className="wd-kpi__note">{productionCoverageNote}</div> : null}
             </div>
           </div>
 
           <div className="wd-kpi wd-kpi--green">
             <div className="wd-kpi__icon">🏠</div>
             <div>
-              <div className="wd-kpi__value">{kpi.domesticMonth.toLocaleString('ru-RU')} м³</div>
+              <div className="wd-kpi__value">{domesticVolumeText}</div>
               <div className="wd-kpi__label">Хоз-питьевое, месяц</div>
+              {domesticCoverageNote ? <div className="wd-kpi__note">{domesticCoverageNote}</div> : null}
             </div>
           </div>
 
-          <div className={`wd-kpi ${kpi.lossesPct > 15 ? 'wd-kpi--red' : kpi.lossesPct > 8 ? 'wd-kpi--orange' : 'wd-kpi--green'}`}>
+          <div className={`wd-kpi ${lossView.anomaly || kpi.lossesPct > 15 ? 'wd-kpi--red' : kpi.lossesPct > 8 ? 'wd-kpi--orange' : 'wd-kpi--green'}`}>
             <div className="wd-kpi__icon">💨</div>
             <div>
-              <div className="wd-kpi__value">
-                {kpi.lossesMonth.toLocaleString('ru-RU')} м³
-                <span className="wd-kpi__pct"> ({kpi.lossesPct}%)</span>
-              </div>
+              <div className="wd-kpi__value">{lossView.text}</div>
               <div className="wd-kpi__label">Потери воды, месяц</div>
+              {lossView.note ? <div className="wd-kpi__note">{lossView.note}</div> : null}
             </div>
           </div>
 
@@ -1741,13 +1839,13 @@ const WaterDashboard: React.FC = () => {
               <div className="wd-kpi__label">Структура потерь</div>
               <div className="wd-kpi__split-row">
                 <span>Промывка:</span>
-                <strong>{lossWashM3.toLocaleString('ru-RU')} м³</strong>
-                <span className="wd-kpi__pct">({kpi.lossesMonth > 0 ? ((lossWashM3 / kpi.lossesMonth) * 100).toFixed(0) : 0}%)</span>
+                <strong>{showLossSplit ? `${lossWashM3.toLocaleString('ru-RU')} м³` : '—'}</strong>
+                <span className="wd-kpi__pct">{showLossSplit ? `(${((lossWashM3 / lossView.balanceM3) * 100).toFixed(0)}%)` : ''}</span>
               </div>
               <div className="wd-kpi__split-row">
                 <span>Осмос:</span>
-                <strong>{lossOsmosisM3.toLocaleString('ru-RU')} м³</strong>
-                <span className="wd-kpi__pct">({kpi.lossesMonth > 0 ? ((lossOsmosisM3 / kpi.lossesMonth) * 100).toFixed(0) : 0}%)</span>
+                <strong>{showLossSplit ? `${lossOsmosisM3.toLocaleString('ru-RU')} м³` : '—'}</strong>
+                <span className="wd-kpi__pct">{showLossSplit ? `(${((lossOsmosisM3 / lossView.balanceM3) * 100).toFixed(0)}%)` : ''}</span>
               </div>
             </div>
           </div>
