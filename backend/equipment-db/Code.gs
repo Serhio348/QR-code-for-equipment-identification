@@ -239,42 +239,11 @@ function doGet(e) {
         return createJsonResponse(getMaintenanceLog(equipmentId, maintenanceSheetId));
       
       case 'addMaintenanceEntry':
-        // Обработка addMaintenanceEntry через GET (для no-cors запросов)
-        // Это fallback для случаев, когда POST не работает из-за CORS
-        Logger.log('📝 Обработка addMaintenanceEntry через GET (no-cors fallback)');
-        Logger.log('  - e.parameter: ' + JSON.stringify(e.parameter));
-        
-        const getEquipmentId = e.parameter.equipmentId;
-        const getMaintenanceSheetId = e.parameter.maintenanceSheetId || null;
-        if (!getEquipmentId) {
-          Logger.log('❌ ID оборудования не указан в GET параметрах');
-          return createErrorResponse('ID оборудования не указан');
-        }
-        
-        const getEntryData = {
-          date: e.parameter.date || '',
-          type: e.parameter.type || '',
-          description: e.parameter.description || '',
-          performedBy: e.parameter.performedBy || '',
-          status: e.parameter.status || 'completed'
-        };
-        
-        Logger.log('  - equipmentId: ' + getEquipmentId);
-        Logger.log('  - maintenanceSheetId: ' + (getMaintenanceSheetId || 'не указан'));
-        Logger.log('  - entryData: ' + JSON.stringify(getEntryData));
-        
-        if (!getEntryData.date || !getEntryData.type || !getEntryData.description || !getEntryData.performedBy) {
-          return createErrorResponse('Не все обязательные поля заполнены');
-        }
-        
-        try {
-          const result = _addMaintenanceEntry(getEquipmentId, getEntryData);
-          Logger.log('✅ Запись добавлена успешно через GET: ' + JSON.stringify(result));
-          return createJsonResponse(result);
-        } catch (error) {
-          Logger.log('❌ Ошибка в addMaintenanceEntry через GET: ' + error.toString());
-          return createErrorResponse('Ошибка при добавлении записи: ' + error.toString());
-        }
+        // SEC-02: мутации через GET отключены (раньше — no-cors fallback).
+        Logger.log('❌ addMaintenanceEntry через GET отклонён (SEC-02)');
+        return createErrorResponse(
+          'Мутации через GET отключены. Используйте авторизованный backend API.'
+        );
       
       // ========================================================================
       // ДЕЙСТВИЯ АУТЕНТИФИКАЦИИ И УПРАВЛЕНИЯ ПОЛЬЗОВАТЕЛЯМИ (GET)
@@ -652,6 +621,12 @@ function doPost(e) {
       Logger.log('❌ action не указан в данных');
       Logger.log('  - Доступные ключи: ' + JSON.stringify(Object.keys(data)));
       return createErrorResponse('Действие (action) не указано в запросе. Доступные ключи: ' + JSON.stringify(Object.keys(data)));
+    }
+
+    // SEC-02: мутации требуют apiSecret, если он задан в Script Properties (API_SECRET)
+    var mutationAuthError = assertMutationApiSecret(action, data);
+    if (mutationAuthError) {
+      return mutationAuthError;
     }
     
     // Выполняем действие в зависимости от параметра

@@ -45,10 +45,9 @@
   - **Остаток в SEC-05:** проверка права на конкретный раздел/оборудование (не только «вошёл»).
 
 ### SEC-02
-- [ ] **P0 — Закрыть прямой обход авторизации через Google Apps Script.**
-  - **Код:** `backend/equipment-db/Code.gs` (`doGet`, `doPost`, ветки мутаций); `src/features/equipment/services/equipmentMutations.ts:45-80`; `src/shared/config/api.ts:23`.
-  - Оборудование изменяется прямо из браузера через GAS. В диспетчере GAS нет общей криптографической проверки личности/прав перед изменениями; есть и добавление ТО через GET. Исправления только Express недостаточно. Реальные deployment permissions GAS не проверялись.
-  - **Готово, когда:** мутации проходят единый доверенный backend с проверкой прав; GAS проверяет серверную авторизацию, не доверяет переданному email; GET не меняет данные; прямые запросы в GAS без полномочий отклоняются.
+- [x] **P0 — Закрыть прямой обход авторизации через Google Apps Script.**
+  - **Сделано 2026-09-25 (частично, рабочий минимум):** add/update/delete/create-folder оборудования идут через Express (`auth` + `admin`); frontend без no-cors/GAS для этих мутаций; GET `addMaintenanceEntry` в GAS отключён; опциональный `GAS_API_SECRET` / Script Property `API_SECRET` для POST-мутаций; тесты SEC-02 в `equipment.auth.test.ts`.
+  - **Остаток:** задеплоить обновлённый `Code.gs` + задать `API_SECRET` в Script Properties и `GAS_API_SECRET` на Railway; остальные прямые GAS-мутации (доступ/Beliot/workshop) — следующими итерациями.
 
 ### SEC-03
 - [x] **P0 — Убрать runtime-файл cookies портала из отслеживания Git и оценить возможную компрометацию.**

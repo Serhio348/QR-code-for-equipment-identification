@@ -32,6 +32,8 @@ export const config = {
 
   // GAS API (для работы с оборудованием)
   gasApiUrl: process.env.GAS_API_URL || '',
+  /** Shared secret for GAS mutations. Optional until set in Script Properties as API_SECRET. */
+  gasApiSecret: process.env.GAS_API_SECRET || '',
 
   // Портал bvod.by (скачивание счетов)
   bvodLogin: process.env.BVOD_LOGIN || '',

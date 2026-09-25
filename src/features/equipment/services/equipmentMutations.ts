@@ -1,30 +1,81 @@
 /**
  * POST запросы (мутации) для работы с оборудованием
- * 
- * Функции для создания, обновления и удаления оборудования
+ *
+ * SEC-02: все мутации идут через Express backend с Bearer-токеном.
+ * Прямые вызовы GAS и no-cors fallback отключены.
  */
 
 import { Equipment } from '../types/equipment';
-import { apiRequest } from '@/shared/services/api/apiRequest';
-import { isCorsError, sendNoCorsRequest, waitForEquipmentUpdate, waitForEquipmentDeletion } from '@/shared/services/api/corsFallback';
-import { getAllEquipment } from './equipmentQueries';
 import { logUserActivity } from '../../user-activity/services/activityLogsApi';
+import { API_CONFIG } from '@/shared/config/api';
+import { supabase } from '@/shared/config/supabase';
+
+const BACKEND_API_URL = import.meta.env.VITE_AI_CONSULTANT_API_URL || '';
+
+function backendUrl(path: string): string {
+  if (BACKEND_API_URL) return `${BACKEND_API_URL}${path}`;
+  return path;
+}
+
+async function getAccessToken(): Promise<string> {
+  const { data } = await supabase.auth.getSession();
+  const session = data.session;
+  if (!session?.access_token) {
+    throw new Error('Не авторизован');
+  }
+
+  const expiresAtMs = session.expires_at ? session.expires_at * 1000 : null;
+  if (expiresAtMs != null && expiresAtMs <= Date.now() + 30_000) {
+    const { data: refreshed, error } = await supabase.auth.refreshSession();
+    if (!error && refreshed.session?.access_token) {
+      return refreshed.session.access_token;
+    }
+  }
+
+  return session.access_token;
+}
+
+async function postEquipmentMutation<T>(path: string, body: unknown): Promise<T> {
+  const token = await getAccessToken();
+  const response = await fetch(backendUrl(path), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    signal: AbortSignal.timeout(API_CONFIG.TIMEOUT),
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    if (response.status === 401) {
+      throw new Error('Сессия истекла. Войдите снова.');
+    }
+    if (response.status === 403) {
+      throw new Error('Недостаточно прав для изменения оборудования');
+    }
+    throw new Error(`HTTP ${response.status}: ${text || response.statusText}`);
+  }
+
+  const json = (await response.json().catch(() => null)) as {
+    success?: boolean;
+    data?: T;
+    error?: string;
+  } | null;
+
+  if (!json) throw new Error('Не удалось прочитать ответ сервера');
+  if (json.success === false) throw new Error(json.error || 'Ошибка сервера');
+  if (json.data == null) throw new Error('Сервер не вернул data');
+  return json.data;
+}
 
 /**
  * Добавить новое оборудование
- * 
- * Создает новую запись оборудования в базе данных
- * Автоматически генерирует ID и временные метки
- * 
- * @param {Omit<Equipment, 'id' | 'createdAt' | 'updatedAt'>} equipment - Данные нового оборудования
- * @returns {Promise<Equipment>} Созданный объект Equipment с присвоенным ID
- * 
- * @throws {Error} При ошибке валидации, сети или API
  */
 export async function addEquipment(
   equipment: Omit<Equipment, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<Equipment> {
-  // Валидация обязательных полей
   if (!equipment.name) {
     throw new Error('Название оборудования обязательно');
   }
@@ -32,107 +83,32 @@ export async function addEquipment(
     throw new Error('Тип оборудования обязателен');
   }
 
-  try {
-    console.log('📤 Отправка данных оборудования:', {
-      name: equipment.name,
-      type: equipment.type,
-      status: equipment.status,
-      hasSpecs: !!equipment.specs,
-      googleDriveUrl: equipment.googleDriveUrl || 'не указан',
-      qrCodeUrl: equipment.qrCodeUrl || 'не указан'
-    });
-    
-    const response = await apiRequest<Equipment>('add', 'POST', equipment);
-    
-    if (!response.data) {
-      throw new Error('Ошибка при добавлении оборудования: данные не получены');
+  console.log('📤 Добавление оборудования через backend:', {
+    name: equipment.name,
+    type: equipment.type,
+    status: equipment.status,
+  });
+
+  const created = await postEquipmentMutation<Equipment>('/api/equipment/add', equipment);
+
+  logUserActivity(
+    'equipment_create',
+    `Создано оборудование: "${created.name}" (${created.type})`,
+    {
+      entityType: 'equipment',
+      entityId: created.id,
+      metadata: {
+        type: created.type,
+        status: created.status,
+      },
     }
+  );
 
-    // Логируем создание оборудования
-    logUserActivity(
-      'equipment_create',
-      `Создано оборудование: "${response.data.name}" (${response.data.type})`,
-      {
-        entityType: 'equipment',
-        entityId: response.data.id,
-        metadata: {
-          type: response.data.type,
-          status: response.data.status,
-        },
-      }
-    );
-
-    return response.data;
-  } catch (error: any) {
-    if (isCorsError(error)) {
-      const postBody = {
-        action: 'add',
-        ...equipment
-      };
-      
-      console.log('📤 Отправка через no-cors fallback:', {
-        action: postBody.action,
-        name: postBody.name,
-        type: postBody.type
-      });
-      
-      try {
-        await sendNoCorsRequest('add', equipment);
-        
-        // Ждем и ищем добавленное оборудование
-        let added: Equipment | undefined;
-        const maxAttempts = 3;
-        
-        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-          
-          const allEquipment = await getAllEquipment();
-          added = allEquipment.find(eq => 
-            eq.name === equipment.name && 
-            eq.type === equipment.type &&
-            eq.status === equipment.status
-          );
-
-          if (added) {
-            // Логируем создание оборудования
-            logUserActivity(
-              'equipment_create',
-              `Создано оборудование: "${added.name}" (${added.type})`,
-              {
-                entityType: 'equipment',
-                entityId: added.id,
-                metadata: {
-                  type: added.type,
-                  status: added.status,
-                  fallback: 'no-cors',
-                },
-              }
-            );
-            return added;
-          }
-        }
-        
-        throw new Error('Оборудование не найдено после добавления, но запрос был отправлен');
-      } catch (fallbackError: any) {
-        throw new Error(`Ошибка при добавлении оборудования: ${fallbackError.message}`);
-      }
-    }
-    
-    throw error;
-  }
+  return created;
 }
 
 /**
  * Обновить оборудование
- * 
- * Обновляет существующее оборудование в базе данных
- * Обновляет только переданные поля, остальные остаются без изменений
- * 
- * @param {string} id - UUID оборудования для обновления
- * @param {Partial<Equipment>} updates - Объект с полями для обновления
- * @returns {Promise<Equipment>} Обновленный объект Equipment
- * 
- * @throws {Error} Если оборудование не найдено или произошла ошибка
  */
 export async function updateEquipment(
   id: string,
@@ -142,159 +118,63 @@ export async function updateEquipment(
     throw new Error('ID не указан');
   }
 
-  try {
-    const response = await apiRequest<Equipment>('update', 'POST', {
-      id,
-      ...updates,
-    });
-
-    if (!response.data) {
-      throw new Error('Ошибка при обновлении оборудования: данные не получены');
+  const normalizedUpdates = { ...updates };
+  if (normalizedUpdates.commissioningDate) {
+    const dateStr = String(normalizedUpdates.commissioningDate).split('T')[0].trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      normalizedUpdates.commissioningDate = dateStr;
     }
-
-    // Логируем обновление оборудования
-    logUserActivity(
-      'equipment_update',
-      `Обновлено оборудование: "${response.data.name}"`,
-      {
-        entityType: 'equipment',
-        entityId: response.data.id,
-        metadata: {
-          updatedFields: Object.keys(updates),
-        },
-      }
-    );
-
-    return response.data;
-  } catch (error: any) {
-    if (isCorsError(error)) {
-      // Нормализуем даты перед отправкой
-      const normalizedUpdates = { ...updates };
-      if (normalizedUpdates.commissioningDate) {
-        const dateStr = String(normalizedUpdates.commissioningDate).split('T')[0].trim();
-        if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-          normalizedUpdates.commissioningDate = dateStr;
-        } else {
-          console.warn('⚠️ Неверный формат даты commissioningDate:', normalizedUpdates.commissioningDate);
-        }
-      }
-      if (normalizedUpdates.lastMaintenanceDate) {
-        const dateStr = String(normalizedUpdates.lastMaintenanceDate).split('T')[0].trim();
-        if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-          normalizedUpdates.lastMaintenanceDate = dateStr;
-        } else {
-          console.warn('⚠️ Неверный формат даты lastMaintenanceDate:', normalizedUpdates.lastMaintenanceDate);
-        }
-      }
-      
-      console.log('📤 Отправка update через no-cors fallback:', {
-        id,
-        updates: normalizedUpdates
-      });
-      
-      try {
-        await sendNoCorsRequest('update', { id, ...normalizedUpdates });
-        
-        // Ждем и получаем обновленное оборудование
-        const updated = await waitForEquipmentUpdate(id, 5, 1500);
-        if (updated) {
-          console.log('✅ Оборудование обновлено:', {
-            id: updated.id,
-            name: updated.name,
-            commissioningDate: updated.commissioningDate,
-            lastMaintenanceDate: updated.lastMaintenanceDate
-          });
-          // Логируем обновление оборудования
-          logUserActivity(
-            'equipment_update',
-            `Обновлено оборудование: "${updated.name}"`,
-            {
-              entityType: 'equipment',
-              entityId: updated.id,
-              metadata: {
-                updatedFields: Object.keys(normalizedUpdates),
-                fallback: 'no-cors',
-              },
-            }
-          );
-          return updated;
-        }
-        
-        throw new Error('Оборудование не найдено после обновления');
-      } catch (fallbackError: any) {
-        throw new Error(`Ошибка при обновлении оборудования: ${fallbackError.message}`);
-      }
-    }
-    
-    throw error;
   }
+  if (normalizedUpdates.lastMaintenanceDate) {
+    const dateStr = String(normalizedUpdates.lastMaintenanceDate).split('T')[0].trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      normalizedUpdates.lastMaintenanceDate = dateStr;
+    }
+  }
+
+  console.log('📤 Обновление оборудования через backend:', { id });
+
+  const updated = await postEquipmentMutation<Equipment>('/api/equipment/update', {
+    id,
+    ...normalizedUpdates,
+  });
+
+  logUserActivity(
+    'equipment_update',
+    `Обновлено оборудование: "${updated.name}"`,
+    {
+      entityType: 'equipment',
+      entityId: updated.id,
+      metadata: {
+        updatedFields: Object.keys(normalizedUpdates),
+      },
+    }
+  );
+
+  return updated;
 }
 
 /**
  * Удалить оборудование (физическое удаление)
- * 
- * Выполняет физическое удаление оборудования из базы данных
- * и удаляет связанную папку в Google Drive (если она была создана)
- * 
- * ⚠️ ВНИМАНИЕ: Это действие необратимо!
- * 
- * @param {string} id - UUID оборудования для удаления
- * @returns {Promise<void>}
- * 
- * @throws {Error} Если оборудование не найдено или произошла ошибка
  */
 export async function deleteEquipment(id: string): Promise<void> {
   if (!id) {
     throw new Error('ID не указан');
   }
 
-  try {
-    await apiRequest('delete', 'POST', { id });
+  console.log('🗑️ Удаление оборудования через backend:', { id });
 
-    // Логируем удаление оборудования
-    logUserActivity(
-      'equipment_delete',
-      `Удалено оборудование (ID: ${id.substring(0, 8)}...)`,
-      {
-        entityType: 'equipment',
-        entityId: id,
-      }
-    );
-  } catch (error: any) {
-    if (isCorsError(error)) {
-      console.log('📤 Отправка запроса на удаление через no-cors fallback');
-      
-      try {
-        await sendNoCorsRequest('delete', { id });
-        
-        // Ждем и проверяем удаление
-        const deleted = await waitForEquipmentDeletion(id, 8, 1500);
-        if (deleted) {
-          console.log('✅ Оборудование успешно удалено');
-          // Логируем удаление оборудования
-          logUserActivity(
-            'equipment_delete',
-            `Удалено оборудование (ID: ${id.substring(0, 8)}...)`,
-            {
-              entityType: 'equipment',
-              entityId: id,
-              metadata: {
-                fallback: 'no-cors',
-              },
-            }
-          );
-          return;
-        }
-        
-        // Если оборудование все еще существует, но запрос был отправлен
-        console.warn('⚠️ Запрос на удаление был отправлен, но подтверждение не получено. Проверьте логи в Google Apps Script.');
-        return;
-      } catch (fallbackError: any) {
-        throw new Error(`Ошибка при удалении оборудования: ${fallbackError.message}`);
-      }
+  await postEquipmentMutation<{ success?: boolean; message?: string }>(
+    '/api/equipment/delete',
+    { id }
+  );
+
+  logUserActivity(
+    'equipment_delete',
+    `Удалено оборудование (ID: ${id.substring(0, 8)}...)`,
+    {
+      entityType: 'equipment',
+      entityId: id,
     }
-    
-    throw error;
-  }
+  );
 }
-
