@@ -3,7 +3,7 @@ builder = "DOCKERFILE"
 dockerfilePath = "ai-consultant-api/Dockerfile"
 
 [deploy]
-startCommand = "npm start"
+# Без startCommand — используется CMD из Dockerfile: node dist/index.js
 healthcheckPath = "/health"
 healthcheckTimeout = 100
 restartPolicyType = "ON_FAILURE"
