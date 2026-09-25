@@ -2,7 +2,7 @@
 # Stage 1: Сборка (Build)
 # ============================================
 
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
@@ -23,7 +23,8 @@ RUN npm run build
 # Stage 2: Продакшн (Production)
 # ============================================
 
-FROM node:20-alpine
+# Node 22+: @supabase/supabase-js 2.117+ требует engines.node >= 22
+FROM node:22-alpine
 
 WORKDIR /app
 
