@@ -2,7 +2,8 @@
  * API для работы с журналом обслуживания оборудования
  * 
  * Функции для получения, добавления, обновления и удаления записей
- * в журнале обслуживания через Google Apps Script API
+ * в журнале обслуживания через backend-proxy (Express → GAS).
+ * Все запросы требуют Bearer-токен Supabase (SEC-01).
  */
 
 import { MaintenanceEntry, MaintenanceEntryInput, MaintenanceFile } from '../types/equipment';
@@ -10,6 +11,7 @@ import { logUserActivity } from '../../user-activity/services/activityLogsApi';
 import { API_CONFIG } from '@/shared/config/api';
 import { ApiResponse } from '@/shared/services/api/types';
 import { MAX_MAINTENANCE_FILE_SIZE_BYTES } from '../constants/maintenanceFiles';
+import { supabase } from '@/shared/config/supabase';
 
 const maintenanceLogInFlight = new Map<string, Promise<MaintenanceEntry[]>>();
 const maintenanceLogCache = new Map<string, { data: MaintenanceEntry[]; timestamp: number }>();
@@ -27,16 +29,45 @@ function backendUrl(path: string): string {
   return path;
 }
 
+async function getAccessToken(): Promise<string> {
+  const { data } = await supabase.auth.getSession();
+  const session = data.session;
+  if (!session?.access_token) {
+    throw new Error('Не авторизован');
+  }
+
+  const expiresAtMs = session.expires_at ? session.expires_at * 1000 : null;
+  if (expiresAtMs != null && expiresAtMs <= Date.now() + 30_000) {
+    const { data: refreshed, error } = await supabase.auth.refreshSession();
+    if (!error && refreshed.session?.access_token) {
+      return refreshed.session.access_token;
+    }
+  }
+
+  return session.access_token;
+}
+
+async function authHeaders(extra: Record<string, string> = {}): Promise<Record<string, string>> {
+  const token = await getAccessToken();
+  return {
+    ...extra,
+    Authorization: `Bearer ${token}`,
+  };
+}
+
 async function postToBackend<TResponse>(path: string, body: unknown): Promise<TResponse> {
   const response = await fetch(backendUrl(path), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: await authHeaders({ 'Content-Type': 'application/json' }),
     signal: AbortSignal.timeout(MAINTENANCE_LOG_TIMEOUT_MS),
     body: JSON.stringify(body),
   });
 
   if (!response.ok) {
     const text = await response.text().catch(() => '');
+    if (response.status === 401) {
+      throw new Error('Сессия истекла. Войдите снова, чтобы продолжить работу с журналом.');
+    }
     throw new Error(`HTTP ${response.status}: ${text || response.statusText}`);
   }
 
@@ -100,13 +131,16 @@ export async function getMaintenanceLog(
       const fetchLog = async (): Promise<MaintenanceEntry[]> => {
         const response = await fetch(url.toString(), {
           method: 'GET',
-          headers: { Accept: 'application/json' },
+          headers: await authHeaders({ Accept: 'application/json' }),
           signal: AbortSignal.timeout(MAINTENANCE_LOG_TIMEOUT_MS),
           cache: 'no-store',
         });
 
         if (!response.ok) {
           const errorText = await response.text().catch(() => '');
+          if (response.status === 401) {
+            throw new Error('Сессия истекла. Войдите снова, чтобы открыть журнал.');
+          }
           throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
         }
 

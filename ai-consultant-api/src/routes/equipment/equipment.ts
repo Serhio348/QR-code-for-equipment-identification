@@ -2,8 +2,12 @@
  * equipment.ts
  *
  * Прокси-маршруты для операций с оборудованием через GAS.
+ *
+ * Все маршруты требуют валидную сессию Supabase (authMiddleware).
+ * Чтение журнала доступно любому вошедшему пользователю (QR / запрос доступа),
+ * запись и загрузка файлов — тоже только после входа (объектные права — SEC-05).
  */
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
 import { gasClient } from '../../services/equipment/index.js';
 import multer from 'multer';
 import { authMiddleware, type AuthenticatedRequest } from '../../middleware/auth.js';
@@ -20,7 +24,10 @@ const upload = multer({
   },
 });
 
-router.get('/maintenance/log', async (req: Request, res: Response) => {
+// SEC-01: анонимные запросы к журналу/файлам отклоняются до вызова GAS.
+router.use(authMiddleware);
+
+router.get('/maintenance/log', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { equipmentId, maintenanceSheetId } = req.query;
     if (!equipmentId || typeof equipmentId !== 'string') {
@@ -53,7 +60,7 @@ router.get('/maintenance/log', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/maintenance/add', async (req: Request, res: Response) => {
+router.post('/maintenance/add', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { equipmentId, date, type, description, performedBy, status, maintenanceSheetId } = req.body;
     if (!equipmentId || !date || !type || !description || !performedBy) {
@@ -74,7 +81,7 @@ router.post('/maintenance/add', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/maintenance/update', async (req: Request, res: Response) => {
+router.post('/maintenance/update', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { entryId, ...fields } = req.body;
     if (!entryId) {
@@ -92,7 +99,7 @@ router.post('/maintenance/update', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/maintenance/delete', async (req: Request, res: Response) => {
+router.post('/maintenance/delete', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { entryId } = req.body;
     if (!entryId) {
@@ -107,7 +114,7 @@ router.post('/maintenance/delete', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/upload-file', async (req: Request, res: Response) => {
+router.post('/upload-file', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { equipmentId, entryId, fileBase64, mimeType, originalFileName, date } = req.body;
     if (!equipmentId || !entryId || !fileBase64) {
@@ -149,7 +156,7 @@ router.post('/upload-file', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/attach-files', async (req: Request, res: Response) => {
+router.post('/attach-files', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { entryId, files } = req.body;
     if (!entryId || !files) {
@@ -192,7 +199,6 @@ router.post('/attach-files', async (req: Request, res: Response) => {
  */
 router.post(
   '/upload-photo',
-  authMiddleware,
   upload.single('photo'),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
