@@ -301,10 +301,10 @@ export async function getBeliotReadingsByPeriod(
 
 /**
  * Сохранить показание счетчика в Supabase
- * 
- * Использует RPC функцию insert_beliot_reading для безопасной вставки.
- * Предотвращает дубликаты через ON CONFLICT.
- * 
+ *
+ * SEC-04: insert_beliot_reading доступен только service_role (cron/collector).
+ * Браузерный anon/authenticated ключ больше не имеет EXECUTE — не вызывать из UI.
+ *
  * @param reading - Данные показания для сохранения
  * @returns Promise с ID созданного/обновленного показания
  * @throws Error если произошла ошибка при сохранении
