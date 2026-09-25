@@ -1,5 +1,8 @@
 /**
- * dayConsumption.ts
+ * meterConsumption.ts
+ *
+ * Та же формула, что src/features/water-monitoring/services/dayConsumption.ts.
+ * Архив, график, KPI и analyze_water_consumption считают расход одинаково.
  *
  * Расход счётчика за календарные сутки.
  *

@@ -4,7 +4,7 @@
  * DATA-01: пропуск суток не должен дважды учитывать уже посчитанный расход.
  */
 import { describe, expect, it } from 'vitest';
-import { computeDayConsumption, type MeterDayReading } from './dayConsumption';
+import { computeDayConsumption, consumptionFromDailySeries, type MeterDayReading } from './dayConsumption';
 
 const YEAR = 2026;
 const MONTH = 8; // сентябрь
@@ -147,5 +147,62 @@ describe('computeDayConsumption', () => {
     });
     expect(result[2].unknownDistribution).toBe(false);
     expect(volumes(result).reduce((sum, value) => sum + value, 0)).toBe(14);
+  });
+
+  it('ручная корректировка заменяет max − min в день замены', () => {
+    const readings = {
+      1: { min: 1000, max: 1010 },
+      2: { min: 0, max: 4 },
+      3: { min: 5, max: 9 },
+    };
+    const result = days(readings, 1000, [2]).map((day, index) =>
+      index === 1
+        ? computeDayConsumption({
+          year: YEAR,
+          monthIndex: MONTH,
+          dayNumber: 2,
+          daysInMonth: DAYS,
+          readingsByDay: { '2026-09-02': readings[2] },
+          monthBaseline: 1000,
+          volumeOverride: 3.48,
+          isMeterReplacementDay: () => true,
+        })
+        : day,
+    );
+
+    expect(result[1].volumeM3).toBe(3.48);
+    expect(result[1].unknownDistribution).toBe(false);
+    expect(result[2].volumeM3).toBe(5);
+  });
+
+  it('обычный месяц, замена в середине и замена на 1-е число дают одну сумму', () => {
+    expect(consumptionFromDailySeries({
+      baseline: 100,
+      days: [
+        { day: '2026-09-01', min: 105, max: 110 },
+        { day: '2026-09-02', min: 112, max: 120 },
+      ],
+    })).toBe(20);
+
+    expect(consumptionFromDailySeries({
+      baseline: 1000,
+      days: [
+        { day: '2026-09-01', min: 1005, max: 1010 },
+        { day: '2026-09-15', min: 0, max: 4 },
+        { day: '2026-09-16', min: 5, max: 9 },
+      ],
+      replacementDay: '2026-09-15',
+      volumeOverrides: { '2026-09-15': 3.48 },
+    })).toBe(18.48);
+
+    expect(consumptionFromDailySeries({
+      baseline: 5000,
+      days: [
+        { day: '2026-09-01', min: 0, max: 4 },
+        { day: '2026-09-02', min: 5, max: 12 },
+      ],
+      replacementDay: '2026-09-01',
+      volumeOverrides: { '2026-09-01': 3.48 },
+    })).toBe(11.48);
   });
 });

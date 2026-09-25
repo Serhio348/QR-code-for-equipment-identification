@@ -13,7 +13,8 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useBeliotDeviceReadings } from './useBeliotDeviceReadings';
 import type { BeliotDeviceReading } from '../services/supabaseBeliotReadingsApi';
-import { getBeliotArchiveVolumeOverride } from '../constants/beliotDeviceRegistry';
+import { meterReplacementDayFor, volumeOverridesForDevice } from '../constants/beliotDeviceRegistry';
+import { consumptionFromDailySeries } from '../services/dayConsumption';
 
 export type ArchiveGroupBy = 'hour' | 'day' | 'week' | 'month' | 'year';
 export type ArchiveViewType = 'readings' | 'volume';
@@ -517,13 +518,40 @@ export function useDeviceArchive(deviceId: string | null) {
 }
 
 /**
- * Объём за период = показание периода − предыдущее известное показание.
- * Как в Beliot («Показать расход») и как ручная разность колонки «Показания»:
- * last[период] − last[предыдущий период], а не сумма часовых дельт внутри дня
- * (иначе теряется ночной расход до первого часового замера → недоучёт).
+ * Объём за период той же формулой, что график и KPI:
+ * сумма дней, ручная корректировка и разрыв шкалы в день замены.
+ * Час по-прежнему last − previous, но не через день замены.
  *
  * @param ascendingIndex — индекс в archiveReadingsAsc (хронологический порядок)
  */
+function periodStartDay(groupBy: ArchiveGroupBy, groupKey: string): string | null {
+  if (groupBy === 'day') return groupKey;
+  if (groupBy === 'month') return `${groupKey}-01`;
+  if (groupBy === 'year') return `${groupKey}-01-01`;
+  const week = /^(\d{4}-\d{2})-W(\d+)$/.exec(groupKey);
+  if (groupBy === 'week' && week) {
+    const start = (Number(week[2]) - 1) * 7 + 1;
+    return `${week[1]}-${String(start).padStart(2, '0')}`;
+  }
+  return null;
+}
+
+function periodIncludesDay(groupBy: ArchiveGroupBy, groupKey: string, day: string): boolean {
+  if (groupBy === 'day') return day === groupKey;
+  if (groupBy === 'month') return day.slice(0, 7) === groupKey;
+  if (groupBy === 'year') return day.slice(0, 4) === groupKey;
+  if (groupBy === 'week') {
+    const [, month, dayOfMonth] = day.split('-').map(Number);
+    const weekOfMonth = Math.ceil(dayOfMonth / 7);
+    return `${day.slice(0, 7)}-W${weekOfMonth}` === groupKey && Number.isFinite(month);
+  }
+  return false;
+}
+
+function readingCrossesReplacement(previousDay: string, currentDay: string, replacementDay: string | null): boolean {
+  return Boolean(replacementDay && previousDay < replacementDay && currentDay >= replacementDay);
+}
+
 export function computeArchivePeriodVolume(
   groupedReading: GroupedReading,
   ascendingIndex: number,
@@ -533,38 +561,67 @@ export function computeArchivePeriodVolume(
 ): number {
   if (!groupedReading.reading) return 0;
 
-  if (groupBy === 'day') {
-    const volumeOverride = getBeliotArchiveVolumeOverride(
-      groupedReading.reading.device_id,
-      groupedReading.groupKey,
-    );
-    if (volumeOverride !== null) return volumeOverride;
+  const deviceId = groupedReading.reading.device_id;
+  const currentDay = moscowYmd(groupedReading.reading.reading_date);
+  const replacementDay = meterReplacementDayFor(deviceId);
+
+  // Час остаётся разностью соседних показаний. Через день замены старая шкала не вычитается.
+  if (groupBy === 'hour') {
+    const current = Number(groupedReading.reading.reading_value);
+    if (isNaN(current)) return 0;
+
+    for (let i = ascendingIndex - 1; i >= 0; i -= 1) {
+      const prev = archiveReadingsAsc[i];
+      if (!prev?.reading) continue;
+      const previous = Number(prev.reading.reading_value);
+      if (isNaN(previous)) return 0;
+      const previousDay = moscowYmd(prev.reading.reading_date);
+      if (readingCrossesReplacement(previousDay, currentDay, replacementDay)) {
+        return groupedReading.consumption;
+      }
+      return Math.max(0, current - previous);
+    }
+    return groupedReading.consumption;
   }
 
-  const current = Number(groupedReading.reading.reading_value);
-  if (isNaN(current)) return 0;
-
-  for (let i = ascendingIndex - 1; i >= 0; i--) {
-    const prev = archiveReadingsAsc[i];
-    if (!prev?.reading) continue;
-    const previous = Number(prev.reading.reading_value);
-    if (isNaN(previous)) return 0;
-    return Math.max(0, current - previous);
-  }
-
-  // Первый период выбранного диапазона: база из raw (запрос тянет день до archiveStart)
-  const periodStartMs = groupedReading.groupDate.getTime();
-  let baseline: BeliotDeviceReading | undefined;
-  for (const r of rawReadings) {
-    if (new Date(r.reading_date).getTime() >= periodStartMs) continue;
-    if (!baseline || new Date(r.reading_date).getTime() > new Date(baseline.reading_date).getTime()) {
-      baseline = r;
+  const days = new Map<string, { min: number; max: number }>();
+  let baseline: number | undefined;
+  let baselineAt = -Infinity;
+  for (const reading of rawReadings) {
+    if (reading.device_id !== deviceId) continue;
+    const day = moscowYmd(reading.reading_date);
+    const value = Number(reading.reading_value);
+    if (!Number.isFinite(value)) continue;
+    if (!periodIncludesDay(groupBy, groupedReading.groupKey, day)) {
+      const startDay = periodStartDay(groupBy, groupedReading.groupKey);
+      const at = new Date(reading.reading_date).getTime();
+      if (startDay && day < startDay && at >= baselineAt) {
+        baseline = value;
+        baselineAt = at;
+      }
+      continue;
+    }
+    const span = days.get(day);
+    if (!span) days.set(day, { min: value, max: value });
+    else {
+      span.min = Math.min(span.min, value);
+      span.max = Math.max(span.max, value);
     }
   }
-  if (baseline) {
-    const previous = Number(baseline.reading_value);
-    if (!isNaN(previous)) return Math.max(0, current - previous);
+
+  const overrides: Record<string, number> = {};
+  for (const [day, volume] of Object.entries(volumeOverridesForDevice(deviceId))) {
+    if (periodIncludesDay(groupBy, groupedReading.groupKey, day)) overrides[day] = volume;
   }
 
-  return 0;
+  const replacementInPeriod = replacementDay && periodIncludesDay(groupBy, groupedReading.groupKey, replacementDay)
+    ? replacementDay
+    : null;
+
+  return consumptionFromDailySeries({
+    baseline,
+    days: [...days].map(([day, span]) => ({ day, min: span.min, max: span.max })),
+    replacementDay: replacementInPeriod,
+    volumeOverrides: overrides,
+  });
 }
