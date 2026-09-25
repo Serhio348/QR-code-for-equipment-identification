@@ -186,7 +186,7 @@ function doGet(e) {
     Logger.log('  - e: ' + (e ? 'есть' : 'НЕТ'));
     Logger.log('  - e.parameter: ' + (e.parameter ? 'есть' : 'НЕТ'));
     Logger.log('  - action: ' + action);
-    Logger.log('  - parameters: ' + JSON.stringify(e.parameter));
+    Logger.log('  - parameters: ' + safeJsonForLog(e.parameter));
     
     // Выполняем действие в зависимости от параметра
     switch(action) {
@@ -414,37 +414,16 @@ function doGet(e) {
  */
 function doPost(e) {
   try {
-    // Логируем входящий запрос для отладки (самое первое, что должно быть видно)
+    // SEC-08: только метаданные, без сырых тел / паролей / base64
     Logger.log('📨 ========== doPost ВЫЗВАН ==========');
     Logger.log('📨 Получен POST запрос');
     Logger.log('  - Timestamp: ' + new Date().toISOString());
-    Logger.log('  - Это HTTP запрос: ' + (typeof e !== 'undefined' && e !== null));
+    Logger.log('  - request meta: ' + summarizePostEventForLog(e));
     
     // Проверяем, что объект события передан
     if (!e) {
       Logger.log('❌ Ошибка: объект события (e) не передан в doPost');
       return createErrorResponse('Ошибка: объект события не передан');
-    }
-    Logger.log('  - e: ' + (e ? 'есть' : 'НЕТ'));
-    Logger.log('  - postData: ' + (e.postData ? 'есть' : 'НЕТ'));
-    if (e.postData && e.postData.contents) {
-      const contentsLength = e.postData.contents.length;
-      Logger.log('  - postData.contents length: ' + contentsLength + ' символов');
-      // Для больших данных показываем только первые и последние 200 символов
-      if (contentsLength > 400) {
-        Logger.log('  - postData.contents (первые 200): ' + e.postData.contents.substring(0, 200));
-        Logger.log('  - postData.contents (последние 200): ' + e.postData.contents.substring(contentsLength - 200));
-      } else {
-        Logger.log('  - postData.contents: ' + e.postData.contents);
-      }
-    } else {
-      Logger.log('  - postData.contents: НЕТ ДАННЫХ');
-    }
-    Logger.log('  - postData.type: ' + (e.postData ? e.postData.type : 'НЕТ'));
-    Logger.log('  - parameters count: ' + (e.parameter ? Object.keys(e.parameter).length : 0));
-    if (e.parameter && Object.keys(e.parameter).length > 0) {
-      Logger.log('  - e.parameter keys: ' + JSON.stringify(Object.keys(e.parameter)));
-      Logger.log('  - e.parameter values: ' + JSON.stringify(e.parameter));
     }
     
     // Парсим данные из тела запроса
@@ -461,7 +440,7 @@ function doPost(e) {
           data = JSON.parse(e.postData.contents);
         } catch (parseError) {
           Logger.log('❌ Ошибка парсинга JSON из postData.contents: ' + parseError);
-          Logger.log('  - Содержимое: ' + e.postData.contents);
+          Logger.log('  - bodyLength: ' + e.postData.contents.length);
           return createErrorResponse('Ошибка парсинга JSON: ' + parseError.toString());
         }
       } 
@@ -471,7 +450,7 @@ function doPost(e) {
         // FormData данные приходят в e.parameter
         if (e.parameter && Object.keys(e.parameter).length > 0) {
           data = e.parameter;
-          Logger.log('  - Данные из e.parameter: ' + JSON.stringify(Object.keys(data)));
+          Logger.log('  - parameter keys: ' + JSON.stringify(Object.keys(data)));
         } else {
           Logger.log('⚠️ e.parameter пуст для multipart/form-data');
           return createErrorResponse('Не удалось получить данные из FormData');
@@ -497,7 +476,7 @@ function doPost(e) {
               data[key] = e.parameter[key];
             }
           }
-          Logger.log('  - Данные из e.parameter: ' + JSON.stringify(data));
+          Logger.log('  - Данные из e.parameter: ' + safeJsonForLog(data));
           Logger.log('  - Количество параметров: ' + Object.keys(data).length);
           Logger.log('  - Ключи: ' + JSON.stringify(Object.keys(data)));
           Logger.log('  - action в e.parameter: ' + (data.action || 'НЕТ'));
@@ -506,7 +485,6 @@ function doPost(e) {
         // Используем ручной парсинг, так как URLSearchParams недоступен в Google Apps Script
         if ((!data || Object.keys(data).length === 0) && e.postData && e.postData.contents) {
           Logger.log('  - Парсинг postData.contents вручную (URLSearchParams недоступен в GAS)...');
-          Logger.log('  - Полное содержимое: ' + e.postData.contents);
           // Ручной парсинг URL-encoded строки через split('&') и split('=')
           const contents = e.postData.contents;
           data = {};
@@ -518,7 +496,7 @@ function doPost(e) {
               const key = decodeURIComponent(pair[0].replace(/\+/g, ' '));
               const value = decodeURIComponent(pair[1].replace(/\+/g, ' '));
             data[key] = value;
-              Logger.log('    - Пара ' + (i + 1) + ': ' + key + ' = ' + value.substring(0, Math.min(100, value.length)));
+              Logger.log('    - Пара ' + (i + 1) + ': key=' + key + ' valueLen=' + value.length);
             } else if (pair.length === 1 && pair[0]) {
               // Пара без значения (ключ без =)
               const key = decodeURIComponent(pair[0].replace(/\+/g, ' '));
@@ -528,14 +506,14 @@ function doPost(e) {
               Logger.log('    - Пара ' + (i + 1) + ' не распознана: ' + pairs[i]);
             }
           }
-          Logger.log('  - Данные из postData.contents (распарсены): ' + JSON.stringify(data));
+          Logger.log('  - Данные из postData.contents (распарсены): ' + safeJsonForLog(data));
           Logger.log('  - Количество параметров: ' + Object.keys(data).length);
           Logger.log('  - action в postData.contents: ' + (data.action || 'НЕТ'));
         }
         
         if (!data || Object.keys(data).length === 0) {
           Logger.log('⚠️ Нет данных ни в e.parameter, ни в postData.contents для URL-encoded');
-          Logger.log('  - e.parameter: ' + (e.parameter ? JSON.stringify(e.parameter) : 'НЕТ'));
+          Logger.log('  - e.parameter: ' + (e.parameter ? safeJsonForLog(e.parameter) : 'НЕТ'));
           Logger.log('  - e.postData: ' + (e.postData ? 'есть' : 'НЕТ'));
           Logger.log('  - e.postData.contents: ' + (e.postData && e.postData.contents ? 'есть (' + e.postData.contents.length + ' символов)' : 'НЕТ'));
         }
@@ -573,7 +551,7 @@ function doPost(e) {
       // Это может быть для no-cors запросов или URL-encoded данных
       Logger.log('⚠️ postData пустое, пытаемся получить данные из параметров');
       Logger.log('  - e.parameter keys: ' + JSON.stringify(Object.keys(e.parameter)));
-      Logger.log('  - e.parameter values: ' + JSON.stringify(e.parameter));
+      Logger.log('  - e.parameter (sanitized): ' + safeJsonForLog(e.parameter));
       
       // Создаем новый объект и копируем все параметры
       data = {};
@@ -583,7 +561,7 @@ function doPost(e) {
         }
       }
       
-      Logger.log('  - Данные из e.parameter (после копирования): ' + JSON.stringify(data));
+      Logger.log('  - Данные из e.parameter (после копирования): ' + safeJsonForLog(data));
       Logger.log('  - data.action: ' + (data.action || 'НЕ УКАЗАНО'));
       Logger.log('  - data.equipmentId: ' + (data.equipmentId || 'НЕ УКАЗАН'));
       
@@ -613,7 +591,7 @@ function doPost(e) {
     Logger.log('  - data.name: ' + (data.name || 'НЕ УКАЗАНО'));
     Logger.log('  - data.email: ' + (data.email || 'НЕ УКАЗАНО'));
     Logger.log('  - data.equipmentId: ' + (data.equipmentId || 'НЕ УКАЗАН'));
-    Logger.log('  - Полный объект data: ' + JSON.stringify(data));
+    Logger.log('  - Полный объект data: ' + safeJsonForLog(data));
     Logger.log('  - Все ключи data: ' + JSON.stringify(Object.keys(data || {})));
     
     // Если action не указан, возвращаем ошибку
@@ -689,7 +667,7 @@ function doPost(e) {
         // Добавить запись в журнал обслуживания
         Logger.log('📝 Обработка addMaintenanceEntry');
         Logger.log('  - data существует: ' + (data ? 'ДА' : 'НЕТ'));
-        Logger.log('  - data: ' + JSON.stringify(data));
+        Logger.log('  - data: ' + safeJsonForLog(data));
         Logger.log('  - data.equipmentId: ' + (data && data.equipmentId ? data.equipmentId : 'НЕ УКАЗАН'));
         Logger.log('  - data.date: ' + (data && data.date ? data.date : 'НЕ УКАЗАНО'));
         Logger.log('  - data.type: ' + (data && data.type ? data.type : 'НЕ УКАЗАНО'));
@@ -705,7 +683,7 @@ function doPost(e) {
         
         if (!data.equipmentId) {
           Logger.log('❌ ID оборудования не указан в data');
-          Logger.log('   data: ' + JSON.stringify(data));
+          Logger.log('   data: ' + safeJsonForLog(data));
           Logger.log('   Все ключи: ' + JSON.stringify(Object.keys(data)));
           return createErrorResponse('ID оборудования не указан. Проверьте, что equipmentId передается в запросе.');
         }
@@ -973,7 +951,7 @@ function doPost(e) {
         Logger.log('📊 data существует: ' + (data ? 'ДА' : 'НЕТ'));
         Logger.log('📊 data type: ' + typeof data);
         Logger.log('📊 Все ключи data: ' + JSON.stringify(data ? Object.keys(data) : []));
-        Logger.log('📊 Полный объект data: ' + JSON.stringify(data));
+        Logger.log('📊 Полный объект data: ' + safeJsonForLog(data));
         Logger.log('📊 Полученные данные: deviceId=' + (data ? data.deviceId : 'undefined') + ', serialNumber=' + (data ? data.serialNumber : 'undefined') + ', object=' + (data ? data.object : 'undefined'));
         
         if (!data) {
@@ -983,7 +961,7 @@ function doPost(e) {
         
         if (!data.deviceId) {
           Logger.log('❌ deviceId не указан в data');
-          Logger.log('   data: ' + JSON.stringify(data));
+          Logger.log('   data: ' + safeJsonForLog(data));
           Logger.log('   Все ключи: ' + JSON.stringify(Object.keys(data)));
           return createErrorResponse('deviceId не указан. Проверьте, что deviceId передается в запросе.');
         }
