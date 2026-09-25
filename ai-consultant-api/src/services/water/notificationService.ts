@@ -113,7 +113,12 @@ async function checkHighConsumption(latest: ParsedInvoice): Promise<void> {
 
 async function checkTariffChange(latest: ParsedInvoice): Promise<void> {
     if (latest.tariff_per_m3 == null && latest.sewage_tariff_per_m3 == null) return;
-    const { data: memRows } = await supabase.from('agent_memory').select('key, value').in('key', ['tariff_water', 'tariff_sewage']).eq('is_active', true);
+    const { data: memRows } = await supabase
+      .from('agent_memory')
+      .select('key, value')
+      .in('key', ['tariff_water', 'tariff_sewage'])
+      .eq('scope', 'shared')
+      .eq('is_active', true);
     if (!memRows || memRows.length === 0) return;
     const memWater = memRows.find(r => r.key === 'tariff_water');
     const memSewage = memRows.find(r => r.key === 'tariff_sewage');

@@ -1,101 +1,93 @@
 /**
  * memoryTools.ts
  *
- * Инструменты агента для управления долговременной памятью.
+ * Инструменты агента для управления долговременной памятью (SEC-06).
  *
- * Агент вызывает эти инструменты когда:
- *   - Узнаёт новый важный факт (тариф, контакт, норму)
- *   - Нужно уточнить что он знает по теме
- *   - Старый факт устарел и нужно его обновить/удалить
- *
- * Инструменты:
- *   save_memory   — запомнить факт (создать или обновить)
- *   get_memory    — вспомнить факты по категории или поиску
- *   delete_memory — забыть устаревший факт
+ * Правила:
+ * - preference → всегда personal (только этот пользователь)
+ * - tariff/norm/contact/address/fact → shared, писать/удалять может только admin
+ * - get_memory → shared + personal текущего пользователя
  */
 
 import Anthropic from '@anthropic-ai/sdk';
-import { saveFact, loadFacts, deactivateFact, type MemoryCategory } from '../services/ai/agentMemoryService.js';
+import {
+    saveSharedFact,
+    savePersonalFact,
+    loadFactsForUser,
+    deactivateFactForUser,
+    type MemoryCategory,
+} from '../services/ai/agentMemoryService.js';
+import { getToolContext } from '../services/ai/toolContext.js';
 
 // ============================================
 // Определения инструментов
 // ============================================
 
 export const memoryTools: Anthropic.Tool[] = [
-
-    // ----------------------------------------
-    // Tool 1: Запомнить факт
-    // ----------------------------------------
     {
         name: 'save_memory',
         description: `Запомнить важный факт для использования в будущих диалогах.
-Вызывай когда узнаёшь: новый тариф, контакт, норму, адрес, или важный факт об объекте.
-Также используй для обновления устаревших фактов — просто сохрани с тем же key и новым value.
 
-Примеры когда вызывать:
-- Пользователь сообщает новый тариф: save_memory(category="tariff", key="water_tariff_2026-03", value="Тариф на воду с марта 2026: 1.82 BYN/м³")
-- Пользователь даёт контакт: save_memory(category="contact", key="vodokanal_dispatcher", value="Диспетчер водоканала: +375 162 21-30-10")
-- Выясняется норма: save_memory(category="norm", key="daily_water_norm", value="Норма суточного потребления: 45 м³")`,
+Правила scope (SEC-06):
+- category=preference → личная память только этого пользователя.
+- tariff/norm/contact/address/fact → общая память; сохранять может только администратор.
+Обычный пользователь: сохраняй предпочтения (preference), не пытайся менять общие справочные факты.
+
+Примеры:
+- Предпочтение: save_memory(category="preference", key="answer_style", value="Пользователь просит отвечать кратко")
+- Тариф (только admin): save_memory(category="tariff", key="water_tariff_2026-03", value="Тариф на воду: 1.82 BYN/м³")`,
         input_schema: {
             type: 'object' as const,
             properties: {
                 category: {
                     type: 'string',
                     enum: ['tariff', 'norm', 'contact', 'address', 'fact', 'preference'],
-                    description: 'Категория факта: tariff=тарифы, norm=нормы, contact=контакты, address=адреса/точки подключения, fact=общие факты, preference=предпочтения',
+                    description:
+                        'Категория: preference=личное; остальные=общее (только admin может писать)',
                 },
                 key: {
                     type: 'string',
-                    description: 'Уникальный ключ факта (snake_case). Примеры: water_tariff_2026-03, vodokanal_contact, daily_water_norm. Для обновления используй тот же key.',
+                    description:
+                        'Уникальный ключ (snake_case). Для обновления используй тот же key.',
                 },
                 value: {
                     type: 'string',
-                    description: 'Значение факта — полное описательное предложение. Например: "Тариф на воду с марта 2026: 1.82 BYN/м³ (решение облисполкома №138)"',
+                    description: 'Значение факта — полное описательное предложение.',
                 },
                 context: {
                     type: 'string',
-                    description: 'Дополнительный контекст: откуда взято, дата, документ. Необязательно.',
+                    description: 'Дополнительный контекст: откуда взято. Необязательно.',
                 },
             },
             required: ['category', 'key', 'value'],
         },
     },
-
-    // ----------------------------------------
-    // Tool 2: Вспомнить факты
-    // ----------------------------------------
     {
         name: 'get_memory',
-        description: `Получить сохранённые факты из памяти.
-Используй когда нужно вспомнить конкретные данные: тарифы, контакты, нормы.
-Можно фильтровать по категории или получить все факты сразу.`,
+        description: `Получить сохранённые факты: общие справочные + личные предпочтения текущего пользователя.`,
         input_schema: {
             type: 'object' as const,
             properties: {
                 category: {
                     type: 'string',
                     enum: ['tariff', 'norm', 'contact', 'address', 'fact', 'preference'],
-                    description: 'Фильтр по категории. Если не указан — вернёт все факты.',
+                    description: 'Фильтр по категории. Если не указан — все доступные факты.',
                 },
             },
             required: [],
         },
     },
-
-    // ----------------------------------------
-    // Tool 3: Удалить устаревший факт
-    // ----------------------------------------
     {
         name: 'delete_memory',
-        description: `Удалить устаревший или неверный факт из памяти.
-Используй когда пользователь говорит что старый факт устарел или был ошибочным.
-После удаления сохрани новый актуальный факт через save_memory.`,
+        description: `Удалить факт из памяти.
+Личный (preference) — может удалить владелец.
+Общий справочный — только администратор.`,
         input_schema: {
             type: 'object' as const,
             properties: {
                 key: {
                     type: 'string',
-                    description: 'Ключ факта который нужно удалить (тот же key что использовался при save_memory).',
+                    description: 'Ключ факта для удаления.',
                 },
             },
             required: ['key'],
@@ -104,32 +96,62 @@ export const memoryTools: Anthropic.Tool[] = [
 ];
 
 // ============================================
-// Исполнитель инструментов
+// Исполнитель
 // ============================================
+
+function requireActor(): { userId: string; isAdmin: boolean } {
+    const ctx = getToolContext();
+    const userId = ctx?.userId ?? '';
+    if (!userId) {
+        throw new Error('Нет контекста пользователя для работы с памятью');
+    }
+    return {
+        userId,
+        isAdmin: ctx?.appAccess?.isAdmin === true,
+    };
+}
 
 export async function executeMemoryTool(
     name: string,
-    input: Record<string, unknown>
+    input: Record<string, unknown>,
 ): Promise<unknown> {
     switch (name) {
-
         case 'save_memory': {
+            const actor = requireActor();
             const category = input.category as MemoryCategory;
             const key = input.key as string;
             const value = input.value as string;
             const context = input.context as string | undefined;
 
-            await saveFact(category, key, value, context);
+            if (category === 'preference') {
+                await savePersonalFact(actor.userId, category, key, value, context);
+                return {
+                    success: true,
+                    scope: 'personal',
+                    message: `Запомнил лично для вас: ${value}`,
+                };
+            }
 
+            if (!actor.isAdmin) {
+                return {
+                    success: false,
+                    message:
+                        'Общую память (тарифы, контакты, нормы, факты) может менять только администратор. Сохраните личное предпочтение с category=preference.',
+                };
+            }
+
+            await saveSharedFact(category, key, value, context, actor.userId);
             return {
                 success: true,
-                message: `Запомнил: [${category}] ${value}`,
+                scope: 'shared',
+                message: `Запомнил в общую память: [${category}] ${value}`,
             };
         }
 
         case 'get_memory': {
+            const actor = requireActor();
             const category = input.category as MemoryCategory | undefined;
-            const facts = await loadFacts(category);
+            const facts = await loadFactsForUser(actor.userId, category);
 
             if (facts.length === 0) {
                 return {
@@ -143,7 +165,8 @@ export async function executeMemoryTool(
             return {
                 found: true,
                 count: facts.length,
-                facts: facts.map(f => ({
+                facts: facts.map((f) => ({
+                    scope: f.scope ?? 'shared',
                     category: f.category,
                     key: f.key,
                     value: f.value,
@@ -154,9 +177,9 @@ export async function executeMemoryTool(
         }
 
         case 'delete_memory': {
+            const actor = requireActor();
             const key = input.key as string;
-            await deactivateFact(key);
-
+            await deactivateFactForUser(key, actor);
             return {
                 success: true,
                 message: `Факт "${key}" удалён из памяти`,
