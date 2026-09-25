@@ -22,6 +22,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { ensureTlsVerificationEnabled } from './tlsPolicy.js';
 
 // Получаем путь к корню проекта
 const __filename = fileURLToPath(import.meta.url);
@@ -77,11 +78,8 @@ function loadEnvFile(): void {
 // Загружаем переменные окружения из .env.local (для локальной разработки)
 loadEnvFile();
 
-// Для Beliot API может потребоваться отключение проверки SSL (только для разработки)
-// В продакшене Railway это должно работать с валидными сертификатами
-if (process.env.NODE_ENV !== 'production') {
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-}
+// SEC-07: строгая проверка TLS для всех HTTPS (Beliot + Supabase).
+ensureTlsVerificationEnabled();
 
 // Загружаем переменные окружения
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;

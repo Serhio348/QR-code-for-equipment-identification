@@ -70,10 +70,9 @@
   - **Остаток:** нет (slice закрыт).
 
 ### SEC-07
-- [ ] **P1 — Удалить глобальное отключение проверки TLS в сборщике.**
-  - **Код:** `scripts/collect-beliot-readings.ts:80-84`; `.github/workflows/collect-readings.yml:49-58`.
-  - При `NODE_ENV !== 'production'` устанавливается `NODE_TLS_REJECT_UNAUTHORIZED=0` для всего процесса, включая Supabase. Workflow не задаёт `NODE_ENV=production` явно.
-  - **Готово, когда:** сертификаты проверяются во всех окружениях; при необходимости настроен доверенный CA для конкретного соединения. Тестовый недоверенный сертификат отвергается, CI не требует отключения TLS.
+- [x] **P1 — Удалить глобальное отключение проверки TLS в сборщике.**
+  - **Сделано 2026-09-25:** убран `NODE_TLS_REJECT_UNAUTHORIZED=0` из `collect-beliot-readings.ts`; добавлен `ensureTlsVerificationEnabled` (`scripts/tlsPolicy.ts`); в workflow `NODE_ENV=production`. Проверено: `beliot.by:4443` проходит строгий TLS; тесты `scripts/__tests__/tlsPolicy.test.ts` (сброс insecure env, reject expired.badssl.com, accept Beliot).
+  - **Остаток:** если Beliot внезапно сменит cert на недоверенный — по команде добавить узкий аварийный флаг только для Beliot.
 
 ### SEC-08
 - [ ] **P1 — Исключить тела чувствительных запросов из логов GAS.**
