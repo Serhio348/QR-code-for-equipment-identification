@@ -46,6 +46,7 @@ import {
 } from '../constants/beliotDeviceRegistry';
 import { buildMeterLabelColorMap } from '../constants/meterSeriesColors';
 import { getTrackedBeliotRegistry } from '../services/beliotRegistryApi';
+import { computeDayConsumption, readingDayKey } from '../services/dayConsumption';
 import { useDeviceDetection } from '@/shared/hooks/useDeviceDetection';
 import './WaterDashboard.css';
 
@@ -100,6 +101,8 @@ interface BalanceDay {
   date: string;
   source: number;
   losses: number;
+  /** Пояснение, если день входит в пропуск показаний. Пустая строка — обычный день. */
+  gapNote: string;
   [productionDevice: string]: number | string;
 }
 
@@ -216,11 +219,13 @@ function BalanceDockedDayPanel({
   label,
   payload,
   selectedMonth,
+  gapNote,
   onClose,
 }: {
   label: string | number | undefined;
   payload: ReadonlyArray<ProductionTooltipPayloadEntry>;
   selectedMonth: SelectedMonth;
+  gapNote?: string;
   onClose: () => void;
 }): React.ReactNode {
   const title = formatBalanceChartTitle(label, selectedMonth);
@@ -263,6 +268,7 @@ function BalanceDockedDayPanel({
             );
           })}
         </ul>
+        {gapNote ? <p className="wd-balance-gap-note">{gapNote}</p> : null}
       </div>
     </div>
   );
@@ -702,30 +708,26 @@ const WaterDashboard: React.FC = () => {
         }
       }
 
-      // Граф баланса: все дни месяца
-      // Используем max[день] − max[предыдущий день] — работает и при одном, и при нескольких показаниях в сутки
+      // Граф баланса: все дни месяца.
+      // Расход = max дня − последнее известное показание. Пропуск не делится по суткам.
       const daysInMonth = new Date(year, month + 1, 0).getDate();
       const days: BalanceDay[] = [];
 
-      const getDay = (did: string, dayNumber: number): number => {
-        const dayStr = `${year}-${pad(month + 1)}-${pad(dayNumber)}`;
-        const seg = byDeviceDay[did]?.[dayStr];
-        if (!seg) return 0;
-        if (isPosudotaraMeterReplacementDay(did, dayStr)) {
-          return Math.max(0, parseFloat((seg.max - seg.min).toFixed(3)));
-        }
+      // DATA-01: предыдущая точка — последнее известное показание, не начало месяца.
+      const dayDetail = (did: string, dayNumber: number) =>
+        computeDayConsumption({
+          year,
+          monthIndex: month,
+          dayNumber,
+          daysInMonth,
+          readingsByDay: byDeviceDay[did] ?? {},
+          monthBaseline: did in monthBaselineByDevice ? monthBaselineByDevice[did] : undefined,
+          isMeterReplacementDay: (day) =>
+            isPosudotaraMeterReplacementDay(did, readingDayKey(year, month, day)),
+        });
 
-        // Предыдущий максимум: вчера из byDeviceDay или baseline (для 1-го числа)
-        let prevMax: number;
-        if (dayNumber === 1) {
-          prevMax = monthBaselineByDevice[did] ?? seg.min;
-        } else {
-          const prevDayStr = `${year}-${pad(month + 1)}-${pad(dayNumber - 1)}`;
-          const prevSeg = byDeviceDay[did]?.[prevDayStr];
-          prevMax = prevSeg ? prevSeg.max : (monthBaselineByDevice[did] ?? seg.min);
-        }
-        return Math.max(0, parseFloat((seg.max - prevMax).toFixed(3)));
-      };
+      const getDay = (did: string, dayNumber: number): number =>
+        dayDetail(did, dayNumber).volumeM3;
 
       const monthConsumptionFromDays = (ids: string[]): number =>
         ids.reduce((s, id) => {
@@ -749,24 +751,40 @@ const WaterDashboard: React.FC = () => {
         const label   = String(d);
 
         const srcTotal = sourceIds.reduce((s, did) => s + getDay(did, d), 0);
-        const row: BalanceDay = { date: label, source: parseFloat(srcTotal.toFixed(3)), losses: 0 };
+        const gapByLabel = new Map<string, { from: number; to: number }>();
+        const recordGap = (seriesLabel: string, deviceId: string): void => {
+          const detail = dayDetail(deviceId, d);
+          if (!detail.unknownDistribution || detail.intervalFromDay == null || detail.intervalToDay == null) return;
+          const prev = gapByLabel.get(seriesLabel);
+          gapByLabel.set(seriesLabel, prev
+            ? {
+              from: Math.min(prev.from, detail.intervalFromDay),
+              to: Math.max(prev.to, detail.intervalToDay),
+            }
+            : { from: detail.intervalFromDay, to: detail.intervalToDay });
+        };
+        for (const did of sourceIds) recordGap('Скважина', did);
+        const row: BalanceDay = { date: label, source: parseFloat(srcTotal.toFixed(3)), losses: 0, gapNote: '' };
 
         const prodByName: Record<string, number> = {};
         if (aggDevs.length > 0) {
           for (const dev of aggDevs) {
             const v = getDay(dev.device_id, d);
             prodByName[dev.name] = (prodByName[dev.name] ?? 0) + v;
+            recordGap(dev.name, dev.device_id);
           }
           if (leafDevs.length > 0) {
             for (const dev of leafDevs) {
               const v = getDay(dev.device_id, d);
               prodByName[dev.name] = (prodByName[dev.name] ?? 0) + v;
+              recordGap(dev.name, dev.device_id);
             }
           }
         } else {
           for (const dev of prodDevs) {
             const v = getDay(dev.device_id, d);
             prodByName[dev.name] = (prodByName[dev.name] ?? 0) + v;
+            recordGap(dev.name, dev.device_id);
           }
         }
         const prodTotalForLoss = productionNeedsIds.reduce((s, id) => s + getDay(id, d), 0);
@@ -777,11 +795,19 @@ const WaterDashboard: React.FC = () => {
         for (const dev of domDevs) {
           const rowKey = domesticBalanceLabelForDevice(dev.device_id, dev.name);
           domByName[rowKey] = (domByName[rowKey] ?? 0) + getDay(dev.device_id, d);
+          recordGap(rowKey, dev.device_id);
         }
         for (const [name, v] of Object.entries(domByName)) {
           row[name] = parseFloat(v.toFixed(3));
         }
         row.losses = parseFloat(Math.max(0, srcTotal - prodTotalForLoss).toFixed(3));
+        if (gapByLabel.size > 0) {
+          const spans = [...gapByLabel].map(([seriesLabel, span]) => {
+            const range = span.from === span.to ? String(span.from) : `${span.from}–${span.to}`;
+            return `${seriesLabel} ${range}`;
+          });
+          row.gapNote = `Пропуск показаний (${spans.join('; ')}): расход не распределён по суткам`;
+        }
         days.push(row);
       }
 
@@ -1171,7 +1197,7 @@ const WaterDashboard: React.FC = () => {
     return balanceData.map(row => {
       const r: BalanceDay = { ...row };
       for (const key of Object.keys(r)) {
-        if (key !== 'date' && key !== 'source' && key !== 'losses' && hiddenDevices.has(key)) {
+        if (key !== 'date' && key !== 'source' && key !== 'losses' && key !== 'gapNote' && hiddenDevices.has(key)) {
           r[key] = 0;
         }
       }
@@ -1491,17 +1517,21 @@ const WaterDashboard: React.FC = () => {
 
   const balanceDockPanelData = useMemo(() => {
     if (balanceDockedTip == null) return null;
-    if (!balanceDockPinned) return balanceDockedTip;
-    const day = String(balanceDockedTip.label);
+    const day = String(balanceDockedTip.label ?? '');
     const row = balanceChartDisplayData.find(r => String(r.date) === day);
-    if (!row) return balanceDockedTip;
-    return buildBalanceDockedTipFromRow(
-      row,
-      productionDeviceNames,
-      domesticDeviceNames,
-      balanceMeterColorMap,
-      hiddenDevices.has('__source__'),
-    );
+    const gapNote = row?.gapNote || undefined;
+    if (!balanceDockPinned) return { ...balanceDockedTip, gapNote };
+    if (!row) return { ...balanceDockedTip, gapNote };
+    return {
+      ...buildBalanceDockedTipFromRow(
+        row,
+        productionDeviceNames,
+        domesticDeviceNames,
+        balanceMeterColorMap,
+        hiddenDevices.has('__source__'),
+      ),
+      gapNote,
+    };
   }, [
     balanceDockedTip,
     balanceDockPinned,
@@ -1946,6 +1976,7 @@ const WaterDashboard: React.FC = () => {
                   label={balanceDockPanelData.label}
                   payload={balanceDockPanelData.payload}
                   selectedMonth={selectedMonth}
+                  gapNote={balanceDockPanelData.gapNote}
                   onClose={() => {
                     balanceDockDismissedRef.current = true;
                     balanceDockedRelayFpRef.current = null;

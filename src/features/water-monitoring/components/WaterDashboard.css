@@ -481,6 +481,13 @@
   border-left-width: 2px;
 }
 
+.wd-balance-gap-note {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: #92400e;
+}
+
 /* Горизонтальный скролл: полный месяц на мобильном — ширина ~26px на день */
 .wd-balance-scroll-hint {
   margin: 0 0 6px;
