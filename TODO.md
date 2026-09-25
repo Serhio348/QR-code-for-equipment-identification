@@ -65,10 +65,9 @@
   - **Остаток:** детальный ACL uploads в конкретную папку Drive (вне этого slice); water Express routes без отдельного app-guard (полагаются на RLS/auth).
 
 ### SEC-06
-- [ ] **P1 — Разделить общую и персональную память агента и ограничить её изменение.**
-  - **Код:** `ai-consultant-api/src/services/ai/agentMemoryService.ts:24-50,63-85`; `ai-consultant-api/src/tools/index.ts:201-204`; `supabase/migrations/20260316_agent_memory.sql`.
-  - Все факты, включая контакты и preferences, хранятся в одной области с уникальным `key`; user ID отсутствует. Любой допущенный к чату пользователь может через tools изменять/деактивировать общие факты. Они затем включаются в контекст других пользователей.
-  - **Готово, когда:** общие справочные факты и личные предпочтения имеют разные scope/права, авторство и аудит; административные факты нельзя перезаписать обычным диалогом; личные сведения не попадают в чужие ответы. Если общая память — сознательное продуктовое решение, это явно объясняется пользователю, но права записи всё равно ограничиваются.
+- [x] **P1 — Разделить общую и персональную память агента и ограничить её изменение.**
+  - **Сделано 2026-09-25:** миграция `20260925_sec06_agent_memory_scopes.sql` применена в Supabase (`scope`, `user_id`, `created_by`; shared/personal unique indexes; RLS read shared+own). Сервис `saveSharedFact` / `savePersonalFact` / `loadFactsForUser`; промпт грузит shared+personal по `userId`. Tools: `preference` → personal; shared write/delete → admin; тесты `memoryTools.test.ts`, `agentMemoryService.test.ts`.
+  - **Остаток:** нет (slice закрыт).
 
 ### SEC-07
 - [ ] **P1 — Удалить глобальное отключение проверки TLS в сборщике.**

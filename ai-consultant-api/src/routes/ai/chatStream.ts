@@ -77,7 +77,7 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
         const allowedTools = filterToolsByAccess(tools as ToolDefinition[], appAccess);
         const accessPrompt = buildAppAccessPrompt(appAccess);
         const [factsPrompt, driveFileContext] = await Promise.all([
-            loadFactsForPrompt().catch(() => ''),
+            loadFactsForPrompt(userId).catch(() => ''),
             buildDriveFileContext(messages, equipmentContext).catch(() => ''),
         ]);
         const documentSessionPrompt = buildDocumentSessionPrompt(userId);
