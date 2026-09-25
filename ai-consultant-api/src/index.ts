@@ -79,7 +79,12 @@ import { repairRequestsRouter } from './routes/repairs/index.js';
 // - gasApiUrl (Google Apps Script API)
 // Если чего-то не хватает — приложение упадёт с понятной ошибкой
 // ДО запуска сервера, а не при первом запросе пользователя
-validateConfig();
+try {
+  validateConfig();
+} catch (err) {
+  console.error('❌ Startup config validation failed:', err instanceof Error ? err.message : err);
+  process.exit(1);
+}
 logProviderConfig();
 
 // ============================================
@@ -230,13 +235,17 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 // Запуск сервера
 // ============================================
 
-// app.listen() создаёт HTTP-сервер и начинает слушать указанный порт.
-// Callback вызывается когда сервер готов принимать соединения
-app.listen(config.port, () => {
+// 0.0.0.0 — обязательно для Railway/Docker healthcheck:
+// иначе процесс может слушать только loopback и пробы с сети контейнера
+// получают service unavailable.
+const listenHost = process.env.HOST || '0.0.0.0';
+
+app.listen(config.port, listenHost, () => {
   console.log(`
 ╔══════════════════════════════════════════════╗
 ║   AI Consultant API Server                   ║
 ╠══════════════════════════════════════════════╣
+║   Host: ${listenHost.padEnd(37)}║
 ║   Port: ${config.port.toString().padEnd(37)}║
 ║   Environment: ${config.nodeEnv.padEnd(30)}║
 ║   Allowed origins: ${config.allowedOrigins.length.toString().padEnd(25)}║
