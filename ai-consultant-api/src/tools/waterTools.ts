@@ -27,6 +27,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@supabase/supabase-js';
 import { config } from '../config/env.js';
 import { fetchWaterAlertsSummary } from '../services/water/waterAlertsService.js';
+import { consumptionFromDailySeries, type DailyMeterSpan } from '../services/water/beliot/meterConsumption.js';
 
 // ============================================
 // Supabase клиент (service role — полный доступ)
@@ -444,6 +445,61 @@ function getPeriodDates(period: string): { from: string; to: string } {
     }
 }
 
+function moscowCalendarDay(iso: string): string {
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Europe/Moscow',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).format(new Date(iso));
+}
+
+async function loadMeterAdjustments(deviceIds: string[]): Promise<{
+    replacementByDevice: Record<string, string>;
+    overridesByDevice: Record<string, Record<string, number>>;
+}> {
+    const empty = {
+        replacementByDevice: {} as Record<string, string>,
+        overridesByDevice: {} as Record<string, Record<string, number>>,
+    };
+    if (deviceIds.length === 0) return empty;
+
+    const [rules, corrections] = await Promise.all([
+        supabase
+            .from('beliot_device_rules')
+            .select('device_id, meter_replacement_day')
+            .in('device_id', deviceIds),
+        supabase
+            .from('beliot_reading_day_corrections')
+            .select('device_id, correction_day, volume_m3')
+            .in('device_id', deviceIds),
+    ]);
+    if (rules.error || corrections.error) {
+        console.warn(
+            '[water] не удалось загрузить замены/корректировки:',
+            rules.error?.message ?? corrections.error?.message,
+        );
+        return empty;
+    }
+
+    const replacementByDevice: Record<string, string> = {};
+    for (const row of rules.data ?? []) {
+        if (row.meter_replacement_day) {
+            replacementByDevice[String(row.device_id)] = String(row.meter_replacement_day).slice(0, 10);
+        }
+    }
+    const overridesByDevice: Record<string, Record<string, number>> = {};
+    for (const row of corrections.data ?? []) {
+        const deviceId = String(row.device_id);
+        const day = String(row.correction_day).slice(0, 10);
+        const volume = Number(row.volume_m3);
+        if (!Number.isFinite(volume)) continue;
+        overridesByDevice[deviceId] ??= {};
+        overridesByDevice[deviceId][day] = volume;
+    }
+    return { replacementByDevice, overridesByDevice };
+}
+
 // ============================================
 // Функция выполнения инструментов
 // ============================================
@@ -662,12 +718,11 @@ export async function executeWaterTool(
             }
 
             /**
-             * ВАЖНО: Счётчики воды фиксируют НАКОПИТЕЛЬНЫЕ показания (нарастающий итог
-             * с момента установки). Расход за период = конечное − базовое показание.
-             *
-             * Базовое = последнее показание ДО начала периода (точный расчёт).
-             * Если базового нет (счётчик установлен внутри периода) — берём первое в периоде.
+             * Расход = сумма дней от baseline. День замены начинает новую шкалу,
+             * ручная корректировка подставляет подтверждённый объём этого дня.
              */
+            const adjustments = await loadMeterAdjustments(deviceIds);
+
             const deviceStats = Object.entries(byDevice).map(([deviceId, { readings: deviceReadings, unit }]) => {
                 const baseline = baselineMap[deviceId];
                 const firstInPeriod = deviceReadings[0];
@@ -679,8 +734,23 @@ export async function executeWaterTool(
                 const endValue = lastEntry.value;
                 const endDate = lastEntry.date;
 
-                // Расход = конечное − начальное (накопительный счётчик)
-                const consumption = parseFloat((endValue - startValue).toFixed(4));
+                const daysByKey = new Map<string, DailyMeterSpan>();
+                for (const point of deviceReadings) {
+                    const day = moscowCalendarDay(point.date);
+                    const existing = daysByKey.get(day);
+                    if (!existing) daysByKey.set(day, { day, min: point.value, max: point.value });
+                    else {
+                        existing.min = Math.min(existing.min, point.value);
+                        existing.max = Math.max(existing.max, point.value);
+                    }
+                }
+                const replacementDay = adjustments.replacementByDevice[deviceId] ?? null;
+                const consumption = consumptionFromDailySeries({
+                    baseline: baseline ? startValue : undefined,
+                    days: [...daysByKey.values()],
+                    replacementDay,
+                    volumeOverrides: adjustments.overridesByDevice[deviceId],
+                });
 
                 // Длительность по реальным датам
                 const startDateMs = new Date(startDate).getTime();
@@ -715,7 +785,7 @@ export async function executeWaterTool(
             });
 
             return {
-                note: 'РАСХОД = последнее показание − базовое (последнее перед периодом). Счётчик накопительный.',
+                note: 'РАСХОД = сумма дней от базового показания. День замены и ручная корректировка не смешивают старую и новую шкалу.',
                 period: { from: dateFrom, to: dateTo },
                 device: deviceLabel,
                 total_readings: readings.length,

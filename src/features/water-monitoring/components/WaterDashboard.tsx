@@ -41,6 +41,7 @@ import {
   FIRE_SUPPRESSION_DEVICE_IDS,
   FIRE_SUPPRESSION_DISPLAY_LABEL,
   HVO_AGGREGATE_WATER_DEVICE_IDS,
+  getBeliotArchiveVolumeOverride,
   isPosudotaraMeterReplacementDay,
   mergeBeliotOverridesForDashboard,
 } from '../constants/beliotDeviceRegistry';
@@ -688,14 +689,13 @@ const WaterDashboard: React.FC = () => {
       }
 
       const prevMonthByDevice: Record<string, MinMax> = {};
-      const currentMonthByDevice: Record<string, MinMax> = {};
       for (const r of monthData || []) {
         const day = String(r.reading_day);
+        if (day >= monthStartDate) continue;
         const did = r.device_id;
-        const target = day >= monthStartDate ? currentMonthByDevice : prevMonthByDevice;
-        if (!target[did]) target[did] = { min: Infinity, max: -Infinity };
-        target[did].max = Math.max(target[did].max, Number(r.max_value));
-        target[did].min = Math.min(target[did].min, Number(r.min_value));
+        if (!prevMonthByDevice[did]) prevMonthByDevice[did] = { min: Infinity, max: -Infinity };
+        prevMonthByDevice[did].max = Math.max(prevMonthByDevice[did].max, Number(r.max_value));
+        prevMonthByDevice[did].min = Math.min(prevMonthByDevice[did].min, Number(r.min_value));
       }
 
       const monthBaselineByDevice: Record<string, number> = {};
@@ -722,6 +722,10 @@ const WaterDashboard: React.FC = () => {
           daysInMonth,
           readingsByDay: byDeviceDay[did] ?? {},
           monthBaseline: did in monthBaselineByDevice ? monthBaselineByDevice[did] : undefined,
+          volumeOverride: (() => {
+            const override = getBeliotArchiveVolumeOverride(did, readingDayKey(year, month, dayNumber));
+            return override === null ? undefined : override;
+          })(),
           isMeterReplacementDay: (day) =>
             isPosudotaraMeterReplacementDay(did, readingDayKey(year, month, day)),
         });
@@ -738,13 +742,6 @@ const WaterDashboard: React.FC = () => {
           return s + total;
         }, 0);
 
-      const hasPosudotaraReplacementInSelectedMonth = (id: string): boolean => {
-        for (let dayNumber = 1; dayNumber <= daysInMonth; dayNumber++) {
-          const dayStr = `${year}-${pad(month + 1)}-${pad(dayNumber)}`;
-          if (isPosudotaraMeterReplacementDay(id, dayStr)) return true;
-        }
-        return false;
-      };
 
       for (let d = 1; d <= daysInMonth; d++) {
         /** Подпись на оси X — только число месяца (месяц в заголовке карточки) */
@@ -811,36 +808,15 @@ const WaterDashboard: React.FC = () => {
         days.push(row);
       }
 
-      // KPI: месячные итоги (max по месяцу − baseline до начала месяца)
-      const monthConsumption = (ids: string[], byDevice: Record<string, MinMax>, baseline: Record<string, number>) =>
-        ids.reduce((s, id) => {
-          if (hasPosudotaraReplacementInSelectedMonth(id)) return s + monthConsumptionFromDays([id]);
-          const v = byDevice[id];
-          if (!v || v.max === -Infinity) return s;
-          const base = id in baseline ? baseline[id] : v.min;
-          return s + Math.max(0, v.max - base);
-        }, 0);
-
-      // Для агрегата ХВО (умягчённая вода, напр. 11363) после замены счётчика baseline прошлого месяца
-      // может ломать месяц (разные шкалы). Для таких рядов считаем только внутри месяца: max − min.
-      const monthConsumptionWithinMonth = (ids: string[], byDevice: Record<string, MinMax>) =>
-        ids.reduce((s, id) => {
-          const v = byDevice[id];
-          if (!v || v.max === -Infinity || v.min === Infinity) return s;
-          return s + Math.max(0, v.max - v.min);
-        }, 0);
+      // KPI = сумма дней. Так итог совпадает с графиком и не смешивает шкалы после замены.
+      const monthTotal = (ids: string[]): number => monthConsumptionFromDays(ids);
 
       const domDeviceIds = domDevs.map(d => d.device_id);
 
-      const sourceMonth = parseFloat(monthConsumption(sourceIds, currentMonthByDevice, monthBaselineByDevice).toFixed(2));
-      const aggMonthTotal =
-        aggIds.length > 0
-          ? monthConsumptionWithinMonth(aggIds, currentMonthByDevice)
-          : 0;
-      const productionMonth = parseFloat(
-        monthConsumption(productionNeedsIds, currentMonthByDevice, monthBaselineByDevice).toFixed(2),
-      );
-      const domesticMonth = parseFloat(monthConsumption(domDeviceIds, currentMonthByDevice, monthBaselineByDevice).toFixed(2));
+      const sourceMonth = parseFloat(monthTotal(sourceIds).toFixed(2));
+      const aggMonthTotal = aggIds.length > 0 ? monthTotal(aggIds) : 0;
+      const productionMonth = parseFloat(monthTotal(productionNeedsIds).toFixed(2));
+      const domesticMonth = parseFloat(monthTotal(domDeviceIds).toFixed(2));
       const lossesMonth     = parseFloat(Math.max(0, sourceMonth - productionMonth).toFixed(2));
       const lossesPct       = sourceMonth > 0 ? parseFloat(((lossesMonth / sourceMonth) * 100).toFixed(1)) : 0;
       const softenedWaterMonth = parseFloat(aggMonthTotal.toFixed(2));
@@ -871,9 +847,7 @@ const WaterDashboard: React.FC = () => {
       const monthlyRows = meterGroups
         .map<MonthlyMeterRow>(group => {
           const groupHasAgg = group.role === 'production' && group.deviceIds.some(id => aggIds.includes(id));
-          const currentMonthValue = groupHasAgg
-            ? monthConsumptionWithinMonth(group.deviceIds, currentMonthByDevice)
-            : monthConsumption(group.deviceIds, currentMonthByDevice, monthBaselineByDevice);
+          const currentMonthValue = monthTotal(group.deviceIds);
           const roleTotal = roleTotals[group.role];
           let shareOfRole = roleTotal > 0 ? parseFloat(((currentMonthValue / roleTotal) * 100).toFixed(1)) : 0;
           let distributionSection: MonthlyMeterRow['distributionSection'];

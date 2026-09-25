@@ -30,9 +30,15 @@ let meterReplacementDays = new Map<string, string>([
   [POSUDOTARA_DEVICE_ID, POSUDOTARA_METER_REPLACEMENT_DAY],
 ]);
 
+/** День замены счётчика: расход нельзя продолжать со старой шкалы. */
+export function meterReplacementDayFor(deviceId: string | null | undefined): string | null {
+  if (!deviceId) return null;
+  return meterReplacementDays.get(deviceId) ?? null;
+}
+
 /** День замены счётчика посудо-тарного участка: расход нельзя считать от предыдущего дня. */
 export function isPosudotaraMeterReplacementDay(deviceId: string, readingDay: string): boolean {
-  return meterReplacementDays.get(deviceId) === readingDay;
+  return meterReplacementDayFor(deviceId) === readingDay;
 }
 
 let archiveVolumeOverrides: Record<string, Record<string, number>> = {
@@ -48,6 +54,12 @@ let archiveVolumeOverrides: Record<string, Record<string, number>> = {
 export function getBeliotArchiveVolumeOverride(deviceId: string | null | undefined, dayKey: string): number | null {
   if (!deviceId) return null;
   return archiveVolumeOverrides[deviceId]?.[dayKey] ?? null;
+}
+
+/** Все ручные корректировки объёма одного счётчика: день → м³. */
+export function volumeOverridesForDevice(deviceId: string | null | undefined): Record<string, number> {
+  if (!deviceId) return {};
+  return { ...(archiveVolumeOverrides[deviceId] ?? {}) };
 }
 
 const FIRE_SUPPRESSION_GROUP = BELOT_DEVICE_GROUPS.find((g) => g.name === 'Пожаротушение');
