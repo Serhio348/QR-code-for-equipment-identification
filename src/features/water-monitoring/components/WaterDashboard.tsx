@@ -48,6 +48,7 @@ import {
 import { buildMeterLabelColorMap } from '../constants/meterSeriesColors';
 import { getTrackedBeliotRegistry } from '../services/beliotRegistryApi';
 import { computeDayConsumption, readingDayKey } from '../services/dayConsumption';
+import { baselineFromLatestRows, fetchAllPages } from '../services/pagedSelect';
 import { useDeviceDetection } from '@/shared/hooks/useDeviceDetection';
 import './WaterDashboard.css';
 
@@ -647,19 +648,26 @@ const WaterDashboard: React.FC = () => {
         ...prodDevs.map(d => d.device_id),
         ...domDevs.map(d => d.device_id),
       ])];
-      const { data: monthData } = allDeviceIds.length > 0
-        ? await supabase
+      const monthData = allDeviceIds.length > 0
+        ? await fetchAllPages<{
+          device_id: string;
+          reading_day: string;
+          min_value: number;
+          max_value: number;
+        }>((from, to) => supabase
           .from('beliot_daily_readings_agg')
           .select('device_id, reading_day, min_value, max_value')
           .in('device_id', allDeviceIds)
           .gte('reading_day', prevMonthStartDate)
           .lt('reading_day', monthEndDate)
           .order('reading_day', { ascending: true })
-        : { data: [] };
+          .order('device_id', { ascending: true })
+          .range(from, to))
+        : [];
 
       // Строим byDeviceDay из агрегированного view
       const byDeviceDay: Record<string, Record<string, MinMax>> = {};
-      for (const r of monthData || []) {
+      for (const r of monthData) {
         const day = String(r.reading_day);
         const did = r.device_id;
         if (!byDeviceDay[did]) byDeviceDay[did] = {};
@@ -671,25 +679,22 @@ const WaterDashboard: React.FC = () => {
       const aggIds = aggDevs.map(d => d.device_id);
       const productionNeedsIds = leafDevs.map(d => d.device_id);
 
-      // Загружаем baseline до прошлого месяца — этого хватит и для прошлого, и для текущего месяца
-      const baselineByDevice: Record<string, number> = {};
-      if (allDeviceIds.length > 0) {
-        const { data: baselineData } = await supabase
+      // Baseline — последнее показание каждого счётчика, не общая пачка на всех.
+      const baselineRows = await Promise.all(allDeviceIds.map(async (deviceId) => {
+        const { data, error } = await supabase
           .from('beliot_device_readings')
           .select('device_id, reading_value')
-          .in('device_id', allDeviceIds)
+          .eq('device_id', deviceId)
           .lt('reading_date', prevMonthStartTs)
           .order('reading_date', { ascending: false })
-          .limit(allDeviceIds.length * 10);
-        for (const r of baselineData || []) {
-          if (!(r.device_id in baselineByDevice)) {
-            baselineByDevice[r.device_id] = Number(r.reading_value);
-          }
-        }
-      }
+          .limit(1);
+        if (error) throw new Error(error.message);
+        return data?.[0] ?? null;
+      }));
+      const baselineByDevice = baselineFromLatestRows(baselineRows);
 
       const prevMonthByDevice: Record<string, MinMax> = {};
-      for (const r of monthData || []) {
+      for (const r of monthData) {
         const day = String(r.reading_day);
         if (day >= monthStartDate) continue;
         const did = r.device_id;

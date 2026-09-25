@@ -18,6 +18,7 @@ import { parseInvoiceText } from '../invoiceParserService.js';
 import { updateTariffFromInvoice } from '../ai/agentMemoryService.js';
 import { checkAndNotify } from './notificationService.js';
 import { config } from '../../config/env.js';
+import { fetchAllPages } from './pagedSelect.js';
 
 const supabase = createClient(config.supabaseUrl, config.supabaseServiceKey);
 
@@ -97,16 +98,21 @@ export async function syncInvoices(forceAll = false): Promise<SyncResult> {
 
     let existingKeys = new Set<string>();
     if (!forceAll) {
-        const { data: existing, error: existingError } = await supabase
-            .from('water_invoices')
-            .select('period, account_number');
-        if (existingError) {
-            throw new Error(`Failed to load existing invoices: ${existingError.message}`);
+        let existing: Array<{ period: string; account_number: string | null }>;
+        try {
+            existing = await fetchAllPages<{ period: string; account_number: string | null }>(
+                (from, to) => supabase
+                    .from('water_invoices')
+                    .select('period, account_number')
+                    .order('id', { ascending: true })
+                    .range(from, to),
+            );
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            throw new Error(`Failed to load existing invoices: ${message}`);
         }
-        if (existing) {
-            for (const row of existing) {
-                existingKeys.add(`${row.period}|${row.account_number ?? ''}`);
-            }
+        for (const row of existing) {
+            existingKeys.add(`${row.period}|${row.account_number ?? ''}`);
         }
         console.log(`[invoiceSync] Already in DB: ${existingKeys.size} records`);
     }
