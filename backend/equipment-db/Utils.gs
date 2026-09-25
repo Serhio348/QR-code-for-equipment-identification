@@ -163,4 +163,137 @@ function assertMutationApiSecret(action, data) {
   return null;
 }
 
+// ============================================================================
+// SEC-08: безопасное логирование (без паролей / токенов / тел документов)
+// ============================================================================
+
+/**
+ * Ключи, значения которых нельзя писать в Logger (сравнение без регистра/_/-).
+ */
+function isSensitiveLogKey_(key) {
+  var normalized = String(key || '').toLowerCase().replace(/[_-]/g, '');
+  var blocked = {
+    password: true,
+    currentpassword: true,
+    newpassword: true,
+    confirmpassword: true,
+    passwordhash: true,
+    token: true,
+    accesstoken: true,
+    refreshtoken: true,
+    bearertoken: true,
+    authorization: true,
+    authtoken: true,
+    apisecret: true,
+    secret: true,
+    cookie: true,
+    cookies: true,
+    session: true,
+    content: true,
+    filecontent: true,
+    filedata: true,
+    base64: true,
+    photobase64: true,
+    rawbody: true,
+    body: true
+  };
+  if (blocked[normalized]) {
+    return true;
+  }
+  // Частичные совпадения: *password*, *token*, *secret*, *base64*
+  if (
+    normalized.indexOf('password') !== -1 ||
+    normalized.indexOf('token') !== -1 ||
+    normalized.indexOf('secret') !== -1 ||
+    normalized.indexOf('base64') !== -1
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Рекурсивно маскирует чувствительные поля для логов.
+ * @param {*} value
+ * @param {number=} depth
+ * @returns {*}
+ */
+function sanitizeForLog(value, depth) {
+  var d = typeof depth === 'number' ? depth : 0;
+  if (d > 6) {
+    return '[MaxDepth]';
+  }
+  if (value === null || value === undefined) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    // Длинные строки в логах не нужны (документы / base64)
+    if (value.length > 120) {
+      return '[redacted ' + value.length + ' chars]';
+    }
+    return value;
+  }
+  if (typeof value !== 'object') {
+    return value;
+  }
+  if (Object.prototype.toString.call(value) === '[object Array]') {
+    var arr = [];
+    var max = Math.min(value.length, 20);
+    for (var i = 0; i < max; i++) {
+      arr.push(sanitizeForLog(value[i], d + 1));
+    }
+    if (value.length > max) {
+      arr.push('[+' + (value.length - max) + ' items]');
+    }
+    return arr;
+  }
+  var out = {};
+  for (var key in value) {
+    if (!value.hasOwnProperty(key)) {
+      continue;
+    }
+    if (isSensitiveLogKey_(key)) {
+      var raw = value[key];
+      var len = raw === null || raw === undefined ? 0 : String(raw).length;
+      out[key] = '***';
+      if (len > 0) {
+        out[key + '_len'] = len;
+      }
+    } else {
+      out[key] = sanitizeForLog(value[key], d + 1);
+    }
+  }
+  return out;
+}
+
+/**
+ * Безопасная сериализация объекта для Logger.log.
+ * @param {*} value
+ * @returns {string}
+ */
+function safeJsonForLog(value) {
+  try {
+    return JSON.stringify(sanitizeForLog(value));
+  } catch (err) {
+    return '[unserializable]';
+  }
+}
+
+/**
+ * Метаданные входящего POST без сырого тела.
+ * @param {*} e - event Apps Script
+ * @returns {string}
+ */
+function summarizePostEventForLog(e) {
+  if (!e) {
+    return safeJsonForLog({ event: null });
+  }
+  var meta = {
+    hasPostData: !!(e.postData),
+    contentType: e.postData ? e.postData.type || '' : '',
+    bodyLength: e.postData && e.postData.contents ? e.postData.contents.length : 0,
+    parameterKeys: e.parameter ? Object.keys(e.parameter) : []
+  };
+  return safeJsonForLog(meta);
+}
 
