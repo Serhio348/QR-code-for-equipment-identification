@@ -655,17 +655,43 @@ export async function readInvoiceFile(filePath: string): Promise<string> {
 
         case '.xlsx':
         case '.xls': {
-            const XLSX = await import('xlsx');
-            const workbook = XLSX.read(buffer, { type: 'buffer' });
+            // SEC-09: exceljs вместо уязвимого npm-пакета xlsx (SheetJS CE).
+            // Старый .xls (BIFF) exceljs не читает — просим xlsx.
+            if (ext === '.xls') {
+                return '[Формат .xls (старый Excel) не поддерживается. Сохраните файл как .xlsx и повторите.]';
+            }
+            const ExcelJS = await import('exceljs');
+            const workbook = new ExcelJS.Workbook();
+            // exceljs типы Buffer расходятся с Node 22 — runtime принимает Node Buffer
+            await workbook.xlsx.load(buffer as unknown as Parameters<typeof workbook.xlsx.load>[0]);
             const result: string[] = [];
 
-            for (const sheetName of workbook.SheetNames) {
-                const sheet = workbook.Sheets[sheetName];
-                const csv = XLSX.utils.sheet_to_csv(sheet);
-                result.push(`=== Лист: ${sheetName} ===\n${csv}`);
+            for (const worksheet of workbook.worksheets) {
+                const rows: string[] = [];
+                worksheet.eachRow({ includeEmpty: false }, (row) => {
+                    const values = Array.isArray(row.values) ? row.values.slice(1) : [];
+                    rows.push(
+                        values
+                            .map((cell) => {
+                                if (cell === null || cell === undefined) return '';
+                                if (typeof cell === 'object' && cell !== null && 'text' in cell) {
+                                    return String((cell as { text?: string }).text ?? '');
+                                }
+                                if (typeof cell === 'object' && cell !== null && 'result' in cell) {
+                                    return String((cell as { result?: unknown }).result ?? '');
+                                }
+                                return String(cell);
+                            })
+                            .map((v) => (v.includes(',') || v.includes('"') || v.includes('\n')
+                                ? `"${v.replace(/"/g, '""')}"`
+                                : v))
+                            .join(','),
+                    );
+                });
+                result.push(`=== Лист: ${worksheet.name} ===\n${rows.join('\n')}`);
             }
 
-            return result.join('\n\n');
+            return result.join('\n\n') || '[Пустой Excel-файл]';
         }
 
         case '.csv': {

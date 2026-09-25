@@ -80,10 +80,9 @@
   - **Остаток:** задеплоить обновлённые `Code.gs` + `Utils.gs` в Apps Script.
 
 ### SEC-09
-- [ ] **P1 — Разобрать и устранить подтверждённые npm audit предупреждения production-зависимостей.**
-  - **Проверка:** `npm audit --omit=dev` для корня и `ai-consultant-api`; источники зависимостей — соответствующие `package.json` и `package-lock.json`.
-  - Корень: `brace-expansion`, `dompurify`, `fast-uri`, `fflate`, `react-router`/`react-router-dom`, `ws`. Backend: `body-parser`, `ip-address`/`express-rate-limit`, `multer`, `path-to-regexp`, `qs`, `ws`, `xlsx`. Для `xlsx` npm audit сообщает `No fix available`; код действительно использует `XLSX.read` в `ai-consultant-api/src/services/browserService.ts:656-659`.
-  - **Готово, когда:** выполнена оценка достижимости каждого advisory, обновления/замены проверены тестами и сборкой. Не считать SSR/RSC-проблемы React Router автоматически эксплуатируемыми в этой SPA. Для xlsx выбрать поддерживаемую безопасную поставку/замену. Не запускать слепой `audit fix --force`; учитывать совместимость и выдержку новых релизов.
+- [x] **P1 — Разобрать и устранить подтверждённые npm audit предупреждения production-зависимостей.**
+  - **Сделано 2026-09-25:** корень и `ai-consultant-api` — `npm audit --omit=dev` = **0**. Обновлены transitive/direct fix'ы (`react-router-dom` → 7.18.4 и др.). `qs` через `overrides` ≥6.16.0. Уязвимый `xlsx` заменён на `exceljs` в `browserService.ts` (+ тест `excelWorkbookParse.test.ts`). Старый `.xls` больше не парсится (сообщение сохранить как `.xlsx`).
+  - **Остаток:** без `--force`; dev-зависимости могут ещё показывать предупреждения — вне scope production.
 
 ## 2. Бизнес-логика и целостность данных
 
