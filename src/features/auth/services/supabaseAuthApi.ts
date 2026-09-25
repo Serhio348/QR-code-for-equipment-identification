@@ -723,10 +723,12 @@ export async function getLoginHistory(limit: number = 100): Promise<LoginHistory
       return [];
     }
 
-    // Используем RPC функцию для получения истории с email через JOIN на сервере
+    // SEC-04: admin — все записи (p_user_id null); обычный пользователь — только свои.
+    // Серверная функция дополнительно форсирует auth.uid() для не-админов.
+    const adminCheck = await verifyAdmin();
     const { data, error } = await supabase.rpc('get_login_history_with_email', {
       p_limit: limit,
-      p_user_id: null, // null = все записи (админы видят все, обычные пользователи - только свои через RLS)
+      p_user_id: adminCheck.isAdmin ? null : user.id,
     });
 
     if (error) {

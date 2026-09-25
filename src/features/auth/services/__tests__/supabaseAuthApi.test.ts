@@ -3,8 +3,15 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { login, register, logout, verifyAdmin, invalidateAdminCache } from '../supabaseAuthApi';
-import { supabase } from '@/shared/config/supabase';
+import {
+  login,
+  register,
+  logout,
+  verifyAdmin,
+  invalidateAdminCache,
+  getLoginHistory,
+} from '../supabaseAuthApi';
+import { supabase, getCurrentProfile } from '@/shared/config/supabase';
 import type { LoginData, RegisterData } from '../../types/user';
 
 // Мокаем Supabase клиент
@@ -18,6 +25,7 @@ vi.mock('@/shared/config/supabase', () => {
         getUser: vi.fn(),
         getSession: vi.fn(),
       },
+      rpc: vi.fn(),
       from: vi.fn(() => ({
         select: vi.fn().mockReturnThis(),
         insert: vi.fn().mockReturnThis(),
@@ -332,8 +340,6 @@ describe('supabaseAuthApi', () => {
     // Для unit тестов достаточно проверить логику через другие функции.
     
     it('should return false when user is not logged in', async () => {
-      // Мокаем getCurrentProfile для возврата null
-      const { getCurrentProfile } = await import('@/shared/config/supabase');
       (getCurrentProfile as any).mockResolvedValue(null);
 
       const result = await verifyAdmin();
@@ -341,6 +347,59 @@ describe('supabaseAuthApi', () => {
       expect(result.isAdmin).toBe(false);
       expect(result.role).toBe('user');
       expect(result.email).toBe('');
+    });
+  });
+
+  describe('getLoginHistory (SEC-04)', () => {
+    it('passes own user id when caller is not admin', async () => {
+      (supabase.auth.getUser as any).mockResolvedValue({
+        data: { user: { id: 'user-1', email: 'u@example.com' } },
+      });
+      (getCurrentProfile as any).mockResolvedValue({
+        id: 'user-1',
+        email: 'u@example.com',
+        name: 'User',
+        role: 'user',
+      });
+      (supabase.rpc as any).mockResolvedValue({ data: [], error: null });
+
+      await getLoginHistory(50);
+
+      expect(supabase.rpc).toHaveBeenCalledWith(
+        'get_login_history_with_email',
+        { p_limit: 50, p_user_id: 'user-1' },
+      );
+    });
+
+    it('passes null p_user_id when caller is admin', async () => {
+      (supabase.auth.getUser as any).mockResolvedValue({
+        data: { user: { id: 'admin-1', email: 'a@example.com' } },
+      });
+      (getCurrentProfile as any).mockResolvedValue({
+        id: 'admin-1',
+        email: 'a@example.com',
+        name: 'Admin',
+        role: 'admin',
+      });
+      (supabase.rpc as any).mockResolvedValue({ data: [], error: null });
+
+      await getLoginHistory(100);
+
+      expect(supabase.rpc).toHaveBeenCalledWith(
+        'get_login_history_with_email',
+        { p_limit: 100, p_user_id: null },
+      );
+    });
+
+    it('returns empty array when not authenticated', async () => {
+      (supabase.auth.getUser as any).mockResolvedValue({
+        data: { user: null },
+      });
+
+      const result = await getLoginHistory();
+
+      expect(result).toEqual([]);
+      expect(supabase.rpc).not.toHaveBeenCalled();
     });
   });
 });

@@ -87,6 +87,12 @@ import { memoryTools, executeMemoryTool } from './memoryTools.js';
 // - executeDocumentSessionTool: in-memory session на userId
 import { documentSessionTools, executeDocumentSessionTool } from './documentSessionTools.js';
 
+import { getToolContext } from '../services/ai/toolContext.js';
+import {
+    getToolRequiredApp,
+    isToolAllowedForAccess,
+} from '../services/ai/toolAccessPolicy.js';
+
 // ============================================
 // Объединённый массив tools
 // ============================================
@@ -263,6 +269,20 @@ export async function executeToolCall(
 ): Promise<unknown> {
     const requestId = crypto.randomUUID();
     const startTime = Date.now();
+
+    // SEC-05: доменные tools только при соответствующем доступе
+    const ctx = getToolContext();
+    if (!isToolAllowedForAccess(name, ctx?.appAccess)) {
+        const required = getToolRequiredApp(name);
+        console.warn(
+            `[${requestId}] Tool ${name} запрещён (нужен доступ: ${required ?? 'none'})`,
+        );
+        throw new Error(
+            required
+                ? `Нет доступа к разделу «${required}» для инструмента ${name}`
+                : `Инструмент ${name} недоступен`,
+        );
+    }
 
     // Поиск исполнителя по имени tool
     const executor = toolExecutors[name];

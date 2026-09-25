@@ -183,7 +183,9 @@ const App: React.FC = () => {
             path={ROUTES.EQUIPMENT_NEW} 
             element={
               <ProtectedRoute requireAdmin>
-                <EquipmentFormPage />
+                <AppAccessGuard appId="equipment">
+                  <EquipmentFormPage />
+                </AppAccessGuard>
               </ProtectedRoute>
             } 
           />
@@ -193,17 +195,21 @@ const App: React.FC = () => {
             path="/equipment/:id/edit" 
             element={
               <ProtectedRoute requireAdmin>
-                <EquipmentFormPage />
+                <AppAccessGuard appId="equipment">
+                  <EquipmentFormPage />
+                </AppAccessGuard>
               </ProtectedRoute>
             } 
           />
           
-          {/* Просмотр конкретного оборудования - для всех авторизованных */}
+          {/* Просмотр конкретного оборудования — нужен доступ к разделу equipment */}
           <Route 
             path="/equipment/:id" 
             element={
               <ProtectedRoute>
-                <EquipmentPage />
+                <AppAccessGuard appId="equipment">
+                  <EquipmentPage />
+                </AppAccessGuard>
               </ProtectedRoute>
             } 
           />
@@ -395,7 +401,9 @@ const App: React.FC = () => {
             path="/water-quality/analysis/new" 
             element={
               <ProtectedRoute>
-                <WaterAnalysisFormPage />
+                <AppAccessGuard appId="water">
+                  <WaterAnalysisFormPage />
+                </AppAccessGuard>
               </ProtectedRoute>
             } 
           />
@@ -405,7 +413,9 @@ const App: React.FC = () => {
             path="/water-quality/analysis/:id" 
             element={
               <ProtectedRoute>
-                <WaterAnalysisViewPage />
+                <AppAccessGuard appId="water">
+                  <WaterAnalysisViewPage />
+                </AppAccessGuard>
               </ProtectedRoute>
             } 
           />
@@ -415,7 +425,9 @@ const App: React.FC = () => {
             path="/water-quality/analysis/:id/edit" 
             element={
               <ProtectedRoute>
-                <WaterAnalysisFormPage />
+                <AppAccessGuard appId="water">
+                  <WaterAnalysisFormPage />
+                </AppAccessGuard>
               </ProtectedRoute>
             } 
           />

@@ -17,6 +17,9 @@ import {
 import { loadFactsForPrompt } from '../../services/ai/agentMemoryService.js';
 import { buildDriveFileContext } from '../../services/ai/driveFileContextService.js';
 import { buildDocumentSessionPrompt } from '../../services/ai/documentSessionService.js';
+import { loadUserAppAccess } from '../../services/ai/userAppAccessService.js';
+import { filterToolsByAccess, buildAppAccessPrompt } from '../../services/ai/toolAccessPolicy.js';
+import { runWithToolContext } from '../../services/ai/toolContext.js';
 import { config } from '../../config/env.js';
 
 const router = Router();
@@ -85,20 +88,28 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
         // чтобы он мог загрузить их через tools.
         const preferredProvider = hasImages && config.aiProvider !== 'deepseek' ? 'claude' : undefined;
         const provider = await ProviderFactory.create(preferredProvider);
+        const appAccess = await loadUserAppAccess(userId);
+        const allowedTools = filterToolsByAccess(tools as ToolDefinition[], appAccess);
+        const accessPrompt = buildAppAccessPrompt(appAccess);
         const [factsPrompt, driveFileContext] = await Promise.all([
             loadFactsForPrompt().catch(() => ''),
             buildDriveFileContext(messages, equipmentContext).catch(() => ''),
         ]);
         const documentSessionPrompt = buildDocumentSessionPrompt(userId);
-        const promptContext = [factsPrompt, driveFileContext, documentSessionPrompt].filter(Boolean).join('\n');
+        const promptContext = [accessPrompt, factsPrompt, driveFileContext, documentSessionPrompt]
+            .filter(Boolean)
+            .join('\n');
 
-        const response = await provider.chat(
-            messagesWithHistory,
-            tools as ToolDefinition[],
-            userId,
-            equipmentContext,
-            waterContext,
-            promptContext ? { factsPrompt: promptContext } : undefined
+        const response = await runWithToolContext(
+            { userId, equipmentId: equipmentContext?.id, appAccess },
+            () => provider.chat(
+                messagesWithHistory,
+                allowedTools,
+                userId,
+                equipmentContext,
+                waterContext,
+                promptContext ? { factsPrompt: promptContext } : undefined
+            ),
         );
 
         const lastUserMessage = messages[messages.length - 1];

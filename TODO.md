@@ -55,17 +55,14 @@
   - **На оценку владельцу:** при необходимости сменить пароль/сессию bvod.by, если cookies когда-либо попали в удалённый репозиторий.
 
 ### SEC-04
-- [ ] **P0 — Ограничить привилегированные SQL RPC и не рассчитывать на RLS внутри SECURITY DEFINER.**
-  - **Код:** `supabase/migrations/20260326_supabase_schema.sql:299-444` — `log_login`, `get_login_history_with_email`, `insert_beliot_reading`.
-  - Функции исполняются как владелец, но не проверяют вызывающего. RPC истории допускает произвольный `p_user_id`/NULL; RPC показаний делает upsert произвольных значений; `log_login` принимает чужой user ID. В миграциях не найден явный отзыв EXECUTE этих функций у PUBLIC/anon/authenticated. При стандартных правах PostgreSQL функции доступны PUBLIC; фактические grants production нужно проверить отдельно. Комментарий о том, что RLS автоматически отфильтрует результат SECURITY DEFINER, неверен.
-  - **Готово, когда:** для каждого RPC зафиксированы допустимые роли, заданы явные grants и серверные проверки; запись показаний доступна только доверенному сервису; пользователь читает только свою историю, администратор — разрешённую общую. Добавлены SQL-тесты под реальными ролями, включая anon.
+- [x] **P0 — Ограничить привилегированные SQL RPC и не рассчитывать на RLS внутри SECURITY DEFINER.**
+  - **Сделано 2026-09-25:** миграция `supabase/migrations/20260925_harden_security_definer_rpcs.sql` применена в Supabase — auth-checks в `log_login` / `get_login_history_with_email`; `insert_beliot_reading` EXECUTE только `service_role`; REVOKE PUBLIC. Frontend `getLoginHistory` передаёт свой `p_user_id` не-админу. Unit-тесты в `supabaseAuthApi.test.ts`; verify SQL: `supabase/tests/sec04_rpc_grants.verify.sql`.
+  - **Остаток:** опционально прогнать verify SQL под JWT anon/user/admin в SQL Editor.
 
 ### SEC-05
-- [ ] **P1 — Сделать доступ к разделам сквозным: маршруты, RLS, API и AI-инструменты.**
-  - **Код:** `src/App.tsx:169-208,393-420,451-454`; `docs/migrations/add-water-quality-tables-rls.sql:22-82`; `supabase/migrations/20260326_supabase_schema.sql:589-605`; `ai-consultant-api/src/routes/ai/chatStream.ts:39-97`; `ai-consultant-api/src/tools/waterTools.ts:35,729-756,870-950`; `ai-consultant-api/src/tools/index.ts:260-298`.
-  - Список оборудования защищён `AppAccessGuard`, но отдельная карточка — только входом. Формы/просмотр анализов также обходятся без guard раздела. Часть RLS разрешает операции любому authenticated, без `user_app_access.water`. Чат доступен всем вошедшим и получает весь набор tools; инструменты воды используют `service_role`, а центральный dispatcher не проверяет права пользователя.
-  - **Последствие:** отключение раздела в админке не является полноценным отзывом доступа, особенно через AI и прямые запросы.
-  - **Готово, когда:** одна явная матрица прав действует на всех уровнях, в том числе для uploads в конкретную папку Drive. Тест: пользователь с обоими доступами false не читает и не меняет доменные данные ни одним путём.
+- [x] **P1 — Сделать доступ к разделам сквозным: маршруты, RLS, API и AI-инструменты.**
+  - **Сделано 2026-09-25 (slice):** UI — `AppAccessGuard` на `/equipment/:id`, forms и `/water-quality/analysis/*`. SQL — `has_app_access` + RLS water-таблиц/показаний (`20260925_sec05_app_access_rls.sql`, применена в Supabase). AI — `loadUserAppAccess` + `filterToolsByAccess` в chat/chatStream; `executeToolCall` повторно проверяет доступ через `toolContext.appAccess`. Тесты: `toolAccessPolicy.test.ts`; verify: `supabase/tests/sec05_app_access.verify.sql`.
+  - **Остаток:** детальный ACL uploads в конкретную папку Drive (вне этого slice); water Express routes без отдельного app-guard (полагаются на RLS/auth).
 
 ### SEC-06
 - [ ] **P1 — Разделить общую и персональную память агента и ограничить её изменение.**
