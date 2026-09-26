@@ -14,33 +14,37 @@ export interface AnalysisBundleInput {
   analysisId: string;
   analysis: WaterAnalysisInput;
   plan: AnalysisSavePlan;
+  updatedBy?: string;
 }
 
 export async function saveAnalysisBundle(input: AnalysisBundleInput): Promise<string> {
   const { analysis } = input;
+  const payload: Record<string, unknown> = {
+    analysis_id: input.analysisId,
+    sampling_point_id: analysis.samplingPointId,
+    equipment_id: analysis.equipmentId ?? '',
+    sample_date: analysis.sampleDate,
+    status: analysis.status ?? 'in_progress',
+    notes: analysis.notes ?? '',
+    sample_condition: analysis.sampleCondition ?? '',
+    external_lab: analysis.externalLab ?? false,
+    external_lab_name: analysis.externalLabName ?? '',
+    delete_result_ids: input.plan.deleteResultIds,
+    results: input.plan.results.map(result => ({
+      parameter_name: result.parameterName,
+      parameter_label: result.parameterLabel,
+      value: result.value,
+      unit: result.unit,
+      method: result.method ?? '',
+    })),
+  };
+  if (analysis.sampledBy !== undefined) payload.sampled_by = analysis.sampledBy;
+  if (analysis.analyzedBy !== undefined) payload.analyzed_by = analysis.analyzedBy;
+  if (analysis.responsiblePerson !== undefined) payload.responsible_person = analysis.responsiblePerson;
+  if (input.updatedBy) payload.updated_by = input.updatedBy;
+
   const { data, error } = await supabase.rpc('save_water_analysis_bundle', {
-    payload: {
-      analysis_id: input.analysisId,
-      sampling_point_id: analysis.samplingPointId,
-      equipment_id: analysis.equipmentId ?? '',
-      sample_date: analysis.sampleDate,
-      sampled_by: analysis.sampledBy ?? '',
-      analyzed_by: analysis.analyzedBy ?? '',
-      responsible_person: analysis.responsiblePerson ?? '',
-      status: analysis.status ?? 'in_progress',
-      notes: analysis.notes ?? '',
-      sample_condition: analysis.sampleCondition ?? '',
-      external_lab: analysis.externalLab ?? false,
-      external_lab_name: analysis.externalLabName ?? '',
-      delete_result_ids: input.plan.deleteResultIds,
-      results: input.plan.results.map(result => ({
-        parameter_name: result.parameterName,
-        parameter_label: result.parameterLabel,
-        value: result.value,
-        unit: result.unit,
-        method: result.method ?? '',
-      })),
-    },
+    payload,
   });
 
   if (error) {

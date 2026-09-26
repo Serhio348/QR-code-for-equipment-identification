@@ -18,6 +18,7 @@ import { useSamplingPoints } from '../hooks/useSamplingPoints';
 import { useCurrentUser } from '../../auth/hooks/useCurrentUser';
 import { checkResultCompliance, uploadAnalysisPDF, deleteAnalysisPDF } from '../services';
 import { planAnalysisResults } from '../services/analysisSavePlan';
+import { authorshipForSave } from '../services/analysisAuthorship';
 import { saveAnalysisBundle } from '../services/saveAnalysisBundle';
 import { ROUTES } from '@/shared/utils/routes';
 import { logUserActivity } from '@/features/user-activity/services/activityLogsApi';
@@ -42,6 +43,7 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
   const [equipmentId, setEquipmentId] = useState<string>('');
   const [sampleDate, setSampleDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [status, setStatus] = useState<AnalysisStatus>('completed');
+  const [changeAuthors, setChangeAuthors] = useState(false);
   const [notes, setNotes] = useState<string>('');
   const [sampleCondition, setSampleCondition] = useState<SampleCondition>('normal');
   const [externalLab, setExternalLab] = useState<boolean>(false);
@@ -166,15 +168,18 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
     setSaving(true);
 
     try {
-      // Подготовка данных анализа
-      // Автоматически заполняем поля пользователя из аутентификации
+      const authorship = authorshipForSave({
+        mode: isEditMode ? 'edit' : 'create',
+        currentUser,
+        changeAuthors,
+      });
       const analysisInput: WaterAnalysisInput = {
         samplingPointId: samplingPointId.trim(),
         equipmentId: equipmentId.trim() || undefined,
         sampleDate: `${sampleDate}T00:00:00Z`,
-        sampledBy: currentUser,
-        analyzedBy: currentUser,
-        responsiblePerson: currentUser,
+        sampledBy: authorship.sampledBy,
+        analyzedBy: authorship.analyzedBy,
+        responsiblePerson: authorship.responsiblePerson,
         status,
         notes: notes.trim() || undefined,
         sampleCondition,
@@ -200,6 +205,7 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
         analysisId: isEditMode && analysisId ? analysisId : draftAnalysisIdRef.current,
         analysis: analysisInput,
         plan,
+        updatedBy: authorship.updatedBy,
       });
       const createdAnalysis = { id: savedAnalysisId };
       const createdResultsCount = plan.results.length;
@@ -378,6 +384,20 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
               </select>
             </div>
           </div>
+
+          {isEditMode && (
+            <div className="form-group">
+              <p>Отбор: {existingAnalysis?.sampledBy || '—'}. Анализ: {existingAnalysis?.analyzedBy || '—'}.</p>
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={changeAuthors}
+                  onChange={(e) => setChangeAuthors(e.target.checked)}
+                />
+                Записать меня ответственным за эту пробу
+              </label>
+            </div>
+          )}
         </div>
 
         {/* Внешняя лаборатория */}
