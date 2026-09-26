@@ -178,15 +178,27 @@ self.addEventListener('notificationclick', (event) => {
 
   const payload = event.notification.data || {};
   const action = event.action;
-
-  // Клик по кнопке "Открыть счёт" или клик по уведомлению о новом счёте
-  if (action === 'open_invoice' || (payload.type === 'new_invoice' && payload.period)) {
-    const period = payload.period;
-    // Открываем страницу воды с параметром для подсветки нужного счёта
-    event.waitUntil(clients.openWindow(`/water?invoice=${period}`));
-  } else {
-    event.waitUntil(clients.openWindow('/water'));
+  const openInvoice = action === 'open_invoice' || payload.type === 'new_invoice';
+  const invoiceId = typeof payload.invoice_id === 'string' ? payload.invoice_id.trim() : '';
+  const period = typeof payload.period === 'string' ? payload.period.trim() : '';
+  const account = typeof payload.account_number === 'string' ? payload.account_number.trim() : '';
+  let path = '/water';
+  if (openInvoice && invoiceId) {
+    path = `/water?invoice=${encodeURIComponent(invoiceId)}`;
+  } else if (openInvoice && period && account) {
+    path = `/water?invoice=${encodeURIComponent(period)}&account=${encodeURIComponent(account)}`;
   }
+
+  event.waitUntil((async () => {
+    const openClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const existing = openClients.find((client) => client.url.startsWith(self.location.origin));
+    if (existing) {
+      existing.postMessage({ type: 'OPEN_PATH', path });
+      if ('focus' in existing) await existing.focus();
+      return;
+    }
+    await self.clients.openWindow(path);
+  })());
 });
 
 // Обработка сообщений от клиента
