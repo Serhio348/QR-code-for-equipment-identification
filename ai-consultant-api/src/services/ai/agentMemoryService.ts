@@ -13,6 +13,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { config } from '../../config/env.js';
+import { tariffMemoryKey } from '../water/invoiceComparison.js';
 
 const supabase = createClient(config.supabaseUrl, config.supabaseServiceKey);
 
@@ -359,17 +360,27 @@ export async function updateTariffFromInvoice(parsed: {
     account_number?: string;
 }): Promise<void> {
     const { period, tariff_per_m3, sewage_tariff_per_m3, account_number } = parsed;
+    if (!account_number?.trim()) return;
+    const account = account_number.trim();
     const current = await loadFacts('tariff');
-    const waterFact = current.find((f) => f.key === 'tariff_water');
-    if (waterFact?.context) {
-        const match = waterFact.context.match(/из счёта (\d{4}-\d{2})/);
-        if (match && match[1] > period) return;
-    }
-    const ctx = `из счёта ${period}${account_number ? `, сч. ${account_number}` : ''}`;
+    const ctx = `из счёта ${period}, сч. ${account}`;
     if (tariff_per_m3 != null) {
-        await saveSharedFact('tariff', 'tariff_water', `${tariff_per_m3} BYN/м³`, ctx);
+        const waterKey = tariffMemoryKey('water', account);
+        const waterFact = current.find((fact) => fact.key === waterKey);
+        if (!storedPeriodIsNewer(waterFact?.context, period)) {
+            await saveSharedFact('tariff', waterKey, `${tariff_per_m3} BYN/м³`, ctx);
+        }
     }
     if (sewage_tariff_per_m3 != null) {
-        await saveSharedFact('tariff', 'tariff_sewage', `${sewage_tariff_per_m3} BYN/м³`, ctx);
+        const sewageKey = tariffMemoryKey('sewage', account);
+        const sewageFact = current.find((fact) => fact.key === sewageKey);
+        if (!storedPeriodIsNewer(sewageFact?.context, period)) {
+            await saveSharedFact('tariff', sewageKey, `${sewage_tariff_per_m3} BYN/м³`, ctx);
+        }
     }
+}
+
+function storedPeriodIsNewer(context: string | undefined, period: string): boolean {
+    const match = context?.match(/из счёта (\d{4}-\d{2})/);
+    return Boolean(match && match[1] > period);
 }

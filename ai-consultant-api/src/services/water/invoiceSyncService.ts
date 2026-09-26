@@ -118,7 +118,7 @@ export async function syncInvoices(forceAll = false): Promise<SyncResult> {
         console.log(`[invoiceSync] Already in DB: ${existingKeys.size} records`);
     }
 
-    let latestSaved: Awaited<ReturnType<typeof parseInvoiceText>> | null = null;
+    let savedParsed: Awaited<ReturnType<typeof parseInvoiceText>>[] = [];
     const savedNotices: InvoiceNotice[] = [];
 
     for (const inv of pdfInvoices) {
@@ -195,10 +195,10 @@ export async function syncInvoices(forceAll = false): Promise<SyncResult> {
             if (dbError) throw new Error(`DB error: ${dbError.message}`);
             if (!savedRow?.id || !savedRow.period) throw new Error('DB error: saved invoice has no id');
             savedNotices.push(invoiceNoticeFromRow(savedRow));
+            savedParsed.push(parsed);
 
             result.saved++;
             existingKeys.add(key);
-            if (!latestSaved || parsed.period > latestSaved.period) latestSaved = parsed;
             result.details.push({
                 fileName,
                 period: parsed.period,
@@ -215,11 +215,11 @@ export async function syncInvoices(forceAll = false): Promise<SyncResult> {
         }
     }
 
-    await checkAndNotify(savedNotices, latestSaved).catch((err) => {
+    await checkAndNotify(savedNotices, savedParsed).catch((err) => {
         console.warn('[invoiceSync] checkAndNotify failed:', err);
     });
-    if (latestSaved) {
-        await updateTariffFromInvoice(latestSaved).catch((err) => {
+    for (const parsed of savedParsed) {
+        await updateTariffFromInvoice(parsed).catch((err) => {
             console.warn('[invoiceSync] updateTariffFromInvoice failed:', err);
         });
     }
