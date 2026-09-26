@@ -4,7 +4,7 @@
  * SSE-эндпоинт для стриминга ответов AI-агента.
  */
 import { Router, Response } from 'express';
-import { ProviderFactory, type ChatMessage, type ToolDefinition, type EquipmentContext, type WaterDashboardContext } from '../../services/ai/index.js';
+import { type ChatMessage, type ToolDefinition, type EquipmentContext, type WaterDashboardContext } from '../../services/ai/index.js';
 import { tools } from '../../tools/index.js';
 import { authMiddleware, AuthenticatedRequest } from '../../middleware/auth.js';
 import { getOrCreateSession, saveMessages, updateSessionTitle, loadRecentHistory } from '../../services/ai/chatMemoryService.js';
@@ -19,6 +19,7 @@ import { filterToolsByAccess, buildAppAccessPrompt } from '../../services/ai/too
 import { runWithToolContext } from '../../services/ai/toolContext.js';
 import rateLimit from 'express-rate-limit';
 import { config } from '../../config/env.js';
+import { createFallbackProviders, runWithProviderFallback } from '../../services/ai/providerFallback.js';
 
 const router = Router();
 
@@ -82,7 +83,7 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
         // Если выбран DeepSeek — не переключаемся на Claude при фото:
         // вложения сериализуются как Base64 и DeepSeek сможет загрузить их через tools.
         const preferredProvider = hasImages && config.aiProvider !== 'deepseek' ? 'claude' : undefined;
-        const provider = await ProviderFactory.create(preferredProvider);
+        const providers = createFallbackProviders(preferredProvider);
         const appAccess = await loadUserAppAccess(userId);
         const allowedTools = filterToolsByAccess(tools as ToolDefinition[], appAccess);
         const accessPrompt = buildAppAccessPrompt(appAccess);
@@ -104,19 +105,31 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
             writeEvent(event);
         };
 
-        await runWithToolContext(
-            { userId, equipmentId: equipmentContext?.id, appAccess },
-            () => provider.streamChat(
-                messagesWithHistory,
-                allowedTools,
-                userId,
-                onEvent,
-                equipmentContext,
-                waterContext,
-                promptContext ? { factsPrompt: promptContext } : undefined,
-                abort.signal,
-            ),
-        );
+        await runWithProviderFallback(providers, (provider, markOutputStarted) => (
+            runWithToolContext(
+                {
+                    userId,
+                    equipmentId: equipmentContext?.id,
+                    appAccess,
+                    lockProviderFallback: markOutputStarted,
+                },
+                () => provider.streamChat(
+                    messagesWithHistory,
+                    allowedTools,
+                    userId,
+                    (event) => {
+                        if (event.type === 'text_delta' || event.type === 'tool_call') {
+                            markOutputStarted();
+                        }
+                        onEvent(event);
+                    },
+                    equipmentContext,
+                    waterContext,
+                    promptContext ? { factsPrompt: promptContext } : undefined,
+                    abort.signal,
+                ),
+            )
+        ));
 
         const lastUserMessage = messages[messages.length - 1];
         const sessionId = await getOrCreateSession(userId, equipmentContext?.id);

@@ -4,7 +4,7 @@
  * Маршрут (route) для чат-эндпоинта AI-консультанта.
  */
 import { Router, Response } from 'express';
-import { ProviderFactory, type ChatMessage, type ToolDefinition, type EquipmentContext, type WaterDashboardContext } from '../../services/ai/index.js';
+import { type ChatMessage, type ToolDefinition, type EquipmentContext, type WaterDashboardContext } from '../../services/ai/index.js';
 import { tools } from '../../tools/index.js';
 import { authMiddleware, AuthenticatedRequest } from '../../middleware/auth.js';
 import rateLimit from 'express-rate-limit';
@@ -22,6 +22,8 @@ import { filterToolsByAccess, buildAppAccessPrompt } from '../../services/ai/too
 import { runWithToolContext } from '../../services/ai/toolContext.js';
 import { mergeConversation, type ConversationMode } from '../../services/ai/conversationHistory.js';
 import { validateChatMessages } from './chatRequestValidation.js';
+import { config } from '../../config/env.js';
+import { createFallbackProviders, runWithProviderFallback } from '../../services/ai/providerFallback.js';
 
 const router = Router();
 
@@ -66,7 +68,7 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
         // DeepSeek не анализирует изображения, но мы сериализуем вложения как Base64 в тексте,
         // чтобы он мог загрузить их через tools.
         const preferredProvider = hasImages && config.aiProvider !== 'deepseek' ? 'claude' : undefined;
-        const provider = await ProviderFactory.create(preferredProvider);
+        const providers = createFallbackProviders(preferredProvider);
         const appAccess = await loadUserAppAccess(userId);
         const allowedTools = filterToolsByAccess(tools as ToolDefinition[], appAccess);
         const accessPrompt = buildAppAccessPrompt(appAccess);
@@ -79,17 +81,24 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
             .filter(Boolean)
             .join('\n');
 
-        const response = await runWithToolContext(
-            { userId, equipmentId: equipmentContext?.id, appAccess },
-            () => provider.chat(
-                messagesWithHistory,
-                allowedTools,
-                userId,
-                equipmentContext,
-                waterContext,
-                promptContext ? { factsPrompt: promptContext } : undefined
-            ),
-        );
+        const response = await runWithProviderFallback(providers, (provider, markOutputStarted) => (
+            runWithToolContext(
+                {
+                    userId,
+                    equipmentId: equipmentContext?.id,
+                    appAccess,
+                    lockProviderFallback: markOutputStarted,
+                },
+                () => provider.chat(
+                    messagesWithHistory,
+                    allowedTools,
+                    userId,
+                    equipmentContext,
+                    waterContext,
+                    promptContext ? { factsPrompt: promptContext } : undefined
+                ),
+            )
+        ));
 
         const lastUserMessage = messages[messages.length - 1];
         const sessionId = await getOrCreateSession(userId, equipmentContext?.id);

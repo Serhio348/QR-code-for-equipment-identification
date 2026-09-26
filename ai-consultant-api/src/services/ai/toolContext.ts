@@ -6,6 +6,7 @@
  * Структура / что умеет:
  * 1. runWithToolContext — привязывает userId/equipmentId/appAccess к запросу
  * 2. getToolContext — читает контекст из текущего async-стека
+ * 3. lockProviderFallback — вложенный вызов сохраняет запрет смены провайдера
  */
 
 import { AsyncLocalStorage } from 'node:async_hooks';
@@ -16,6 +17,8 @@ export interface ToolContext {
   equipmentId?: string;
   /** SEC-05: права на разделы; нужны для фильтрации tools. */
   appAccess?: UserAppAccess;
+  /** После старта инструмента запасной провайдер уже нельзя вызывать. */
+  lockProviderFallback?: () => void;
 }
 
 const storage = new AsyncLocalStorage<ToolContext>();
@@ -31,6 +34,7 @@ export function runWithToolContext<T>(
   const merged: ToolContext = {
     ...context,
     appAccess: context.appAccess ?? parent?.appAccess,
+    lockProviderFallback: context.lockProviderFallback ?? parent?.lockProviderFallback,
   };
   return storage.run(merged, fn);
 }

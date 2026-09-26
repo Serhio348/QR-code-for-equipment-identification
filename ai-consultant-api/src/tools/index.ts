@@ -305,6 +305,7 @@ export async function executeToolCall(
     console.log(`[${requestId}] Tool ${name} вызван`);
 
     try {
+        getToolContext()?.lockProviderFallback?.();
         const result = await executor(name, input);
         const duration = Date.now() - startTime;
         console.log(`[${requestId}] Tool ${name} завершён за ${duration}мс`);
