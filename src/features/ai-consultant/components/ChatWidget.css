@@ -641,6 +641,13 @@
   background: rgba(220, 38, 38, 0.9);
 }
 
+.ai-chat-input__photo-error {
+  margin: 0;
+  padding: 0 8px;
+  color: #b91c1c;
+  font-size: 13px;
+}
+
 /* Мобильная адаптация */
 @media (max-width: 480px) {
   .ai-chat-widget {

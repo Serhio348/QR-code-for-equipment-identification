@@ -44,6 +44,7 @@ import {
   WaterDashboardContext,
 } from '../services/consultantApi';
 import type { ChatInputMessage } from '../components/ChatInput';
+import { historyForApi } from '../services/chatHistoryPayload';
 import { logUserActivity } from '../../user-activity/services/activityLogsApi';
 
 // ============================================
@@ -214,9 +215,10 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
   // Пользователь видит все сообщения, но на сервер уходят только последние N.
   // Экономит токены Claude API
   const trimForApi = useCallback((msgs: ChatMessageWithMeta[]): ChatMessage[] => {
-    const trimmed = msgs.slice(-MAX_HISTORY_FOR_API);
-    // Убираем метаданные (id, timestamp) — серверу они не нужны
-    return trimmed.map(({ role, content }) => ({ role, content }));
+    return historyForApi(
+      msgs.map(({ role, content }) => ({ role, content })),
+      MAX_HISTORY_FOR_API,
+    );
   }, []);
 
   /**

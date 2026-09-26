@@ -1,4 +1,5 @@
 import React, { useRef } from 'react';
+import { planPhotoSelection } from '../services/chatPhotoBudget';
 import './ChatWidget.css';
 
 export interface PhotoData {
@@ -16,40 +17,31 @@ export interface PhotoData {
 
 interface PhotoButtonProps {
   disabled?: boolean;
+  /** Уже выбранные фото, в байтах Base64. */
+  encodedBytesUsed?: number;
   onPhotosSelected?: (photos: PhotoData[]) => void;
+  onPhotoErrors?: (errors: string[]) => void;
 }
 
-export const PhotoButton: React.FC<PhotoButtonProps> = ({ disabled, onPhotosSelected }) => {
+export const PhotoButton: React.FC<PhotoButtonProps> = ({
+  disabled,
+  encodedBytesUsed = 0,
+  onPhotosSelected,
+  onPhotoErrors,
+}) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   /**
    * Конвертирует File в Base64 и создаёт объект PhotoData.
    */
   const fileToPhotoData = async (file: File): Promise<PhotoData | null> => {
-    // Проверка типа файла
-    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    if (!validTypes.includes(file.type)) {
-      console.warn(`Неподдерживаемый тип файла: ${file.type}`);
-      return null;
-    }
-
-    // Проверка размера (макс 10MB)
-    const maxSize = 10 * 1024 * 1024;
-    if (file.size > maxSize) {
-      console.warn(`Файл слишком большой: ${file.size} байт (макс 10MB)`);
-      return null;
-    }
-
     return new Promise((resolve) => {
       const reader = new FileReader();
 
       reader.onload = (e) => {
         const dataUrl = e.target?.result as string;
-
-        // Извлекаем Base64 часть (без префикса "data:image/jpeg;base64,")
         const base64Match = dataUrl.match(/^data:image\/[a-z]+;base64,(.+)$/);
         if (!base64Match) {
-          console.warn('Не удалось извлечь Base64 из Data URL');
           resolve(null);
           return;
         }
@@ -64,7 +56,6 @@ export const PhotoButton: React.FC<PhotoButtonProps> = ({ disabled, onPhotosSele
       };
 
       reader.onerror = () => {
-        console.error('Ошибка чтения файла');
         resolve(null);
       };
 
@@ -72,25 +63,27 @@ export const PhotoButton: React.FC<PhotoButtonProps> = ({ disabled, onPhotosSele
     });
   };
 
-  /**
-   * Обработчик выбора файлов.
-   */
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
+    const list = Array.from(files);
+    const plan = planPhotoSelection(encodedBytesUsed, list.map(file => ({
+      name: file.name,
+      size: file.size,
+      type: file.type,
+    })));
+    const accepted = await Promise.all(plan.accepted.map(index => fileToPhotoData(list[index])));
+    const validPhotos = accepted.filter((photo): photo is PhotoData => photo !== null);
+    const readFailures = plan.accepted.length - validPhotos.length;
+    const errors = readFailures > 0
+      ? [...plan.errors, 'Не удалось прочитать одно из фото']
+      : plan.errors;
 
-    // Конвертируем все файлы в PhotoData
-    const photosPromises = Array.from(files).map(file => fileToPhotoData(file));
-    const photosResults = await Promise.all(photosPromises);
-
-    // Фильтруем null значения (невалидные файлы)
-    const validPhotos = photosResults.filter((photo): photo is PhotoData => photo !== null);
-
+    onPhotoErrors?.(errors);
     if (validPhotos.length > 0 && onPhotosSelected) {
       onPhotosSelected(validPhotos);
     }
 
-    // Сбрасываем input чтобы можно было выбрать те же файлы снова
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }

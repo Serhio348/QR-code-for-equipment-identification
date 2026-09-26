@@ -29,6 +29,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 }) => {
   const [text, setText] = useState('');
   const [selectedPhotos, setSelectedPhotos] = useState<PhotoData[]>([]);
+  const [photoError, setPhotoError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Обновляем текст при получении голосового ввода
@@ -58,6 +59,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       });
       setText('');
       setSelectedPhotos([]);
+      setPhotoError(null);
     }
   };
 
@@ -72,6 +74,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     setSelectedPhotos(prev => [...prev, ...photos]);
   };
 
+  const handlePhotoErrors = (errors: string[]) => {
+    setPhotoError(errors.length > 0 ? errors.join(' ') : null);
+  };
+
+  const encodedBytesUsed = selectedPhotos.reduce((sum, photo) => sum + photo.data.length, 0);
+
   const handleRemovePhoto = (index: number) => {
     setSelectedPhotos(prev => prev.filter((_, i) => i !== index));
   };
@@ -83,6 +91,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   return (
     <form className="ai-chat-input" onSubmit={handleSubmit}>
+      {photoError && (
+        <p className="ai-chat-input__photo-error" role="alert">{photoError}</p>
+      )}
+
       {/* Превью выбранных фото */}
       {selectedPhotos.length > 0 && (
         <div className="ai-chat-input__photo-preview">
@@ -114,7 +126,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       />
 
       <div className="ai-chat-input__actions">
-        <PhotoButton disabled={isLoading} onPhotosSelected={handlePhotosSelected} />
+        <PhotoButton
+          disabled={isLoading}
+          encodedBytesUsed={encodedBytesUsed}
+          onPhotosSelected={handlePhotosSelected}
+          onPhotoErrors={handlePhotoErrors}
+        />
         <VoiceButton disabled={isLoading} onTranscript={handleVoiceTranscript} />
         {onQRScanClick && <QRButton disabled={isLoading} onClick={onQRScanClick} />}
 
