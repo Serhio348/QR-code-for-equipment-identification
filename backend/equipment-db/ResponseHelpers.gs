@@ -49,6 +49,9 @@ function createJsonResponse(data) {
     };
     
     const jsonString = JSON.stringify(jsonData);
+    if (typeof rememberGasOperationSuccess === 'function') {
+      rememberGasOperationSuccess(data);
+    }
     Logger.log('[createJsonResponse] JSON строка создана, длина: ' + jsonString.length);
     Logger.log('[createJsonResponse] Первые 500 символов: ' + jsonString.substring(0, 500));
     

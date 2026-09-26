@@ -181,6 +181,7 @@ function doGet(e) {
     
     // Получаем параметр action из URL
     const action = e.parameter.action;
+    beginGasOperation('');
     
     Logger.log('📥 GET запрос получен');
     Logger.log('  - e: ' + (e ? 'есть' : 'НЕТ'));
@@ -190,6 +191,9 @@ function doGet(e) {
     
     // Выполняем действие в зависимости от параметра
     switch(action) {
+      case 'operationResult':
+        return readGasOperationResult(e.parameter.operationId);
+
       case 'getAll':
         // Получить все оборудование из таблицы
         return createJsonResponse(getAllEquipment());
@@ -605,6 +609,11 @@ function doPost(e) {
     var mutationAuthError = assertMutationApiSecret(action, data);
     if (mutationAuthError) {
       return mutationAuthError;
+    }
+
+    var replay = beginGasOperation(data.operationId);
+    if (replay) {
+      return replay;
     }
     
     // Выполняем действие в зависимости от параметра
