@@ -1,7 +1,9 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Equipment } from '../types/equipment';
 import MaintenanceLog from './MaintenanceLog';
 import { logUserActivity } from '@/features/user-activity/services/activityLogsApi';
+import { useDialogA11y } from '@/features/common/hooks/useDialogA11y';
+import { leaveDecision } from '@/features/common/services/leaveDecision';
 import './MaintenanceLogModal.css';
 
 interface MaintenanceLogModalProps {
@@ -19,6 +21,17 @@ const MaintenanceLogModal: React.FC<MaintenanceLogModalProps> = ({
   equipment,
   onClose
 }) => {
+  const [activity, setActivity] = useState({ dirty: false, saving: false });
+  const requestClose = useCallback(() => {
+    const decision = leaveDecision(activity);
+    if (decision === 'block') {
+      window.alert('Дождитесь окончания сохранения.');
+      return;
+    }
+    if (decision === 'confirm' && !window.confirm('Есть несохранённый ввод. Закрыть журнал?')) return;
+    onClose();
+  }, [activity, onClose]);
+  const { dialogRef, titleId } = useDialogA11y(true, requestClose);
   // Логирование открытия журнала обслуживания
   useEffect(() => {
     logUserActivity(
@@ -35,31 +48,28 @@ const MaintenanceLogModal: React.FC<MaintenanceLogModalProps> = ({
     ).catch(() => {});
   }, [equipmentId, equipmentName, maintenanceSheetId]);
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
-
   const stopPropagation = (event: React.MouseEvent<HTMLDivElement>) => {
     event.stopPropagation();
   };
 
   return (
-    <div className="maintenance-modal-overlay" onClick={onClose} role="dialog" aria-modal="true">
+    <div
+      className="maintenance-modal-overlay"
+      onClick={requestClose}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      ref={dialogRef}
+      tabIndex={-1}
+    >
       <div className="maintenance-modal" onClick={stopPropagation}>
         <div className="maintenance-modal__header">
-          <h2>
+          <h2 id={titleId}>
             Журнал обслуживания{equipmentName ? ` — ${equipmentName}` : ''}
           </h2>
           <button
             className="maintenance-modal__close"
-            onClick={onClose}
+            onClick={requestClose}
             aria-label="Закрыть журнал обслуживания"
             type="button"
           >
@@ -71,6 +81,7 @@ const MaintenanceLogModal: React.FC<MaintenanceLogModalProps> = ({
             equipmentId={equipmentId} 
             maintenanceSheetId={maintenanceSheetId}
             equipment={equipment}
+            onActivityChange={setActivity}
           />
         </div>
       </div>
