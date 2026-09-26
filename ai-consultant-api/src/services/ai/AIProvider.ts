@@ -8,6 +8,7 @@ import {
   StreamEvent,
 } from './types.js';
 import { config } from '../../config/env.js';
+import { throwIfAborted } from './abortSignal.js';
 
 /**
  * Базовый интерфейс для всех AI провайдеров.
@@ -55,6 +56,7 @@ export interface AIProvider {
     equipmentContext?: EquipmentContext,
     waterContext?: WaterDashboardContext,
     memoryContext?: MemoryContext,
+    signal?: AbortSignal,
   ): Promise<void>;
 }
 
@@ -100,7 +102,9 @@ export abstract class BaseAIProvider implements AIProvider {
     equipmentContext?: EquipmentContext,
     waterContext?: WaterDashboardContext,
     memoryContext?: MemoryContext,
+    signal?: AbortSignal,
   ): Promise<void> {
+    throwIfAborted(signal);
     const response = await this.chat(messages, tools, userId, equipmentContext, waterContext, memoryContext);
     onEvent({ type: 'text_delta', delta: response.message });
     onEvent({ type: 'done', toolsUsed: response.toolsUsed || [], provider: response.provider });

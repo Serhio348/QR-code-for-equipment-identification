@@ -166,6 +166,10 @@ const createMessage = (
   timestamp: Date.now(),
 });
 
+function isRequestAbort(err: unknown): boolean {
+  return (err instanceof DOMException || err instanceof Error) && err.name === 'AbortError';
+}
+
 // ============================================
 // Хук useChat
 // ============================================
@@ -195,11 +199,17 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
   // Хранит текущий AbortController для отмены запроса при размонтировании
   const abortControllerRef = useRef<AbortController | null>(null);
   const conversationModeRef = useRef<'continue' | 'fresh'>('continue');
+  const sawToolRef = useRef(false);
+  const mountedRef = useRef(true);
+  const suppressAbortNoticeRef = useRef(false);
 
   // Отмена текущего запроса при размонтировании компонента.
   // Предотвращает setState на размонтированном компоненте
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
+      suppressAbortNoticeRef.current = true;
       abortControllerRef.current?.abort();
     };
   }, []);
@@ -251,6 +261,8 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
     setError(null);
     setLastFailed(null);
     setIsLoading(true);
+    sawToolRef.current = false;
+    suppressAbortNoticeRef.current = false;
 
     // Создаём AbortController для этого запроса.
     // Отменяем предыдущий, если он ещё активен
@@ -341,6 +353,7 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
         conversationModeRef.current,
       )) {
         if (event.type === 'tool_call') {
+          sawToolRef.current = true;
           setActiveToolName(event.name);
         } else if (event.type === 'text_delta') {
           setActiveToolName(null);
@@ -388,7 +401,10 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
         }
       );
     } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') {
+      if (isRequestAbort(err)) {
+        if (mountedRef.current && !suppressAbortNoticeRef.current && sawToolRef.current) {
+          setError('Запрос остановлен. Запись, которая уже выполнилась, закрытием чата не отменяется.');
+        }
         return;
       }
 
@@ -396,12 +412,13 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
       const errorMessage = err instanceof Error ? err.message : 'Ошибка отправки';
       console.debug('[Chat] Error:', { duration: `${duration}ms`, error: errorMessage });
 
+      if (!mountedRef.current) return;
       setActiveToolName(null);
       setError(errorMessage);
       setLastFailed({ message: messageForAi, messagesSnapshot: trimForApi(newMessages2) });
       setMessages(messages);
     } finally {
-      setIsLoading(false);
+      if (mountedRef.current) setIsLoading(false);
       abortControllerRef.current = null;
     }
   }, [messages, isLoading, trimForApi, equipmentContext, waterContext]);
@@ -421,6 +438,8 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
 
     setError(null);
     setIsLoading(true);
+    sawToolRef.current = false;
+    suppressAbortNoticeRef.current = false;
 
     // Создаём AbortController для retry запроса
     abortControllerRef.current?.abort();
@@ -452,6 +471,7 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
         conversationModeRef.current,
       )) {
         if (event.type === 'tool_call') {
+          sawToolRef.current = true;
           setActiveToolName(event.name);
         } else if (event.type === 'text_delta') {
           setActiveToolName(null);
@@ -469,13 +489,19 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
 
       console.debug('[Chat] Retry succeeded:', { duration: `${Date.now() - startTime}ms` });
     } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
+      if (isRequestAbort(err)) {
+        if (mountedRef.current && !suppressAbortNoticeRef.current && sawToolRef.current) {
+          setError('Запрос остановлен. Запись, которая уже выполнилась, закрытием чата не отменяется.');
+        }
+        return;
+      }
 
+      if (!mountedRef.current) return;
       setActiveToolName(null);
       setError(err instanceof Error ? err.message : 'Ошибка отправки');
       setMessages(messages);
     } finally {
-      setIsLoading(false);
+      if (mountedRef.current) setIsLoading(false);
       abortControllerRef.current = null;
     }
   }, [lastFailed, messages, isLoading, equipmentContext, waterContext, sendMessage]);
@@ -484,6 +510,7 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
    * Очистить историю чата.
    */
   const clearMessages = useCallback(() => {
+    suppressAbortNoticeRef.current = true;
     abortControllerRef.current?.abort();
     conversationModeRef.current = 'fresh';
     setMessages([]);

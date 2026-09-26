@@ -56,9 +56,15 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
     res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders();
 
+    const abort = new AbortController();
+    let streamSettled = false;
+    res.on('close', () => {
+        if (!streamSettled) abort.abort();
+    });
+
     const userId = req.user?.id || '';
     const writeEvent = (event: StreamEvent): boolean => {
-        if (res.writableEnded) return false;
+        if (abort.signal.aborted || res.writableEnded) return false;
         res.write(`data: ${JSON.stringify(event)}\n\n`);
         return true;
     };
@@ -108,6 +114,7 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
                 equipmentContext,
                 waterContext,
                 promptContext ? { factsPrompt: promptContext } : undefined,
+                abort.signal,
             ),
         );
 
@@ -121,9 +128,11 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
         saveMessages(sessionId, userId, lastUserMessage, fullText, toolsUsedList)
             .catch(err => console.error('[Stream] Ошибка сохранения в память:', err));
     } catch (err) {
+        if (abort.signal.aborted) return;
         const message = err instanceof Error ? err.message : String(err);
         writeEvent({ type: 'error', message });
     } finally {
+        streamSettled = true;
         if (!res.writableEnded) res.end();
     }
 });
