@@ -7,7 +7,8 @@ import { Router, Response } from 'express';
 import { ProviderFactory, type ChatMessage, type ToolDefinition, type EquipmentContext, type WaterDashboardContext } from '../../services/ai/index.js';
 import { tools } from '../../tools/index.js';
 import { authMiddleware, AuthenticatedRequest } from '../../middleware/auth.js';
-import { getOrCreateSession, saveMessages, updateSessionTitle } from '../../services/ai/chatMemoryService.js';
+import { getOrCreateSession, saveMessages, updateSessionTitle, loadRecentHistory } from '../../services/ai/chatMemoryService.js';
+import { mergeConversation, type ConversationMode } from '../../services/ai/conversationHistory.js';
 import { loadFactsForPrompt } from '../../services/ai/agentMemoryService.js';
 import { buildDriveFileContext } from '../../services/ai/driveFileContextService.js';
 import { buildDocumentSessionPrompt } from '../../services/ai/documentSessionService.js';
@@ -37,10 +38,11 @@ interface StreamChatRequestBody {
     messages: ChatMessage[];
     equipmentContext?: EquipmentContext;
     waterContext?: WaterDashboardContext;
+    conversation?: ConversationMode;
 }
 
 router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
-    const { messages, equipmentContext, waterContext } = req.body as StreamChatRequestBody;
+    const { messages, equipmentContext, waterContext, conversation } = req.body as StreamChatRequestBody;
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
         res.status(400).json({ error: 'Messages array is required' });
@@ -68,7 +70,12 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
     const toolsUsedList: string[] = [];
 
     try {
-        const hasImages = messages.some(m => Array.isArray(m.content) && m.content.some(b => (b as any).type === 'image'));
+        const mode: ConversationMode = conversation === 'fresh' ? 'fresh' : 'continue';
+        const backgroundHistory = mode === 'fresh'
+            ? []
+            : await loadRecentHistory(userId, 10).catch(() => [] as ChatMessage[]);
+        const messagesWithHistory = mergeConversation(backgroundHistory, messages, mode);
+        const hasImages = messagesWithHistory.some(m => Array.isArray(m.content) && m.content.some(b => (b as any).type === 'image'));
         // Если выбран DeepSeek — не переключаемся на Claude при фото:
         // вложения сериализуются как Base64 и DeepSeek сможет загрузить их через tools.
         const preferredProvider = hasImages && config.aiProvider !== 'deepseek' ? 'claude' : undefined;
@@ -97,7 +104,7 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
         await runWithToolContext(
             { userId, equipmentId: equipmentContext?.id, appAccess },
             () => provider.streamChat(
-                messages,
+                messagesWithHistory,
                 allowedTools,
                 userId,
                 onEvent,

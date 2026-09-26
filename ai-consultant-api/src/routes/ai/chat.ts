@@ -20,7 +20,7 @@ import { buildDocumentSessionPrompt } from '../../services/ai/documentSessionSer
 import { loadUserAppAccess } from '../../services/ai/userAppAccessService.js';
 import { filterToolsByAccess, buildAppAccessPrompt } from '../../services/ai/toolAccessPolicy.js';
 import { runWithToolContext } from '../../services/ai/toolContext.js';
-import { config } from '../../config/env.js';
+import { mergeConversation, type ConversationMode } from '../../services/ai/conversationHistory.js';
 
 const router = Router();
 const MAX_MESSAGES = 50;
@@ -42,11 +42,12 @@ interface ChatRequestBody {
     messages: ChatMessage[];
     equipmentContext?: EquipmentContext;
     waterContext?: WaterDashboardContext;
+    conversation?: ConversationMode;
 }
 
 router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const { messages, equipmentContext, waterContext } = req.body as ChatRequestBody;
+        const { messages, equipmentContext, waterContext, conversation } = req.body as ChatRequestBody;
 
         if (!messages || !Array.isArray(messages) || messages.length === 0) {
             res.status(400).json({ error: 'Messages array is required' });
@@ -77,10 +78,11 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
         }
 
         const userId = req.user?.id || '';
-        const backgroundHistory = await loadRecentHistory(userId, 10).catch(() => [] as ChatMessage[]);
-        const messagesWithHistory: ChatMessage[] = backgroundHistory.length > 0
-            ? [...backgroundHistory, ...messages]
-            : messages;
+        const mode: ConversationMode = conversation === 'fresh' ? 'fresh' : 'continue';
+        const backgroundHistory = mode === 'fresh'
+            ? []
+            : await loadRecentHistory(userId, 10).catch(() => [] as ChatMessage[]);
+        const messagesWithHistory = mergeConversation(backgroundHistory, messages, mode);
 
         const hasImages = messagesWithHistory.some(m => Array.isArray(m.content) && m.content.some(b => (b as any).type === 'image'));
         // Если пользователь работает только с DeepSeek — НЕ форсим Claude на фото.
@@ -140,10 +142,12 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
     }
 });
 
-router.get('/history', authMiddleware, async (_req: AuthenticatedRequest, res: Response) => {
+router.get('/history', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.user?.id || '';
+    const messages = userId ? await loadRecentHistory(userId, 20).catch(() => []) : [];
     res.json({
         success: true,
-        data: { messages: [] },
+        data: { messages },
     });
 });
 

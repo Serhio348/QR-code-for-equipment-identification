@@ -38,6 +38,7 @@ import {
   ChatMessage,
   streamChatMessage,
   uploadPhotoToDriveFolder,
+  fetchChatHistory,
   TextContentBlock,
   ImageContentBlock,
   EquipmentContext,
@@ -193,12 +194,28 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
   // useRef вместо useState — не нужен ре-рендер при смене контроллера.
   // Хранит текущий AbortController для отмены запроса при размонтировании
   const abortControllerRef = useRef<AbortController | null>(null);
+  const conversationModeRef = useRef<'continue' | 'fresh'>('continue');
 
   // Отмена текущего запроса при размонтировании компонента.
   // Предотвращает setState на размонтированном компоненте
   useEffect(() => {
     return () => {
       abortControllerRef.current?.abort();
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchChatHistory(20).then(history => {
+      if (cancelled || conversationModeRef.current === 'fresh' || history.length === 0) return;
+      setMessages(prev => (
+        prev.length > 0
+          ? prev
+          : history.map(message => createMessage(message.role, message.content))
+      ));
+    }).catch(() => {});
+    return () => {
+      cancelled = true;
     };
   }, []);
 
@@ -321,6 +338,7 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
         controller.signal,
         equipmentContext || undefined,
         waterContext || undefined,
+        conversationModeRef.current,
       )) {
         if (event.type === 'tool_call') {
           setActiveToolName(event.name);
@@ -431,6 +449,7 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
         controller.signal,
         equipmentContext || undefined,
         waterContext || undefined,
+        conversationModeRef.current,
       )) {
         if (event.type === 'tool_call') {
           setActiveToolName(event.name);
@@ -466,6 +485,7 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
    */
   const clearMessages = useCallback(() => {
     abortControllerRef.current?.abort();
+    conversationModeRef.current = 'fresh';
     setMessages([]);
     setError(null);
     setLastFailed(null);

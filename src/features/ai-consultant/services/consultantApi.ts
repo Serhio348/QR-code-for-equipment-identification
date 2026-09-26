@@ -145,6 +145,7 @@ export async function* streamChatMessage(
   signal?: AbortSignal,
   equipmentContext?: EquipmentContext,
   waterContext?: WaterDashboardContext,
+  conversation: 'continue' | 'fresh' = 'continue',
 ): AsyncGenerator<StreamEvent> {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) throw new Error('Не авторизован');
@@ -155,7 +156,7 @@ export async function* streamChatMessage(
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${session.access_token}`,
     },
-    body: JSON.stringify({ messages, equipmentContext, waterContext }),
+    body: JSON.stringify({ messages, equipmentContext, waterContext, conversation }),
     signal,
   });
 
