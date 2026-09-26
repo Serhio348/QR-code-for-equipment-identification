@@ -19,6 +19,7 @@ import { useCurrentUser } from '../../auth/hooks/useCurrentUser';
 import { checkResultCompliance, uploadAnalysisPDF, deleteAnalysisPDF } from '../services';
 import { planAnalysisResults } from '../services/analysisSavePlan';
 import { authorshipForSave } from '../services/analysisAuthorship';
+import { equipmentIdForSamplingPoint } from '../services/samplingPointEquipment';
 import { saveAnalysisBundle } from '../services/saveAnalysisBundle';
 import { ROUTES } from '@/shared/utils/routes';
 import { logUserActivity } from '@/features/user-activity/services/activityLogsApi';
@@ -319,11 +320,10 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
             <select
               value={samplingPointId}
               onChange={(e) => {
-                setSamplingPointId(e.target.value);
-                const point = samplingPoints.find((p) => p.id === e.target.value);
-                if (point?.equipmentId) {
-                  setEquipmentId(point.equipmentId);
-                }
+                const nextPointId = e.target.value;
+                setSamplingPointId(nextPointId);
+                const point = samplingPoints.find((p) => p.id === nextPointId);
+                setEquipmentId(equipmentIdForSamplingPoint(point));
               }}
               required
             >
