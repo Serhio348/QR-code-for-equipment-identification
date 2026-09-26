@@ -3,13 +3,11 @@
  * Поддерживает режимы создания и редактирования
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import type {
   WaterAnalysisInput,
-  AnalysisResultInput,
-  AnalysisResult,
   WaterQualityParameter,
   AnalysisStatus,
   SampleCondition,
@@ -18,7 +16,9 @@ import { PARAMETER_METADATA, getAllParameters } from '../types/waterQuality';
 import { useWaterAnalysisManagement, useWaterAnalysis } from '../hooks/useWaterQualityMeasurements';
 import { useSamplingPoints } from '../hooks/useSamplingPoints';
 import { useCurrentUser } from '../../auth/hooks/useCurrentUser';
-import { createAnalysisResults, updateAnalysisResult, deleteAnalysisResult, checkResultCompliance, uploadAnalysisPDF, deleteAnalysisPDF } from '../services';
+import { checkResultCompliance, uploadAnalysisPDF, deleteAnalysisPDF } from '../services';
+import { planAnalysisResults } from '../services/analysisSavePlan';
+import { saveAnalysisBundle } from '../services/saveAnalysisBundle';
 import { ROUTES } from '@/shared/utils/routes';
 import { logUserActivity } from '@/features/user-activity/services/activityLogsApi';
 import './WaterAnalysisForm.css';
@@ -32,7 +32,8 @@ interface WaterAnalysisFormProps {
 const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSave, onCancel }) => {
   const navigate = useNavigate();
   const isEditMode = !!analysisId;
-  const { create, update, error } = useWaterAnalysisManagement();
+  const draftAnalysisIdRef = useRef(analysisId ?? crypto.randomUUID());
+  const { update, error } = useWaterAnalysisManagement();
   const { samplingPoints, loading: loadingPoints } = useSamplingPoints();
   const currentUser = useCurrentUser();
 
@@ -181,98 +182,40 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
         externalLabName: externalLabName.trim() || undefined,
       };
 
-      // Создание или обновление анализа
-      let createdAnalysis;
-      if (isEditMode && analysisId) {
-        createdAnalysis = await update(analysisId, analysisInput);
-      } else {
-        createdAnalysis = await create(analysisInput);
-      }
-
-      if (!createdAnalysis) {
-        throw new Error('Не удалось сохранить анализ');
-      }
-
-      // Подготовка и сохранение результатов измерений
       const allParams = getAllParameters();
-      const existingResultsMap = new Map<string, AnalysisResult>();
-      
-      if (isEditMode && existingAnalysis?.results) {
-        // Создаем карту существующих результатов для быстрого поиска
-        existingAnalysis.results.forEach((result) => {
-          existingResultsMap.set(result.parameterName, result);
-        });
-      }
+      const plan = planAnalysisResults(
+        allParams.map(param => ({
+          parameterName: param,
+          parameterLabel: PARAMETER_METADATA[param].label,
+          valueText: results[param].value,
+          unit: PARAMETER_METADATA[param].unit,
+          method: results[param].method,
+        })),
+        existingAnalysis?.results?.map(result => ({
+          id: result.id,
+          parameterName: result.parameterName,
+        })) ?? [],
+      );
+      const savedAnalysisId = await saveAnalysisBundle({
+        analysisId: isEditMode && analysisId ? analysisId : draftAnalysisIdRef.current,
+        analysis: analysisInput,
+        plan,
+      });
+      const createdAnalysis = { id: savedAnalysisId };
+      const createdResultsCount = plan.results.length;
 
-      // Обрабатываем каждый параметр и проверяем соответствие нормам
-      const savedResultIds: string[] = [];
-      let createdResultsCount = 0;
-      for (const param of allParams) {
-        const resultValue = results[param].value.trim();
-        const existingResult = existingResultsMap.get(param);
-
-        // Если в режиме редактирования значение очищено — удаляем результат
-        if (!resultValue) {
-          if (isEditMode && existingResult) {
-            try {
-              await deleteAnalysisResult(existingResult.id);
-            } catch (deleteError: any) {
-              console.warn('[WaterAnalysisForm] Не удалось удалить результат:', deleteError);
-            }
+      for (const result of plan.results) {
+        const saved = existingAnalysis?.results?.find(item => item.parameterName === result.parameterName);
+        if (!saved) continue;
+        try {
+          const compliance = await checkResultCompliance(saved.id);
+          if (compliance.status === 'exceeded') {
+            toast.warning(`Превышение норматива: ${result.parameterLabel} (${result.value} ${result.unit})`);
+          } else if (compliance.status === 'warning') {
+            toast.info(`Предупреждение: ${result.parameterLabel} близко к пределу нормы`);
           }
-          continue;
-        }
-
-        const numValue = parseFloat(resultValue);
-        if (isNaN(numValue)) {
-          continue;
-        }
-
-        const metadata = PARAMETER_METADATA[param];
-        let savedResultId: string;
-        if (isEditMode && existingResult) {
-          // Обновляем существующий результат
-          const updatedResult = await updateAnalysisResult(existingResult.id, {
-            parameterLabel: metadata.label,
-            value: numValue,
-            unit: metadata.unit,
-            method: results[param].method?.trim() || undefined,
-          });
-          savedResultId = updatedResult.id;
-        } else {
-          // Создаем новый результат
-          const newResult: AnalysisResultInput = {
-            analysisId: createdAnalysis.id,
-            parameterName: param,
-            parameterLabel: metadata.label,
-            value: numValue,
-            unit: metadata.unit,
-            method: results[param].method?.trim() || undefined,
-          };
-          const createdResults = await createAnalysisResults([newResult]);
-          savedResultId = createdResults[0]?.id;
-          if (savedResultId) createdResultsCount += 1;
-        }
-
-        if (savedResultId) {
-          savedResultIds.push(savedResultId);
-
-          // Проверяем соответствие нормам (триггеры БД тоже это делают, но для немедленной обратной связи)
-          try {
-            const compliance = await checkResultCompliance(savedResultId);
-            if (compliance.status === 'exceeded') {
-              toast.warning(
-                `Превышение норматива: ${metadata.label} (${numValue} ${metadata.unit})`
-              );
-            } else if (compliance.status === 'warning') {
-              toast.info(
-                `Предупреждение: ${metadata.label} близко к пределу нормы`
-              );
-            }
-          } catch (complianceError: any) {
-            // Не критично, если проверка не удалась - триггеры БД все равно проверят
-            console.warn('[WaterAnalysisForm] Предупреждение при проверке соответствия:', complianceError);
-          }
+        } catch (complianceError: unknown) {
+          console.warn('[WaterAnalysisForm] Предупреждение при проверке соответствия:', complianceError);
         }
       }
 
