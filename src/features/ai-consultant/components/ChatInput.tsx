@@ -10,6 +10,11 @@ export type { PhotoData };
 export interface ChatInputMessage {
   text: string;
   photos?: PhotoData[];
+  /** Пользователь явно включил запись выбранных фото в папку. */
+  uploadConfirmed?: boolean;
+  folderUrl?: string;
+  /** Ключи fileName:size уже записанных файлов. Повтор их не отправляет. */
+  alreadyUploaded?: string[];
 }
 
 interface ChatInputProps {
@@ -18,6 +23,7 @@ interface ChatInputProps {
   voiceTranscript?: string;
   onVoiceTranscriptUsed?: () => void;
   onQRScanClick?: () => void;
+  folderUrl?: string | null;
 }
 
 export const ChatInput: React.FC<ChatInputProps> = ({
@@ -26,9 +32,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   voiceTranscript,
   onVoiceTranscriptUsed,
   onQRScanClick,
+  folderUrl,
 }) => {
   const [text, setText] = useState('');
   const [selectedPhotos, setSelectedPhotos] = useState<PhotoData[]>([]);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [uploadConfirmed, setUploadConfirmed] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Обновляем текст при получении голосового ввода
@@ -55,9 +64,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       onSend({
         text: text.trim(),
         photos: selectedPhotos.length > 0 ? selectedPhotos : undefined,
+        uploadConfirmed: uploadConfirmed && selectedPhotos.length > 0,
+        folderUrl: folderUrl?.trim() || undefined,
       });
       setText('');
       setSelectedPhotos([]);
+      setPhotoError(null);
+      setUploadConfirmed(false);
     }
   };
 
@@ -72,6 +85,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     setSelectedPhotos(prev => [...prev, ...photos]);
   };
 
+  const handlePhotoErrors = (errors: string[]) => {
+    setPhotoError(errors.length > 0 ? errors.join(' ') : null);
+  };
+
+  const encodedBytesUsed = selectedPhotos.reduce((sum, photo) => sum + photo.data.length, 0);
+
   const handleRemovePhoto = (index: number) => {
     setSelectedPhotos(prev => prev.filter((_, i) => i !== index));
   };
@@ -83,6 +102,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   return (
     <form className="ai-chat-input" onSubmit={handleSubmit}>
+      {photoError && (
+        <p className="ai-chat-input__photo-error" role="alert">{photoError}</p>
+      )}
+
       {/* Превью выбранных фото */}
       {selectedPhotos.length > 0 && (
         <div className="ai-chat-input__photo-preview">
@@ -102,6 +125,22 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         </div>
       )}
 
+      {selectedPhotos.length > 0 && (
+        <label className="ai-chat-input__upload">
+          <input
+            type="checkbox"
+            checked={uploadConfirmed}
+            disabled={!folderUrl?.trim() || isLoading}
+            onChange={(event) => setUploadConfirmed(event.target.checked)}
+          />
+          <span>
+            {folderUrl?.trim()
+              ? 'Записать эти фото в папку оборудования'
+              : 'Папка оборудования не выбрана, фото останутся только в чате'}
+          </span>
+        </label>
+      )}
+
       <textarea
         ref={textareaRef}
         value={text}
@@ -114,7 +153,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       />
 
       <div className="ai-chat-input__actions">
-        <PhotoButton disabled={isLoading} onPhotosSelected={handlePhotosSelected} />
+        <PhotoButton
+          disabled={isLoading}
+          encodedBytesUsed={encodedBytesUsed}
+          onPhotosSelected={handlePhotosSelected}
+          onPhotoErrors={handlePhotoErrors}
+        />
         <VoiceButton disabled={isLoading} onTranscript={handleVoiceTranscript} />
         {onQRScanClick && <QRButton disabled={isLoading} onClick={onQRScanClick} />}
 

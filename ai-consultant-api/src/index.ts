@@ -68,6 +68,7 @@ import { chatRouter, chatStreamRouter, transcribeRouter } from './routes/ai/inde
 import { equipmentRouter } from './routes/equipment/index.js';
 import { alertsRouter, beliotRouter, invoicesRouter, notificationsRouter, pushRouter } from './routes/water/index.js';
 import { repairRequestsRouter } from './routes/repairs/index.js';
+import { jsonBodyLimit } from './http/jsonBodyLimit.js';
 
 // ============================================
 // Валидация конфигурации
@@ -144,10 +145,7 @@ app.use(helmet({
 // Для загрузки вложений журнала ТО нужен больший лимит (Base64 фото).
 // Остальные маршруты остаются на 5mb.
 app.use((req, res, next) => {
-  const isMaintenanceFileUpload =
-    req.method === 'POST' && req.path === '/api/equipment/upload-file';
-  // 25 МБ файла ≈ ~34 МБ Base64; берём запас 40mb
-  express.json({ limit: isMaintenanceFileUpload ? '40mb' : '5mb' })(req, res, next);
+  express.json({ limit: jsonBodyLimit(req.method, req.path) })(req, res, next);
 });
 
 // --- Логирование запросов ---

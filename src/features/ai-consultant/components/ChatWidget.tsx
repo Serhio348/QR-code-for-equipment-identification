@@ -316,6 +316,7 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({ initialOpen = false }) =
             voiceTranscript={transcript}
             onVoiceTranscriptUsed={handleVoiceTranscriptUsed}
             onQRScanClick={handleQRScanClick}
+            folderUrl={contextForChat?.googleDriveUrl}
           />
         </div>
       )}

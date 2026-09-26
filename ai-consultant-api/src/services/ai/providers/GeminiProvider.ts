@@ -20,9 +20,11 @@ export class GeminiProvider extends BaseAIProvider {
   readonly name = 'Gemini';
   private client: GoogleGenerativeAI;
   private model: string;
+  private apiKey: string;
 
   constructor(apiKey: string, model: string = 'gemini-2.0-flash-exp') {
     super();
+    this.apiKey = apiKey;
     this.client = new GoogleGenerativeAI(apiKey);
     this.model = model;
   }
@@ -292,17 +294,12 @@ export class GeminiProvider extends BaseAIProvider {
   }
 
   /**
-   * Проверка доступности Gemini API
+   * Ключ есть — провайдер можно выбрать.
+   * Пробный generateContent на каждый ответ тратит квоту. Ошибка 429 или 5xx
+   * обрабатывается запасным провайдером до первого токена и до первого инструмента.
    */
   async isAvailable(): Promise<boolean> {
-    try {
-      const genAI = this.client.getGenerativeModel({ model: this.model });
-      const result = await genAI.generateContent('test');
-      return !!result.response;
-    } catch (error) {
-      console.error('[GeminiProvider] Not available:', error instanceof Error ? error.message : error);
-      return false;
-    }
+    return this.apiKey.trim().length > 0;
   }
 
   /**

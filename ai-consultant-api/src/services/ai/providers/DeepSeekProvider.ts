@@ -8,6 +8,7 @@ import {
 } from '../adapters/deepseekToolAdapter.js';
 import { executeToolCall } from '../../../tools/index.js';
 import { runWithToolContext } from '../toolContext.js';
+import { throwIfAborted } from '../abortSignal.js';
 
 export class DeepSeekProvider extends BaseAIProvider {
   readonly name = 'DeepSeek';
@@ -192,10 +193,11 @@ export class DeepSeekProvider extends BaseAIProvider {
     equipmentContext?: EquipmentContext,
     waterContext?: WaterDashboardContext,
     memoryContext?: MemoryContext,
+    signal?: AbortSignal,
   ): Promise<void> {
     return runWithToolContext(
       { userId, equipmentId: equipmentContext?.id },
-      () => this.streamChatInner(messages, tools, userId, onEvent, equipmentContext, waterContext, memoryContext),
+      () => this.streamChatInner(messages, tools, userId, onEvent, equipmentContext, waterContext, memoryContext, signal),
     );
   }
 
@@ -207,6 +209,7 @@ export class DeepSeekProvider extends BaseAIProvider {
     equipmentContext?: EquipmentContext,
     waterContext?: WaterDashboardContext,
     memoryContext?: MemoryContext,
+    signal?: AbortSignal,
   ): Promise<void> {
     const toolsUsed: string[] = [];
     const systemPrompt = this.getSystemPrompt(equipmentContext, waterContext, memoryContext);
@@ -221,6 +224,7 @@ export class DeepSeekProvider extends BaseAIProvider {
 
     while (iteration < this.MAX_ITERATIONS) {
       iteration++;
+      throwIfAborted(signal);
 
       // Аккумуляторы для сбора данных из стримингового ответа
       let fullContent = '';
@@ -238,6 +242,7 @@ export class DeepSeekProvider extends BaseAIProvider {
       });
 
       for await (const chunk of stream) {
+        throwIfAborted(signal);
         const delta = chunk.choices[0]?.delta;
         const reason = chunk.choices[0]?.finish_reason;
         if (reason) finishReason = reason;
@@ -289,6 +294,7 @@ export class DeepSeekProvider extends BaseAIProvider {
       });
 
       toolCallsList.forEach(tc => { this.log(`Выполняю инструмент (стриминг): ${tc.name}`); toolsUsed.push(tc.name); });
+      throwIfAborted(signal);
 
       const toolResults = await Promise.all(toolCallsList.map(async (tc) => {
         try {

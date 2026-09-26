@@ -38,12 +38,15 @@ import {
   ChatMessage,
   streamChatMessage,
   uploadPhotoToDriveFolder,
+  fetchChatHistory,
   TextContentBlock,
   ImageContentBlock,
   EquipmentContext,
   WaterDashboardContext,
 } from '../services/consultantApi';
 import type { ChatInputMessage } from '../components/ChatInput';
+import { historyForApi } from '../services/chatHistoryPayload';
+import { photoUploadKey, planFolderUpload, uploadNewPhotos } from '../services/photoUploadIntent';
 import { logUserActivity } from '../../user-activity/services/activityLogsApi';
 
 // ============================================
@@ -143,21 +146,11 @@ const createMultimodalContent = (
   return content;
 };
 
-const DRIVE_FOLDER_URL_REGEX = /https:\/\/drive\.google\.com\/drive\/folders\/[a-zA-Z0-9_-]+/g;
-
-function findLastDriveFolderUrl(messages: ChatMessageWithMeta[]): string | null {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const content = messages[i]?.content;
-    const text = typeof content === 'string'
-      ? content
-      : content.filter(b => b.type === 'text').map(b => (b as TextContentBlock).text).join('\n');
-
-    const matches = text.match(DRIVE_FOLDER_URL_REGEX);
-    if (matches && matches.length > 0) {
-      return matches[matches.length - 1];
-    }
-  }
-  return null;
+function fileUrlFromUpload(data: unknown): string | null {
+  if (!data || typeof data !== 'object') return null;
+  const record = data as { fileUrl?: unknown; file_url?: unknown };
+  const url = record.fileUrl ?? record.file_url;
+  return typeof url === 'string' && url.startsWith('http') ? url : null;
 }
 
 /**
@@ -172,6 +165,10 @@ const createMessage = (
   content,
   timestamp: Date.now(),
 });
+
+function isRequestAbort(err: unknown): boolean {
+  return (err instanceof DOMException || err instanceof Error) && err.name === 'AbortError';
+}
 
 // ============================================
 // Хук useChat
@@ -201,12 +198,34 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
   // useRef вместо useState — не нужен ре-рендер при смене контроллера.
   // Хранит текущий AbortController для отмены запроса при размонтировании
   const abortControllerRef = useRef<AbortController | null>(null);
+  const conversationModeRef = useRef<'continue' | 'fresh'>('continue');
+  const sawToolRef = useRef(false);
+  const mountedRef = useRef(true);
+  const suppressAbortNoticeRef = useRef(false);
 
   // Отмена текущего запроса при размонтировании компонента.
   // Предотвращает setState на размонтированном компоненте
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
+      suppressAbortNoticeRef.current = true;
       abortControllerRef.current?.abort();
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchChatHistory(20).then(history => {
+      if (cancelled || conversationModeRef.current === 'fresh' || history.length === 0) return;
+      setMessages(prev => (
+        prev.length > 0
+          ? prev
+          : history.map(message => createMessage(message.role, message.content))
+      ));
+    }).catch(() => {});
+    return () => {
+      cancelled = true;
     };
   }, []);
 
@@ -214,9 +233,10 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
   // Пользователь видит все сообщения, но на сервер уходят только последние N.
   // Экономит токены Claude API
   const trimForApi = useCallback((msgs: ChatMessageWithMeta[]): ChatMessage[] => {
-    const trimmed = msgs.slice(-MAX_HISTORY_FOR_API);
-    // Убираем метаданные (id, timestamp) — серверу они не нужны
-    return trimmed.map(({ role, content }) => ({ role, content }));
+    return historyForApi(
+      msgs.map(({ role, content }) => ({ role, content })),
+      MAX_HISTORY_FOR_API,
+    );
   }, []);
 
   /**
@@ -241,6 +261,8 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
     setError(null);
     setLastFailed(null);
     setIsLoading(true);
+    sawToolRef.current = false;
+    suppressAbortNoticeRef.current = false;
 
     // Создаём AbortController для этого запроса.
     // Отменяем предыдущий, если он ещё активен
@@ -248,63 +270,58 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
-    // Если есть фото и пользователь просит "просто загрузить" — грузим напрямую на backend,
-    // чтобы не отправлять Base64 в LLM (это и вызывает "зависания").
-    const wantsDirectUpload = !!inputMessage.photos?.length && /загруз/i.test(inputMessage.text);
-    const lastFolderUrl = wantsDirectUpload
-      ? (equipmentContext?.googleDriveUrl || findLastDriveFolderUrl(messages))
-      : null;
-
-    let messageForAi: ChatInputMessage = inputMessage;
-
-    if (wantsDirectUpload && lastFolderUrl && inputMessage.photos?.every(p => !!(p as any).file)) {
-      // Показываем сообщение пользователя без картинок
-      const userMessage = createMessage('user', inputMessage.text);
-      const newMessages = [...messages, userMessage];
-      setMessages(newMessages);
-
-      try {
-        const uploadedLinks: string[] = [];
-
-        for (const p of inputMessage.photos || []) {
-          const resp = await uploadPhotoToDriveFolder(
-            lastFolderUrl,
-            (p as any).file as File,
-            { name: p.fileName, description: inputMessage.text },
-            controller.signal,
-          );
-
-          // GAS возвращает data.fileUrl; но структура может отличаться — пытаемся достать ссылку аккуратно.
-          const fileUrl = (resp as any)?.data?.fileUrl || (resp as any)?.data?.file_url;
-          if (typeof fileUrl === 'string' && fileUrl.startsWith('http')) {
-            uploadedLinks.push(fileUrl);
-          }
-        }
-
-        // В AI отправляем короткий текст: что фото уже загружены и куда.
-        messageForAi = {
-          text:
-            `${inputMessage.text}\n\n` +
-            `Фото загружены в папку: ${lastFolderUrl}\n` +
-            (uploadedLinks.length ? uploadedLinks.map(u => `- ${u}`).join('\n') : ''),
-          photos: undefined,
-        };
-
-        // ВАЖНО: если пользователь просил "просто загрузить" — на этом всё.
-        // Не делаем запрос к AI, иначе снова будет долго и бессмысленно.
-        const assistantText =
-          `✅ Фото загружены в папку:\n${lastFolderUrl}\n` +
-          (uploadedLinks.length ? `\nСсылки:\n${uploadedLinks.map(u => `- ${u}`).join('\n')}\n` : '');
-
-        setMessages(prev => [...prev, createMessage('assistant', assistantText)]);
+    const uploadPlan = planFolderUpload({
+      uploadConfirmed: inputMessage.uploadConfirmed === true,
+      folderUrl: inputMessage.folderUrl,
+      photoCount: inputMessage.photos?.length ?? 0,
+    });
+    if (uploadPlan.action === 'need-folder') {
+      setError('Сначала выберите оборудование с папкой на Диске');
+      setIsLoading(false);
+      abortControllerRef.current = null;
+      return;
+    }
+    if (uploadPlan.action === 'upload') {
+      const photos = (inputMessage.photos ?? []).flatMap(photo => (
+        photo.file ? [{ fileName: photo.fileName, size: photo.file.size, file: photo.file }] : []
+      ));
+      if (!inputMessage.alreadyUploaded?.length) {
+        setMessages([...messages, createMessage('user', inputMessage.text || 'Запись фото в папку')]);
+      }
+      const batch = await uploadNewPhotos(photos, new Set(inputMessage.alreadyUploaded ?? []), async (photo) => {
+        const response = await uploadPhotoToDriveFolder(
+          uploadPlan.folderUrl,
+          photo.file,
+          { name: photo.fileName, description: inputMessage.text },
+          controller.signal,
+        );
+        const fileUrl = fileUrlFromUpload(response.data);
+        if (!fileUrl) throw new Error('Сервер не вернул ссылку на файл');
+        return fileUrl;
+      });
+      const uploadedKeys = [
+        ...(inputMessage.alreadyUploaded ?? []),
+        ...batch.uploaded.map(item => photoUploadKey(item.photo)),
+      ];
+      if (batch.failed.length > 0) {
+        const failedNames = batch.failed.map(photo => photo.fileName).join(', ');
+        setError(`Часть фото уже в папке. Не записались: ${failedNames}. Повтор не отправит записанные файлы ещё раз.`);
+        setLastFailed({
+          message: { ...inputMessage, alreadyUploaded: uploadedKeys },
+          messagesSnapshot: [],
+        });
         setIsLoading(false);
         abortControllerRef.current = null;
         return;
-      } catch {
-        // Если прямую загрузку сделать не удалось — fallback на мультимодальный режим ниже.
-        messageForAi = inputMessage;
       }
+      const links = batch.uploaded.map(item => `- ${item.url}`).join('\n');
+      setMessages(prev => [...prev, createMessage('assistant', `Фото записаны в папку:\n${uploadPlan.folderUrl}\n${links}`)]);
+      setIsLoading(false);
+      abortControllerRef.current = null;
+      return;
     }
+
+    let messageForAi: ChatInputMessage = inputMessage;
 
     const content = createMultimodalContent(messageForAi);
 
@@ -333,8 +350,10 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
         controller.signal,
         equipmentContext || undefined,
         waterContext || undefined,
+        conversationModeRef.current,
       )) {
         if (event.type === 'tool_call') {
+          sawToolRef.current = true;
           setActiveToolName(event.name);
         } else if (event.type === 'text_delta') {
           setActiveToolName(null);
@@ -382,7 +401,10 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
         }
       );
     } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') {
+      if (isRequestAbort(err)) {
+        if (mountedRef.current && !suppressAbortNoticeRef.current && sawToolRef.current) {
+          setError('Запрос остановлен. Запись, которая уже выполнилась, закрытием чата не отменяется.');
+        }
         return;
       }
 
@@ -390,15 +412,16 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
       const errorMessage = err instanceof Error ? err.message : 'Ошибка отправки';
       console.debug('[Chat] Error:', { duration: `${duration}ms`, error: errorMessage });
 
+      if (!mountedRef.current) return;
       setActiveToolName(null);
       setError(errorMessage);
       setLastFailed({ message: messageForAi, messagesSnapshot: trimForApi(newMessages2) });
       setMessages(messages);
     } finally {
-      setIsLoading(false);
+      if (mountedRef.current) setIsLoading(false);
       abortControllerRef.current = null;
     }
-  }, [messages, isLoading, trimForApi, equipmentContext]);
+  }, [messages, isLoading, trimForApi, equipmentContext, waterContext]);
 
   /**
    * Повторить последнее неудачное сообщение.
@@ -406,9 +429,17 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
    */
   const retryLastMessage = useCallback(async () => {
     if (!lastFailed || isLoading) return;
+    if (lastFailed.message.uploadConfirmed) {
+      const message = lastFailed.message;
+      setLastFailed(null);
+      await sendMessage(message);
+      return;
+    }
 
     setError(null);
     setIsLoading(true);
+    sawToolRef.current = false;
+    suppressAbortNoticeRef.current = false;
 
     // Создаём AbortController для retry запроса
     abortControllerRef.current?.abort();
@@ -437,8 +468,10 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
         controller.signal,
         equipmentContext || undefined,
         waterContext || undefined,
+        conversationModeRef.current,
       )) {
         if (event.type === 'tool_call') {
+          sawToolRef.current = true;
           setActiveToolName(event.name);
         } else if (event.type === 'text_delta') {
           setActiveToolName(null);
@@ -456,22 +489,30 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
 
       console.debug('[Chat] Retry succeeded:', { duration: `${Date.now() - startTime}ms` });
     } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
+      if (isRequestAbort(err)) {
+        if (mountedRef.current && !suppressAbortNoticeRef.current && sawToolRef.current) {
+          setError('Запрос остановлен. Запись, которая уже выполнилась, закрытием чата не отменяется.');
+        }
+        return;
+      }
 
+      if (!mountedRef.current) return;
       setActiveToolName(null);
       setError(err instanceof Error ? err.message : 'Ошибка отправки');
       setMessages(messages);
     } finally {
-      setIsLoading(false);
+      if (mountedRef.current) setIsLoading(false);
       abortControllerRef.current = null;
     }
-  }, [lastFailed, messages, isLoading, equipmentContext]);
+  }, [lastFailed, messages, isLoading, equipmentContext, waterContext, sendMessage]);
 
   /**
    * Очистить историю чата.
    */
   const clearMessages = useCallback(() => {
+    suppressAbortNoticeRef.current = true;
     abortControllerRef.current?.abort();
+    conversationModeRef.current = 'fresh';
     setMessages([]);
     setError(null);
     setLastFailed(null);

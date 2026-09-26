@@ -4,7 +4,7 @@
  * Маршрут (route) для чат-эндпоинта AI-консультанта.
  */
 import { Router, Response } from 'express';
-import { ProviderFactory, type ChatMessage, type ToolDefinition, type EquipmentContext, type WaterDashboardContext } from '../../services/ai/index.js';
+import { type ChatMessage, type ToolDefinition, type EquipmentContext, type WaterDashboardContext } from '../../services/ai/index.js';
 import { tools } from '../../tools/index.js';
 import { authMiddleware, AuthenticatedRequest } from '../../middleware/auth.js';
 import rateLimit from 'express-rate-limit';
@@ -20,11 +20,12 @@ import { buildDocumentSessionPrompt } from '../../services/ai/documentSessionSer
 import { loadUserAppAccess } from '../../services/ai/userAppAccessService.js';
 import { filterToolsByAccess, buildAppAccessPrompt } from '../../services/ai/toolAccessPolicy.js';
 import { runWithToolContext } from '../../services/ai/toolContext.js';
+import { mergeConversation, type ConversationMode } from '../../services/ai/conversationHistory.js';
+import { validateChatMessages } from './chatRequestValidation.js';
 import { config } from '../../config/env.js';
+import { createFallbackProviders, runWithProviderFallback } from '../../services/ai/providerFallback.js';
 
 const router = Router();
-const MAX_MESSAGES = 50;
-const MAX_MESSAGE_LENGTH = 32_000;
 
 const chatRateLimit = rateLimit({
     windowMs: 60 * 1000,
@@ -42,52 +43,32 @@ interface ChatRequestBody {
     messages: ChatMessage[];
     equipmentContext?: EquipmentContext;
     waterContext?: WaterDashboardContext;
+    conversation?: ConversationMode;
 }
 
 router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const { messages, equipmentContext, waterContext } = req.body as ChatRequestBody;
+        const { messages, equipmentContext, waterContext, conversation } = req.body as ChatRequestBody;
 
-        if (!messages || !Array.isArray(messages) || messages.length === 0) {
-            res.status(400).json({ error: 'Messages array is required' });
+        const invalid = validateChatMessages(messages);
+        if (invalid) {
+            res.status(400).json({ error: invalid });
             return;
-        }
-        if (messages.length > MAX_MESSAGES) {
-            res.status(400).json({ error: `Too many messages: max ${MAX_MESSAGES} allowed` });
-            return;
-        }
-
-        for (const msg of messages) {
-            if (!msg.role || !msg.content) {
-                res.status(400).json({ error: 'Invalid message format' });
-                return;
-            }
-            if (msg.role !== 'user' && msg.role !== 'assistant') {
-                res.status(400).json({ error: 'Invalid message role' });
-                return;
-            }
-            if (typeof msg.content !== 'string' && !Array.isArray(msg.content)) {
-                res.status(400).json({ error: 'Invalid content type' });
-                return;
-            }
-            if (typeof msg.content === 'string' && msg.content.length > MAX_MESSAGE_LENGTH) {
-                res.status(400).json({ error: `Message too long: max ${MAX_MESSAGE_LENGTH} characters` });
-                return;
-            }
         }
 
         const userId = req.user?.id || '';
-        const backgroundHistory = await loadRecentHistory(userId, 10).catch(() => [] as ChatMessage[]);
-        const messagesWithHistory: ChatMessage[] = backgroundHistory.length > 0
-            ? [...backgroundHistory, ...messages]
-            : messages;
+        const mode: ConversationMode = conversation === 'fresh' ? 'fresh' : 'continue';
+        const backgroundHistory = mode === 'fresh'
+            ? []
+            : await loadRecentHistory(userId, 10).catch(() => [] as ChatMessage[]);
+        const messagesWithHistory = mergeConversation(backgroundHistory, messages, mode);
 
         const hasImages = messagesWithHistory.some(m => Array.isArray(m.content) && m.content.some(b => (b as any).type === 'image'));
         // Если пользователь работает только с DeepSeek — НЕ форсим Claude на фото.
         // DeepSeek не анализирует изображения, но мы сериализуем вложения как Base64 в тексте,
         // чтобы он мог загрузить их через tools.
         const preferredProvider = hasImages && config.aiProvider !== 'deepseek' ? 'claude' : undefined;
-        const provider = await ProviderFactory.create(preferredProvider);
+        const providers = createFallbackProviders(preferredProvider);
         const appAccess = await loadUserAppAccess(userId);
         const allowedTools = filterToolsByAccess(tools as ToolDefinition[], appAccess);
         const accessPrompt = buildAppAccessPrompt(appAccess);
@@ -100,17 +81,24 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
             .filter(Boolean)
             .join('\n');
 
-        const response = await runWithToolContext(
-            { userId, equipmentId: equipmentContext?.id, appAccess },
-            () => provider.chat(
-                messagesWithHistory,
-                allowedTools,
-                userId,
-                equipmentContext,
-                waterContext,
-                promptContext ? { factsPrompt: promptContext } : undefined
-            ),
-        );
+        const response = await runWithProviderFallback(providers, (provider, markOutputStarted) => (
+            runWithToolContext(
+                {
+                    userId,
+                    equipmentId: equipmentContext?.id,
+                    appAccess,
+                    lockProviderFallback: markOutputStarted,
+                },
+                () => provider.chat(
+                    messagesWithHistory,
+                    allowedTools,
+                    userId,
+                    equipmentContext,
+                    waterContext,
+                    promptContext ? { factsPrompt: promptContext } : undefined
+                ),
+            )
+        ));
 
         const lastUserMessage = messages[messages.length - 1];
         const sessionId = await getOrCreateSession(userId, equipmentContext?.id);
@@ -140,10 +128,12 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
     }
 });
 
-router.get('/history', authMiddleware, async (_req: AuthenticatedRequest, res: Response) => {
+router.get('/history', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.user?.id || '';
+    const messages = userId ? await loadRecentHistory(userId, 20).catch(() => []) : [];
     res.json({
         success: true,
-        data: { messages: [] },
+        data: { messages },
     });
 });
 

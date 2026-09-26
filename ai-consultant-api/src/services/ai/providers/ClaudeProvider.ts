@@ -18,6 +18,7 @@ import {
 } from '../adapters/claudeToolAdapter.js';
 import { executeToolCall } from '../../../tools/index.js';
 import { runWithToolContext } from '../toolContext.js';
+import { throwIfAborted } from '../abortSignal.js';
 
 export class ClaudeProvider extends BaseAIProvider {
   readonly name = 'Claude';
@@ -477,10 +478,11 @@ ${memoryContext?.factsPrompt ?? ''}
     equipmentContext?: EquipmentContext,
     waterContext?: WaterDashboardContext,
     memoryContext?: MemoryContext,
+    signal?: AbortSignal,
   ): Promise<void> {
     return runWithToolContext(
       { userId, equipmentId: equipmentContext?.id },
-      () => this.streamChatInner(messages, tools, userId, onEvent, equipmentContext, waterContext, memoryContext),
+      () => this.streamChatInner(messages, tools, userId, onEvent, equipmentContext, waterContext, memoryContext, signal),
     );
   }
 
@@ -492,6 +494,7 @@ ${memoryContext?.factsPrompt ?? ''}
     equipmentContext?: EquipmentContext,
     waterContext?: WaterDashboardContext,
     memoryContext?: MemoryContext,
+    signal?: AbortSignal,
   ): Promise<void> {
     const toolsUsed: string[] = [];
 
@@ -507,6 +510,7 @@ ${memoryContext?.factsPrompt ?? ''}
 
     while (iteration < this.MAX_ITERATIONS) {
       iteration++;
+      throwIfAborted(signal);
 
       // Накопленные блоки контента из потока
       const responseContent: Anthropic.ContentBlock[] = [];
@@ -523,6 +527,7 @@ ${memoryContext?.factsPrompt ?? ''}
       });
 
       for await (const event of stream) {
+        throwIfAborted(signal);
         if (event.type === 'content_block_start') {
           const block = event.content_block;
           if (block.type === 'tool_use') {
@@ -567,6 +572,7 @@ ${memoryContext?.factsPrompt ?? ''}
       // Выполняем инструменты параллельно
       const toolCalls = extractClaudeToolCalls(responseContent);
       toolCalls.forEach(tc => { onEvent({ type: 'tool_call', name: tc.name }); toolsUsed.push(tc.name); this.log(`Выполняю инструмент (стриминг): ${tc.name}`); });
+      throwIfAborted(signal);
 
       const toolResults = await Promise.all(toolCalls.map(async (toolCall) => {
         try {

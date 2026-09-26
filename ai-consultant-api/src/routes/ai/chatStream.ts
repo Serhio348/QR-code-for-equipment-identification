@@ -4,10 +4,12 @@
  * SSE-эндпоинт для стриминга ответов AI-агента.
  */
 import { Router, Response } from 'express';
-import { ProviderFactory, type ChatMessage, type ToolDefinition, type EquipmentContext, type WaterDashboardContext } from '../../services/ai/index.js';
+import { type ChatMessage, type ToolDefinition, type EquipmentContext, type WaterDashboardContext } from '../../services/ai/index.js';
 import { tools } from '../../tools/index.js';
 import { authMiddleware, AuthenticatedRequest } from '../../middleware/auth.js';
-import { getOrCreateSession, saveMessages, updateSessionTitle } from '../../services/ai/chatMemoryService.js';
+import { getOrCreateSession, saveMessages, updateSessionTitle, loadRecentHistory } from '../../services/ai/chatMemoryService.js';
+import { mergeConversation, type ConversationMode } from '../../services/ai/conversationHistory.js';
+import { validateChatMessages } from './chatRequestValidation.js';
 import { loadFactsForPrompt } from '../../services/ai/agentMemoryService.js';
 import { buildDriveFileContext } from '../../services/ai/driveFileContextService.js';
 import { buildDocumentSessionPrompt } from '../../services/ai/documentSessionService.js';
@@ -17,9 +19,9 @@ import { filterToolsByAccess, buildAppAccessPrompt } from '../../services/ai/too
 import { runWithToolContext } from '../../services/ai/toolContext.js';
 import rateLimit from 'express-rate-limit';
 import { config } from '../../config/env.js';
+import { createFallbackProviders, runWithProviderFallback } from '../../services/ai/providerFallback.js';
 
 const router = Router();
-const MAX_MESSAGES = 50;
 
 const chatRateLimit = rateLimit({
     windowMs: 60 * 1000,
@@ -37,17 +39,15 @@ interface StreamChatRequestBody {
     messages: ChatMessage[];
     equipmentContext?: EquipmentContext;
     waterContext?: WaterDashboardContext;
+    conversation?: ConversationMode;
 }
 
 router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
-    const { messages, equipmentContext, waterContext } = req.body as StreamChatRequestBody;
+    const { messages, equipmentContext, waterContext, conversation } = req.body as StreamChatRequestBody;
 
-    if (!messages || !Array.isArray(messages) || messages.length === 0) {
-        res.status(400).json({ error: 'Messages array is required' });
-        return;
-    }
-    if (messages.length > MAX_MESSAGES) {
-        res.status(400).json({ error: `Too many messages: max ${MAX_MESSAGES}` });
+    const invalid = validateChatMessages(messages);
+    if (invalid) {
+        res.status(400).json({ error: invalid });
         return;
     }
 
@@ -57,9 +57,15 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
     res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders();
 
+    const abort = new AbortController();
+    let streamSettled = false;
+    res.on('close', () => {
+        if (!streamSettled) abort.abort();
+    });
+
     const userId = req.user?.id || '';
     const writeEvent = (event: StreamEvent): boolean => {
-        if (res.writableEnded) return false;
+        if (abort.signal.aborted || res.writableEnded) return false;
         res.write(`data: ${JSON.stringify(event)}\n\n`);
         return true;
     };
@@ -68,11 +74,16 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
     const toolsUsedList: string[] = [];
 
     try {
-        const hasImages = messages.some(m => Array.isArray(m.content) && m.content.some(b => (b as any).type === 'image'));
+        const mode: ConversationMode = conversation === 'fresh' ? 'fresh' : 'continue';
+        const backgroundHistory = mode === 'fresh'
+            ? []
+            : await loadRecentHistory(userId, 10).catch(() => [] as ChatMessage[]);
+        const messagesWithHistory = mergeConversation(backgroundHistory, messages, mode);
+        const hasImages = messagesWithHistory.some(m => Array.isArray(m.content) && m.content.some(b => (b as any).type === 'image'));
         // Если выбран DeepSeek — не переключаемся на Claude при фото:
         // вложения сериализуются как Base64 и DeepSeek сможет загрузить их через tools.
         const preferredProvider = hasImages && config.aiProvider !== 'deepseek' ? 'claude' : undefined;
-        const provider = await ProviderFactory.create(preferredProvider);
+        const providers = createFallbackProviders(preferredProvider);
         const appAccess = await loadUserAppAccess(userId);
         const allowedTools = filterToolsByAccess(tools as ToolDefinition[], appAccess);
         const accessPrompt = buildAppAccessPrompt(appAccess);
@@ -94,18 +105,31 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
             writeEvent(event);
         };
 
-        await runWithToolContext(
-            { userId, equipmentId: equipmentContext?.id, appAccess },
-            () => provider.streamChat(
-                messages,
-                allowedTools,
-                userId,
-                onEvent,
-                equipmentContext,
-                waterContext,
-                promptContext ? { factsPrompt: promptContext } : undefined,
-            ),
-        );
+        await runWithProviderFallback(providers, (provider, markOutputStarted) => (
+            runWithToolContext(
+                {
+                    userId,
+                    equipmentId: equipmentContext?.id,
+                    appAccess,
+                    lockProviderFallback: markOutputStarted,
+                },
+                () => provider.streamChat(
+                    messagesWithHistory,
+                    allowedTools,
+                    userId,
+                    (event) => {
+                        if (event.type === 'text_delta' || event.type === 'tool_call') {
+                            markOutputStarted();
+                        }
+                        onEvent(event);
+                    },
+                    equipmentContext,
+                    waterContext,
+                    promptContext ? { factsPrompt: promptContext } : undefined,
+                    abort.signal,
+                ),
+            )
+        ));
 
         const lastUserMessage = messages[messages.length - 1];
         const sessionId = await getOrCreateSession(userId, equipmentContext?.id);
@@ -117,9 +141,11 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
         saveMessages(sessionId, userId, lastUserMessage, fullText, toolsUsedList)
             .catch(err => console.error('[Stream] Ошибка сохранения в память:', err));
     } catch (err) {
+        if (abort.signal.aborted) return;
         const message = err instanceof Error ? err.message : String(err);
         writeEvent({ type: 'error', message });
     } finally {
+        streamSettled = true;
         if (!res.writableEnded) res.end();
     }
 });
