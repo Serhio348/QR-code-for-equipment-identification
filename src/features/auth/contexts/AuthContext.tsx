@@ -10,6 +10,7 @@ import { supabase, invalidateProfileCache } from '@/shared/config/supabase';
 import { login as loginApi, logout as logoutApi, register as registerApi, getCurrentUser } from '../services/supabaseAuthApi';
 import { startActivityTracking, stopActivityTracking, checkSessionTimeout as checkTimeout } from '@/shared/utils/sessionTimeout';
 import { clearLastPath } from '@/shared/utils/pathStorage';
+import { detachBrowserPush } from '@/features/water-monitoring/services/pushDetach';
 import { ROUTES } from '@/shared/utils/routes';
 import type { User } from '../types/user';
 import type { AuthState } from '../types/auth';
@@ -609,8 +610,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const logout = useCallback(async () => {
     try {
       setLoading(true);
-      // Выход через Supabase Auth
-      // onAuthStateChange автоматически обновит состояние (SIGNED_OUT)
+      try {
+        await detachBrowserPush();
+      } catch (error) {
+        console.error('Не удалось отвязать push перед выходом:', error);
+      }
       await logoutApi();
     } catch (error) {
       console.error('Ошибка при выходе:', error);

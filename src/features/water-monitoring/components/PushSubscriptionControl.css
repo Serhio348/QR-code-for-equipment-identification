@@ -1,0 +1,22 @@
+.push-control {
+  margin-top: 8px;
+  font-size: 14px;
+}
+
+.push-control p {
+  margin: 0 0 8px;
+}
+
+.push-control button {
+  background: #fff;
+  border: 1px solid #667eea;
+  color: #667eea;
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.push-control__error {
+  color: #b42318;
+}

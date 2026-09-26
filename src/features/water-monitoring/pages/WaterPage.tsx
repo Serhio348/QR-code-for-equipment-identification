@@ -18,6 +18,7 @@ import { invoiceRequestFromSearch } from '../services/invoiceDeepLink';
 import { downloadInvoicePdf } from '../services/notificationsApi';
 import { toast } from 'react-toastify';
 import { usePushSubscription } from '../hooks/usePushSubscription';
+import PushSubscriptionControl from '../components/PushSubscriptionControl';
 import { logUserActivity } from '@/features/user-activity/services/activityLogsApi';
 import './WaterPage.css';
 
@@ -30,7 +31,7 @@ const WaterPage: React.FC = () => {
   const loggedWaterViewRef = useRef(false);
 
   const notificationInbox = useWaterNotifications();
-  usePushSubscription();
+  const pushSubscription = usePushSubscription();
 
   // Определяем активную вкладку на основе маршрута и search-параметра ?tab=
   useEffect(() => {
@@ -127,6 +128,7 @@ const WaterPage: React.FC = () => {
           </button>
         </div>
         <NotificationInbox inbox={notificationInbox} />
+        <PushSubscriptionControl push={pushSubscription} />
       </div>
 
       <div className="water-page-content">

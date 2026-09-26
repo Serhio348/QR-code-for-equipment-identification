@@ -80,6 +80,18 @@ export async function markNotificationsRead(ids: string[]): Promise<number> {
     return typeof json.data?.updated === 'number' ? json.data.updated : ids.length;
 }
 
+export async function unsubscribeFromPush(endpoint: string): Promise<void> {
+    const headers = await authHeaders();
+    const res = await fetch(`${API_URL}/api/push/unsubscribe`, {
+        method: 'DELETE',
+        headers,
+        body: JSON.stringify({ endpoint }),
+    });
+    if (!res.ok) {
+        throw new Error('Не удалось отвязать уведомления на сервере');
+    }
+}
+
 // ============================================
 // Web Push: подписать устройство
 // ============================================
@@ -87,7 +99,7 @@ export async function markNotificationsRead(ids: string[]): Promise<number> {
 export async function subscribeToPush(subscription: PushSubscription): Promise<void> {
     const json = subscription.toJSON();
     const headers = await authHeaders();
-    await fetch(`${API_URL}/api/push/subscribe`, {
+    const res = await fetch(`${API_URL}/api/push/subscribe`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -95,6 +107,9 @@ export async function subscribeToPush(subscription: PushSubscription): Promise<v
             keys: { p256dh: json.keys?.p256dh, auth: json.keys?.auth },
         }),
     });
+    if (!res.ok) {
+        throw new Error('Не удалось сохранить подписку на уведомления');
+    }
 }
 
 // ============================================
