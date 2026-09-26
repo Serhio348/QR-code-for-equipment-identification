@@ -19,7 +19,7 @@ import { useCurrentUser } from '../../auth/hooks/useCurrentUser';
 import { checkResultCompliance, uploadAnalysisPDF, deleteAnalysisPDF } from '../services';
 import { planAnalysisResults } from '../services/analysisSavePlan';
 import { authorshipForSave } from '../services/analysisAuthorship';
-import { equipmentIdForSamplingPoint } from '../services/samplingPointEquipment';
+import { concludeCompliance } from '../services/complianceConclusion';
 import { saveAnalysisBundle } from '../services/saveAnalysisBundle';
 import { ROUTES } from '@/shared/utils/routes';
 import { logUserActivity } from '@/features/user-activity/services/activityLogsApi';
@@ -43,7 +43,9 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
   const [samplingPointId, setSamplingPointId] = useState<string>('');
   const [equipmentId, setEquipmentId] = useState<string>('');
   const [sampleDate, setSampleDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [status, setStatus] = useState<AnalysisStatus>('completed');
+  const [status, setStatus] = useState<AnalysisStatus>('in_progress');
+  const [manualConclusion, setManualConclusion] = useState<'' | 'compliant' | 'non_compliant'>('');
+  const [complianceBasis, setComplianceBasis] = useState('');
   const [changeAuthors, setChangeAuthors] = useState(false);
   const [notes, setNotes] = useState<string>('');
   const [sampleCondition, setSampleCondition] = useState<SampleCondition>('normal');
@@ -80,7 +82,14 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
         setSamplingPointId(existingAnalysis.samplingPointId);
         setEquipmentId(existingAnalysis.equipmentId || '');
         setSampleDate(existingAnalysis.sampleDate.split('T')[0]);
-        setStatus(existingAnalysis.status);
+        setStatus(existingAnalysis.status === 'deviation' ? 'completed' : existingAnalysis.status);
+        setManualConclusion(
+          existingAnalysis.complianceConclusion === 'compliant'
+            || existingAnalysis.complianceConclusion === 'non_compliant'
+            ? existingAnalysis.complianceConclusion
+            : '',
+        );
+        setComplianceBasis(existingAnalysis.complianceBasis || '');
         setNotes(existingAnalysis.notes || '');
         setSampleCondition(existingAnalysis.sampleCondition || 'normal');
         setExternalLab(existingAnalysis.externalLab || false);
@@ -169,6 +178,19 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
     setSaving(true);
 
     try {
+      const allParams = getAllParameters();
+      const measuredCount = allParams.filter(param => results[param].value.trim() !== '').length;
+      const decision = concludeCompliance({
+        measuredCount,
+        exceededCount: 0,
+        normsChecked: false,
+        manualConclusion: manualConclusion || null,
+        manualBasis: complianceBasis,
+      });
+      if (!decision.ok) {
+        toast.error(decision.error || 'Не удалось определить заключение');
+        return;
+      }
       const authorship = authorshipForSave({
         mode: isEditMode ? 'edit' : 'create',
         currentUser,
@@ -182,13 +204,14 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
         analyzedBy: authorship.analyzedBy,
         responsiblePerson: authorship.responsiblePerson,
         status,
+        complianceConclusion: decision.conclusion,
+        complianceBasis: complianceBasis.trim() || undefined,
         notes: notes.trim() || undefined,
         sampleCondition,
         externalLab,
         externalLabName: externalLabName.trim() || undefined,
       };
 
-      const allParams = getAllParameters();
       const plan = planAnalysisResults(
         allParams.map(param => ({
           parameterName: param,
@@ -366,9 +389,30 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
             <div className="form-group">
               <label>Статус *</label>
               <select value={status} onChange={(e) => setStatus(e.target.value as AnalysisStatus)} required>
-                <option value="completed">Норма</option>
-                <option value="deviation">Отклонение</option>
+                <option value="in_progress">В работе</option>
+                <option value="completed">Завершён</option>
+                <option value="cancelled">Отменён</option>
               </select>
+            </div>
+
+            <div className="form-group">
+              <label>Заключение</label>
+              <select
+                value={manualConclusion}
+                onChange={(e) => setManualConclusion(e.target.value as '' | 'compliant' | 'non_compliant')}
+              >
+                <option value="">Не проверено</option>
+                <option value="compliant">Норма</option>
+                <option value="non_compliant">Не соответствует</option>
+              </select>
+              {manualConclusion && (
+                <input
+                  type="text"
+                  value={complianceBasis}
+                  onChange={(e) => setComplianceBasis(e.target.value)}
+                  placeholder="Основание ручного заключения"
+                />
+              )}
             </div>
 
             <div className="form-group">

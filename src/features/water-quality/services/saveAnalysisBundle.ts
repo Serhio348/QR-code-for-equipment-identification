@@ -42,6 +42,8 @@ export async function saveAnalysisBundle(input: AnalysisBundleInput): Promise<st
   if (analysis.analyzedBy !== undefined) payload.analyzed_by = analysis.analyzedBy;
   if (analysis.responsiblePerson !== undefined) payload.responsible_person = analysis.responsiblePerson;
   if (input.updatedBy) payload.updated_by = input.updatedBy;
+  if (analysis.complianceConclusion) payload.compliance_conclusion = analysis.complianceConclusion;
+  if (analysis.complianceBasis !== undefined) payload.compliance_basis = analysis.complianceBasis;
 
   const { data, error } = await supabase.rpc('save_water_analysis_bundle', {
     payload,

@@ -41,6 +41,8 @@ export function mapWaterAnalysisFromDb(data: any): WaterAnalysis {
     analyzedBy: data.analyzed_by || undefined,
     responsiblePerson: data.responsible_person || undefined,
     status: data.status,
+    complianceConclusion: data.compliance_conclusion || undefined,
+    complianceBasis: data.compliance_basis || undefined,
     notes: data.notes || undefined,
     sampleCondition: data.sample_condition || undefined,
     externalLab: data.external_lab || false,
