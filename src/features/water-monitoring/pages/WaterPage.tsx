@@ -13,6 +13,7 @@ import BeliotDevicesTest from '../components/BeliotDevicesTest';
 import WaterQualityJournalPage from '../../water-quality/pages/WaterQualityJournalPage';
 import { ROUTES } from '@/shared/utils/routes';
 import { useWaterNotifications } from '../hooks/useWaterNotifications';
+import NotificationInbox from '../components/NotificationInbox';
 import { usePushSubscription } from '../hooks/usePushSubscription';
 import { logUserActivity } from '@/features/user-activity/services/activityLogsApi';
 import './WaterPage.css';
@@ -25,7 +26,7 @@ const WaterPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<WaterTab>('dashboard');
   const loggedWaterViewRef = useRef(false);
 
-  useWaterNotifications();
+  const notificationInbox = useWaterNotifications();
   usePushSubscription();
 
   // Определяем активную вкладку на основе маршрута и search-параметра ?tab=
@@ -96,6 +97,7 @@ const WaterPage: React.FC = () => {
             <span className="water-tab-text">Анализы качества воды</span>
           </button>
         </div>
+        <NotificationInbox inbox={notificationInbox} />
       </div>
 
       <div className="water-page-content">

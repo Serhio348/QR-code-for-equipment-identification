@@ -55,34 +55,29 @@ async function authHeaders(): Promise<Record<string, string>> {
 // Получить непрочитанные уведомления
 // ============================================
 
-export async function fetchUnreadNotifications(): Promise<WaterNotification[]> {
-    try {
-        const headers = await authHeaders();
-        const res = await fetch(`${API_URL}/api/notifications`, { headers });
-        if (!res.ok) return [];
-        const json = await res.json();
-        return json.data ?? [];
-    } catch {
-        return [];
+export async function fetchNotifications(): Promise<WaterNotification[]> {
+    const headers = await authHeaders();
+    const res = await fetch(`${API_URL}/api/notifications`, { headers });
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.success) {
+        throw new Error(json?.error || 'Не удалось загрузить уведомления');
     }
+    return json.data ?? [];
 }
 
-// ============================================
-// Пометить как прочитанные
-// ============================================
-
-export async function markNotificationsRead(ids: string[]): Promise<void> {
-    if (ids.length === 0) return;
-    try {
-        const headers = await authHeaders();
-        await fetch(`${API_URL}/api/notifications/mark-read`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({ ids }),
-        });
-    } catch {
-        // silent fail
+export async function markNotificationsRead(ids: string[]): Promise<number> {
+    if (ids.length === 0) return 0;
+    const headers = await authHeaders();
+    const res = await fetch(`${API_URL}/api/notifications/mark-read`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ ids }),
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.success) {
+        throw new Error(json?.error || 'Не удалось отметить уведомления прочитанными');
     }
+    return typeof json.data?.updated === 'number' ? json.data.updated : ids.length;
 }
 
 // ============================================
