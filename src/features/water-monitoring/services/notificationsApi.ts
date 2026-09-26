@@ -5,6 +5,7 @@
  */
 
 import { supabase } from '@/shared/config/supabase';
+import { invoiceDownloadSearch, type InvoiceDownloadRequest } from './invoiceDownloadQuery';
 
 const API_URL = import.meta.env.VITE_AI_CONSULTANT_API_URL || 'http://localhost:3001';
 
@@ -120,10 +121,16 @@ export async function getVapidPublicKey(): Promise<string | null> {
 // Скачать PDF счёта как Blob (без signed URL)
 // ============================================
 
-export async function downloadInvoicePdf(period: string, account?: string): Promise<Blob | null> {
+export async function downloadInvoicePdf(
+    periodOrRequest: string | InvoiceDownloadRequest,
+    account?: string,
+): Promise<Blob | null> {
     try {
-        let params = `period=${encodeURIComponent(period)}`;
-        if (account) params += `&account=${encodeURIComponent(account)}`;
+        const request: InvoiceDownloadRequest = typeof periodOrRequest === 'string'
+            ? { period: periodOrRequest, account }
+            : periodOrRequest;
+        const params = invoiceDownloadSearch(request);
+        if (!params) return null;
 
         let headers = await authHeaders();
         let res = await fetch(`${API_URL}/api/invoices/download?${params}`, { headers });

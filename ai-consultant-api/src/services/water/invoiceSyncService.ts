@@ -17,6 +17,7 @@ import { getInvoicesList, downloadInvoice, readInvoiceFile } from '../browserSer
 import { parseInvoiceText } from '../invoiceParserService.js';
 import { updateTariffFromInvoice } from '../ai/agentMemoryService.js';
 import { checkAndNotify } from './notificationService.js';
+import { invoiceNoticeFromRow, type InvoiceNotice } from './invoiceIdentity.js';
 import { config } from '../../config/env.js';
 import { fetchAllPages } from './pagedSelect.js';
 
@@ -118,6 +119,7 @@ export async function syncInvoices(forceAll = false): Promise<SyncResult> {
     }
 
     let latestSaved: Awaited<ReturnType<typeof parseInvoiceText>> | null = null;
+    const savedNotices: InvoiceNotice[] = [];
 
     for (const inv of pdfInvoices) {
         const fileName = inv.title || `invoice_${Date.now()}.pdf`;
@@ -176,7 +178,7 @@ export async function syncInvoices(forceAll = false): Promise<SyncResult> {
                 console.warn(`[invoiceSync] Storage upload failed for ${fileName}:`, storageErr);
             }
 
-            const { error: dbError } = await supabase.from('water_invoices').upsert({
+            const { data: savedRow, error: dbError } = await supabase.from('water_invoices').upsert({
                 period: parsed.period,
                 period_date: `${parsed.period}-01`,
                 account_number: parsed.account_number,
@@ -189,8 +191,10 @@ export async function syncInvoices(forceAll = false): Promise<SyncResult> {
                 file_name: fileName,
                 storage_path: storagePath,
                 raw_text: rawText.slice(0, 50000),
-            }, { onConflict: 'period,account_number' });
+            }, { onConflict: 'period,account_number' }).select('id, period, account_number, amount_byn, volume_m3, storage_path').single();
             if (dbError) throw new Error(`DB error: ${dbError.message}`);
+            if (!savedRow?.id || !savedRow.period) throw new Error('DB error: saved invoice has no id');
+            savedNotices.push(invoiceNoticeFromRow(savedRow));
 
             result.saved++;
             existingKeys.add(key);
@@ -211,25 +215,7 @@ export async function syncInvoices(forceAll = false): Promise<SyncResult> {
         }
     }
 
-    const savedDetailsRaw = result.details.filter(d => d.status === 'saved');
-    const savedDetails = await Promise.all(
-        savedDetailsRaw.map(async (d) => {
-            const { data: row } = await supabase
-                .from('water_invoices')
-                .select('amount_byn, volume_m3, storage_path')
-                .eq('period', d.period)
-                .limit(1)
-                .single();
-            return {
-                period: d.period,
-                amount_byn: (row?.amount_byn as number | null) ?? null,
-                volume_m3: (row?.volume_m3 as number | null) ?? null,
-                storage_path: (row?.storage_path as string | null) ?? null,
-            };
-        })
-    );
-
-    await checkAndNotify(savedDetails, latestSaved).catch((err) => {
+    await checkAndNotify(savedNotices, latestSaved).catch((err) => {
         console.warn('[invoiceSync] checkAndNotify failed:', err);
     });
     if (latestSaved) {

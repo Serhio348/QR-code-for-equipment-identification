@@ -7,6 +7,7 @@ import webpush from 'web-push';
 import { createClient } from '@supabase/supabase-js';
 import { config } from '../../config/env.js';
 import type { ParsedInvoice } from '../invoiceParserService.js';
+import type { InvoiceNotice } from './invoiceIdentity.js';
 
 const supabase = createClient(config.supabaseUrl, config.supabaseServiceKey);
 
@@ -74,15 +75,18 @@ async function sendPushToUser(userId: string, title: string, body: string, paylo
 }
 
 export async function checkAndNotify(
-    savedPeriods: Array<{ period: string; amount_byn?: number | null; volume_m3?: number | null; storage_path?: string | null }>,
+    savedInvoices: InvoiceNotice[],
     latestParsed: ParsedInvoice | null
 ): Promise<void> {
-    if (savedPeriods.length === 0 && !latestParsed) return;
-    for (const inv of savedPeriods) {
+    if (savedInvoices.length === 0 && !latestParsed) return;
+    for (const inv of savedInvoices) {
         const volStr = inv.volume_m3 != null ? `${inv.volume_m3} м³` : '—';
         const amtStr = inv.amount_byn != null ? `${inv.amount_byn} BYN` : '—';
-        await createNotification('new_invoice', `Новый счёт за ${inv.period}`, `Объём: ${volStr}, сумма: ${amtStr}`, {
+        const accountStr = inv.account_number ? `, лицевой ${inv.account_number}` : '';
+        await createNotification('new_invoice', `Новый счёт за ${inv.period}`, `Объём: ${volStr}, сумма: ${amtStr}${accountStr}`, {
+            invoice_id: inv.id,
             period: inv.period,
+            account_number: inv.account_number,
             volume_m3: inv.volume_m3,
             amount_byn: inv.amount_byn,
             storage_path: inv.storage_path ?? null,

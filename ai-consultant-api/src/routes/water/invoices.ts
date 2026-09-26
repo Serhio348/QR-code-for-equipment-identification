@@ -18,6 +18,7 @@ import { syncInvoices, type SyncResult } from '../../services/water/index.js';
 import { createClient } from '@supabase/supabase-js';
 import { config } from '../../config/env.js';
 import { authMiddleware, AuthenticatedRequest } from '../../middleware/auth.js';
+import { resolveInvoiceDownload } from '../../services/water/invoiceIdentity.js';
 
 const supabase = createClient(config.supabaseUrl, config.supabaseServiceKey);
 const router = Router();
@@ -165,17 +166,20 @@ router.post('/sync-all', requireSyncSecret, async (_req: Request, res: Response)
 });
 
 router.get('/download', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
-    const period = req.query.period as string;
-    const account = req.query.account as string | undefined;
-    if (!period) {
-        res.status(400).json({ error: 'period обязателен (YYYY-MM)' });
+    const lookup = resolveInvoiceDownload({
+        invoiceId: typeof req.query.id === 'string' ? req.query.id : undefined,
+        period: typeof req.query.period === 'string' ? req.query.period : undefined,
+        account: typeof req.query.account === 'string' ? req.query.account : undefined,
+    });
+    if (!lookup.ok) {
+        res.status(400).json({ error: lookup.error });
         return;
     }
-    let query = supabase.from('water_invoices').select('storage_path, file_name').eq('period', period);
-    if (account) query = query.eq('account_number', account);
+    let query = supabase.from('water_invoices').select('storage_path, file_name, period');
+    if (lookup.by === 'id') query = query.eq('id', lookup.invoiceId);
+    else query = query.eq('period', lookup.period).eq('account_number', lookup.account);
 
-    const { data: rows, error } = await query.limit(1);
-    const row = rows?.[0];
+    const { data: row, error } = await query.maybeSingle();
     if (error || !row?.storage_path) {
         res.status(404).json({ error: 'Файл не найден' });
         return;
@@ -190,7 +194,7 @@ router.get('/download', authMiddleware, async (req: AuthenticatedRequest, res: R
         res.status(502).json({ error: 'Файл в хранилище недоступен' });
         return;
     }
-    const fileName = row.file_name || `${period}.pdf`;
+    const fileName = row.file_name || `${row.period ?? 'invoice'}.pdf`;
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileName)}"`);
     res.send(buffer);
