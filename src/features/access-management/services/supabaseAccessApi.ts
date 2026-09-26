@@ -8,6 +8,7 @@
 import { supabase } from '@/shared/config/supabase';
 import { API_CONFIG } from '@/shared/config/api';
 import type { UserAppAccess, UpdateUserAccessData } from '../types/access';
+import { profileQueryOutcome } from './accessLoadState';
 
 let hasLoggedUnsupportedUpdateUserAccess = false;
 
@@ -166,7 +167,11 @@ export async function getUserAccess(email: string): Promise<UserAppAccess | null
       .eq('email', email.toLowerCase().trim())
       .single();
 
-    if (profileError || !profile) {
+    const profileOutcome = profileQueryOutcome(profileError);
+    if (profileOutcome === 'failed') {
+      throw new Error(profileError?.message || 'Не удалось загрузить профиль');
+    }
+    if (profileOutcome === 'missing' || !profile) {
       console.debug('[supabaseAccessApi] Пользователь не найден:', email);
       return null;
     }
@@ -308,6 +313,10 @@ export async function checkUserAccess(email: string, appId: 'equipment' | 'water
       .eq('email', email.toLowerCase().trim())
       .single();
 
+    if (profileQueryOutcome(profileError) === 'failed') {
+      throw new Error(profileError?.message || 'Не удалось проверить профиль');
+    }
+
     if (!profileError && profile && profile.role === 'admin') {
       // Администраторы всегда имеют доступ ко всем приложениям
       return true;
@@ -321,9 +330,8 @@ export async function checkUserAccess(email: string, appId: 'equipment' | 'water
     }
     
     return access[appId] === true;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[supabaseAccessApi] Ошибка checkUserAccess:', error);
-    // В случае ошибки, по умолчанию доступ запрещен
-    return false;
+    throw error;
   }
 }

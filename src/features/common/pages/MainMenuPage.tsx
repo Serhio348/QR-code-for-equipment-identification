@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/contexts/AuthContext';
 import { getUserAccess } from '../../access-management/services/supabaseAccessApi';
 import { AVAILABLE_APPS, type UserAppAccess } from '../../access-management/types/access';
+import { menuAccessView } from '../../access-management/services/accessLoadState';
 import { ROUTES } from '@/shared/utils/routes';
 import { clearLastPath } from '@/shared/utils/pathStorage';
 import AdminModal from '../components/AdminModal';
@@ -19,6 +20,9 @@ const MainMenuPage: React.FC = () => {
   const { user, isAdmin, logout } = useAuth();
   const [userAccess, setUserAccess] = useState<UserAppAccess | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [accessError, setAccessError] = useState<string | null>(null);
+  const [profileMissing, setProfileMissing] = useState<boolean>(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [loggingOut, setLoggingOut] = useState<boolean>(false);
   const [showAdminModal, setShowAdminModal] = useState<boolean>(false);
 
@@ -63,12 +67,17 @@ const MainMenuPage: React.FC = () => {
         }
 
         if (mounted) {
+          setAccessError(null);
+          setProfileMissing(access === null);
           setUserAccess(access);
           setLoading(false);
         }
       } catch (error) {
         console.error('Ошибка загрузки настроек доступа:', error);
         if (mounted) {
+          setAccessError(error instanceof Error ? error.message : 'Не удалось загрузить права доступа');
+          setProfileMissing(false);
+          setUserAccess(null);
           setLoading(false);
         }
       }
@@ -79,7 +88,7 @@ const MainMenuPage: React.FC = () => {
     return () => {
       mounted = false;
     };
-  }, [user, isAdmin]);
+  }, [user, isAdmin, reloadKey]);
 
   // Проверка доступа к приложению
   const hasAccessToApp = (appId: 'equipment' | 'water'): boolean => {
@@ -98,6 +107,19 @@ const MainMenuPage: React.FC = () => {
 
   // Фильтруем доступные приложения
   const availableApps = AVAILABLE_APPS.filter(app => hasAccessToApp(app.id));
+  const menuView = menuAccessView({
+    loading,
+    accessError,
+    profileMissing,
+    appCount: availableApps.length,
+  });
+
+  const retryAccessLoad = (): void => {
+    setLoading(true);
+    setAccessError(null);
+    setProfileMissing(false);
+    setReloadKey(key => key + 1);
+  };
 
   // Обработчик выхода
   const handleLogout = async () => {
@@ -137,14 +159,29 @@ const MainMenuPage: React.FC = () => {
         </div>
 
         {/* Кнопки выбора приложения */}
-        {loading ? (
+        {menuView === 'loading' && (
           <div className="main-menu-loading">Загрузка...</div>
-        ) : availableApps.length === 0 ? (
+        )}
+        {menuView === 'error' && (
+          <div className="main-menu-no-access" role="alert">
+            <p>Не удалось загрузить права доступа. Это не значит, что доступа нет.</p>
+            <p>{accessError}</p>
+            <button type="button" className="main-menu-retry" onClick={retryAccessLoad}>Повторить</button>
+          </div>
+        )}
+        {menuView === 'profile-missing' && (
+          <div className="main-menu-no-access" role="status">
+            <p>Профиль не найден. Доступ закрыт, пока учётная запись не появится в системе.</p>
+            <button type="button" className="main-menu-retry" onClick={retryAccessLoad}>Повторить</button>
+          </div>
+        )}
+        {menuView === 'denied' && (
           <div className="main-menu-no-access">
             <p>У вас нет доступа ни к одному приложению.</p>
             <p>Обратитесь к администратору для получения доступа.</p>
           </div>
-        ) : (
+        )}
+        {menuView === 'apps' && (
           <div className="main-menu-content">
             {availableApps.map(app => (
               <button

@@ -248,6 +248,18 @@
   margin: 10px 0;
 }
 
+.main-menu-retry {
+  margin-top: 12px;
+  padding: 10px 20px;
+  background: #667eea;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 /* Адаптивность для мобильных устройств */
 @media (max-width: 768px) {
   .main-menu-page {
