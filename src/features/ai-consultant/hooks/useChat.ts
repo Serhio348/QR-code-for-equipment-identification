@@ -386,7 +386,7 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
       setIsLoading(false);
       abortControllerRef.current = null;
     }
-  }, [messages, isLoading, trimForApi, equipmentContext]);
+  }, [messages, isLoading, trimForApi, equipmentContext, waterContext]);
 
   /**
    * Повторить последнее неудачное сообщение.
@@ -459,7 +459,7 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
       setIsLoading(false);
       abortControllerRef.current = null;
     }
-  }, [lastFailed, messages, isLoading, equipmentContext, sendMessage]);
+  }, [lastFailed, messages, isLoading, equipmentContext, waterContext, sendMessage]);
 
   /**
    * Очистить историю чата.
