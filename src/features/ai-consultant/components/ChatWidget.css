@@ -648,6 +648,14 @@
   font-size: 13px;
 }
 
+.ai-chat-input__upload {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 0 8px 8px;
+  font-size: 13px;
+}
+
 /* Мобильная адаптация */
 @media (max-width: 480px) {
   .ai-chat-widget {

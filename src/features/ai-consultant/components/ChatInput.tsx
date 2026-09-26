@@ -10,6 +10,11 @@ export type { PhotoData };
 export interface ChatInputMessage {
   text: string;
   photos?: PhotoData[];
+  /** Пользователь явно включил запись выбранных фото в папку. */
+  uploadConfirmed?: boolean;
+  folderUrl?: string;
+  /** Ключи fileName:size уже записанных файлов. Повтор их не отправляет. */
+  alreadyUploaded?: string[];
 }
 
 interface ChatInputProps {
@@ -18,6 +23,7 @@ interface ChatInputProps {
   voiceTranscript?: string;
   onVoiceTranscriptUsed?: () => void;
   onQRScanClick?: () => void;
+  folderUrl?: string | null;
 }
 
 export const ChatInput: React.FC<ChatInputProps> = ({
@@ -26,10 +32,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   voiceTranscript,
   onVoiceTranscriptUsed,
   onQRScanClick,
+  folderUrl,
 }) => {
   const [text, setText] = useState('');
   const [selectedPhotos, setSelectedPhotos] = useState<PhotoData[]>([]);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  const [uploadConfirmed, setUploadConfirmed] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Обновляем текст при получении голосового ввода
@@ -56,10 +64,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       onSend({
         text: text.trim(),
         photos: selectedPhotos.length > 0 ? selectedPhotos : undefined,
+        uploadConfirmed: uploadConfirmed && selectedPhotos.length > 0,
+        folderUrl: folderUrl?.trim() || undefined,
       });
       setText('');
       setSelectedPhotos([]);
       setPhotoError(null);
+      setUploadConfirmed(false);
     }
   };
 
@@ -112,6 +123,22 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             </div>
           ))}
         </div>
+      )}
+
+      {selectedPhotos.length > 0 && (
+        <label className="ai-chat-input__upload">
+          <input
+            type="checkbox"
+            checked={uploadConfirmed}
+            disabled={!folderUrl?.trim() || isLoading}
+            onChange={(event) => setUploadConfirmed(event.target.checked)}
+          />
+          <span>
+            {folderUrl?.trim()
+              ? 'Записать эти фото в папку оборудования'
+              : 'Папка оборудования не выбрана, фото останутся только в чате'}
+          </span>
+        </label>
       )}
 
       <textarea

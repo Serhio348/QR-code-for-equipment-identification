@@ -45,6 +45,7 @@ import {
 } from '../services/consultantApi';
 import type { ChatInputMessage } from '../components/ChatInput';
 import { historyForApi } from '../services/chatHistoryPayload';
+import { photoUploadKey, planFolderUpload, uploadNewPhotos } from '../services/photoUploadIntent';
 import { logUserActivity } from '../../user-activity/services/activityLogsApi';
 
 // ============================================
@@ -144,21 +145,11 @@ const createMultimodalContent = (
   return content;
 };
 
-const DRIVE_FOLDER_URL_REGEX = /https:\/\/drive\.google\.com\/drive\/folders\/[a-zA-Z0-9_-]+/g;
-
-function findLastDriveFolderUrl(messages: ChatMessageWithMeta[]): string | null {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const content = messages[i]?.content;
-    const text = typeof content === 'string'
-      ? content
-      : content.filter(b => b.type === 'text').map(b => (b as TextContentBlock).text).join('\n');
-
-    const matches = text.match(DRIVE_FOLDER_URL_REGEX);
-    if (matches && matches.length > 0) {
-      return matches[matches.length - 1];
-    }
-  }
-  return null;
+function fileUrlFromUpload(data: unknown): string | null {
+  if (!data || typeof data !== 'object') return null;
+  const record = data as { fileUrl?: unknown; file_url?: unknown };
+  const url = record.fileUrl ?? record.file_url;
+  return typeof url === 'string' && url.startsWith('http') ? url : null;
 }
 
 /**
@@ -250,63 +241,58 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
-    // Если есть фото и пользователь просит "просто загрузить" — грузим напрямую на backend,
-    // чтобы не отправлять Base64 в LLM (это и вызывает "зависания").
-    const wantsDirectUpload = !!inputMessage.photos?.length && /загруз/i.test(inputMessage.text);
-    const lastFolderUrl = wantsDirectUpload
-      ? (equipmentContext?.googleDriveUrl || findLastDriveFolderUrl(messages))
-      : null;
-
-    let messageForAi: ChatInputMessage = inputMessage;
-
-    if (wantsDirectUpload && lastFolderUrl && inputMessage.photos?.every(p => !!(p as any).file)) {
-      // Показываем сообщение пользователя без картинок
-      const userMessage = createMessage('user', inputMessage.text);
-      const newMessages = [...messages, userMessage];
-      setMessages(newMessages);
-
-      try {
-        const uploadedLinks: string[] = [];
-
-        for (const p of inputMessage.photos || []) {
-          const resp = await uploadPhotoToDriveFolder(
-            lastFolderUrl,
-            (p as any).file as File,
-            { name: p.fileName, description: inputMessage.text },
-            controller.signal,
-          );
-
-          // GAS возвращает data.fileUrl; но структура может отличаться — пытаемся достать ссылку аккуратно.
-          const fileUrl = (resp as any)?.data?.fileUrl || (resp as any)?.data?.file_url;
-          if (typeof fileUrl === 'string' && fileUrl.startsWith('http')) {
-            uploadedLinks.push(fileUrl);
-          }
-        }
-
-        // В AI отправляем короткий текст: что фото уже загружены и куда.
-        messageForAi = {
-          text:
-            `${inputMessage.text}\n\n` +
-            `Фото загружены в папку: ${lastFolderUrl}\n` +
-            (uploadedLinks.length ? uploadedLinks.map(u => `- ${u}`).join('\n') : ''),
-          photos: undefined,
-        };
-
-        // ВАЖНО: если пользователь просил "просто загрузить" — на этом всё.
-        // Не делаем запрос к AI, иначе снова будет долго и бессмысленно.
-        const assistantText =
-          `✅ Фото загружены в папку:\n${lastFolderUrl}\n` +
-          (uploadedLinks.length ? `\nСсылки:\n${uploadedLinks.map(u => `- ${u}`).join('\n')}\n` : '');
-
-        setMessages(prev => [...prev, createMessage('assistant', assistantText)]);
+    const uploadPlan = planFolderUpload({
+      uploadConfirmed: inputMessage.uploadConfirmed === true,
+      folderUrl: inputMessage.folderUrl,
+      photoCount: inputMessage.photos?.length ?? 0,
+    });
+    if (uploadPlan.action === 'need-folder') {
+      setError('Сначала выберите оборудование с папкой на Диске');
+      setIsLoading(false);
+      abortControllerRef.current = null;
+      return;
+    }
+    if (uploadPlan.action === 'upload') {
+      const photos = (inputMessage.photos ?? []).flatMap(photo => (
+        photo.file ? [{ fileName: photo.fileName, size: photo.file.size, file: photo.file }] : []
+      ));
+      if (!inputMessage.alreadyUploaded?.length) {
+        setMessages([...messages, createMessage('user', inputMessage.text || 'Запись фото в папку')]);
+      }
+      const batch = await uploadNewPhotos(photos, new Set(inputMessage.alreadyUploaded ?? []), async (photo) => {
+        const response = await uploadPhotoToDriveFolder(
+          uploadPlan.folderUrl,
+          photo.file,
+          { name: photo.fileName, description: inputMessage.text },
+          controller.signal,
+        );
+        const fileUrl = fileUrlFromUpload(response.data);
+        if (!fileUrl) throw new Error('Сервер не вернул ссылку на файл');
+        return fileUrl;
+      });
+      const uploadedKeys = [
+        ...(inputMessage.alreadyUploaded ?? []),
+        ...batch.uploaded.map(item => photoUploadKey(item.photo)),
+      ];
+      if (batch.failed.length > 0) {
+        const failedNames = batch.failed.map(photo => photo.fileName).join(', ');
+        setError(`Часть фото уже в папке. Не записались: ${failedNames}. Повтор не отправит записанные файлы ещё раз.`);
+        setLastFailed({
+          message: { ...inputMessage, alreadyUploaded: uploadedKeys },
+          messagesSnapshot: [],
+        });
         setIsLoading(false);
         abortControllerRef.current = null;
         return;
-      } catch {
-        // Если прямую загрузку сделать не удалось — fallback на мультимодальный режим ниже.
-        messageForAi = inputMessage;
       }
+      const links = batch.uploaded.map(item => `- ${item.url}`).join('\n');
+      setMessages(prev => [...prev, createMessage('assistant', `Фото записаны в папку:\n${uploadPlan.folderUrl}\n${links}`)]);
+      setIsLoading(false);
+      abortControllerRef.current = null;
+      return;
     }
+
+    let messageForAi: ChatInputMessage = inputMessage;
 
     const content = createMultimodalContent(messageForAi);
 
@@ -408,6 +394,12 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
    */
   const retryLastMessage = useCallback(async () => {
     if (!lastFailed || isLoading) return;
+    if (lastFailed.message.uploadConfirmed) {
+      const message = lastFailed.message;
+      setLastFailed(null);
+      await sendMessage(message);
+      return;
+    }
 
     setError(null);
     setIsLoading(true);
@@ -467,7 +459,7 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
       setIsLoading(false);
       abortControllerRef.current = null;
     }
-  }, [lastFailed, messages, isLoading, equipmentContext]);
+  }, [lastFailed, messages, isLoading, equipmentContext, sendMessage]);
 
   /**
    * Очистить историю чата.
