@@ -21,6 +21,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useRequestGate } from '@/shared/async/requestGate';
 import { Equipment, EquipmentSpecs } from '../types/equipment';
 import { getAllEquipment, getEquipmentById } from '../services/equipmentApi';
 
@@ -158,6 +159,7 @@ export function useEquipmentData(id?: string): UseEquipmentDataResult {
   
   // Используем ref для предотвращения обновления состояния после размонтирования
   const isMountedRef = useRef(true);
+  const requests = useRequestGate();
   
   // Используем ref для хранения актуального id
   const idRef = useRef(id);
@@ -172,14 +174,17 @@ export function useEquipmentData(id?: string): UseEquipmentDataResult {
    * @param forceRefresh - Принудительная перезагрузка (игнорирует кеш)
    */
   const loadData = useCallback(async (forceRefresh: boolean = false) => {
-    const currentId = idRef.current;
-    const cacheKey = currentId || 'all';
+    const requestedId = idRef.current;
+    const cacheKey = requestedId || 'all';
+    const token = requests.begin();
+    const stillCurrent = (): boolean =>
+      isMountedRef.current && requests.isCurrent(token) && idRef.current === requestedId;
     
     // Проверяем кеш, если не принудительная перезагрузка
     if (!forceRefresh) {
       const cached = cache.get(cacheKey);
       if (cached && isCacheValid(cached.timestamp)) {
-        if (isMountedRef.current) {
+        if (stillCurrent()) {
           setData(cached.data);
           setLoading(false);
           setError(null);
@@ -189,19 +194,19 @@ export function useEquipmentData(id?: string): UseEquipmentDataResult {
     }
     
     // Устанавливаем состояние загрузки
-    if (isMountedRef.current) {
+    if (stillCurrent()) {
       setLoading(true);
       setError(null);
     }
     
     try {
-      console.debug('[useEquipmentData] Начало загрузки данных, id:', currentId, 'forceRefresh:', forceRefresh);
+      console.debug('[useEquipmentData] Начало загрузки данных, id:', requestedId, 'forceRefresh:', forceRefresh);
       let result: Equipment | Equipment[];
       
-      if (currentId) {
+      if (requestedId) {
         // Загрузка одного оборудования
-        console.debug('[useEquipmentData] Загрузка одного оборудования:', currentId);
-        const equipment = await getEquipmentById(currentId);
+        console.debug('[useEquipmentData] Загрузка одного оборудования:', requestedId);
+        const equipment = await getEquipmentById(requestedId);
         if (!equipment) {
           throw new Error('Оборудование не найдено');
         }
@@ -214,28 +219,25 @@ export function useEquipmentData(id?: string): UseEquipmentDataResult {
         result = allEquipment.map(normalizeEquipmentDates);
       }
       
-      // Сохраняем в кеш
+      // Сохраняем в кеш даже если пользователь уже ушёл на другую карточку.
       cache.set(cacheKey, {
         data: result,
         timestamp: Date.now(),
       });
       
-      // Обновляем состояние только если компонент еще смонтирован
-      if (isMountedRef.current) {
-        setData(result);
-        setLoading(false);
-        setError(null);
-      }
-    } catch (err: any) {
+      if (!stillCurrent()) return;
+      setData(result);
+      setLoading(false);
+      setError(null);
+    } catch (err: unknown) {
       console.error('Ошибка загрузки оборудования:', err);
-      
-      if (isMountedRef.current) {
-        setError(err.message || 'Не удалось загрузить данные оборудования');
-        setLoading(false);
-        setData(null);
-      }
+      if (!stillCurrent()) return;
+      const message = err instanceof Error ? err.message : 'Не удалось загрузить данные оборудования';
+      setError(message);
+      setLoading(false);
+      setData(null);
     }
-  }, []);
+  }, [requests]);
   
   // Сохраняем функцию в ref для доступа из useEffect
   loadDataRef.current = loadData;
