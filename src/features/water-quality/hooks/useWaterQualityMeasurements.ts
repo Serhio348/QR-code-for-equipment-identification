@@ -17,6 +17,7 @@ import {
   updateAnalysisResult,
   deleteAnalysisResult,
 } from '../services';
+import { AnalysisFileCleanupError } from '../services/analysisAttachmentLifecycle';
 import type {
   WaterAnalysis,
   WaterAnalysisInput,
@@ -169,9 +170,11 @@ export function useWaterAnalysisManagement() {
       setError(null);
       await deleteWaterAnalysis(id);
       return true;
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Не удалось удалить анализ';
       console.error('[useWaterAnalysisManagement] Ошибка удаления:', err);
-      setError(err.message || 'Не удалось удалить анализ');
+      setError(message);
+      if (err instanceof AnalysisFileCleanupError) throw err;
       return false;
     } finally {
       setLoading(false);

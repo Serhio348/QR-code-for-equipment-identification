@@ -17,7 +17,9 @@ import { useWaterAnalysisManagement, useWaterAnalysis } from '../hooks/useWaterQ
 import { useSamplingPoints } from '../hooks/useSamplingPoints';
 import { useCurrentUser } from '../../auth/hooks/useCurrentUser';
 import { checkResultCompliance, uploadAnalysisPDF, deleteAnalysisPDF } from '../services';
+import { detachAnalysisAttachment, linkUploadedAnalysisPdf } from '../services/analysisAttachmentLifecycle';
 import { planAnalysisResults } from '../services/analysisSavePlan';
+import { equipmentIdForSamplingPoint } from '../services/samplingPointEquipment';
 import { authorshipForSave } from '../services/analysisAuthorship';
 import { concludeCompliance } from '../services/complianceConclusion';
 import { saveAnalysisBundle } from '../services/saveAnalysisBundle';
@@ -144,11 +146,21 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
 
     try {
       setRemovingAttachmentUrl(fileUrl);
-      await deleteAnalysisPDF(fileUrl);
-      const updatedUrls = attachmentUrls.filter((url) => url !== fileUrl);
-      await update(analysisId, { attachmentUrls: updatedUrls });
-      setAttachmentUrls(updatedUrls);
-      toast.success('Файл удален');
+      const outcome = await detachAnalysisAttachment(attachmentUrls, fileUrl, {
+        writeUrls: async (urls) => {
+          const updated = await update(analysisId, { attachmentUrls: urls });
+          if (!updated) {
+            throw new Error('Не удалось убрать ссылку на файл');
+          }
+        },
+        deleteFile: deleteAnalysisPDF,
+      });
+      setAttachmentUrls(outcome.urls);
+      if (outcome.fileRemoved) {
+        toast.success('Файл удален');
+      } else {
+        toast.warning('Ссылка убрана, но файл в хранилище не удалился');
+      }
     } catch (err: any) {
       console.error('[WaterAnalysisForm] Ошибка удаления файла:', err);
       toast.error(err.message || 'Не удалось удалить файл');
@@ -254,14 +266,17 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
         try {
           setUploadingPdf(true);
           const pdfUrl = await uploadAnalysisPDF(pdfFile, createdAnalysis.id);
-          
-          // Обновляем анализ с URL файла
           const existingUrls = isEditMode ? attachmentUrls : [];
-
-          await update(createdAnalysis.id, {
-            attachmentUrls: [...existingUrls, pdfUrl],
+          const nextUrls = await linkUploadedAnalysisPdf(existingUrls, pdfUrl, {
+            writeUrls: async (urls) => {
+              const updated = await update(createdAnalysis.id, { attachmentUrls: urls });
+              if (!updated) {
+                throw new Error('Не удалось записать ссылку на PDF');
+              }
+            },
+            deleteFile: deleteAnalysisPDF,
           });
-          setAttachmentUrls([...existingUrls, pdfUrl]);
+          setAttachmentUrls(nextUrls);
         } catch (err: any) {
           console.error('[WaterAnalysisForm] Ошибка загрузки PDF:', err);
           toast.warning('Анализ сохранен, но не удалось загрузить PDF файл: ' + (err.message || 'Неизвестная ошибка'));
