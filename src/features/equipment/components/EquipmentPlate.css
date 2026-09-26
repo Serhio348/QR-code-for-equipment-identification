@@ -142,6 +142,16 @@
   margin: 0;
 }
 
+.qr-missing {
+  margin: 0;
+  padding: 16px;
+  text-align: center;
+  color: #555;
+  background: #f9f9f9;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+}
+
 .qr-code-container {
   display: flex;
   justify-content: center;

@@ -60,14 +60,14 @@ export async function getEquipmentById(id: string, preventCache: boolean = false
 
     const data: ApiResponse<Equipment> = await response.json();
 
-    if (!data.success || !data.data) {
-      return null;
+    if (!data.success) {
+      throw new Error(data.error || 'Не удалось загрузить оборудование');
     }
 
-    return data.data;
+    return data.data ?? null;
   } catch (error) {
     console.error('Error getting equipment by ID:', error);
-    return null;
+    throw error;
   }
 }
 
