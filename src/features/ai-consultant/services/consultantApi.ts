@@ -1,4 +1,5 @@
 import { supabase } from '../../../shared/config/supabase';
+import { readSseBuffer } from './sseChatEvents';
 
 // URL API (из переменных окружения)
 const API_URL = import.meta.env.VITE_AI_CONSULTANT_API_URL || '';
@@ -169,24 +170,23 @@ export async function* streamChatMessage(
   const decoder = new TextDecoder();
   let buffer = '';
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const parts = buffer.split('\n\n');
-    buffer = parts.pop() ?? '';
-
-    for (const part of parts) {
-      const line = part.trim();
-      if (line.startsWith('data: ')) {
-        try {
-          yield JSON.parse(line.slice(6)) as StreamEvent;
-        } catch {
-          // пропускаем невалидный JSON
-        }
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
+      const parsed = readSseBuffer(buffer, done);
+      buffer = parsed.rest;
+      for (const event of parsed.events) {
+        yield event as StreamEvent;
       }
+      if (parsed.protocolError) {
+        yield { type: 'error', message: parsed.protocolError };
+        return;
+      }
+      if (done) return;
     }
+  } finally {
+    reader.releaseLock();
   }
 }
 

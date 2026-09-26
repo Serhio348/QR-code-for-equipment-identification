@@ -9,6 +9,7 @@ import { tools } from '../../tools/index.js';
 import { authMiddleware, AuthenticatedRequest } from '../../middleware/auth.js';
 import { getOrCreateSession, saveMessages, updateSessionTitle, loadRecentHistory } from '../../services/ai/chatMemoryService.js';
 import { mergeConversation, type ConversationMode } from '../../services/ai/conversationHistory.js';
+import { validateChatMessages } from './chatRequestValidation.js';
 import { loadFactsForPrompt } from '../../services/ai/agentMemoryService.js';
 import { buildDriveFileContext } from '../../services/ai/driveFileContextService.js';
 import { buildDocumentSessionPrompt } from '../../services/ai/documentSessionService.js';
@@ -20,7 +21,6 @@ import rateLimit from 'express-rate-limit';
 import { config } from '../../config/env.js';
 
 const router = Router();
-const MAX_MESSAGES = 50;
 
 const chatRateLimit = rateLimit({
     windowMs: 60 * 1000,
@@ -44,12 +44,9 @@ interface StreamChatRequestBody {
 router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
     const { messages, equipmentContext, waterContext, conversation } = req.body as StreamChatRequestBody;
 
-    if (!messages || !Array.isArray(messages) || messages.length === 0) {
-        res.status(400).json({ error: 'Messages array is required' });
-        return;
-    }
-    if (messages.length > MAX_MESSAGES) {
-        res.status(400).json({ error: `Too many messages: max ${MAX_MESSAGES}` });
+    const invalid = validateChatMessages(messages);
+    if (invalid) {
+        res.status(400).json({ error: invalid });
         return;
     }
 

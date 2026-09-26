@@ -21,10 +21,9 @@ import { loadUserAppAccess } from '../../services/ai/userAppAccessService.js';
 import { filterToolsByAccess, buildAppAccessPrompt } from '../../services/ai/toolAccessPolicy.js';
 import { runWithToolContext } from '../../services/ai/toolContext.js';
 import { mergeConversation, type ConversationMode } from '../../services/ai/conversationHistory.js';
+import { validateChatMessages } from './chatRequestValidation.js';
 
 const router = Router();
-const MAX_MESSAGES = 50;
-const MAX_MESSAGE_LENGTH = 32_000;
 
 const chatRateLimit = rateLimit({
     windowMs: 60 * 1000,
@@ -49,32 +48,10 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
     try {
         const { messages, equipmentContext, waterContext, conversation } = req.body as ChatRequestBody;
 
-        if (!messages || !Array.isArray(messages) || messages.length === 0) {
-            res.status(400).json({ error: 'Messages array is required' });
+        const invalid = validateChatMessages(messages);
+        if (invalid) {
+            res.status(400).json({ error: invalid });
             return;
-        }
-        if (messages.length > MAX_MESSAGES) {
-            res.status(400).json({ error: `Too many messages: max ${MAX_MESSAGES} allowed` });
-            return;
-        }
-
-        for (const msg of messages) {
-            if (!msg.role || !msg.content) {
-                res.status(400).json({ error: 'Invalid message format' });
-                return;
-            }
-            if (msg.role !== 'user' && msg.role !== 'assistant') {
-                res.status(400).json({ error: 'Invalid message role' });
-                return;
-            }
-            if (typeof msg.content !== 'string' && !Array.isArray(msg.content)) {
-                res.status(400).json({ error: 'Invalid content type' });
-                return;
-            }
-            if (typeof msg.content === 'string' && msg.content.length > MAX_MESSAGE_LENGTH) {
-                res.status(400).json({ error: `Message too long: max ${MAX_MESSAGE_LENGTH} characters` });
-                return;
-            }
         }
 
         const userId = req.user?.id || '';
