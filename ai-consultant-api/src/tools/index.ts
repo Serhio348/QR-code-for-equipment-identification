@@ -92,6 +92,7 @@ import {
     getToolRequiredApp,
     isToolAllowedForAccess,
 } from '../services/ai/toolAccessPolicy.js';
+import { isCacheableTool, noteToolWrite, readCachedTool, storeCachedTool } from './toolResultCache.js';
 
 // ============================================
 // Объединённый массив tools
@@ -216,26 +217,6 @@ const toolExecutors: Record<string, (name: string, input: Record<string, unknown
 };
 
 // ============================================
-// Кэш результатов инструментов (TTL 5 минут)
-// ============================================
-
-// Только read-only инструменты — не кэшируем запись/изменение данных
-const CACHEABLE_TOOLS = new Set([
-    'get_all_equipment', 'get_equipment_details', 'get_maintenance_log',
-    'search_files_in_folder', 'read_file_content',
-    'get_maintenance_photos', 'search_maintenance_photos',
-    'get_water_devices', 'get_water_readings', 'analyze_water_consumption',
-    'get_water_quality_analyses', 'get_all_water_alerts', 'get_water_quality_alerts', 'get_water_meter_passport',
-    'get_invoices', 'get_memory',
-    'portal_list_invoices', 'portal_list_downloaded',
-]);
-
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 минут
-
-interface CacheEntry { result: unknown; expiresAt: number; }
-const toolCache = new Map<string, CacheEntry>();
-
-// ============================================
 // Функция выполнения tool
 // ============================================
 
@@ -292,11 +273,10 @@ export async function executeToolCall(
         throw new Error(`Unknown tool: ${name}`);
     }
 
-    // Проверяем кэш для read-only инструментов
-    if (CACHEABLE_TOOLS.has(name)) {
-        const cacheKey = `${name}:${JSON.stringify(input)}`;
-        const cached = toolCache.get(cacheKey);
-        if (cached && cached.expiresAt > Date.now()) {
+    // Проверяем кэш для read-only инструментов. Права уже проверены выше.
+    if (isCacheableTool(name)) {
+        const cached = readCachedTool(name, input);
+        if (cached.hit) {
             console.log(`[${requestId}] Tool ${name} — из кэша`);
             return cached.result;
         }
@@ -310,11 +290,10 @@ export async function executeToolCall(
         const duration = Date.now() - startTime;
         console.log(`[${requestId}] Tool ${name} завершён за ${duration}мс`);
 
-        // Сохраняем в кэш если инструмент кэшируемый
-        if (CACHEABLE_TOOLS.has(name)) {
-            const cacheKey = `${name}:${JSON.stringify(input)}`;
-            toolCache.set(cacheKey, { result, expiresAt: Date.now() + CACHE_TTL_MS });
+        if (isCacheableTool(name)) {
+            storeCachedTool(name, input, result);
         }
+        noteToolWrite(name);
 
         return result;
     } catch (error) {
