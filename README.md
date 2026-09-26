@@ -262,7 +262,7 @@ CLAUDE_MODEL=claude-sonnet-4-20250514
 FALLBACK_PROVIDER=claude    # резервный провайдер
 
 # Google Apps Script API
-GAS_API_URL=https://script.google.com/macros/s/AKfycbyzLcAUNQE597JcAhgN-wQYo5CybIPxswBz1sgCmOM08qHljUQA4EERHqNmyrFjUxNGNQ/exec
+GAS_API_URL=https://script.google.com/macros/s/AKfycbxEf20_m9W7Zix3qwPZg1cfKH-dwrYYfqy1nkIHWCWlF1ggK00O3d_Ap6yRJJQNfv4K/exec
 
 # Сервер
 PORT=3001

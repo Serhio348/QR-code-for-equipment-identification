@@ -17,6 +17,8 @@ import { getInvoicesList, downloadInvoice, readInvoiceFile } from '../browserSer
 import { parseInvoiceText } from '../invoiceParserService.js';
 import { updateTariffFromInvoice } from '../ai/agentMemoryService.js';
 import { checkAndNotify } from './notificationService.js';
+import { invoiceNoticeFromRow, type InvoiceNotice } from './invoiceIdentity.js';
+import { invoiceFileKey, invoicePdfAction, nextStoragePath } from './invoiceFileState.js';
 import { config } from '../../config/env.js';
 import { fetchAllPages } from './pagedSelect.js';
 
@@ -96,35 +98,33 @@ export async function syncInvoices(forceAll = false): Promise<SyncResult> {
         return result;
     }
 
-    let existingKeys = new Set<string>();
-    if (!forceAll) {
-        let existing: Array<{ period: string; account_number: string | null }>;
-        try {
-            existing = await fetchAllPages<{ period: string; account_number: string | null }>(
-                (from, to) => supabase
-                    .from('water_invoices')
-                    .select('period, account_number')
-                    .order('id', { ascending: true })
-                    .range(from, to),
-            );
-        } catch (err) {
-            const message = err instanceof Error ? err.message : String(err);
-            throw new Error(`Failed to load existing invoices: ${message}`);
-        }
+    const existingFiles = new Map<string, string | null>();
+    try {
+        const existing = await fetchAllPages<{ period: string; account_number: string | null; storage_path: string | null }>(
+            (from, to) => supabase
+                .from('water_invoices')
+                .select('period, account_number, storage_path')
+                .order('id', { ascending: true })
+                .range(from, to),
+        );
         for (const row of existing) {
-            existingKeys.add(`${row.period}|${row.account_number ?? ''}`);
+            existingFiles.set(invoiceFileKey(row.period, row.account_number), row.storage_path);
         }
-        console.log(`[invoiceSync] Already in DB: ${existingKeys.size} records`);
+        console.log(`[invoiceSync] Already in DB: ${existingFiles.size} records`);
+    } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(`Failed to load existing invoices: ${message}`);
     }
 
-    let latestSaved: Awaited<ReturnType<typeof parseInvoiceText>> | null = null;
+    let savedParsed: Awaited<ReturnType<typeof parseInvoiceText>>[] = [];
+    const savedNotices: InvoiceNotice[] = [];
 
     for (const inv of pdfInvoices) {
         const fileName = inv.title || `invoice_${Date.now()}.pdf`;
         let filePath: string | null = null;
         try {
             const fastMeta = extractPeriodAndAccountFromFileName(fileName);
-            if (!forceAll && fastMeta && existingKeys.has(`${fastMeta.period}|${fastMeta.account ?? ''}`)) {
+            if (fastMeta && invoicePdfAction(existingFiles, fastMeta.period, fastMeta.account, forceAll) === 'skip') {
                 result.skipped++;
                 result.details.push({
                     fileName,
@@ -147,8 +147,8 @@ export async function syncInvoices(forceAll = false): Promise<SyncResult> {
                 throw new Error(`Invalid period parsed from ${fileName}: ${parsed.period}`);
             }
 
-            const key = `${parsed.period}|${parsed.account_number ?? ''}`;
-            if (!forceAll && existingKeys.has(key)) {
+            const key = invoiceFileKey(parsed.period, parsed.account_number);
+            if (invoicePdfAction(existingFiles, parsed.period, parsed.account_number, forceAll) === 'skip') {
                 result.skipped++;
                 result.details.push({
                     fileName,
@@ -160,7 +160,8 @@ export async function syncInvoices(forceAll = false): Promise<SyncResult> {
                 continue;
             }
 
-            let storagePath: string | null = null;
+            const previousPath = existingFiles.get(key) ?? null;
+            let uploadedPath: string | null = null;
             try {
                 const fileBuffer = fs.readFileSync(filePath);
                 const storageKey = `invoices/${parsed.account_number ?? 'unknown'}/${parsed.period}.pdf`;
@@ -168,15 +169,16 @@ export async function syncInvoices(forceAll = false): Promise<SyncResult> {
                     .from('invoices')
                     .upload(storageKey, fileBuffer, { contentType: 'application/pdf', upsert: true });
                 if (!uploadError) {
-                    storagePath = storageKey;
+                    uploadedPath = storageKey;
                 } else {
                     console.warn(`[invoiceSync] Storage upload failed for ${fileName}: ${uploadError.message}`);
                 }
             } catch (storageErr) {
                 console.warn(`[invoiceSync] Storage upload failed for ${fileName}:`, storageErr);
             }
+            const storagePath = nextStoragePath(previousPath, uploadedPath);
 
-            const { error: dbError } = await supabase.from('water_invoices').upsert({
+            const { data: savedRow, error: dbError } = await supabase.from('water_invoices').upsert({
                 period: parsed.period,
                 period_date: `${parsed.period}-01`,
                 account_number: parsed.account_number,
@@ -189,12 +191,14 @@ export async function syncInvoices(forceAll = false): Promise<SyncResult> {
                 file_name: fileName,
                 storage_path: storagePath,
                 raw_text: rawText.slice(0, 50000),
-            }, { onConflict: 'period,account_number' });
+            }, { onConflict: 'period,account_number' }).select('id, period, account_number, amount_byn, volume_m3, storage_path').single();
             if (dbError) throw new Error(`DB error: ${dbError.message}`);
+            if (!savedRow?.id || !savedRow.period) throw new Error('DB error: saved invoice has no id');
+            savedNotices.push(invoiceNoticeFromRow(savedRow));
+            savedParsed.push(parsed);
 
             result.saved++;
-            existingKeys.add(key);
-            if (!latestSaved || parsed.period > latestSaved.period) latestSaved = parsed;
+            existingFiles.set(key, storagePath);
             result.details.push({
                 fileName,
                 period: parsed.period,
@@ -211,29 +215,11 @@ export async function syncInvoices(forceAll = false): Promise<SyncResult> {
         }
     }
 
-    const savedDetailsRaw = result.details.filter(d => d.status === 'saved');
-    const savedDetails = await Promise.all(
-        savedDetailsRaw.map(async (d) => {
-            const { data: row } = await supabase
-                .from('water_invoices')
-                .select('amount_byn, volume_m3, storage_path')
-                .eq('period', d.period)
-                .limit(1)
-                .single();
-            return {
-                period: d.period,
-                amount_byn: (row?.amount_byn as number | null) ?? null,
-                volume_m3: (row?.volume_m3 as number | null) ?? null,
-                storage_path: (row?.storage_path as string | null) ?? null,
-            };
-        })
-    );
-
-    await checkAndNotify(savedDetails, latestSaved).catch((err) => {
+    await checkAndNotify(savedNotices, savedParsed).catch((err) => {
         console.warn('[invoiceSync] checkAndNotify failed:', err);
     });
-    if (latestSaved) {
-        await updateTariffFromInvoice(latestSaved).catch((err) => {
+    for (const parsed of savedParsed) {
+        await updateTariffFromInvoice(parsed).catch((err) => {
             console.warn('[invoiceSync] updateTariffFromInvoice failed:', err);
         });
     }

@@ -29,6 +29,8 @@ import {
 import { validateLimit, validateId, validateISODate } from './validators';
 import { mapWaterAnalysisFromDb, mapSamplingPointFromDb } from './mappers';
 import { getAnalysisResults } from './analysisResults';
+import { deleteAnalysisWithAttachments } from './analysisAttachmentLifecycle';
+import { deleteAnalysisPDF } from './waterQualityStorage';
 
 /**
  * Получить все анализы с фильтрами и кэшированием
@@ -588,42 +590,50 @@ export async function updateWaterAnalysis(
  */
 export async function deleteWaterAnalysis(id: string): Promise<void> {
   try {
-    // Шаг 1: Валидация ID
     validateId(id, 'ID анализа');
+    const analysisId = id.trim();
 
-    // Шаг 2: Удаление из БД
-    const { error } = await supabase
-      .from('water_analysis')
-      .delete()
-      .eq('id', id.trim());
-
-    // Шаг 3: Обработка ошибок
-    if (error) {
-      console.error('[waterAnalysisApi] Ошибка deleteWaterAnalysis:', {
-        error: {
-          code: error.code,
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-        },
-        id: id.trim(),
-      });
-      
-      // Специальная обработка ошибки foreign key constraint
-      // Это означает, что анализ используется в других таблицах
-      if (error.code === '23503') {
-        throw new Error('Невозможно удалить анализ: он используется в других записях');
-      }
-      
-      throw new Error(error.message || 'Ошибка при удалении анализа');
-    }
-
-    // Шаг 4: Очистка кэша
-    // Очищаем кэш анализов, конкретного анализа и результатов
-    clearWaterQualityCache('water_analyses');
-    clearWaterQualityCache(`water_analysis_${id.trim()}`);
-    clearWaterQualityCache('analysis_results');
-    clearWaterQualityCache(`analysis_results_${id.trim()}`);
+    await deleteAnalysisWithAttachments({
+      readUrls: async () => {
+        const { data, error } = await supabase
+          .from('water_analysis')
+          .select('attachment_urls')
+          .eq('id', analysisId)
+          .maybeSingle();
+        if (error) {
+          throw new Error(error.message || 'Ошибка при удалении анализа');
+        }
+        if (!data) return null;
+        const urls = data.attachment_urls;
+        return Array.isArray(urls) ? urls.filter((item): item is string => typeof item === 'string') : [];
+      },
+      deleteRecord: async () => {
+        const { error } = await supabase
+          .from('water_analysis')
+          .delete()
+          .eq('id', analysisId);
+        if (error) {
+          console.error('[waterAnalysisApi] Ошибка deleteWaterAnalysis:', {
+            error: {
+              code: error.code,
+              message: error.message,
+              details: error.details,
+              hint: error.hint,
+            },
+            id: analysisId,
+          });
+          if (error.code === '23503') {
+            throw new Error('Невозможно удалить анализ: он используется в других записях');
+          }
+          throw new Error(error.message || 'Ошибка при удалении анализа');
+        }
+        clearWaterQualityCache('water_analyses');
+        clearWaterQualityCache(`water_analysis_${analysisId}`);
+        clearWaterQualityCache('analysis_results');
+        clearWaterQualityCache(`analysis_results_${analysisId}`);
+      },
+      deleteFile: deleteAnalysisPDF,
+    });
   } catch (error: any) {
     // Если ошибка уже обработана выше, просто пробрасываем
     if (error.message && (

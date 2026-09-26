@@ -56,6 +56,7 @@ import {
   roleCoverage,
   type RoleCoverage,
 } from '../services/balanceStatus';
+import { useRequestGate } from '@/shared/async/requestGate';
 import { useDeviceDetection } from '@/shared/hooks/useDeviceDetection';
 import './WaterDashboard.css';
 
@@ -615,7 +616,11 @@ const WaterDashboard: React.FC = () => {
 
   useLayoutEffect(() => {
     const onResize = (): void => {
-      setViewportSize({ width: window.innerWidth, height: window.innerHeight });
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      setViewportSize(prev => (
+        prev.width === width && prev.height === height ? prev : { width, height }
+      ));
     };
     onResize();
     window.addEventListener('resize', onResize);
@@ -638,10 +643,17 @@ const WaterDashboard: React.FC = () => {
   const meterGroupsRef = useRef<MeterGroup[]>([]);
   const selectedMonthRef = useRef<SelectedMonth>(selectedMonth);
   const staticDataLoadedRef = useRef(false);
+  const balanceRequests = useRequestGate();
+  const dashboardRequests = useRequestGate();
 
   // ── Load balance + KPI for a given month ─────────────────────────────────
 
   const loadBalanceAndKpi = useCallback(async (year: number, month: number) => {
+    const token = balanceRequests.begin();
+    const stillCurrent = (): boolean =>
+      balanceRequests.isCurrent(token)
+      && selectedMonthRef.current.year === year
+      && selectedMonthRef.current.month === month;
     setBalanceLoading(true);
     try {
       const prevMonthStart = new Date(year, month - 1, 1);
@@ -910,6 +922,8 @@ const WaterDashboard: React.FC = () => {
           return b.currentMonth - a.currentMonth;
         });
 
+      if (!stillCurrent()) return;
+
       const measuredIds = new Set<string>();
       for (const id of allDeviceIds) {
         const days = byDeviceDay[id];
@@ -938,17 +952,20 @@ const WaterDashboard: React.FC = () => {
         softenedWaterMonth,
       }));
     } catch (err) {
+      if (!stillCurrent()) return;
       console.error('[WaterDashboard] loadBalanceAndKpi error:', err);
       setBalanceError(err instanceof Error ? err.message : 'Не удалось загрузить баланс');
     } finally {
-      setBalanceLoading(false);
+      if (stillCurrent()) setBalanceLoading(false);
     }
-  }, []);
+  }, [balanceRequests]);
 
 
   // ── Load main dashboard data ──────────────────────────────────────────────
 
   const loadDashboard = useCallback(async () => {
+    const token = dashboardRequests.begin();
+    const stillCurrent = (): boolean => dashboardRequests.isCurrent(token);
     setLoading(true);
     try {
       const [
@@ -973,6 +990,8 @@ const WaterDashboard: React.FC = () => {
           .select('device_id, name, object_name, address, device_role'),
         getTrackedBeliotRegistry(),
       ]);
+
+      if (!stillCurrent()) return;
 
       // ── Карта устройств ──────────────────────────────────────────────────
       const trackedIds = new Set(registryRes.devices.map(device => device.deviceId));
@@ -1021,6 +1040,7 @@ const WaterDashboard: React.FC = () => {
         samplingPointsCount: samplingPointsRes.data?.length || 0,
       }));
 
+      if (!stillCurrent()) return;
       staticDataLoadedRef.current = true;
       setDashboardError(null);
       const prodForToday = chartProd.length > 0 ? chartProd : prodDevices;
@@ -1030,14 +1050,15 @@ const WaterDashboard: React.FC = () => {
         loadProductionDayReadings(selectedProductionDay, prodForToday),
       ]);
     } catch (err) {
+      if (!stillCurrent()) return;
       console.error('[WaterDashboard] loadDashboard error:', err);
       setDashboardError(err instanceof Error ? err.message : 'Не удалось загрузить дашборд');
     } finally {
-      setLoading(false);
+      if (stillCurrent()) setLoading(false);
     }
   // loadProductionDayReadings declared after this callback — safe because it runs on mount, not at definition time
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadBalanceAndKpi]);
+  }, [dashboardRequests, loadBalanceAndKpi]);
 
   useEffect(() => { loadDashboard(); }, [loadDashboard]);
 
@@ -1510,13 +1531,15 @@ const WaterDashboard: React.FC = () => {
   }, [kpi, selectedMonth, loading, lossWashM3, lossOsmosisM3]);
 
   useEffect(() => {
-    if (
-      distributionRole === 'production' &&
-      !monthlyMeterRows.some(row => row.role === 'production' || row.role === 'source')
-    ) {
+    const hasProductionSide = monthlyMeterRows.some(
+      row => row.role === 'production' || row.role === 'source',
+    );
+    const hasDomestic = monthlyMeterRows.some(row => row.role === 'domestic');
+    if (distributionRole === 'production' && !hasProductionSide && hasDomestic) {
       setDistributionRole('domestic');
+      return;
     }
-    if (distributionRole === 'domestic' && !monthlyMeterRows.some(row => row.role === 'domestic')) {
+    if (distributionRole === 'domestic' && !hasDomestic && hasProductionSide) {
       setDistributionRole('production');
     }
   }, [distributionRole, monthlyMeterRows]);

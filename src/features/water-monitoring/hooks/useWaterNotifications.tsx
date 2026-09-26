@@ -6,6 +6,7 @@ import {
     downloadInvoicePdf,
     type WaterNotification,
 } from '../services/notificationsApi';
+import { invoiceDownloadSearch, type InvoiceDownloadRequest } from '../services/invoiceDownloadQuery';
 
 /**
  * Загружает непрочитанные уведомления при открытии вкладки Вода
@@ -23,8 +24,7 @@ export function useWaterNotifications(): void {
 
             for (const n of notifications) {
                 if (n.type === 'new_invoice') {
-                    const period = n.payload?.period as string | undefined;
-                    showInvoiceToast(n, period);
+                    showInvoiceToast(n);
                 } else if (n.type === 'high_consumption') {
                     toast.warning(`${n.title}\n${n.body}`, { autoClose: 10000 });
                 } else if (n.type === 'tariff_change') {
@@ -42,10 +42,19 @@ export function useWaterNotifications(): void {
     }, []); // только при монтировании
 }
 
-function showInvoiceToast(n: WaterNotification, period: string | undefined): void {
+function invoiceRequestFromPayload(payload: Record<string, unknown> | undefined): InvoiceDownloadRequest {
+    return {
+        invoiceId: typeof payload?.invoice_id === 'string' ? payload.invoice_id : undefined,
+        period: typeof payload?.period === 'string' ? payload.period : undefined,
+        account: typeof payload?.account_number === 'string' ? payload.account_number : undefined,
+    };
+}
+
+function showInvoiceToast(n: WaterNotification): void {
+    const request = invoiceRequestFromPayload(n.payload);
+    const canOpen = invoiceDownloadSearch(request) !== null;
     const openPdf = async () => {
-        if (!period) return;
-        const blob = await downloadInvoicePdf(period);
+        const blob = await downloadInvoicePdf(request);
         if (!blob) {
             toast.error('Не удалось получить счёт');
             return;
@@ -59,8 +68,8 @@ function showInvoiceToast(n: WaterNotification, period: string | undefined): voi
         ({ closeToast }) => (
             <div>
                 <div style={{ fontWeight: 600, marginBottom: 4 }}>{n.title}</div>
-                <div style={{ fontSize: 13, marginBottom: period ? 8 : 0 }}>{n.body}</div>
-                {period && (
+                <div style={{ fontSize: 13, marginBottom: canOpen ? 8 : 0 }}>{n.body}</div>
+                {canOpen && (
                     <button
                         onClick={() => { openPdf(); closeToast?.(); }}
                         style={{

@@ -24,6 +24,9 @@ export type SamplingFrequency = 'daily' | 'weekly' | 'monthly' | 'custom';
  */
 export type AnalysisStatus = 'in_progress' | 'completed' | 'deviation' | 'cancelled';
 
+/** Заключение о соответствии нормам. Не совпадает со статусом выполнения. */
+export type ComplianceConclusion = 'unchecked' | 'compliant' | 'non_compliant';
+
 /**
  * Состояние пробы
  */
@@ -89,6 +92,8 @@ export interface WaterAnalysis {
   analyzedBy?: string;
   responsiblePerson?: string;
   status: AnalysisStatus;
+  complianceConclusion?: ComplianceConclusion;
+  complianceBasis?: string;
   notes?: string;
   sampleCondition?: SampleCondition;
   externalLab: boolean;
@@ -125,6 +130,8 @@ export interface WaterAnalysisInput {
   analyzedBy?: string;
   responsiblePerson?: string;
   status?: AnalysisStatus;
+  complianceConclusion?: ComplianceConclusion;
+  complianceBasis?: string;
   notes?: string;
   sampleCondition?: SampleCondition;
   externalLab?: boolean;

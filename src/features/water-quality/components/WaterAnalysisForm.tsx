@@ -3,13 +3,11 @@
  * Поддерживает режимы создания и редактирования
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import type {
   WaterAnalysisInput,
-  AnalysisResultInput,
-  AnalysisResult,
   WaterQualityParameter,
   AnalysisStatus,
   SampleCondition,
@@ -18,7 +16,13 @@ import { PARAMETER_METADATA, getAllParameters } from '../types/waterQuality';
 import { useWaterAnalysisManagement, useWaterAnalysis } from '../hooks/useWaterQualityMeasurements';
 import { useSamplingPoints } from '../hooks/useSamplingPoints';
 import { useCurrentUser } from '../../auth/hooks/useCurrentUser';
-import { createAnalysisResults, updateAnalysisResult, deleteAnalysisResult, checkResultCompliance, uploadAnalysisPDF, deleteAnalysisPDF } from '../services';
+import { checkResultCompliance, uploadAnalysisPDF, deleteAnalysisPDF } from '../services';
+import { detachAnalysisAttachment, linkUploadedAnalysisPdf } from '../services/analysisAttachmentLifecycle';
+import { planAnalysisResults } from '../services/analysisSavePlan';
+import { equipmentIdForSamplingPoint } from '../services/samplingPointEquipment';
+import { authorshipForSave } from '../services/analysisAuthorship';
+import { concludeCompliance } from '../services/complianceConclusion';
+import { saveAnalysisBundle } from '../services/saveAnalysisBundle';
 import { ROUTES } from '@/shared/utils/routes';
 import { logUserActivity } from '@/features/user-activity/services/activityLogsApi';
 import './WaterAnalysisForm.css';
@@ -32,7 +36,8 @@ interface WaterAnalysisFormProps {
 const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSave, onCancel }) => {
   const navigate = useNavigate();
   const isEditMode = !!analysisId;
-  const { create, update, error } = useWaterAnalysisManagement();
+  const draftAnalysisIdRef = useRef(analysisId ?? crypto.randomUUID());
+  const { update, error } = useWaterAnalysisManagement();
   const { samplingPoints, loading: loadingPoints } = useSamplingPoints();
   const currentUser = useCurrentUser();
 
@@ -40,7 +45,10 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
   const [samplingPointId, setSamplingPointId] = useState<string>('');
   const [equipmentId, setEquipmentId] = useState<string>('');
   const [sampleDate, setSampleDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [status, setStatus] = useState<AnalysisStatus>('completed');
+  const [status, setStatus] = useState<AnalysisStatus>('in_progress');
+  const [manualConclusion, setManualConclusion] = useState<'' | 'compliant' | 'non_compliant'>('');
+  const [complianceBasis, setComplianceBasis] = useState('');
+  const [changeAuthors, setChangeAuthors] = useState(false);
   const [notes, setNotes] = useState<string>('');
   const [sampleCondition, setSampleCondition] = useState<SampleCondition>('normal');
   const [externalLab, setExternalLab] = useState<boolean>(false);
@@ -76,7 +84,14 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
         setSamplingPointId(existingAnalysis.samplingPointId);
         setEquipmentId(existingAnalysis.equipmentId || '');
         setSampleDate(existingAnalysis.sampleDate.split('T')[0]);
-        setStatus(existingAnalysis.status);
+        setStatus(existingAnalysis.status === 'deviation' ? 'completed' : existingAnalysis.status);
+        setManualConclusion(
+          existingAnalysis.complianceConclusion === 'compliant'
+            || existingAnalysis.complianceConclusion === 'non_compliant'
+            ? existingAnalysis.complianceConclusion
+            : '',
+        );
+        setComplianceBasis(existingAnalysis.complianceBasis || '');
         setNotes(existingAnalysis.notes || '');
         setSampleCondition(existingAnalysis.sampleCondition || 'normal');
         setExternalLab(existingAnalysis.externalLab || false);
@@ -131,11 +146,21 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
 
     try {
       setRemovingAttachmentUrl(fileUrl);
-      await deleteAnalysisPDF(fileUrl);
-      const updatedUrls = attachmentUrls.filter((url) => url !== fileUrl);
-      await update(analysisId, { attachmentUrls: updatedUrls });
-      setAttachmentUrls(updatedUrls);
-      toast.success('Файл удален');
+      const outcome = await detachAnalysisAttachment(attachmentUrls, fileUrl, {
+        writeUrls: async (urls) => {
+          const updated = await update(analysisId, { attachmentUrls: urls });
+          if (!updated) {
+            throw new Error('Не удалось убрать ссылку на файл');
+          }
+        },
+        deleteFile: deleteAnalysisPDF,
+      });
+      setAttachmentUrls(outcome.urls);
+      if (outcome.fileRemoved) {
+        toast.success('Файл удален');
+      } else {
+        toast.warning('Ссылка убрана, но файл в хранилище не удалился');
+      }
     } catch (err: any) {
       console.error('[WaterAnalysisForm] Ошибка удаления файла:', err);
       toast.error(err.message || 'Не удалось удалить файл');
@@ -165,114 +190,74 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
     setSaving(true);
 
     try {
-      // Подготовка данных анализа
-      // Автоматически заполняем поля пользователя из аутентификации
+      const allParams = getAllParameters();
+      const measuredCount = allParams.filter(param => results[param].value.trim() !== '').length;
+      const decision = concludeCompliance({
+        measuredCount,
+        exceededCount: 0,
+        normsChecked: false,
+        manualConclusion: manualConclusion || null,
+        manualBasis: complianceBasis,
+      });
+      if (!decision.ok) {
+        toast.error(decision.error || 'Не удалось определить заключение');
+        return;
+      }
+      const authorship = authorshipForSave({
+        mode: isEditMode ? 'edit' : 'create',
+        currentUser,
+        changeAuthors,
+      });
       const analysisInput: WaterAnalysisInput = {
         samplingPointId: samplingPointId.trim(),
         equipmentId: equipmentId.trim() || undefined,
         sampleDate: `${sampleDate}T00:00:00Z`,
-        sampledBy: currentUser,
-        analyzedBy: currentUser,
-        responsiblePerson: currentUser,
+        sampledBy: authorship.sampledBy,
+        analyzedBy: authorship.analyzedBy,
+        responsiblePerson: authorship.responsiblePerson,
         status,
+        complianceConclusion: decision.conclusion,
+        complianceBasis: complianceBasis.trim() || undefined,
         notes: notes.trim() || undefined,
         sampleCondition,
         externalLab,
         externalLabName: externalLabName.trim() || undefined,
       };
 
-      // Создание или обновление анализа
-      let createdAnalysis;
-      if (isEditMode && analysisId) {
-        createdAnalysis = await update(analysisId, analysisInput);
-      } else {
-        createdAnalysis = await create(analysisInput);
-      }
+      const plan = planAnalysisResults(
+        allParams.map(param => ({
+          parameterName: param,
+          parameterLabel: PARAMETER_METADATA[param].label,
+          valueText: results[param].value,
+          unit: PARAMETER_METADATA[param].unit,
+          method: results[param].method,
+        })),
+        existingAnalysis?.results?.map(result => ({
+          id: result.id,
+          parameterName: result.parameterName,
+        })) ?? [],
+      );
+      const savedAnalysisId = await saveAnalysisBundle({
+        analysisId: isEditMode && analysisId ? analysisId : draftAnalysisIdRef.current,
+        analysis: analysisInput,
+        plan,
+        updatedBy: authorship.updatedBy,
+      });
+      const createdAnalysis = { id: savedAnalysisId };
+      const createdResultsCount = plan.results.length;
 
-      if (!createdAnalysis) {
-        throw new Error('Не удалось сохранить анализ');
-      }
-
-      // Подготовка и сохранение результатов измерений
-      const allParams = getAllParameters();
-      const existingResultsMap = new Map<string, AnalysisResult>();
-      
-      if (isEditMode && existingAnalysis?.results) {
-        // Создаем карту существующих результатов для быстрого поиска
-        existingAnalysis.results.forEach((result) => {
-          existingResultsMap.set(result.parameterName, result);
-        });
-      }
-
-      // Обрабатываем каждый параметр и проверяем соответствие нормам
-      const savedResultIds: string[] = [];
-      let createdResultsCount = 0;
-      for (const param of allParams) {
-        const resultValue = results[param].value.trim();
-        const existingResult = existingResultsMap.get(param);
-
-        // Если в режиме редактирования значение очищено — удаляем результат
-        if (!resultValue) {
-          if (isEditMode && existingResult) {
-            try {
-              await deleteAnalysisResult(existingResult.id);
-            } catch (deleteError: any) {
-              console.warn('[WaterAnalysisForm] Не удалось удалить результат:', deleteError);
-            }
+      for (const result of plan.results) {
+        const saved = existingAnalysis?.results?.find(item => item.parameterName === result.parameterName);
+        if (!saved) continue;
+        try {
+          const compliance = await checkResultCompliance(saved.id);
+          if (compliance.status === 'exceeded') {
+            toast.warning(`Превышение норматива: ${result.parameterLabel} (${result.value} ${result.unit})`);
+          } else if (compliance.status === 'warning') {
+            toast.info(`Предупреждение: ${result.parameterLabel} близко к пределу нормы`);
           }
-          continue;
-        }
-
-        const numValue = parseFloat(resultValue);
-        if (isNaN(numValue)) {
-          continue;
-        }
-
-        const metadata = PARAMETER_METADATA[param];
-        let savedResultId: string;
-        if (isEditMode && existingResult) {
-          // Обновляем существующий результат
-          const updatedResult = await updateAnalysisResult(existingResult.id, {
-            parameterLabel: metadata.label,
-            value: numValue,
-            unit: metadata.unit,
-            method: results[param].method?.trim() || undefined,
-          });
-          savedResultId = updatedResult.id;
-        } else {
-          // Создаем новый результат
-          const newResult: AnalysisResultInput = {
-            analysisId: createdAnalysis.id,
-            parameterName: param,
-            parameterLabel: metadata.label,
-            value: numValue,
-            unit: metadata.unit,
-            method: results[param].method?.trim() || undefined,
-          };
-          const createdResults = await createAnalysisResults([newResult]);
-          savedResultId = createdResults[0]?.id;
-          if (savedResultId) createdResultsCount += 1;
-        }
-
-        if (savedResultId) {
-          savedResultIds.push(savedResultId);
-
-          // Проверяем соответствие нормам (триггеры БД тоже это делают, но для немедленной обратной связи)
-          try {
-            const compliance = await checkResultCompliance(savedResultId);
-            if (compliance.status === 'exceeded') {
-              toast.warning(
-                `Превышение норматива: ${metadata.label} (${numValue} ${metadata.unit})`
-              );
-            } else if (compliance.status === 'warning') {
-              toast.info(
-                `Предупреждение: ${metadata.label} близко к пределу нормы`
-              );
-            }
-          } catch (complianceError: any) {
-            // Не критично, если проверка не удалась - триггеры БД все равно проверят
-            console.warn('[WaterAnalysisForm] Предупреждение при проверке соответствия:', complianceError);
-          }
+        } catch (complianceError: unknown) {
+          console.warn('[WaterAnalysisForm] Предупреждение при проверке соответствия:', complianceError);
         }
       }
 
@@ -281,14 +266,17 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
         try {
           setUploadingPdf(true);
           const pdfUrl = await uploadAnalysisPDF(pdfFile, createdAnalysis.id);
-          
-          // Обновляем анализ с URL файла
           const existingUrls = isEditMode ? attachmentUrls : [];
-
-          await update(createdAnalysis.id, {
-            attachmentUrls: [...existingUrls, pdfUrl],
+          const nextUrls = await linkUploadedAnalysisPdf(existingUrls, pdfUrl, {
+            writeUrls: async (urls) => {
+              const updated = await update(createdAnalysis.id, { attachmentUrls: urls });
+              if (!updated) {
+                throw new Error('Не удалось записать ссылку на PDF');
+              }
+            },
+            deleteFile: deleteAnalysisPDF,
           });
-          setAttachmentUrls([...existingUrls, pdfUrl]);
+          setAttachmentUrls(nextUrls);
         } catch (err: any) {
           console.error('[WaterAnalysisForm] Ошибка загрузки PDF:', err);
           toast.warning('Анализ сохранен, но не удалось загрузить PDF файл: ' + (err.message || 'Неизвестная ошибка'));
@@ -370,11 +358,10 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
             <select
               value={samplingPointId}
               onChange={(e) => {
-                setSamplingPointId(e.target.value);
-                const point = samplingPoints.find((p) => p.id === e.target.value);
-                if (point?.equipmentId) {
-                  setEquipmentId(point.equipmentId);
-                }
+                const nextPointId = e.target.value;
+                setSamplingPointId(nextPointId);
+                const point = samplingPoints.find((p) => p.id === nextPointId);
+                setEquipmentId(equipmentIdForSamplingPoint(point));
               }}
               required
             >
@@ -417,9 +404,30 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
             <div className="form-group">
               <label>Статус *</label>
               <select value={status} onChange={(e) => setStatus(e.target.value as AnalysisStatus)} required>
-                <option value="completed">Норма</option>
-                <option value="deviation">Отклонение</option>
+                <option value="in_progress">В работе</option>
+                <option value="completed">Завершён</option>
+                <option value="cancelled">Отменён</option>
               </select>
+            </div>
+
+            <div className="form-group">
+              <label>Заключение</label>
+              <select
+                value={manualConclusion}
+                onChange={(e) => setManualConclusion(e.target.value as '' | 'compliant' | 'non_compliant')}
+              >
+                <option value="">Не проверено</option>
+                <option value="compliant">Норма</option>
+                <option value="non_compliant">Не соответствует</option>
+              </select>
+              {manualConclusion && (
+                <input
+                  type="text"
+                  value={complianceBasis}
+                  onChange={(e) => setComplianceBasis(e.target.value)}
+                  placeholder="Основание ручного заключения"
+                />
+              )}
             </div>
 
             <div className="form-group">
@@ -435,6 +443,20 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
               </select>
             </div>
           </div>
+
+          {isEditMode && (
+            <div className="form-group">
+              <p>Отбор: {existingAnalysis?.sampledBy || '—'}. Анализ: {existingAnalysis?.analyzedBy || '—'}.</p>
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={changeAuthors}
+                  onChange={(e) => setChangeAuthors(e.target.checked)}
+                />
+                Записать меня ответственным за эту пробу
+              </label>
+            </div>
+          )}
         </div>
 
         {/* Внешняя лаборатория */}

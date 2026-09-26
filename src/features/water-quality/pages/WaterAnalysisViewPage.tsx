@@ -11,6 +11,7 @@ import { useSamplingPoints } from '../hooks/useSamplingPoints';
 import { ROUTES } from '@/shared/utils/routes';
 import type { AnalysisStatus, SampleCondition, ComplianceStatus } from '../types/waterQuality';
 import { PARAMETER_METADATA } from '../types/waterQuality';
+import { AnalysisFileCleanupError } from '../services/analysisAttachmentLifecycle';
 import './WaterAnalysisViewPage.css';
 
 const WaterAnalysisViewPage: React.FC = () => {
@@ -117,9 +118,15 @@ const WaterAnalysisViewPage: React.FC = () => {
       } else {
         toast.error('Не удалось удалить анализ');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[WaterAnalysisViewPage] Ошибка удаления:', err);
-      toast.error(err.message || 'Не удалось удалить анализ');
+      const message = err instanceof Error ? err.message : 'Не удалось удалить анализ';
+      if (err instanceof AnalysisFileCleanupError) {
+        toast.warning(message);
+        navigate(ROUTES.WATER_QUALITY_JOURNAL);
+        return;
+      }
+      toast.error(message);
     } finally {
       setIsDeleting(false);
     }

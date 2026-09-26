@@ -7,6 +7,8 @@ import webpush from 'web-push';
 import { createClient } from '@supabase/supabase-js';
 import { config } from '../../config/env.js';
 import type { ParsedInvoice } from '../invoiceParserService.js';
+import type { InvoiceNotice } from './invoiceIdentity.js';
+import { compareAccountConsumption, consumptionGrowthAlert, tariffMemoryKey } from './invoiceComparison.js';
 
 const supabase = createClient(config.supabaseUrl, config.supabaseServiceKey);
 
@@ -74,54 +76,71 @@ async function sendPushToUser(userId: string, title: string, body: string, paylo
 }
 
 export async function checkAndNotify(
-    savedPeriods: Array<{ period: string; amount_byn?: number | null; volume_m3?: number | null; storage_path?: string | null }>,
-    latestParsed: ParsedInvoice | null
+    savedInvoices: InvoiceNotice[],
+    parsedInvoices: ParsedInvoice[]
 ): Promise<void> {
-    if (savedPeriods.length === 0 && !latestParsed) return;
-    for (const inv of savedPeriods) {
+    if (savedInvoices.length === 0 && parsedInvoices.length === 0) return;
+    for (const inv of savedInvoices) {
         const volStr = inv.volume_m3 != null ? `${inv.volume_m3} м³` : '—';
         const amtStr = inv.amount_byn != null ? `${inv.amount_byn} BYN` : '—';
-        await createNotification('new_invoice', `Новый счёт за ${inv.period}`, `Объём: ${volStr}, сумма: ${amtStr}`, {
+        const accountStr = inv.account_number ? `, лицевой ${inv.account_number}` : '';
+        await createNotification('new_invoice', `Новый счёт за ${inv.period}`, `Объём: ${volStr}, сумма: ${amtStr}${accountStr}`, {
+            invoice_id: inv.id,
             period: inv.period,
+            account_number: inv.account_number,
             volume_m3: inv.volume_m3,
             amount_byn: inv.amount_byn,
             storage_path: inv.storage_path ?? null,
         });
     }
-    if (!latestParsed) return;
-    await checkHighConsumption(latestParsed);
-    await checkTariffChange(latestParsed);
+    for (const parsed of parsedInvoices) {
+        await checkHighConsumption(parsed);
+        await checkTariffChange(parsed);
+    }
 }
 
 async function checkHighConsumption(latest: ParsedInvoice): Promise<void> {
-    if (latest.volume_m3 == null) return;
-    const { data } = await supabase.from('water_invoices').select('period, volume_m3').order('period_date', { ascending: false }).limit(2);
-    if (!data || data.length < 2) return;
-    const [current, previous] = data;
-    if (current.volume_m3 == null || previous.volume_m3 == null) return;
-    const change = (current.volume_m3 - previous.volume_m3) / previous.volume_m3;
-    if (change <= 0.2) return;
-    const pct = Math.round(change * 100);
-    await createNotification('high_consumption', `Потребление воды выросло на ${pct}%`, `${previous.period}: ${previous.volume_m3} м³ → ${current.period}: ${current.volume_m3} м³`, {
-        period: current.period,
-        prev_period: previous.period,
-        current_volume: current.volume_m3,
-        prev_volume: previous.volume_m3,
-        percent_change: pct,
-    });
+    if (latest.volume_m3 == null || !latest.account_number) return;
+    const { data } = await supabase
+        .from('water_invoices')
+        .select('period, account_number, volume_m3')
+        .eq('account_number', latest.account_number)
+        .lte('period', latest.period)
+        .order('period', { ascending: false })
+        .limit(24);
+    const alert = consumptionGrowthAlert(
+        compareAccountConsumption(data ?? [], latest.account_number, latest.period),
+    );
+    if (!alert) return;
+    await createNotification(
+        'high_consumption',
+        `Потребление воды выросло на ${alert.percent}%`,
+        `${alert.previousPeriod}: ${alert.previousVolume} м³ → ${alert.currentPeriod}: ${alert.currentVolume} м³`,
+        {
+            account_number: latest.account_number,
+            period: alert.currentPeriod,
+            prev_period: alert.previousPeriod,
+            current_volume: alert.currentVolume,
+            prev_volume: alert.previousVolume,
+            percent_change: alert.percent,
+        },
+    );
 }
 
 async function checkTariffChange(latest: ParsedInvoice): Promise<void> {
+    if (!latest.account_number) return;
     if (latest.tariff_per_m3 == null && latest.sewage_tariff_per_m3 == null) return;
+    const waterKey = tariffMemoryKey('water', latest.account_number);
+    const sewageKey = tariffMemoryKey('sewage', latest.account_number);
     const { data: memRows } = await supabase
       .from('agent_memory')
       .select('key, value')
-      .in('key', ['tariff_water', 'tariff_sewage'])
+      .in('key', [waterKey, sewageKey])
       .eq('scope', 'shared')
       .eq('is_active', true);
     if (!memRows || memRows.length === 0) return;
-    const memWater = memRows.find(r => r.key === 'tariff_water');
-    const memSewage = memRows.find(r => r.key === 'tariff_sewage');
+    const memWater = memRows.find(r => r.key === waterKey);
+    const memSewage = memRows.find(r => r.key === sewageKey);
     const oldWater = memWater ? parseFloat(memWater.value) : null;
     const oldSewage = memSewage ? parseFloat(memSewage.value) : null;
     const waterChanged = latest.tariff_per_m3 != null && oldWater != null && Math.abs(latest.tariff_per_m3 - oldWater) > 0.0001;
@@ -130,7 +149,8 @@ async function checkTariffChange(latest: ParsedInvoice): Promise<void> {
     const parts: string[] = [];
     if (waterChanged && oldWater != null && latest.tariff_per_m3 != null) parts.push(`Вода: ${oldWater} → ${latest.tariff_per_m3} BYN/м³`);
     if (sewageChanged && oldSewage != null && latest.sewage_tariff_per_m3 != null) parts.push(`Канализация: ${oldSewage} → ${latest.sewage_tariff_per_m3} BYN/м³`);
-    await createNotification('tariff_change', 'Изменился тариф на воду', parts.join(', '), {
+    await createNotification('tariff_change', `Изменился тариф, лицевой ${latest.account_number}`, parts.join(', '), {
+        account_number: latest.account_number,
         period: latest.period,
         old_tariff_water: oldWater,
         new_tariff_water: latest.tariff_per_m3,
