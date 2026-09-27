@@ -9,7 +9,6 @@
     "start": "serve -s dist -l $PORT",
     "collect-readings": "tsx scripts/collect-beliot-readings.ts",
     "scan-beliot-devices": "tsx scripts/scan-beliot-devices.ts",
-    "inspect:posudotara": "tsx scripts/inspect-posudotara-meter.ts",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
