@@ -17,6 +17,7 @@ jobs:
       - run: npm ci
       - run: npx tsc --noEmit
       - run: npm run test:run
+      - run: npm run lint
 
   api:
     runs-on: ubuntu-latest

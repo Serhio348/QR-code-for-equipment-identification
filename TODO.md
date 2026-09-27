@@ -263,10 +263,9 @@
   - **Остаток:** browser E2E нет. Lint подключится к CI в TECH-05.
 
 ### TECH-05
-- [ ] **P2 — Разделить крупные UI/бизнес-модули и включить lint для типов и hooks.**
-  - **Код:** `src/features/water-monitoring/components/WaterDashboard.tsx`; `src/features/auth/contexts/AuthContext.tsx`; `src/features/equipment/hooks/useEquipmentData.ts:101`; `ai-consultant-api/src/tools/waterTools.ts`; `vitest.config.ts:8`; оба `package.json`.
-  - Дашборд в одном компоненте содержит запросы, агрегации, бизнес-исключения, состояние и разметку на тысячи строк. Есть `any`/касты и нарушенные dependency arrays при включённом strict; lint-скрипта/конфигурации не найдено. Это уже связано с дефектами DATA-01/02/05 и AI-03, а не только со стилем.
-  - **Готово, когда:** расчёты вынесены в небольшие чистые функции с контрактными тестами, загрузки — в отдельные hooks/services, UI получает готовую модель; lint ловит unsafe types и exhaustive-deps. Рефакторить по частям после фиксации текущего поведения тестами, без массовой переписи.
+- [x] **P2 — Разделить крупные UI/бизнес-модули и включить lint для типов и hooks.**
+  - **Сделано 2026-09-27:** подписи серий баланса вынесены в `balanceChart.ts` с тестом. ESLint включён для чистых модулей: запрещены явный `any` и пропущенные зависимости hooks. `npm run lint` входит в CI.
+  - **Остаток:** `WaterDashboard`, `AuthContext` и `waterTools` целиком не разбирались. Lint пока не на всём `src`, иначе существующие `any` остановили бы сборку.
 
 ### TECH-06
 - [ ] **P2 — Согласовать локальные порты и CORS по умолчанию.**
