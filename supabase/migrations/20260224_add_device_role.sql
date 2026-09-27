@@ -11,9 +11,20 @@
 --   NULL         — не классифицировано
 -- ============================================================
 
-ALTER TABLE public.beliot_device_overrides
-  ADD COLUMN IF NOT EXISTS device_role TEXT
-  CHECK (device_role IN ('source', 'production', 'domestic'));
+-- Файл идёт раньше baseline, который создаёт таблицу.
+-- На чистой БД колонка добавляется в 20260327_app_tables_from_docs.sql.
+DO $device_role$
+BEGIN
+  IF to_regclass('public.beliot_device_overrides') IS NULL THEN
+    RAISE NOTICE 'beliot_device_overrides ещё нет, device_role добавит поздняя миграция';
+    RETURN;
+  END IF;
 
-COMMENT ON COLUMN public.beliot_device_overrides.device_role
-  IS 'Роль счётчика: source — источник (скважина), production — производство, domestic — хоз-питьевое водоснабжение';
+  ALTER TABLE public.beliot_device_overrides
+    ADD COLUMN IF NOT EXISTS device_role TEXT
+    CHECK (device_role IN ('source', 'production', 'domestic'));
+
+  COMMENT ON COLUMN public.beliot_device_overrides.device_role
+    IS 'Роль счётчика: source — источник (скважина), production — производство, domestic — хоз-питьевое водоснабжение';
+END
+$device_role$;

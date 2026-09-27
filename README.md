@@ -72,7 +72,7 @@
 - 📋 **Паспорт устройства** - просмотр и редактирование паспортных данных счетчиков
 
 ### Счета водоканала (bvod.by)
-- 🧾 **Автоматический импорт счетов** - ежедневная синхронизация PDF счетов с портала bvod.by через GitHub Actions (06:00 UTC)
+- 🧾 **Автоматический импорт счетов** - PDF счетов с портала bvod.by. Плановый запуск рассчитан на локальный Windows Task Scheduler (`ai-consultant-api/scripts/sync-invoices-scheduled.ps1`), потому что портал рвёт TLS с облачных IP. Workflow `.github/workflows/invoice-sync.yml` только ручной. Наличие скрипта не доказывает, что задача установлена на машине.
 - 📂 **Хранение в Supabase** - счета парсируются и сохраняются в базе данных + PDF в Supabase Storage
 - 🗂️ **Детализация по точкам подключения** - разбивка потребления по адресам/вводам (sections)
 - 📉 **Анализ через AI** - агент мгновенно отвечает на вопросы по истории счетов из БД без обращения к порталу
@@ -167,8 +167,8 @@
   - PostgreSQL - хранение данных оборудования, показаний счетчиков, анализов качества воды, логов активности и ошибок
   - Row Level Security (RLS) - безопасность на уровне строк
   - Storage API - хранение PDF файлов анализов качества воды
-- **Google Apps Script** - API для работы с Google Sheets и Google Drive (legacy)
-- **Google Sheets** - база данных оборудования (legacy)
+- **Google Apps Script** - действующий API оборудования, журнала и файлов на Диске
+- **Google Sheets** - хранилище оборудования, к которому ходит этот API
 - **Google Drive API** - хранение документации и фото оборудования
 - **Node.js + Express** - бэкенд для AI-консультанта
   - TypeScript - типизированный код
@@ -201,7 +201,7 @@
 ## 📦 Установка
 
 ### Требования
-- Node.js 18+
+- Node.js 22 (локально, CI и оба Docker-образа)
 - npm или yarn
 - Аккаунт Supabase (для аутентификации и базы данных)
 - Google Apps Script проект (для работы с Google Drive, опционально)
@@ -534,7 +534,7 @@ docker run -p 8080:80 equipment-management
 
 ### GitHub Actions: синхронизация счетов bvod.by
 
-Ежедневный импорт счетов настроен в `.github/workflows/invoice-sync.yml` (06:00 UTC).
+Workflow `.github/workflows/invoice-sync.yml` запускается только вручную. Ежедневный импорт, если он включён, делает Windows Task Scheduler скриптом `ai-consultant-api/scripts/sync-invoices-scheduled.ps1`. Факт установки задачи на компьютере этим репозиторием не проверяется.
 
 **Необходимые секреты** (Settings → Secrets → Actions):
 - `AI_API_URL` - URL бэкенда на Railway (например: `https://ai-api.railway.app`)

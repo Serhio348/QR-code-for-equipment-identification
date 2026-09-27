@@ -4,7 +4,7 @@
 # Файл vite.build.env — строки вида KEY=value (все нужные VITE_*).
 # Railway пока подставляет переменные как ARG — блок ниже; SERVICE ROLE в фронт не передаём.
 
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 

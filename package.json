@@ -9,11 +9,11 @@
     "start": "serve -s dist -l $PORT",
     "collect-readings": "tsx scripts/collect-beliot-readings.ts",
     "scan-beliot-devices": "tsx scripts/scan-beliot-devices.ts",
-    "inspect:posudotara": "tsx scripts/inspect-posudotara-meter.ts",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src/shared/utils/swCachePolicy.ts src/features/access-management/services/accessLoadState.ts src/features/water-monitoring/services/balanceChart.ts src/features/common/services/leaveDecision.ts src/features/auth/services/logoutOutcome.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
@@ -40,10 +40,14 @@
     "@types/react-dom": "^18.2.17",
     "@types/react-router-dom": "^5.3.3",
     "@vitejs/plugin-react": "^4.2.1",
+    "@vitest/coverage-v8": "^4.0.16",
     "@vitest/ui": "^4.0.16",
+    "eslint": "^10.11.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "jsdom": "^27.4.0",
     "tsx": "^4.7.0",
     "typescript": "^5.9.3",
+    "typescript-eslint": "^8.70.1",
     "vite": "^7.3.1",
     "vitest": "^4.0.16"
   },

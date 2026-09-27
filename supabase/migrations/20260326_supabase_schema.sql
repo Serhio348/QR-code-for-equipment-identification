@@ -16,38 +16,41 @@
 -- ============================================================================
 -- ОЧИСТКА: Удаление существующих объектов
 -- ============================================================================
--- Сначала удаляем существующие политики и функции, чтобы избежать конфликтов
-DROP POLICY IF EXISTS "Users can view profiles" ON public.profiles;
-DROP POLICY IF EXISTS "Admins can view all profiles" ON public.profiles;
-DROP POLICY IF EXISTS "Trigger can insert profiles" ON public.profiles;
-DROP POLICY IF EXISTS "Clients cannot insert profiles" ON public.profiles;
-DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
-DROP POLICY IF EXISTS "Admins can update all profiles" ON public.profiles;
-
-DROP POLICY IF EXISTS "Users can view own access" ON public.user_app_access;
-DROP POLICY IF EXISTS "Trigger can insert access" ON public.user_app_access;
-DROP POLICY IF EXISTS "Clients cannot insert access" ON public.user_app_access;
-DROP POLICY IF EXISTS "Admins can manage all access" ON public.user_app_access;
-
-DROP POLICY IF EXISTS "Users can view own login history" ON public.login_history;
-DROP POLICY IF EXISTS "Admins can view all login history" ON public.login_history;
-
-DROP POLICY IF EXISTS "Authenticated users can view overrides" ON public.beliot_device_overrides;
-DROP POLICY IF EXISTS "Only admins can modify overrides" ON public.beliot_device_overrides;
-
-DROP POLICY IF EXISTS "Users can read readings" ON public.beliot_device_readings;
-DROP POLICY IF EXISTS "Only system can insert readings" ON public.beliot_device_readings;
-DROP POLICY IF EXISTS "Users cannot update readings" ON public.beliot_device_readings;
-DROP POLICY IF EXISTS "Users cannot delete readings" ON public.beliot_device_readings;
-
--- Удаляем существующие функции
-DROP FUNCTION IF EXISTS public.is_admin() CASCADE;
-DROP FUNCTION IF EXISTS public.get_user_role(UUID) CASCADE;
-DROP FUNCTION IF EXISTS public.handle_new_user() CASCADE;
-DROP FUNCTION IF EXISTS public.handle_updated_at() CASCADE;
-DROP FUNCTION IF EXISTS public.log_login(BOOLEAN, UUID, TEXT, TEXT) CASCADE;
-DROP FUNCTION IF EXISTS public.insert_beliot_reading(TEXT, TIMESTAMPTZ, NUMERIC, TEXT, TEXT, TEXT, TEXT) CASCADE;
-DROP FUNCTION IF EXISTS public.get_last_beliot_reading(TEXT, TEXT) CASCADE;
+-- DROP POLICY IF EXISTS падает, если таблицы ещё нет.
+-- На чистой БД этот блок ничего не делает. На повторном запуске снимает
+-- только политики этого файла. Функции ниже заменяются через CREATE OR REPLACE:
+-- DROP ... CASCADE здесь нельзя, иначе повтор сотрёт политики поздних миграций.
+DO $drop_owned_policies$
+DECLARE
+  item text[];
+  owned text[] := ARRAY[
+    ARRAY['profiles', 'Users can view profiles'],
+    ARRAY['profiles', 'Admins can view all profiles'],
+    ARRAY['profiles', 'Trigger can insert profiles'],
+    ARRAY['profiles', 'Clients cannot insert profiles'],
+    ARRAY['profiles', 'Users can update own profile'],
+    ARRAY['profiles', 'Admins can update all profiles'],
+    ARRAY['user_app_access', 'Users can view own access'],
+    ARRAY['user_app_access', 'Trigger can insert access'],
+    ARRAY['user_app_access', 'Clients cannot insert access'],
+    ARRAY['user_app_access', 'Admins can manage all access'],
+    ARRAY['login_history', 'Users can view own login history'],
+    ARRAY['login_history', 'Admins can view all login history'],
+    ARRAY['beliot_device_overrides', 'Authenticated users can view overrides'],
+    ARRAY['beliot_device_overrides', 'Only admins can modify overrides'],
+    ARRAY['beliot_device_readings', 'Users can read readings'],
+    ARRAY['beliot_device_readings', 'Only system can insert readings'],
+    ARRAY['beliot_device_readings', 'Users cannot update readings'],
+    ARRAY['beliot_device_readings', 'Users cannot delete readings']
+  ];
+BEGIN
+  FOREACH item SLICE 1 IN ARRAY owned LOOP
+    IF to_regclass('public.' || item[1]) IS NOT NULL THEN
+      EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', item[2], item[1]);
+    END IF;
+  END LOOP;
+END
+$drop_owned_policies$;
 
 -- ============================================================================
 -- ТАБЛИЦА: profiles

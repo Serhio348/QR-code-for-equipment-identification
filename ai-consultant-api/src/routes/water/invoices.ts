@@ -15,6 +15,7 @@
  */
 import { Router, Request, Response } from 'express';
 import { syncInvoices, type SyncResult } from '../../services/water/index.js';
+import { SyncInProgressError } from '../../services/water/invoiceSyncLock.js';
 import { createClient } from '@supabase/supabase-js';
 import { config } from '../../config/env.js';
 import { authMiddleware, AuthenticatedRequest } from '../../middleware/auth.js';
@@ -63,7 +64,9 @@ function runSyncInBackground(forceAll: boolean): boolean {
             );
         })
         .catch((err) => {
-            const message = err instanceof Error ? err.message : String(err);
+            const message = err instanceof SyncInProgressError
+                ? err.message
+                : err instanceof Error ? err.message : String(err);
             syncStatus.lastError = message;
             syncStatus.lastResult = null;
             console.error('[Invoices background sync] failed:', err);
@@ -131,6 +134,10 @@ router.post('/sync', requireSyncSecret, async (_req: Request, res: Response) => 
         syncStatus.finishedAt = new Date().toISOString();
         res.json({ ok: true, ...result });
     } catch (err) {
+        if (err instanceof SyncInProgressError) {
+            res.status(409).json({ ok: false, error: err.message });
+            return;
+        }
         const message = err instanceof Error ? err.message : String(err);
         syncStatus.lastError = message;
         syncStatus.lastResult = null;
@@ -158,6 +165,10 @@ router.post('/sync-all', requireSyncSecret, async (_req: Request, res: Response)
         syncStatus.finishedAt = new Date().toISOString();
         res.json({ ok: true, ...result });
     } catch (err) {
+        if (err instanceof SyncInProgressError) {
+            res.status(409).json({ ok: false, error: err.message });
+            return;
+        }
         const message = err instanceof Error ? err.message : String(err);
         syncStatus.lastError = message;
         syncStatus.lastResult = null;
@@ -186,7 +197,7 @@ router.get('/download', authMiddleware, async (req: AuthenticatedRequest, res: R
     }
     const { data: file, error: downloadError } = await supabase.storage.from('invoices').download(row.storage_path);
     if (downloadError || !file) {
-        res.status(500).json({ error: 'Не удалось скачать файл', detail: downloadError?.message });
+        res.status(500).json({ error: 'Не удалось скачать файл' });
         return;
     }
     const buffer = Buffer.from(await file.arrayBuffer());

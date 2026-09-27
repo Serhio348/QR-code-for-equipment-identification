@@ -10,6 +10,7 @@ import type { ParsedInvoice } from '../invoiceParserService.js';
 import type { InvoiceNotice } from './invoiceIdentity.js';
 import { compareAccountConsumption, consumptionGrowthAlert, tariffMemoryKey } from './invoiceComparison.js';
 import { assertNotificationsMarked } from './notificationRead.js';
+import { notificationEventKey } from './notificationEventKey.js';
 
 const supabase = createClient(config.supabaseUrl, config.supabaseServiceKey);
 
@@ -38,13 +39,21 @@ async function createNotification(type: NotificationType, title: string, body: s
         console.warn('[notifications] NOTIFICATION_USER_IDS is empty — skip createNotification');
         return;
     }
-    const rows = userIds.map(user_id => ({ user_id, type, title, body, payload }));
-    const { error } = await supabase.from('water_notifications').insert(rows);
-    if (error) {
-        console.error('[notifications] Failed to insert water_notifications:', error.message);
-        return;
+    for (const user_id of userIds) {
+        const event_key = notificationEventKey(type, user_id, payload);
+        const { data, error } = await supabase
+            .from('water_notifications')
+            .insert({ user_id, type, title, body, payload, event_key })
+            .select('id');
+        if (error) {
+            if (error.code === '23505') continue;
+            console.error('[notifications] Failed to insert water_notifications:', error.message);
+            continue;
+        }
+        if ((data ?? []).length > 0) {
+            await sendPushToUser(user_id, title, body, { type, ...payload });
+        }
     }
-    await Promise.allSettled(userIds.map(uid => sendPushToUser(uid, title, body, { type, ...payload })));
 }
 
 async function sendPushToUser(userId: string, title: string, body: string, payload: Record<string, unknown> = {}): Promise<void> {

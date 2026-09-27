@@ -8,11 +8,12 @@
 
 const CACHE_VERSION = '__CACHE_VERSION__'; // Заменяется при сборке на timestamp
 const CACHE_NAME = `equipment-app-${CACHE_VERSION}`;
-const STATIC_CACHE_URLS = [
+// Сборка подставляет сюда /assets/*.js и *.css. Без них offline-перезагрузка
+// остаётся без оболочки. Чужие API в этот список не входят.
+const PRECACHE_URLS = [
   '/',
   '/index.html',
   '/manifest.json',
-  // CSS и JS файлы будут добавлены автоматически при сборке
 ];
 
 // Установка Service Worker
@@ -23,17 +24,23 @@ self.addEventListener('install', (event) => {
     caches.open(CACHE_NAME)
       .then((cache) => {
         console.log('[SW] Caching static assets');
-        return cache.addAll(STATIC_CACHE_URLS);
+        return cache.addAll(PRECACHE_URLS);
       })
       .then(() => {
-        console.log('[SW] Service Worker installed');
-        return self.skipWaiting(); // Активировать сразу
+        console.log('[SW] Service Worker installed, waiting for the user to refresh');
       })
       .catch((error) => {
         console.error('[SW] Error caching static assets:', error);
       })
   );
 });
+
+function cachesToDelete(cacheNames, currentName) {
+  const previous = cacheNames
+    .filter((name) => name.startsWith('equipment-app-') && name !== currentName)
+    .sort();
+  return previous.slice(0, Math.max(0, previous.length - 1));
+}
 
 // Активация Service Worker
 self.addEventListener('activate', (event) => {
@@ -42,23 +49,14 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
-        cacheNames.map((cacheName) => {
-          // Удаляем все старые кэши, которые начинаются с 'equipment-app-'
-          // но не соответствуют текущей версии
-          if (cacheName.startsWith('equipment-app-') && cacheName !== CACHE_NAME) {
-            console.log('[SW] Deleting old cache:', cacheName);
-            return caches.delete(cacheName);
-          }
-          // Также удаляем любые другие старые кэши
-          if (!cacheName.startsWith('equipment-app-')) {
-            console.log('[SW] Deleting unrelated cache:', cacheName);
-            return caches.delete(cacheName);
-          }
+        cachesToDelete(cacheNames, CACHE_NAME).map((cacheName) => {
+          console.log('[SW] Deleting old cache:', cacheName);
+          return caches.delete(cacheName);
         })
       );
     }).then(() => {
       console.log('[SW] Service Worker activated with cache:', CACHE_NAME);
-      return self.clients.claim(); // Взять контроль над всеми страницами
+      return self.clients.claim();
     })
   );
 });
@@ -76,16 +74,10 @@ self.addEventListener('fetch', (event) => {
     return; // Пропускаем запросы от расширений без обработки
   }
   
-  // Пропускаем запросы к API (они должны идти на сервер без перехвата SW).
-  // На iOS PWA SW раньше возвращал ложный 504 «Offline and no cached response».
-  if (event.request.url.includes('/exec') || 
-      event.request.url.includes('script.google.com') ||
-      event.request.url.includes('beliot.by') ||
-      event.request.url.includes('supabase.co') ||
-      requestUrl.pathname.startsWith('/api/') ||
-      requestUrl.hostname.includes('railway.app') ||
-      requestUrl.hostname === 'localhost' && requestUrl.port === '3001') {
-    return; // Не кэшируем API запросы
+  // Чужой origin и свой /api/ не перехватываем: кэш только у статики этого приложения.
+  // Домен railway.app сам по себе не повод пропускать JS/CSS оболочки.
+  if (requestUrl.origin !== self.location.origin || requestUrl.pathname.startsWith('/api/')) {
+    return;
   }
   
   // Не кэшируем POST, PUT, DELETE и другие не-GET запросы

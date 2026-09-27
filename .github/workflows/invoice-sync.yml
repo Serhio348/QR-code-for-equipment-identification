@@ -3,7 +3,8 @@ name: Sync bvod.by Invoices
 # Daily sync runs on the local Windows Task Scheduler
 # (ai-consultant-api/scripts/sync-invoices-scheduled.ps1) because bvod.by
 # resets TLS from GitHub-hosted / Railway cloud IPs.
-# Keep this workflow for manual runs only when BVOD_HTTP_PROXY is configured.
+# Keep this workflow for manual runs. Hosted runners usually cannot reach bvod.by;
+# the supported schedule is the local Windows task, which can set BVOD_HTTP_PROXY.
 on:
   workflow_dispatch:
     inputs:
@@ -30,7 +31,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: '24'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: ai-consultant-api/package-lock.json
 
@@ -46,7 +47,6 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           BVOD_LOGIN: ${{ secrets.BVOD_LOGIN }}
           BVOD_PASSWORD: ${{ secrets.BVOD_PASSWORD }}
-          BVOD_HTTP_PROXY: ${{ secrets.BVOD_HTTP_PROXY }}
           FORCE_ALL: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'full' && '1' || '' }}
         run: |
           set -euo pipefail
@@ -61,11 +61,8 @@ jobs:
             exit 1
           fi
 
-          if [ -n "${BVOD_HTTP_PROXY:-}" ]; then
-            echo "Using BVOD_HTTP_PROXY for portal access"
-          else
-            echo "No BVOD_HTTP_PROXY set — hosted runners usually cannot open bvod.by"
-            echo "Prefer local Windows Task Scheduler sync-invoices-scheduled.ps1"
-          fi
+          echo "This workflow does not set BVOD_HTTP_PROXY."
+          echo "Hosted runners usually cannot open bvod.by."
+          echo "Prefer local Windows Task Scheduler sync-invoices-scheduled.ps1"
 
           npm run sync-invoices

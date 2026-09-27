@@ -48,6 +48,7 @@ import {
 import { buildMeterLabelColorMap } from '../constants/meterSeriesColors';
 import { getTrackedBeliotRegistry } from '../services/beliotRegistryApi';
 import { computeDayConsumption, readingDayKey } from '../services/dayConsumption';
+import { balanceChartSeriesLabel, balanceDockedTipFingerprint } from '../services/balanceChart';
 import { baselineFromLatestRows, fetchAllPages } from '../services/pagedSelect';
 import {
   coverageNote,
@@ -218,13 +219,7 @@ function formatBalanceChartTitle(dayLabel: string | number | undefined, selected
   });
 }
 
-function balanceChartSeriesLabel(name: string | undefined): string {
-  if (name === 'source') return 'Скважина';
-  if (name === 'losses') return 'Потери';
-  return name ?? '';
-}
-
-/** Панель под графиком баланса: расход по счётчикам за выбранный день (тот же каркас, что у тултипа производства). */
+/** Панель под графиком баланса: расход по счётчикам за выбранный день. */
 function BalanceDockedDayPanel({
   label,
   payload,
@@ -282,13 +277,6 @@ function BalanceDockedDayPanel({
       </div>
     </div>
   );
-}
-
-function balanceDockedTipFingerprint(
-  label: string | number | undefined,
-  list: ReadonlyArray<ProductionTooltipPayloadEntry>,
-): string {
-  return `${String(label)}|${list.map(e => `${String(e.name)}:${String(e.value)}`).join(';')}`;
 }
 
 /** Порядок серий как у ComposedChart баланса — для клика и синхронизации с фильтрами. */
