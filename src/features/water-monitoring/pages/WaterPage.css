@@ -13,8 +13,12 @@
 
 .water-page-header {
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   background: white;
-  padding: 12px 20px;
+  padding: 8px 20px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   z-index: 100;
 }
@@ -22,7 +26,15 @@
 .water-page-tabs {
   display: flex;
   gap: 10px;
+  min-width: 0;
   border-bottom: 2px solid #e0e0e0;
+}
+
+.water-page-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .water-tab {
@@ -136,7 +148,13 @@
 /* Адаптивность */
 @media (max-width: 768px) {
   .water-page-header {
+    flex-wrap: wrap;
     padding: 6px 10px;
+  }
+
+  .water-page-tools {
+    width: 100%;
+    justify-content: flex-end;
   }
 
   .water-page-tabs {
