@@ -19,6 +19,7 @@ import { updateTariffFromInvoice } from '../ai/agentMemoryService.js';
 import { checkAndNotify } from './notificationService.js';
 import { invoiceNoticeFromRow, type InvoiceNotice } from './invoiceIdentity.js';
 import { invoiceFileKey, invoicePdfAction, nextStoragePath } from './invoiceFileState.js';
+import { withInvoiceSyncLock } from './invoiceSyncLock.js';
 import { config } from '../../config/env.js';
 import { fetchAllPages } from './pagedSelect.js';
 
@@ -81,6 +82,10 @@ export function isDownloadableInvoice(inv: {
 }
 
 export async function syncInvoices(forceAll = false): Promise<SyncResult> {
+    return withInvoiceSyncLock(() => syncInvoicesUnlocked(forceAll));
+}
+
+async function syncInvoicesUnlocked(forceAll = false): Promise<SyncResult> {
     const result: SyncResult = { total: 0, skipped: 0, downloaded: 0, saved: 0, errors: [], details: [] };
 
     console.log('[invoiceSync] Fetching invoice list...');
