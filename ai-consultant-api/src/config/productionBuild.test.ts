@@ -7,5 +7,7 @@ describe('production TypeScript build', () => {
       exclude: string[];
     };
     expect(build.exclude).toContain('src/**/*.test.ts');
+    const dockerfile = readFileSync(new URL('../../Dockerfile', import.meta.url), 'utf8');
+    expect(dockerfile).toContain('tsconfig.build.json');
   });
 });
