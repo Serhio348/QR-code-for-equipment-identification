@@ -127,8 +127,10 @@ const WaterPage: React.FC = () => {
             <span className="water-tab-text">Анализы качества воды</span>
           </button>
         </div>
-        <NotificationInbox inbox={notificationInbox} />
-        <PushSubscriptionControl push={pushSubscription} />
+        <div className="water-page-tools">
+          <NotificationInbox inbox={notificationInbox} />
+          <PushSubscriptionControl push={pushSubscription} />
+        </div>
       </div>
 
       <div className="water-page-content">

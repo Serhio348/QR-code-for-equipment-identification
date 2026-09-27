@@ -24,17 +24,27 @@ export default function PushSubscriptionControl({ push }: PushSubscriptionContro
     }
     if (push.state === 'subscribed') {
         return (
-            <div className="push-control">
-                <p>Уведомления этого браузера включены.</p>
-                <button type="button" onClick={() => { void push.disable(); }}>Отключить</button>
-            </div>
+            <button
+                type="button"
+                className="push-control__button"
+                title="Уведомления этого браузера включены"
+                onClick={() => { void push.disable(); }}
+            >
+                Отключить
+            </button>
         );
     }
     return (
-        <div className="push-control">
-            <p>Уведомления о счетах приходят на это устройство, пока вы не выйдете из аккаунта.</p>
+        <>
+            <button
+                type="button"
+                className="push-control__button"
+                title="Уведомления о счетах приходят на это устройство, пока вы не выйдете из аккаунта."
+                onClick={() => { void push.enable(); }}
+            >
+                Включить уведомления
+            </button>
             {push.error && <p className="push-control__error" role="alert">{push.error}</p>}
-            <button type="button" onClick={() => { void push.enable(); }}>Включить уведомления</button>
-        </div>
+        </>
     );
 }
