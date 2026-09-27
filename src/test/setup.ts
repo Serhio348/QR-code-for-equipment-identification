@@ -38,12 +38,9 @@ global.ResizeObserver = vi.fn().mockImplementation(() => ({
   disconnect: vi.fn(),
 }));
 
-// Мокаем console методы для чистоты тестов
 global.console = {
   ...console,
   log: vi.fn(),
   debug: vi.fn(),
   info: vi.fn(),
-  warn: vi.fn(),
-  error: vi.fn(),
 };

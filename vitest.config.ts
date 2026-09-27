@@ -22,6 +22,16 @@ export default defineConfig({
         '**/*.config.*',
         '**/mockData/**',
       ],
+      thresholds: {
+        'src/shared/utils/swCachePolicy.ts': {
+          lines: 80,
+          functions: 80,
+        },
+        'src/features/access-management/services/accessLoadState.ts': {
+          lines: 80,
+          functions: 80,
+        },
+      },
     },
     typecheck: {
       tsconfig: './tsconfig.test.json',
