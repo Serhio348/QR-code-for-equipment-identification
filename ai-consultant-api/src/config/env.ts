@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import { parseAllowedOrigins } from './allowedOrigins.js';
 
 dotenv.config();
 
@@ -48,8 +49,8 @@ export const config = {
   beliotApiTimeout: parseInt(process.env.BELIOT_API_TIMEOUT || '30000', 10),
   waterDeviceRegistryEnabled: process.env.WATER_DEVICE_REGISTRY_ENABLED === 'true',
 
-  // CORS
-  allowedOrigins: (process.env.ALLOWED_ORIGINS || 'http://localhost:5173').split(','),
+  // CORS. Локальный Vite слушает 3000. Звёздочка отклоняется.
+  allowedOrigins: parseAllowedOrigins(process.env.ALLOWED_ORIGINS),
 
   // Rate limiting
   rateLimitWindowMs: 60 * 1000, // 1 минута

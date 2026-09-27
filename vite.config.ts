@@ -80,9 +80,9 @@ export default defineConfig(({ mode }) => ({
   server: {
     port: 3000,
     host: true, // Разрешает доступ из локальной сети
-    strictPort: false, // Если порт занят, попробует другой
+    strictPort: true, // Тот же порт, что в CORS бэкенда и в hmr.clientPort
     hmr: {
-      clientPort: 3000, // Явно указываем порт для HMR WebSocket
+      clientPort: 3000,
     },
   },
   preview: {
