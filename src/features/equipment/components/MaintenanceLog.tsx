@@ -49,6 +49,7 @@ interface MaintenanceLogProps {
   /** Опциональный ID общего журнала обслуживания (для нескольких единиц оборудования) */
   maintenanceSheetId?: string;
   /** Опциональная информация об оборудовании (если уже загружена) */
+  equipment?: Equipment;
   /** Сообщает модальному окну, что черновик или сохранение нельзя закрыть молча. */
   onActivityChange?: (activity: { dirty: boolean; saving: boolean }) => void;
 }
