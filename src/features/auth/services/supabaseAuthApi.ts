@@ -9,6 +9,7 @@ import { supabase, getCurrentProfile, type Profile } from '@/shared/config/supab
 import type { RegisterData, LoginData, AuthResponse, User } from '../types/user';
 import type { LoginHistoryEntry, SessionCheckResponse } from '../types/auth';
 import { logUserActivity } from '@/features/user-activity/services/activityLogsApi';
+import { classifySignOut, type LogoutOutcome } from './logoutOutcome';
 
 /**
  * Кэш для проверки прав администратора
@@ -423,31 +424,38 @@ export async function login(data: LoginData): Promise<AuthResponse> {
 }
 
 /**
- * Выход пользователя
- * 
- * @returns Promise<void>
+ * Выход пользователя.
+ * Сначала отзывает сессию на сервере, затем очищает её локально.
  */
-export async function logout(): Promise<void> {
+export async function logout(): Promise<LogoutOutcome> {
   try {
     console.debug('📤 Выход пользователя');
 
-    // Логируем выход ДО выхода из системы (пока есть пользователь)
     logUserActivity('logout', 'Выход из системы', {
       entityType: 'user',
     }).catch(() => {});
 
-    // Инвалидируем кэш сессии перед выходом
     invalidateSessionCache();
 
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      console.error('❌ Ошибка выхода:', error);
-      throw error;
+    let remoteError: unknown = null;
+    try {
+      const remote = await supabase.auth.signOut({ scope: 'global' });
+      remoteError = remote.error;
+    } catch (error) {
+      remoteError = error;
     }
-    console.debug('✅ Выход выполнен успешно');
+    if (!remoteError) return 'remote-revoked';
+
+    let localError: unknown = null;
+    try {
+      const local = await supabase.auth.signOut({ scope: 'local' });
+      localError = local.error;
+    } catch (error) {
+      localError = error;
+    }
+    return classifySignOut(remoteError, localError);
   } catch (error) {
     console.error('❌ Ошибка выхода:', error);
-    // Пробрасываем ошибку, но не блокируем выход
     throw error;
   }
 }

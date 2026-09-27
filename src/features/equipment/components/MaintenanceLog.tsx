@@ -29,6 +29,7 @@ import {
   MAX_MAINTENANCE_FILES,
   MAX_MAINTENANCE_FILE_SIZE_BYTES,
 } from '../constants/maintenanceFiles';
+import { maintenanceDraftIsDirty } from '@/features/common/services/leaveDecision';
 import { updateEquipmentCache } from '../hooks/useEquipmentData';
 import './MaintenanceLog.css';
 
@@ -48,10 +49,11 @@ interface MaintenanceLogProps {
   /** Опциональный ID общего журнала обслуживания (для нескольких единиц оборудования) */
   maintenanceSheetId?: string;
   /** Опциональная информация об оборудовании (если уже загружена) */
-  equipment?: Equipment;
+  /** Сообщает модальному окну, что черновик или сохранение нельзя закрыть молча. */
+  onActivityChange?: (activity: { dirty: boolean; saving: boolean }) => void;
 }
 
-const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanceSheetId, equipment: propEquipment }) => {
+const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanceSheetId, equipment: propEquipment, onActivityChange }) => {
   const [entries, setEntries] = useState<MaintenanceEntry[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -84,6 +86,31 @@ const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanc
   });
 
   const effectiveMaintenanceSheetId = maintenanceSheetId || equipment?.maintenanceSheetId;
+
+  useEffect(() => {
+    onActivityChange?.({
+      dirty: maintenanceDraftIsDirty({
+        type: formData.type,
+        description: formData.description,
+        performedBy: formData.performedBy,
+        fileCount: selectedFiles.length + editSelectedFiles.length,
+        editing: editingEntryId !== null || showInspectionForm,
+      }),
+      saving: saving || uploadingFiles || savingEditId !== null,
+    });
+  }, [
+    formData.type,
+    formData.description,
+    formData.performedBy,
+    selectedFiles.length,
+    editSelectedFiles.length,
+    editingEntryId,
+    showInspectionForm,
+    saving,
+    uploadingFiles,
+    savingEditId,
+    onActivityChange,
+  ]);
   const maxMaintenanceFileSizeMb = MAX_MAINTENANCE_FILE_SIZE_BYTES / 1024 / 1024;
 
   const handlePickMaintenanceFiles = (

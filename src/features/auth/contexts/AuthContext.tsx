@@ -9,7 +9,10 @@ import { useNavigate } from 'react-router-dom';
 import { supabase, invalidateProfileCache } from '@/shared/config/supabase';
 import { login as loginApi, logout as logoutApi, register as registerApi, getCurrentUser } from '../services/supabaseAuthApi';
 import { startActivityTracking, stopActivityTracking, checkSessionTimeout as checkTimeout } from '@/shared/utils/sessionTimeout';
-import { clearLastPath } from '@/shared/utils/pathStorage';
+import { clearLastPath, clearRedirectPath } from '@/shared/utils/pathStorage';
+import { detachBrowserPush } from '@/features/water-monitoring/services/pushDetach';
+import { clearEquipmentCache } from '@/features/equipment/hooks/useEquipmentData';
+import { toast } from 'react-toastify';
 import { ROUTES } from '@/shared/utils/routes';
 import type { User } from '../types/user';
 import type { AuthState } from '../types/auth';
@@ -607,19 +610,31 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   const logout = useCallback(async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      // Выход через Supabase Auth
-      // onAuthStateChange автоматически обновит состояние (SIGNED_OUT)
-      await logoutApi();
-    } catch (error) {
-      console.error('Ошибка при выходе:', error);
-    } finally {
-      invalidateProfileCache(); // Очищаем кеш профиля при выходе
-      clearLastPath(); // Очищаем сохраненный путь при выходе
+      try {
+        await detachBrowserPush();
+      } catch (error) {
+        console.error('Не удалось отвязать push перед выходом:', error);
+      }
+      const outcome = await logoutApi();
+      invalidateProfileCache();
+      clearLastPath();
+      clearRedirectPath();
+      clearEquipmentCache();
       stopActivityTracking();
       setUser(null);
       setError(null);
+      if (outcome === 'local-only') {
+        toast.warning('Вы вышли на этом устройстве. Сервер не подтвердил отзыв сессии.');
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Не удалось выйти';
+      console.error('Ошибка при выходе:', error);
+      setError(message);
+      toast.error(message);
+      throw error;
+    } finally {
       setLoading(false);
     }
   }, []);

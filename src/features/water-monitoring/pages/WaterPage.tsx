@@ -13,7 +13,12 @@ import BeliotDevicesTest from '../components/BeliotDevicesTest';
 import WaterQualityJournalPage from '../../water-quality/pages/WaterQualityJournalPage';
 import { ROUTES } from '@/shared/utils/routes';
 import { useWaterNotifications } from '../hooks/useWaterNotifications';
+import NotificationInbox from '../components/NotificationInbox';
+import { invoiceRequestFromSearch } from '../services/invoiceDeepLink';
+import { downloadInvoicePdf } from '../services/notificationsApi';
+import { toast } from 'react-toastify';
 import { usePushSubscription } from '../hooks/usePushSubscription';
+import PushSubscriptionControl from '../components/PushSubscriptionControl';
 import { logUserActivity } from '@/features/user-activity/services/activityLogsApi';
 import './WaterPage.css';
 
@@ -25,8 +30,8 @@ const WaterPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<WaterTab>('dashboard');
   const loggedWaterViewRef = useRef(false);
 
-  useWaterNotifications();
-  usePushSubscription();
+  const notificationInbox = useWaterNotifications();
+  const pushSubscription = usePushSubscription();
 
   // Определяем активную вкладку на основе маршрута и search-параметра ?tab=
   useEffect(() => {
@@ -53,6 +58,32 @@ const WaterPage: React.FC = () => {
 
     setActiveTab(nextTab);
   }, [location.pathname, location.search]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (!params.get('invoice')) return;
+    const request = invoiceRequestFromSearch(location.search);
+    if (!request) {
+      toast.error('Счёт нужно открыть по идентификатору или по периоду вместе с лицевым счётом.');
+      return;
+    }
+    let cancelled = false;
+    downloadInvoicePdf(request).then(blob => {
+      if (cancelled) return;
+      if (!blob) {
+        toast.error('Не удалось открыть счёт из уведомления.');
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank', 'noopener,noreferrer');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    }).catch(() => {
+      if (!cancelled) toast.error('Не удалось открыть счёт из уведомления.');
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [location.search]);
 
   const handleTabChange = (tab: WaterTab) => {
     if (tab === 'counters') {
@@ -96,6 +127,8 @@ const WaterPage: React.FC = () => {
             <span className="water-tab-text">Анализы качества воды</span>
           </button>
         </div>
+        <NotificationInbox inbox={notificationInbox} />
+        <PushSubscriptionControl push={pushSubscription} />
       </div>
 
       <div className="water-page-content">

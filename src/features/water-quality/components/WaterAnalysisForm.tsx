@@ -3,7 +3,7 @@
  * Поддерживает режимы создания и редактирования
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useId } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import type {
@@ -25,6 +25,7 @@ import { concludeCompliance } from '../services/complianceConclusion';
 import { saveAnalysisBundle } from '../services/saveAnalysisBundle';
 import { ROUTES } from '@/shared/utils/routes';
 import { logUserActivity } from '@/features/user-activity/services/activityLogsApi';
+import { leaveDecision } from '@/features/common/services/leaveDecision';
 import './WaterAnalysisForm.css';
 
 interface WaterAnalysisFormProps {
@@ -40,6 +41,8 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
   const { update, error } = useWaterAnalysisManagement();
   const { samplingPoints, loading: loadingPoints } = useSamplingPoints();
   const currentUser = useCurrentUser();
+  const fieldId = useId();
+  const field = (name: string): string => `${fieldId}-${name}`;
 
   // Основные поля анализа
   const [samplingPointId, setSamplingPointId] = useState<string>('');
@@ -319,7 +322,50 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
     }
   };
 
+  const formSnapshot = JSON.stringify({
+    samplingPointId,
+    equipmentId,
+    sampleDate,
+    status,
+    manualConclusion,
+    complianceBasis,
+    notes,
+    externalLab,
+    externalLabName,
+    results,
+    pdfName: pdfFile?.name ?? '',
+  });
+  const formBaselineRef = useRef<string | null>(null);
+  const formReady = !loadingPoints && !loadingExistingAnalysis && !loadingAnalysis;
+  const formBusy = saving || uploadingPdf;
+  useEffect(() => {
+    if (!formReady) {
+      formBaselineRef.current = null;
+      return;
+    }
+    if (formBaselineRef.current === null) formBaselineRef.current = formSnapshot;
+  }, [formReady, formSnapshot]);
+  const formDirty = formReady && formBaselineRef.current !== null && formBaselineRef.current !== formSnapshot;
+
+  useEffect(() => {
+    const onLeave = (event: BeforeUnloadEvent): void => {
+      if (leaveDecision({ dirty: formDirty, saving: formBusy }) === 'allow') return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onLeave);
+    return () => window.removeEventListener('beforeunload', onLeave);
+  }, [formDirty, formBusy]);
+
   const handleCancel = () => {
+    const decision = leaveDecision({ dirty: formDirty, saving: formBusy });
+    if (decision === 'block') {
+      toast.info('Дождитесь окончания сохранения.');
+      return;
+    }
+    if (decision === 'confirm' && !window.confirm('Есть несохранённые изменения. Закрыть без сохранения?')) {
+      return;
+    }
     if (onCancel) {
       onCancel();
     } else {
@@ -348,14 +394,15 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
         <h2>{isEditMode ? 'Редактирование анализа' : 'Добавление анализа качества воды'}</h2>
       </div>
 
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={handleSubmit} aria-describedby={error ? field('form-error') : undefined}>
         {/* Основная информация */}
         <div className="form-section">
           <h3>Основная информация</h3>
 
           <div className="form-group">
-            <label>Пункт отбора проб *</label>
+            <label htmlFor={field('sampling-point')}>Пункт отбора проб *</label>
             <select
+              id={field('sampling-point')}
               value={samplingPointId}
               onChange={(e) => {
                 const nextPointId = e.target.value;
@@ -377,8 +424,9 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
           </div>
 
           <div className="form-group">
-            <label>ID оборудования</label>
+            <label htmlFor={field('equipment')}>ID оборудования</label>
             <input
+              id={field('equipment')}
               type="text"
               value={equipmentId}
               onChange={(e) => setEquipmentId(e.target.value)}
@@ -391,8 +439,9 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
           </div>
 
           <div className="form-group">
-            <label>Дата отбора пробы *</label>
+            <label htmlFor={field('sample-date')}>Дата отбора пробы *</label>
             <input
+              id={field('sample-date')}
               type="date"
               value={sampleDate}
               onChange={(e) => setSampleDate(e.target.value)}
@@ -402,8 +451,8 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
 
           <div className="form-row">
             <div className="form-group">
-              <label>Статус *</label>
-              <select value={status} onChange={(e) => setStatus(e.target.value as AnalysisStatus)} required>
+              <label htmlFor={field('status')}>Статус *</label>
+              <select id={field('status')} value={status} onChange={(e) => setStatus(e.target.value as AnalysisStatus)} required>
                 <option value="in_progress">В работе</option>
                 <option value="completed">Завершён</option>
                 <option value="cancelled">Отменён</option>
@@ -411,8 +460,9 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
             </div>
 
             <div className="form-group">
-              <label>Заключение</label>
+              <label htmlFor={field('conclusion')}>Заключение</label>
               <select
+                id={field('conclusion')}
                 value={manualConclusion}
                 onChange={(e) => setManualConclusion(e.target.value as '' | 'compliant' | 'non_compliant')}
               >
@@ -422,17 +472,20 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
               </select>
               {manualConclusion && (
                 <input
+                  id={field('compliance-basis')}
                   type="text"
                   value={complianceBasis}
                   onChange={(e) => setComplianceBasis(e.target.value)}
+                  aria-label="Основание ручного заключения"
                   placeholder="Основание ручного заключения"
                 />
               )}
             </div>
 
             <div className="form-group">
-              <label>Состояние пробы</label>
+              <label htmlFor={field('sample-condition')}>Состояние пробы</label>
               <select
+                id={field('sample-condition')}
                 value={sampleCondition}
                 onChange={(e) => setSampleCondition(e.target.value as SampleCondition)}
               >
@@ -477,8 +530,9 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
           {externalLab && (
             <>
               <div className="form-group">
-                <label>Название лаборатории</label>
+                <label htmlFor={field('lab-name')}>Название лаборатории</label>
                 <input
+                  id={field('lab-name')}
                   type="text"
                   value={externalLabName}
                   onChange={(e) => setExternalLabName(e.target.value)}
@@ -487,8 +541,9 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
               </div>
 
               <div className="form-group">
-                <label>PDF файл анализа</label>
+                <label htmlFor={field('pdf')}>PDF файл анализа</label>
                 <input
+                  id={field('pdf')}
                   type="file"
                   accept=".pdf,application/pdf"
                   onChange={(e) => {
@@ -523,7 +578,7 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
 
               {attachmentUrls.length > 0 && (
                 <div className="form-group">
-                  <label>Прикрепленные файлы</label>
+                  <p>Прикрепленные файлы</p>
                   <div className="attachments-list">
                     {attachmentUrls.map((url) => (
                       <div key={url} className="attachment-item">
@@ -562,7 +617,7 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
               return (
                 <div key={param} className="result-item">
                   <div className="result-header">
-                    <label>
+                    <label htmlFor={field(`value-${param}`)}>
                       {metadata.label} ({metadata.unit})
                     </label>
                     {metadata.description && (
@@ -572,6 +627,7 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
 
                   <div className="result-inputs">
                     <input
+                      id={field(`value-${param}`)}
                       type="number"
                       value={result.value}
                       onChange={(e) => handleResultChange(param, 'value', e.target.value)}
@@ -586,6 +642,7 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
                       type="text"
                       value={result.method || ''}
                       onChange={(e) => handleResultChange(param, 'method', e.target.value)}
+                      aria-label={`Метод измерения: ${metadata.label}`}
                       placeholder="Метод измерения"
                       className="result-method-input"
                     />
@@ -601,8 +658,9 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
           <h3>Дополнительная информация</h3>
 
           <div className="form-group">
-            <label>Примечания</label>
+            <label htmlFor={field('notes')}>Примечания</label>
             <textarea
+              id={field('notes')}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Дополнительная информация об анализе..."
@@ -613,7 +671,7 @@ const WaterAnalysisForm: React.FC<WaterAnalysisFormProps> = ({ analysisId, onSav
 
         {/* Сообщения об ошибках */}
         {error && (
-          <div className="error-message">
+          <div id={field('form-error')} className="error-message" role="alert">
             <span className="error-icon">⚠</span> {error}
           </div>
         )}

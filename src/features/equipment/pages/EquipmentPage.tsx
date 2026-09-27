@@ -13,11 +13,11 @@ import EquipmentPageHeader from '../components/EquipmentPage/EquipmentPageHeader
 import StatusMessages from '../components/EquipmentPage/StatusMessages';
 import { useAuth } from '../../auth/contexts/AuthContext';
 import { getEquipmentEditUrl } from '@/shared/utils/routes';
-import { filterSpecs } from '../types/equipment';
 import { PlateExportSettings } from '@/shared/types/plateExport';
 import { deleteEquipment } from '../services/equipmentApi';
 import { useEquipmentData, clearEquipmentCache } from '../hooks/useEquipmentData';
 import { useEquipmentDates } from '../hooks/useEquipmentDates';
+import { equipmentCardState } from '../services/equipmentCardState';
 import { ROUTES } from '@/shared/utils/routes';
 import { logUserActivity } from '@/features/user-activity/services/activityLogsApi';
 import './EquipmentPage.css';
@@ -28,7 +28,7 @@ const EquipmentPage: React.FC = () => {
   const { isAdmin } = useAuth();
   
   // Используем хук для загрузки данных (с кешированием)
-  const { data: equipmentData, loading, error: loadError } = useEquipmentData(id && id !== 'new' ? id : undefined);
+  const { data: equipmentData, loading, error: loadError, notFound, refetch } = useEquipmentData(id && id !== 'new' ? id : undefined);
   
   // Преобразуем данные в один объект (если это одно оборудование)
   const currentEquipment = equipmentData && !Array.isArray(equipmentData) ? equipmentData : null;
@@ -49,8 +49,12 @@ const EquipmentPage: React.FC = () => {
   // Состояния для настроек экспорта
   const [isExportSettingsOpen, setIsExportSettingsOpen] = useState(false);
   
-  // Объединяем ошибки загрузки и удаления
-  const error = loadError || datesError || deleteError;
+  const cardState = equipmentCardState({
+    loading,
+    notFound,
+    loadError,
+    hasEquipment: currentEquipment !== null,
+  });
 
   useEffect(() => {
     if (!currentEquipment) {
@@ -210,22 +214,36 @@ const EquipmentPage: React.FC = () => {
         <StatusMessages
           saving={false}
           success={false}
-          error={error}
+          error={cardState === 'ready' ? (datesError || deleteError) : null}
           loading={loading}
         />
-        
-        {loading ? (
+
+        {cardState === 'loading' && (
           <div className="loading-message">Загрузка данных оборудования...</div>
-        ) : (
+        )}
+        {cardState === 'not-found' && (
+          <div className="equipment-state" role="status">
+            <p>Оборудование не найдено.</p>
+          </div>
+        )}
+        {cardState === 'error' && (
+          <div className="equipment-state" role="alert">
+            <p>{loadError || 'Не удалось загрузить оборудование.'}</p>
+            <button type="button" className="equipment-state__retry" onClick={() => { void refetch(); }}>
+              Повторить
+            </button>
+          </div>
+        )}
+        {cardState === 'ready' && currentEquipment && (
           <>
-            <EquipmentPlate 
-              specs={currentEquipment?.specs || filterSpecs} 
-              equipmentName={currentEquipment?.name}
-              equipmentType={currentEquipment?.type}
+            <EquipmentPlate
+              specs={currentEquipment.specs}
+              equipmentName={currentEquipment.name}
+              equipmentType={currentEquipment.type}
               filterNumber={getFilterNumber()}
               commissioningDate={commissioningDate}
               lastMaintenanceDate={lastMaintenanceDate}
-              qrCodeUrl={currentEquipment?.qrCodeUrl}
+              qrCodeUrl={currentEquipment.qrCodeUrl}
             />
             
             {currentEquipment && isMaintenanceLogOpen && (

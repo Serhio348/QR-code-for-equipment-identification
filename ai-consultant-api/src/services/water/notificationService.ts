@@ -9,6 +9,7 @@ import { config } from '../../config/env.js';
 import type { ParsedInvoice } from '../invoiceParserService.js';
 import type { InvoiceNotice } from './invoiceIdentity.js';
 import { compareAccountConsumption, consumptionGrowthAlert, tariffMemoryKey } from './invoiceComparison.js';
+import { assertNotificationsMarked } from './notificationRead.js';
 
 const supabase = createClient(config.supabaseUrl, config.supabaseServiceKey);
 
@@ -159,21 +160,32 @@ async function checkTariffChange(latest: ParsedInvoice): Promise<void> {
     });
 }
 
-export async function getUnreadNotifications(userId: string): Promise<WaterNotification[]> {
+export async function getRecentNotifications(userId: string, limit = 30): Promise<WaterNotification[]> {
     const { data, error } = await supabase
         .from('water_notifications')
         .select('id, type, title, body, payload, is_read, created_at')
         .eq('user_id', userId)
-        .eq('is_read', false)
         .order('created_at', { ascending: false })
-        .limit(20);
-    if (error) return [];
+        .limit(limit);
+    if (error) throw new Error(error.message);
     return (data ?? []) as WaterNotification[];
 }
 
-export async function markNotificationsRead(userId: string, ids: string[]): Promise<void> {
-    if (ids.length === 0) return;
-    await supabase.from('water_notifications').update({ is_read: true }).in('id', ids).eq('user_id', userId);
+export async function getUnreadNotifications(userId: string): Promise<WaterNotification[]> {
+    const recent = await getRecentNotifications(userId);
+    return recent.filter(item => !item.is_read).slice(0, 20);
+}
+
+export async function markNotificationsRead(userId: string, ids: string[]): Promise<number> {
+    if (ids.length === 0) return 0;
+    const { data, error } = await supabase
+        .from('water_notifications')
+        .update({ is_read: true })
+        .in('id', ids)
+        .eq('user_id', userId)
+        .select('id');
+    if (error) throw new Error(error.message);
+    return assertNotificationsMarked(ids, (data ?? []).map(row => row.id));
 }
 
 export async function savePushSubscription(userId: string, endpoint: string, p256dh: string, authKey: string): Promise<void> {

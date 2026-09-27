@@ -246,6 +246,31 @@
   gap: 10px;
 }
 
+.equipment-state {
+  max-width: 640px;
+  margin: 24px auto;
+  padding: 24px;
+  text-align: center;
+  background: #fff;
+  border-radius: 8px;
+}
+
+.equipment-state p {
+  margin: 0;
+}
+
+.equipment-state__retry {
+  margin-top: 16px;
+  padding: 10px 20px;
+  background: #667eea;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 @media (max-width: 768px) {
   .equipment-page {
     padding-left: 0; /* Убираем отступ на мобильных */

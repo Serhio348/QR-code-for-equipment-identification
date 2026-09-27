@@ -103,7 +103,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   return (
     <form className="ai-chat-input" onSubmit={handleSubmit}>
       {photoError && (
-        <p className="ai-chat-input__photo-error" role="alert">{photoError}</p>
+        <p id="ai-chat-photo-error" className="ai-chat-input__photo-error" role="alert">{photoError}</p>
       )}
 
       {/* Превью выбранных фото */}
@@ -143,10 +143,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
       <textarea
         ref={textareaRef}
+        id="ai-chat-message"
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder="Задайте вопрос об оборудовании..."
+        aria-label="Сообщение консультанту"
+        aria-describedby={photoError ? 'ai-chat-photo-error' : undefined}
         disabled={isLoading}
         rows={3}
         className="ai-chat-input__textarea"
@@ -166,7 +169,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           type="submit"
           disabled={(!text.trim() && selectedPhotos.length === 0) || isLoading}
           className="ai-chat-input__send"
-          title="Отправить"
+          aria-label="Отправить сообщение"
         >
           {isLoading ? '⏳' : '➤'}
         </button>

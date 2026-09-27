@@ -1,45 +1,66 @@
-import { useEffect } from 'react';
+/**
+ * useWaterNotifications.tsx
+ *
+ * Список уведомлений на странице воды.
+ * Toast показывает не больше трёх новых. Прочитанным сообщение становится
+ * только после явной отметки, и только если сервер подтвердил запись.
+ */
+
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'react-toastify';
 import {
-    fetchUnreadNotifications,
+    fetchNotifications,
     markNotificationsRead,
     downloadInvoicePdf,
     type WaterNotification,
 } from '../services/notificationsApi';
 import { invoiceDownloadSearch, type InvoiceDownloadRequest } from '../services/invoiceDownloadQuery';
+import { NOTIFICATION_POLL_MS, toastBatch } from '../services/notificationInbox';
 
-/**
- * Загружает непрочитанные уведомления при открытии вкладки Вода
- * и показывает их как toast. Помечает как прочитанные автоматически.
- */
-export function useWaterNotifications(): void {
-    useEffect(() => {
-        let cancelled = false;
+export interface WaterNotificationInbox {
+    notifications: WaterNotification[];
+    error: string | null;
+    markRead: (ids: string[]) => Promise<void>;
+}
 
-        async function loadAndShow() {
-            const notifications = await fetchUnreadNotifications();
-            if (cancelled || notifications.length === 0) return;
+export function useWaterNotifications(): WaterNotificationInbox {
+    const [notifications, setNotifications] = useState<WaterNotification[]>([]);
+    const [error, setError] = useState<string | null>(null);
+    const shownRef = useRef<Set<string>>(new Set());
 
-            const ids = notifications.map((n: WaterNotification) => n.id);
-
-            for (const n of notifications) {
-                if (n.type === 'new_invoice') {
-                    showInvoiceToast(n);
-                } else if (n.type === 'high_consumption') {
-                    toast.warning(`${n.title}\n${n.body}`, { autoClose: 10000 });
-                } else if (n.type === 'tariff_change') {
-                    toast.info(`${n.title}\n${n.body}`, { autoClose: 10000 });
-                } else {
-                    toast.success(`${n.title}\n${n.body}`, { autoClose: 8000 });
-                }
+    const load = useCallback(async (): Promise<void> => {
+        try {
+            const rows = await fetchNotifications();
+            setNotifications(rows);
+            setError(null);
+            const unread = rows.filter(item => !item.is_read);
+            for (const item of toastBatch(unread, shownRef.current)) {
+                shownRef.current.add(item.id);
+                showNotificationToast(item);
             }
-
-            markNotificationsRead(ids).catch(() => {});
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Не удалось загрузить уведомления');
         }
+    }, []);
 
-        loadAndShow();
-        return () => { cancelled = true; };
-    }, []); // только при монтировании
+    useEffect(() => {
+        void load();
+        const timer = window.setInterval(() => { void load(); }, NOTIFICATION_POLL_MS);
+        return () => window.clearInterval(timer);
+    }, [load]);
+
+    const markRead = useCallback(async (ids: string[]): Promise<void> => {
+        const updated = await markNotificationsRead(ids);
+        if (updated !== ids.length) {
+            throw new Error('Не все уведомления отмечены прочитанными');
+        }
+        setNotifications(prev => prev.map(item => (
+            ids.includes(item.id) ? { ...item, is_read: true } : item
+        )));
+        setError(null);
+    }, []);
+
+    return { notifications, error, markRead };
 }
 
 function invoiceRequestFromPayload(payload: Record<string, unknown> | undefined): InvoiceDownloadRequest {
@@ -50,8 +71,23 @@ function invoiceRequestFromPayload(payload: Record<string, unknown> | undefined)
     };
 }
 
-function showInvoiceToast(n: WaterNotification): void {
-    const request = invoiceRequestFromPayload(n.payload);
+function showNotificationToast(item: WaterNotification): void {
+    if (item.type === 'new_invoice') {
+        showInvoiceToast(item);
+        return;
+    }
+    const text = `${item.title}\n${item.body}`;
+    if (item.type === 'high_consumption') {
+        toast.warning(text, { autoClose: 10000 });
+    } else if (item.type === 'tariff_change') {
+        toast.info(text, { autoClose: 10000 });
+    } else {
+        toast.success(text, { autoClose: 8000 });
+    }
+}
+
+function showInvoiceToast(item: WaterNotification): void {
+    const request = invoiceRequestFromPayload(item.payload);
     const canOpen = invoiceDownloadSearch(request) !== null;
     const openPdf = async () => {
         const blob = await downloadInvoicePdf(request);
@@ -67,11 +103,12 @@ function showInvoiceToast(n: WaterNotification): void {
     toast.success(
         ({ closeToast }) => (
             <div>
-                <div style={{ fontWeight: 600, marginBottom: 4 }}>{n.title}</div>
-                <div style={{ fontSize: 13, marginBottom: canOpen ? 8 : 0 }}>{n.body}</div>
+                <div style={{ fontWeight: 600, marginBottom: 4 }}>{item.title}</div>
+                <div style={{ fontSize: 13, marginBottom: canOpen ? 8 : 0 }}>{item.body}</div>
                 {canOpen && (
                     <button
-                        onClick={() => { openPdf(); closeToast?.(); }}
+                        type="button"
+                        onClick={() => { void openPdf(); closeToast?.(); }}
                         style={{
                             background: 'none',
                             border: '1px solid currentColor',
@@ -87,6 +124,6 @@ function showInvoiceToast(n: WaterNotification): void {
                 )}
             </div>
         ),
-        { autoClose: 12000 }
+        { autoClose: 12000 },
     );
 }

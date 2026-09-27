@@ -3,9 +3,10 @@
  * Позволяет выбрать между различными административными функциями
  */
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '@/shared/utils/routes';
+import { useDialogA11y } from '../hooks/useDialogA11y';
 import './AdminModal.css';
 
 interface AdminModalProps {
@@ -14,17 +15,7 @@ interface AdminModalProps {
 
 const AdminModal: React.FC<AdminModalProps> = ({ onClose }) => {
   const navigate = useNavigate();
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  const { dialogRef, titleId } = useDialogA11y(true, onClose);
 
   const stopPropagation = (event: React.MouseEvent<HTMLDivElement>) => {
     event.stopPropagation();
@@ -36,10 +27,18 @@ const AdminModal: React.FC<AdminModalProps> = ({ onClose }) => {
   };
 
   return (
-    <div className="admin-modal-overlay" onClick={onClose} role="dialog" aria-modal="true">
+    <div
+      className="admin-modal-overlay"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      ref={dialogRef}
+      tabIndex={-1}
+    >
       <div className="admin-modal" onClick={stopPropagation}>
         <div className="admin-modal__header">
-          <h2>Администрирование</h2>
+          <h2 id={titleId}>Администрирование</h2>
           <button
             className="admin-modal__close"
             onClick={onClose}

@@ -31,7 +31,8 @@ import { getAllEquipment, getEquipmentById } from '../services/equipmentApi';
 interface UseEquipmentDataResult {
   data: Equipment | Equipment[] | null;  // Загруженные данные
   loading: boolean;                      // Состояние загрузки
-  error: string | null;                  // Ошибка (если есть)
+  error: string | null;                  // Сбой загрузки, не путать с отсутствием записи
+  notFound: boolean;                     // Запись с этим ID отсутствует
   refetch: () => Promise<void>;          // Функция перезагрузки данных
 }
 
@@ -156,6 +157,7 @@ export function useEquipmentData(id?: string): UseEquipmentDataResult {
   const [data, setData] = useState<Equipment | Equipment[] | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [notFound, setNotFound] = useState<boolean>(false);
   
   // Используем ref для предотвращения обновления состояния после размонтирования
   const isMountedRef = useRef(true);
@@ -188,6 +190,7 @@ export function useEquipmentData(id?: string): UseEquipmentDataResult {
           setData(cached.data);
           setLoading(false);
           setError(null);
+          setNotFound(false);
         }
         return;
       }
@@ -197,6 +200,7 @@ export function useEquipmentData(id?: string): UseEquipmentDataResult {
     if (stillCurrent()) {
       setLoading(true);
       setError(null);
+      setNotFound(false);
     }
     
     try {
@@ -208,7 +212,12 @@ export function useEquipmentData(id?: string): UseEquipmentDataResult {
         console.debug('[useEquipmentData] Загрузка одного оборудования:', requestedId);
         const equipment = await getEquipmentById(requestedId);
         if (!equipment) {
-          throw new Error('Оборудование не найдено');
+          if (!stillCurrent()) return;
+          setData(null);
+          setLoading(false);
+          setError(null);
+          setNotFound(true);
+          return;
         }
         result = normalizeEquipmentDates(equipment);
       } else {
@@ -229,11 +238,13 @@ export function useEquipmentData(id?: string): UseEquipmentDataResult {
       setData(result);
       setLoading(false);
       setError(null);
+      setNotFound(false);
     } catch (err: unknown) {
       console.error('Ошибка загрузки оборудования:', err);
       if (!stillCurrent()) return;
       const message = err instanceof Error ? err.message : 'Не удалось загрузить данные оборудования';
       setError(message);
+      setNotFound(false);
       setLoading(false);
       setData(null);
     }
@@ -283,6 +294,7 @@ export function useEquipmentData(id?: string): UseEquipmentDataResult {
     data,
     loading,
     error,
+    notFound,
     refetch,
   };
 }

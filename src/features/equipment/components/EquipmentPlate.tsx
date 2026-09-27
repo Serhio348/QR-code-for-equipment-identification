@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { EquipmentSpecs } from '../types/equipment';
 import { getAllSpecFieldsForType } from '../constants/equipmentSpecFields';
+import { verifiedQrUrl } from '../services/equipmentCardState';
 import QRCodeComponent from '../../common/components/QRCode';
 import { formatDate } from '@/shared/utils/dateFormatting';
 import './EquipmentPlate.css';
@@ -24,10 +25,7 @@ const EquipmentPlate: React.FC<EquipmentPlateProps> = ({
   qrCodeUrl
 }) => {
   const [isQRModalOpen, setIsQRModalOpen] = useState(false);
-  
-  // Используем переданный URL или дефолтный
-  const defaultUrl = 'https://drive.google.com/drive/folders/1t90itk12veviwYM1LH7DZ15G4slpPnon';
-  const urlForQR = qrCodeUrl || defaultUrl;
+  const urlForQR = verifiedQrUrl(qrCodeUrl);
   
   // Используем переданное название оборудования или название из specs
   const displayName = equipmentName || specs.name || 'Оборудование';
@@ -126,16 +124,20 @@ const EquipmentPlate: React.FC<EquipmentPlateProps> = ({
           </table>
         </div>
         
-        <div className="qr-section">
-          <div className="qr-code-clickable" onClick={handleQRClick}>
-            <QRCodeComponent url={urlForQR} />
+        {urlForQR ? (
+          <div className="qr-section">
+            <div className="qr-code-clickable" onClick={handleQRClick}>
+              <QRCodeComponent url={urlForQR} />
+            </div>
+            <p className="qr-label">Отсканируйте для получения дополнительной информации</p>
           </div>
-          <p className="qr-label">Отсканируйте для получения дополнительной информации</p>
-        </div>
+        ) : (
+          <p className="qr-missing">Для этого оборудования QR-код не задан.</p>
+        )}
       </div>
       
       {/* Модальное окно с увеличенным QR-кодом */}
-      {isQRModalOpen && (
+      {isQRModalOpen && urlForQR && (
         <div className="qr-modal-overlay" onClick={handleModalBackdropClick}>
           <div className="qr-modal-content">
             <button 

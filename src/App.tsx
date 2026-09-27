@@ -86,6 +86,18 @@ const App: React.FC = () => {
     }
   }, [location.pathname, location.search, isAuthenticated, isAuthPage, isMainMenuPage]);
 
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    const onMessage = (event: MessageEvent): void => {
+      const path = event.data?.type === 'OPEN_PATH' ? event.data.path : '';
+      if (typeof path === 'string' && path.startsWith('/')) {
+        navigate(path);
+      }
+    };
+    navigator.serviceWorker.addEventListener('message', onMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage);
+  }, [navigate]);
+
   return (
     <div className="app" data-theme="modern-minimal">
       {!isMainMenuPage && (
