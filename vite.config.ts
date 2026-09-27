@@ -1,8 +1,9 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import { readFileSync, writeFileSync } from 'fs'
+import { readFileSync, readdirSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import path from 'path'
+import { precacheUrls } from './src/shared/utils/swCachePolicy'
 
 // Плагин для замены версии кэша в Service Worker при сборке
 function serviceWorkerCacheVersion() {
@@ -20,6 +21,12 @@ function serviceWorkerCacheVersion() {
         // Обрабатываем файл в dist (Vite уже скопировал его из public)
         let swContent = readFileSync(distSwPath, 'utf-8')
         swContent = swContent.replace(/__CACHE_VERSION__/g, cacheVersion)
+        const assetNames = readdirSync(join(process.cwd(), 'dist', 'assets'))
+        const urls = precacheUrls(assetNames)
+        swContent = swContent.replace(
+          /const PRECACHE_URLS = \[[\s\S]*?\];/,
+          `const PRECACHE_URLS = ${JSON.stringify(urls)};`,
+        )
         writeFileSync(distSwPath, swContent, 'utf-8')
         console.log(`[SW] Cache version updated: ${cacheVersion}`)
       } catch (error) {

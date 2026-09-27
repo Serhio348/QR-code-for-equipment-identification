@@ -8,11 +8,12 @@
 
 const CACHE_VERSION = '__CACHE_VERSION__'; // Заменяется при сборке на timestamp
 const CACHE_NAME = `equipment-app-${CACHE_VERSION}`;
-const STATIC_CACHE_URLS = [
+// Сборка подставляет сюда /assets/*.js и *.css. Без них offline-перезагрузка
+// остаётся без оболочки. Чужие API в этот список не входят.
+const PRECACHE_URLS = [
   '/',
   '/index.html',
   '/manifest.json',
-  // CSS и JS файлы будут добавлены автоматически при сборке
 ];
 
 // Установка Service Worker
@@ -23,7 +24,7 @@ self.addEventListener('install', (event) => {
     caches.open(CACHE_NAME)
       .then((cache) => {
         console.log('[SW] Caching static assets');
-        return cache.addAll(STATIC_CACHE_URLS);
+        return cache.addAll(PRECACHE_URLS);
       })
       .then(() => {
         console.log('[SW] Service Worker installed');
@@ -76,16 +77,10 @@ self.addEventListener('fetch', (event) => {
     return; // Пропускаем запросы от расширений без обработки
   }
   
-  // Пропускаем запросы к API (они должны идти на сервер без перехвата SW).
-  // На iOS PWA SW раньше возвращал ложный 504 «Offline and no cached response».
-  if (event.request.url.includes('/exec') || 
-      event.request.url.includes('script.google.com') ||
-      event.request.url.includes('beliot.by') ||
-      event.request.url.includes('supabase.co') ||
-      requestUrl.pathname.startsWith('/api/') ||
-      requestUrl.hostname.includes('railway.app') ||
-      requestUrl.hostname === 'localhost' && requestUrl.port === '3001') {
-    return; // Не кэшируем API запросы
+  // Чужой origin и свой /api/ не перехватываем: кэш только у статики этого приложения.
+  // Домен railway.app сам по себе не повод пропускать JS/CSS оболочки.
+  if (requestUrl.origin !== self.location.origin || requestUrl.pathname.startsWith('/api/')) {
+    return;
   }
   
   // Не кэшируем POST, PUT, DELETE и другие не-GET запросы
