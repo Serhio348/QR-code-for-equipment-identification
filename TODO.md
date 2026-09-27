@@ -278,16 +278,14 @@
   - **Остаток:** на компьютере с Windows Scheduler факт задачи не проверялся. Отдельные документы-планы вне README не переписывались.
 
 ### TECH-08
-- [ ] **P2 — Не компилировать тестовые файлы в production backend.**
-  - **Код:** `ai-consultant-api/tsconfig.json:16-17`; `ai-consultant-api/Dockerfile:17-20,52-54`.
-  - `include: src/**/*`, а exclude содержит только node_modules/dist: `*.test.ts` попадают в сборку вместе с декларациями. Production image получает весь dist при установке dependencies без devDependencies, хотя тестовые файлы импортируют Vitest.
-  - **Готово, когда:** production tsconfig исключает тесты, отдельная проверка типизирует их; образ содержит только runtime-код. CI проверяет состав артефактов и запускает smoke test production-сервера.
+- [x] **P2 — Не компилировать тестовые файлы в production backend.**
+  - **Сделано 2026-09-27:** `npm run build` берёт `tsconfig.build.json` и не включает `src/**/*.test.ts`. Обычный `tsc --noEmit` в CI по-прежнему проверяет тесты. Образ копирует `dist` после этой сборки. Тест: `productionBuild.test.ts`.
+  - **Остаток:** отдельный smoke-запуск production-сервера в CI не добавлялся.
 
 ### TECH-09
-- [ ] **P1 — Привести async error handling и HTTP-статусы API к единому контракту.**
-  - **Код:** `ai-consultant-api/src/index.ts:224-226`; `ai-consultant-api/src/routes/water/invoices.ts:167-196`; `ai-consultant-api/package.json:18`.
-  - Общий handler превращает всё в 500, включая превышение body limit и ошибки JSON/multipart; пользователь не получает корректные 400/413. В download-route нет try/catch или async-wrapper для исключений await/arrayBuffer, а используется Express 4, который не автоматически передаёт rejected promises обработчику ошибок.
-  - **Готово, когда:** все async endpoints передают исключения в error middleware, клиентские ошибки имеют корректный статус и безопасное сообщение, внутренние детали не уходят клиенту; тесты malformed JSON, oversized body/upload и исключения Storage.
+- [x] **P1 — Привести async error handling и HTTP-статусы API к единому контракту.**
+  - **Сделано 2026-09-27:** отклонённый promise маршрута доходит до error handler. Невалидный JSON отвечает 400, слишком большое тело и файл — 413, внутренняя ошибка — 500 без текста исключения. Тест: `httpError.test.ts`.
+  - **Остаток:** нет.
 
 ### TECH-10
 - [ ] **P2 — Сериализовать синхронизацию счетов и сделать уведомления идемпотентными.**

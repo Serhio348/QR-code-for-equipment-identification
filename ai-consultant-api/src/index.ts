@@ -42,6 +42,10 @@
 // Импорты
 // ============================================
 
+// До маршрутов: Express 4 сам не ловит rejected promise.
+import './http/asyncRoute.js';
+import { publicHttpError } from './http/httpError.js';
+
 // Express — HTTP-фреймворк для Node.js
 import express from 'express';
 
@@ -220,13 +224,12 @@ app.use((_req, res) => {
 // Сигнатура с 4 параметрами (err, req, res, next) — обязательна,
 // именно по ней Express отличает error handler от обычного middleware.
 //
-// Срабатывает когда:
-// - Middleware или route вызывает next(error)
-// - В async route возникает необработанное исключение (Express 5+)
-// - JSON body невалиден (SyntaxError от express.json())
-app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error('Unhandled error:', err);
-  res.status(500).json({ error: 'Internal server error' });
+// Срабатывает когда middleware вызывает next(error), JSON/multipart невалиден
+// или async-маршрут отклонил promise (см. asyncRoute.ts).
+app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  const body = publicHttpError(err);
+  if (body.status >= 500) console.error('Unhandled error:', err);
+  res.status(body.status).json({ error: body.error });
 });
 
 // ============================================
