@@ -27,3 +27,15 @@ export function precacheUrls(assetFileNames: readonly string[]): string[] {
     .map((name) => `/assets/${name}`);
   return ['/', '/index.html', '/manifest.json', ...assets];
 }
+
+/**
+ * Удаляет только свои устаревшие кэши и оставляет один предыдущий,
+ * чтобы открытая вкладка ещё могла загрузить свои lazy chunks.
+ * Чужие Cache Storage этого origin не трогает.
+ */
+export function cachesToDelete(cacheNames: readonly string[], currentName: string): string[] {
+  const previous = cacheNames
+    .filter((name) => name.startsWith('equipment-app-') && name !== currentName)
+    .sort();
+  return previous.slice(0, Math.max(0, previous.length - 1));
+}

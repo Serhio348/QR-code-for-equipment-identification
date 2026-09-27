@@ -27,14 +27,20 @@ self.addEventListener('install', (event) => {
         return cache.addAll(PRECACHE_URLS);
       })
       .then(() => {
-        console.log('[SW] Service Worker installed');
-        return self.skipWaiting(); // Активировать сразу
+        console.log('[SW] Service Worker installed, waiting for the user to refresh');
       })
       .catch((error) => {
         console.error('[SW] Error caching static assets:', error);
       })
   );
 });
+
+function cachesToDelete(cacheNames, currentName) {
+  const previous = cacheNames
+    .filter((name) => name.startsWith('equipment-app-') && name !== currentName)
+    .sort();
+  return previous.slice(0, Math.max(0, previous.length - 1));
+}
 
 // Активация Service Worker
 self.addEventListener('activate', (event) => {
@@ -43,23 +49,14 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
-        cacheNames.map((cacheName) => {
-          // Удаляем все старые кэши, которые начинаются с 'equipment-app-'
-          // но не соответствуют текущей версии
-          if (cacheName.startsWith('equipment-app-') && cacheName !== CACHE_NAME) {
-            console.log('[SW] Deleting old cache:', cacheName);
-            return caches.delete(cacheName);
-          }
-          // Также удаляем любые другие старые кэши
-          if (!cacheName.startsWith('equipment-app-')) {
-            console.log('[SW] Deleting unrelated cache:', cacheName);
-            return caches.delete(cacheName);
-          }
+        cachesToDelete(cacheNames, CACHE_NAME).map((cacheName) => {
+          console.log('[SW] Deleting old cache:', cacheName);
+          return caches.delete(cacheName);
         })
       );
     }).then(() => {
       console.log('[SW] Service Worker activated with cache:', CACHE_NAME);
-      return self.clients.claim(); // Взять контроль над всеми страницами
+      return self.clients.claim();
     })
   );
 });
