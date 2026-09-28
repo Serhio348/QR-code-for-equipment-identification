@@ -139,13 +139,12 @@ describe('supabaseAccessApi', () => {
     });
 
     it('should return false when user is not found', async () => {
-      // Мокаем отсутствие пользователя
       const fromMock = vi.fn(() => ({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({
           data: null,
-          error: { message: 'Not found' },
+          error: { code: 'PGRST116', message: 'Not found' },
         }),
       }));
 
@@ -156,8 +155,7 @@ describe('supabaseAccessApi', () => {
       expect(result).toBe(false);
     });
 
-    it('should return false on error', async () => {
-      // Мокаем ошибку
+    it('should throw when the profile query fails', async () => {
       const fromMock = vi.fn(() => ({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
@@ -166,9 +164,7 @@ describe('supabaseAccessApi', () => {
 
       (supabase.from as any).mockReturnValue(fromMock());
 
-      const result = await checkUserAccess('user@example.com', 'equipment');
-
-      expect(result).toBe(false);
+      await expect(checkUserAccess('user@example.com', 'equipment')).rejects.toThrow('Database error');
     });
   });
 
@@ -232,7 +228,7 @@ describe('supabaseAccessApi', () => {
         eq: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({
           data: null,
-          error: { message: 'Not found' },
+          error: { code: 'PGRST116', message: 'Not found' },
         }),
       }));
 
