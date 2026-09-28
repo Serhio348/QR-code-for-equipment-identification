@@ -7,6 +7,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase, invalidateProfileCache } from '@/shared/config/supabase';
+import { clearAccessSession } from '@/features/access-management/services/accessSessionCache';
 import { login as loginApi, logout as logoutApi, register as registerApi, getCurrentUser } from '../services/supabaseAuthApi';
 import { startActivityTracking, stopActivityTracking, checkSessionTimeout as checkTimeout } from '@/shared/utils/sessionTimeout';
 import { clearLastPath, clearRedirectPath } from '@/shared/utils/pathStorage';
@@ -227,6 +228,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           // Пользователь вошел или сессия обновлена
           // Инвалидируем кеш профиля, чтобы получить свежие данные
           invalidateProfileCache();
+          clearAccessSession();
           
           // Получаем пользователя с таймаутом для предотвращения зависания
           const getUserWithTimeout = Promise.race([
@@ -337,6 +339,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           // Пользователь вышел
           signedInProcessing = false; // Сбрасываем флаг обработки
           invalidateProfileCache(); // Очищаем кеш профиля
+          clearAccessSession();
           setUser(null);
           stopActivityTracking();
           setError(null);
@@ -496,6 +499,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           // Очищаем невалидные токены
           try {
             invalidateProfileCache(); // Очищаем кеш профиля
+            clearAccessSession();
             localStorage.removeItem('sb-auth-token');
             localStorage.removeItem('sb-auth-token.0');
             localStorage.removeItem('sb-auth-token.1');
@@ -619,6 +623,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
       const outcome = await logoutApi();
       invalidateProfileCache();
+      clearAccessSession();
       clearLastPath();
       clearRedirectPath();
       clearEquipmentCache();

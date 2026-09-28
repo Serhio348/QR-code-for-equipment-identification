@@ -8,6 +8,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/contexts/AuthContext';
 import { getUserAccess } from '../../access-management/services/supabaseAccessApi';
+import { readAccessSession, writeAccessSession } from '../../access-management/services/accessSessionCache';
 import { AVAILABLE_APPS, type UserAppAccess } from '../../access-management/types/access';
 import { menuAccessView } from '../../access-management/services/accessLoadState';
 import { ROUTES } from '@/shared/utils/routes';
@@ -50,6 +51,17 @@ const MainMenuPage: React.FC = () => {
         return;
       }
 
+      if (reloadKey === 0) {
+        const cached = readAccessSession(user.email);
+        if (cached !== undefined) {
+          setAccessError(null);
+          setProfileMissing(cached === null);
+          setUserAccess(cached);
+          setLoading(false);
+          return;
+        }
+      }
+
       try {
         const access = await getUserAccess(user.email);
 
@@ -65,6 +77,8 @@ const MainMenuPage: React.FC = () => {
           }, retryDelay);
           return;
         }
+
+        writeAccessSession(user.email, access);
 
         if (mounted) {
           setAccessError(null);

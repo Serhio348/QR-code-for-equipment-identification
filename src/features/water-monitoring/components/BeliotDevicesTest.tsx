@@ -9,7 +9,7 @@ import type { BeliotDevice } from '../types/beliotDevice';
 import { getBeliotDevicesOverrides } from '@/shared/services/api/supabaseBeliotOverridesApi';
 import { useDeviceOverrides } from '../hooks/useDeviceOverrides';
 import { useDevicePassport } from '../hooks/useDevicePassport';
-import { getBeliotReadings, getLastBeliotReading } from '../services/supabaseBeliotReadingsApi';
+import { getBeliotReadings, getLatestBeliotReadings } from '../services/supabaseBeliotReadingsApi';
 import { useDeviceArchive } from '../hooks/useDeviceArchive';
 import DeviceArchiveModal from './DeviceArchiveModal';
 import DevicePassportModal from './DevicePassportModal';
@@ -194,22 +194,11 @@ const BeliotDevicesTest: React.FC = () => {
       // Подтягиваем самые свежие показания из Supabase для отображения в колонке "Показание"
       // (чтобы совпадало с архивом и не зависело от last_message_type из Beliot)
       try {
-        const latestPairs = await Promise.all(
-          uniqueIds.map(async (id) => {
-            try {
-              const last = await getLastBeliotReading(id, 'hourly');
-              return last ? [id, Number(last.reading_value)] as const : null;
-            } catch {
-              return null;
-            }
-          }),
-        );
-
+        const latest = await getLatestBeliotReadings(uniqueIds, { readingType: 'hourly' });
         const map: Record<string, number> = {};
-        for (const pair of latestPairs) {
-          if (!pair) continue;
-          const [id, value] = pair;
-          if (!Number.isNaN(value)) map[id] = value;
+        for (const row of latest) {
+          const value = Number(row.reading_value);
+          if (!Number.isNaN(value)) map[row.device_id] = value;
         }
         setLatestReadingsByDeviceId(map);
       } catch {

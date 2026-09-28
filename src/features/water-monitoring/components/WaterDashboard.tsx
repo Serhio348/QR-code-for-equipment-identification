@@ -34,6 +34,7 @@ import {
 } from 'recharts';
 import type { MouseHandlerDataParam } from 'recharts';
 import { supabase } from '@/shared/config/supabase';
+import { getLatestBeliotReadings } from '../services/supabaseBeliotReadingsApi';
 import { setAIChatWaterContext } from '@/features/ai-consultant/events/chatEvents';
 // Логирование активности по дашборду отключено: слишком шумно для журнала действий.
 import {
@@ -695,17 +696,9 @@ const WaterDashboard: React.FC = () => {
       const productionNeedsIds = leafDevs.map(d => d.device_id);
 
       // Baseline — последнее показание каждого счётчика, не общая пачка на всех.
-      const baselineRows = await Promise.all(allDeviceIds.map(async (deviceId) => {
-        const { data, error } = await supabase
-          .from('beliot_device_readings')
-          .select('device_id, reading_value')
-          .eq('device_id', deviceId)
-          .lt('reading_date', prevMonthStartTs)
-          .order('reading_date', { ascending: false })
-          .limit(1);
-        if (error) throw new Error(error.message);
-        return data?.[0] ?? null;
-      }));
+      const baselineRows = await getLatestBeliotReadings(allDeviceIds, {
+        before: prevMonthStartTs,
+      });
       const baselineByDevice = baselineFromLatestRows(baselineRows);
 
       const prevMonthByDevice: Record<string, MinMax> = {};

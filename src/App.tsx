@@ -1,5 +1,5 @@
 import React, { lazy, Suspense, useEffect } from 'react';
-import { Routes, Route, Link, useLocation, Navigate, useNavigate } from 'react-router-dom';
+import { Routes, Route, Link, Outlet, useLocation, Navigate, useNavigate } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useAuth } from './features/auth/contexts/AuthContext';
@@ -39,6 +39,21 @@ const NotFoundPage = lazy(() => import('./features/common/pages/NotFoundPage'));
 const ChatWidget = lazy(() =>
   import('./features/ai-consultant/components/ChatWidget').then((m) => ({ default: m.ChatWidget })),
 );
+
+function WaterSection() {
+  return (
+    <ProtectedRoute>
+      <AppAccessGuard appId="water">
+        <WaterPage />
+        <Outlet />
+      </AppAccessGuard>
+    </ProtectedRoute>
+  );
+}
+
+function WaterTabRoute() {
+  return null;
+}
 
 const App: React.FC = () => {
   const location = useLocation();
@@ -226,29 +241,11 @@ const App: React.FC = () => {
             } 
           />
           
-          {/* Страница приложения "Вода" - для всех авторизованных с доступом */}
-          <Route 
-            path={ROUTES.WATER} 
-            element={
-              <ProtectedRoute>
-                <AppAccessGuard appId="water">
-                  <WaterPage />
-                </AppAccessGuard>
-              </ProtectedRoute>
-            } 
-          />
-          
-          {/* Страница журнала анализов качества воды */}
-          <Route 
-            path={ROUTES.WATER_QUALITY_JOURNAL} 
-            element={
-              <ProtectedRoute>
-                <AppAccessGuard appId="water">
-                  <WaterPage />
-                </AppAccessGuard>
-              </ProtectedRoute>
-            } 
-          />
+          {/* Вода и журнал качества — один экран, вкладки не собираются заново */}
+          <Route element={<WaterSection />}>
+            <Route path={ROUTES.WATER} element={<WaterTabRoute />} />
+            <Route path={ROUTES.WATER_QUALITY_JOURNAL} element={<WaterTabRoute />} />
+          </Route>
           
           {/* Страница оповещений о превышении нормативов */}
           <Route 
