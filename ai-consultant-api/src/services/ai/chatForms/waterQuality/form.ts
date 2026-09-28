@@ -220,7 +220,7 @@ function interpretCurrent(text: string, draft: FormDraft, list: SamplingPointRec
   }
   if (stepId === 'status') {
     const value = matchStatus(cutPrefix(text, ['статус']) ?? text);
-    if (!value) return { type: 'invalid', message: 'Укажите статус: выполнен или в работе.', STATUS_SUGGESTIONS };
+    if (!value) return { type: 'invalid', message: 'Укажите статус: выполнен или в работе.', suggestions: STATUS_SUGGESTIONS };
     return { type: 'ok', values: [{ key: 'status', value, undoable: true }] };
   }
   if (stepId === 'parameters') return interpretParameters(text, draft);
@@ -254,7 +254,7 @@ function interpretMany(text: string, draft: FormDraft, list: SamplingPointRecord
     const statusText = cutPrefix(clause, ['статус']);
     const status = matchStatus(statusText ?? clause);
     if (statusText !== null || status) {
-      if (!status) return { type: 'invalid', message: 'Укажите статус: выполнен или в работе.', STATUS_SUGGESTIONS };
+      if (!status) return { type: 'invalid', message: 'Укажите статус: выполнен или в работе.', suggestions: STATUS_SUGGESTIONS };
       remember(draft, values, 'status', status);
       continue;
     }
