@@ -22,6 +22,7 @@ import { filterToolsByAccess, buildAppAccessPrompt } from '../../services/ai/too
 import { runWithToolContext } from '../../services/ai/toolContext.js';
 import { mergeConversation, type ConversationMode } from '../../services/ai/conversationHistory.js';
 import { validateChatMessages } from './chatRequestValidation.js';
+import { handleChatForm, textFromChatContent } from '../../services/ai/chatForms/index.js';
 import { config } from '../../config/env.js';
 import { createFallbackProviders, runWithProviderFallback } from '../../services/ai/providerFallback.js';
 
@@ -57,6 +58,32 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
         }
 
         const userId = req.user?.id || '';
+        const lastUserMessage = messages[messages.length - 1];
+        const appAccess = await loadUserAppAccess(userId);
+        const formResult = await handleChatForm({
+            userId,
+            text: textFromChatContent(lastUserMessage.content),
+            access: appAccess,
+            equipmentContext,
+        });
+        if (formResult.handled) {
+            const sessionId = await getOrCreateSession(userId, equipmentContext?.id);
+            if (typeof lastUserMessage.content === 'string') {
+                updateSessionTitle(sessionId, lastUserMessage.content).catch(() => {});
+            }
+            saveMessages(sessionId, userId, lastUserMessage, formResult.text, [])
+                .catch(err => console.error('Ошибка сохранения в память:', err));
+            res.json({
+                success: true,
+                data: {
+                    message: formResult.text,
+                    toolsUsed: [],
+                    suggestions: formResult.suggestions,
+                },
+            });
+            return;
+        }
+
         const mode: ConversationMode = conversation === 'fresh' ? 'fresh' : 'continue';
         const backgroundHistory = mode === 'fresh'
             ? []
@@ -69,7 +96,6 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
         // чтобы он мог загрузить их через tools.
         const preferredProvider = hasImages && config.aiProvider !== 'deepseek' ? 'claude' : undefined;
         const providers = createFallbackProviders(preferredProvider);
-        const appAccess = await loadUserAppAccess(userId);
         const allowedTools = filterToolsByAccess(tools as ToolDefinition[], appAccess);
         const accessPrompt = buildAppAccessPrompt(appAccess);
         const [factsPrompt, driveFileContext] = await Promise.all([
@@ -100,7 +126,6 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
             )
         ));
 
-        const lastUserMessage = messages[messages.length - 1];
         const sessionId = await getOrCreateSession(userId, equipmentContext?.id);
 
         if (typeof lastUserMessage.content === 'string') {

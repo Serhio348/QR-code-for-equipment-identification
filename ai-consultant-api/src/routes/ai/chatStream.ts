@@ -10,6 +10,7 @@ import { authMiddleware, AuthenticatedRequest } from '../../middleware/auth.js';
 import { getOrCreateSession, saveMessages, updateSessionTitle, loadRecentHistory } from '../../services/ai/chatMemoryService.js';
 import { mergeConversation, type ConversationMode } from '../../services/ai/conversationHistory.js';
 import { validateChatMessages } from './chatRequestValidation.js';
+import { handleChatForm, textFromChatContent } from '../../services/ai/chatForms/index.js';
 import { loadFactsForPrompt } from '../../services/ai/agentMemoryService.js';
 import { buildDriveFileContext } from '../../services/ai/driveFileContextService.js';
 import { buildDocumentSessionPrompt } from '../../services/ai/documentSessionService.js';
@@ -74,6 +75,30 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
     const toolsUsedList: string[] = [];
 
     try {
+        const lastUserMessage = messages[messages.length - 1];
+        const appAccess = await loadUserAppAccess(userId);
+        const formResult = await handleChatForm({
+            userId,
+            text: textFromChatContent(lastUserMessage.content),
+            access: appAccess,
+            equipmentContext,
+        });
+        if (formResult.handled) {
+            fullText = formResult.text;
+            writeEvent({ type: 'text_delta', delta: formResult.text });
+            if (formResult.suggestions && formResult.suggestions.length > 0) {
+                writeEvent({ type: 'suggestions', suggestions: formResult.suggestions });
+            }
+            writeEvent({ type: 'done', toolsUsed: [] });
+            const sessionId = await getOrCreateSession(userId, equipmentContext?.id);
+            if (typeof lastUserMessage.content === 'string') {
+                updateSessionTitle(sessionId, lastUserMessage.content).catch(() => {});
+            }
+            saveMessages(sessionId, userId, lastUserMessage, fullText, [])
+                .catch(err => console.error('[Stream] Ошибка сохранения в память:', err));
+            return;
+        }
+
         const mode: ConversationMode = conversation === 'fresh' ? 'fresh' : 'continue';
         const backgroundHistory = mode === 'fresh'
             ? []
@@ -84,7 +109,6 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
         // вложения сериализуются как Base64 и DeepSeek сможет загрузить их через tools.
         const preferredProvider = hasImages && config.aiProvider !== 'deepseek' ? 'claude' : undefined;
         const providers = createFallbackProviders(preferredProvider);
-        const appAccess = await loadUserAppAccess(userId);
         const allowedTools = filterToolsByAccess(tools as ToolDefinition[], appAccess);
         const accessPrompt = buildAppAccessPrompt(appAccess);
         const [factsPrompt, driveFileContext] = await Promise.all([
@@ -131,7 +155,6 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
             )
         ));
 
-        const lastUserMessage = messages[messages.length - 1];
         const sessionId = await getOrCreateSession(userId, equipmentContext?.id);
 
         if (typeof lastUserMessage.content === 'string') {

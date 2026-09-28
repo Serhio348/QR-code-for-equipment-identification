@@ -62,6 +62,7 @@ export interface MemoryContext {
 export interface ChatResponse {
   message: string;
   toolsUsed?: string[];
+  suggestions?: string[];
   provider?: string; // Какой провайдер использовался
   tokensUsed?: {     // Статистика токенов
     input: number;
@@ -98,5 +99,6 @@ export interface ToolResult {
 export type StreamEvent =
   | { type: 'tool_call'; name: string }        // агент вызывает инструмент
   | { type: 'text_delta'; delta: string }       // кусочек текста финального ответа
+  | { type: 'suggestions'; suggestions: string[] } // кнопки следующего хода бланка
   | { type: 'done'; toolsUsed: string[]; provider?: string } // всё готово
   | { type: 'error'; message: string };         // ошибка
