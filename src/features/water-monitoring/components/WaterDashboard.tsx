@@ -46,7 +46,7 @@ import {
   isPosudotaraMeterReplacementDay,
   mergeBeliotOverridesForDashboard,
 } from '../constants/beliotDeviceRegistry';
-import { buildMeterLabelColorMap } from '../constants/meterSeriesColors';
+import { LOSSES_COLOR, SOURCE_COLOR, buildMeterLabelColorMap } from '../constants/meterSeriesColors';
 import { getTrackedBeliotRegistry } from '../services/beliotRegistryApi';
 import { computeDayConsumption, readingDayKey } from '../services/dayConsumption';
 import { balanceChartSeriesLabel, balanceDockedTipFingerprint } from '../services/balanceChart';
@@ -133,12 +133,6 @@ interface MonthlyMeterRow {
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-/** Цвет потерь */
-const LOSSES_COLOR = '#ef4444';
-
-/** Цвет скважины (источника) */
-const SOURCE_COLOR = '#1e40af';
 
 type ProductionTooltipPayloadEntry = {
   name?: string;
@@ -1526,8 +1520,8 @@ const WaterDashboard: React.FC = () => {
   }, [distributionRole, monthlyMeterRows]);
 
   /**
-   * Одна фиксированная палитра на все серии баланса и распределения: производство + хозбыт вместе,
-   * чтобы на одном графике не было двух похожих полос и цвет не «плавал» от HSL.
+   * Один цвет на подпись счётчика. Скважина и потери в палитру не входят,
+   * чтобы их синий и красный не повторялись на столбцах.
    */
   const balanceMeterColorMap = useMemo(() => {
     const prodLabels = monthlyMeterRows.filter(r => r.role === 'production').map(r => r.label);
