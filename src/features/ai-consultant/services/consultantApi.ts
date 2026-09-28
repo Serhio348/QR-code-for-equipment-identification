@@ -134,12 +134,13 @@ export async function sendChatMessage(
 export type StreamEvent =
   | { type: 'tool_call'; name: string }
   | { type: 'text_delta'; delta: string }
+  | { type: 'suggestions'; suggestions: string[] }
   | { type: 'done'; toolsUsed: string[]; provider?: string }
   | { type: 'error'; message: string };
 
 /**
  * Стриминг ответа AI через SSE.
- * Возвращает AsyncGenerator событий: tool_call, text_delta, done, error.
+ * Возвращает AsyncGenerator событий: tool_call, text_delta, suggestions, done, error.
  */
 export async function* streamChatMessage(
   messages: ChatMessage[],
