@@ -61,6 +61,7 @@ export function matchTriggerPhrase(
 
 export function splitClauses(text: string): string[] {
   return text
+    .replace(/(\d),(\d)/g, '$1.$2')
     .replace(/:/g, ',')
     .split(/[,;\n]+/)
     .map((part) => part.trim())
@@ -182,13 +183,15 @@ export function parseCommand(text: string): FormCommand | null {
   return null;
 }
 
-export function stripLabel(text: string, labels: string[]): string | null {
-  const normalized = normalizeUtterance(text);
-  for (const label of labels) {
-    if (normalized === label) return '';
-    if (normalized.startsWith(`${label} `)) {
-      return text.trim().slice(text.trim().toLowerCase().replace(/ё/g, 'е').indexOf(label) + label.length).trim();
-    }
+/** Срезает подпись в начале фрагмента и возвращает хвост с исходным регистром. */
+export function cutPrefix(text: string, prefixes: string[]): string | null {
+  const source = text.trim();
+  const lowered = source.toLowerCase().replace(/ё/g, 'е');
+  const sorted = [...prefixes].sort((left, right) => right.length - left.length);
+  for (const prefix of sorted) {
+    const match = lowered.match(new RegExp(`^${escapeRegExp(prefix)}(?:\\s+|$)`, 'i'));
+    if (!match) continue;
+    return source.slice(match[0].length).trim();
   }
   return null;
 }
