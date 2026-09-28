@@ -625,7 +625,6 @@
   cursor: pointer;
   font-size: 11px;
   font-weight: 700;
-  /* цвет подписи задаётся inline под цвет серии на графике */
   text-align: left;
   transition: opacity 0.15s, background 0.1s;
   width: 100%;
@@ -658,6 +657,7 @@
 .wd-device-filter__name {
   line-height: 1.3;
   word-break: break-word;
+  color: #111827;
 }
 
 /* ── Period selector (balance chart) ────────────────────────── */

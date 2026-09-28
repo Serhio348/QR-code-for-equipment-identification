@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   LOSSES_COLOR,
-  SOURCE_COLOR,
   buildMeterLabelColorMap,
-  chartColorDistance,
+  seriesHueDistance,
 } from './meterSeriesColors';
 
-const METER_LABELS = [
+const STACK_ORDER = [
   'АЛПО',
   'Очистное отделение',
   'Ликерный участок',
@@ -18,20 +17,23 @@ const METER_LABELS = [
   'АБК по ул.Советская, 2/1',
 ];
 
-describe('buildMeterLabelColorMap', () => {
-  it('gives every balance series a color that stays apart from the others and from the well and losses', () => {
-    const map = buildMeterLabelColorMap(METER_LABELS);
-    const colors = METER_LABELS.map(label => map.get(label) ?? '');
+function hueGap(left: string, right: string): number {
+  return seriesHueDistance(left, right) ?? 180;
+}
 
-    expect(new Set(colors).size).toBe(METER_LABELS.length);
-    for (const color of colors) {
-      expect(chartColorDistance(color, SOURCE_COLOR)).toBeGreaterThan(28);
-      expect(chartColorDistance(color, LOSSES_COLOR)).toBeGreaterThan(28);
+describe('buildMeterLabelColorMap', () => {
+  it('paints stacked meters in different families, not shades of green or red', () => {
+    const map = buildMeterLabelColorMap(STACK_ORDER);
+    const colors = STACK_ORDER.map(label => map.get(label) ?? '');
+
+    expect(new Set(colors).size).toBe(STACK_ORDER.length);
+    expect(hueGap(colors[0], colors[1])).toBeGreaterThan(80);
+    expect(hueGap(colors[colors.length - 1], LOSSES_COLOR)).toBeGreaterThan(60);
+
+    for (let i = 0; i < colors.length - 1; i += 1) {
+      expect(hueGap(colors[i], colors[i + 1])).toBeGreaterThan(40);
     }
-    for (let i = 0; i < colors.length; i += 1) {
-      for (let j = i + 1; j < colors.length; j += 1) {
-        expect(chartColorDistance(colors[i], colors[j])).toBeGreaterThan(24);
-      }
-    }
+    const greenFamily = colors.filter(color => hueGap(color, '#15803d') < 28);
+    expect(greenFamily).toHaveLength(1);
   });
 });
