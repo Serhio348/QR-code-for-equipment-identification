@@ -170,14 +170,16 @@ export async function* streamChatMessage(
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
+  let sawTerminal = false;
 
   try {
     while (true) {
       const { done, value } = await reader.read();
       buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
-      const parsed = readSseBuffer(buffer, done);
+      const parsed = readSseBuffer(buffer, done, sawTerminal);
       buffer = parsed.rest;
       for (const event of parsed.events) {
+        if (event.type === 'done' || event.type === 'error') sawTerminal = true;
         yield event as StreamEvent;
       }
       if (parsed.protocolError) {
@@ -189,6 +191,21 @@ export async function* streamChatMessage(
   } finally {
     reader.releaseLock();
   }
+}
+
+/**
+ * Закрытый чат не продолжает бланк, который остался в памяти API.
+ */
+export async function dismissChatForm(): Promise<void> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) return;
+
+  await fetch(`${API_URL}/api/chat/dismiss`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
+    },
+  }).catch(() => {});
 }
 
 /**

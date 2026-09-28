@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   handleChatForm: vi.fn(),
+  cancelChatForm: vi.fn(),
   chat: vi.fn(),
   streamChat: vi.fn(),
   createFallbackProviders: vi.fn(),
@@ -28,6 +29,7 @@ vi.mock('../../middleware/auth.js', () => ({
 
 vi.mock('../../services/ai/chatForms/index.js', () => ({
   handleChatForm: mocks.handleChatForm,
+  cancelChatForm: mocks.cancelChatForm,
   textFromChatContent: (content: unknown) => (typeof content === 'string' ? content.trim() : ''),
 }));
 
@@ -205,5 +207,15 @@ describe('chat form routing', () => {
     });
 
     expect(mocks.streamChat).toHaveBeenCalledOnce();
+  });
+
+  it('drops the open form when the chat is dismissed', async () => {
+    await withServer(chatRouter, async (url) => {
+      const response = await fetch(`${url}dismiss`, { method: 'POST' });
+      expect(response.status).toBe(204);
+    });
+
+    expect(mocks.cancelChatForm).toHaveBeenCalledWith('user-1');
+    expect(mocks.chat).not.toHaveBeenCalled();
   });
 });

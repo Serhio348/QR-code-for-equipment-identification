@@ -58,6 +58,7 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({ initialOpen = false }) =
   }, [messages]);
 
   const toggleOpen = () => {
+    if (isOpen) clearMessages();
     setIsOpen(!isOpen);
   };
 
