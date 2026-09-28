@@ -1,7 +1,8 @@
 /**
  * Цвета серий на дашборде «Вода».
- * Скважина и потери заняты своими цветами. Остальным рядам достаются
- * оттенки, которые не сливаются ни с ними, ни друг с другом.
+ * Скважина — синяя линия, потери — красная шапка.
+ * Счётчики идут по порядку столбца: соседние слои из разных семейств,
+ * без второго зелёного и без красного.
  */
 
 /** Линия скважины. */
@@ -11,29 +12,21 @@ export const SOURCE_COLOR = '#1e40af';
 export const LOSSES_COLOR = '#ef4444';
 
 /**
- * Кандидаты для счётчиков. Красный и тёмно-синий сюда не входят:
- * они уже стоят на потерях и скважине.
+ * Один цвет — одно семейство. Порядок совпадает с порядком слоёв в столбце:
+ * первый счётчик снизу, следующий над ним.
  */
 export const METER_SERIES_PALETTE: readonly string[] = [
-  '#f97316',
   '#eab308',
-  '#84cc16',
+  '#6d28d9',
   '#15803d',
-  '#0f766e',
-  '#0891b2',
-  '#7c3aed',
   '#c026d3',
+  '#0f766e',
   '#db2777',
-  '#9a3412',
-  '#4d7c0f',
-  '#155e75',
-  '#6b21a8',
-  '#a16207',
-  '#3f3f46',
-  '#fb7185',
+  '#44403c',
+  '#0891b2',
+  '#65a30d',
+  '#ea580c',
 ];
-
-const RESERVED_SERIES_COLORS = [SOURCE_COLOR, LOSSES_COLOR];
 
 function hexToRgb(hex: string): [number, number, number] {
   const value = parseInt(hex.slice(1), 16);
@@ -59,64 +52,24 @@ function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
   return [hue * 60, saturation * 100, lightness * 100];
 }
 
-function hueDistance(a: number, b: number): number {
-  const raw = Math.abs(a - b);
+/** Расстояние по цветовому кругу, 0–180. У серого оттенка нет. */
+export function seriesHueDistance(left: string, right: string): number | null {
+  const [h1, s1] = rgbToHsl(...hexToRgb(left));
+  const [h2, s2] = rgbToHsl(...hexToRgb(right));
+  if (s1 < 18 || s2 < 18) return null;
+  const raw = Math.abs(h1 - h2);
   return Math.min(raw, 360 - raw);
 }
 
-/** Насколько два цвета различимы на легенде и в стопке столбцов. */
-export function chartColorDistance(left: string, right: string): number {
-  const [h1, s1, l1] = rgbToHsl(...hexToRgb(left));
-  const [h2, s2, l2] = rgbToHsl(...hexToRgb(right));
-  const hueWeight = Math.min(s1, s2) / 100;
-  return hueDistance(h1, h2) * hueWeight
-    + Math.abs(l1 - l2) * 1.2
-    + Math.abs(s1 - s2) * 0.25;
-}
-
-function colorsCollide(left: string, right: string): boolean {
-  const [h1, s1, l1] = rgbToHsl(...hexToRgb(left));
-  const [h2, s2, l2] = rgbToHsl(...hexToRgb(right));
-  const dh = hueDistance(h1, h2);
-  const dl = Math.abs(l1 - l2);
-  if (Math.min(s1, s2) < 18) return dl < 14;
-  return dh < 26 && dl < 22;
-}
-
 /**
- * Каждой подписи счётчика — свой цвет.
- * Порядок подписей не меняет набор: сначала самые далёкие от скважины, потерь и уже выбранных.
+ * Цвет по порядку списка. Первые имена — нижние слои столбца,
+ * поэтому соседние в списке не должны быть оттенками одного цвета.
  */
 export function buildMeterLabelColorMap(labels: string[]): Map<string, string> {
-  const unique = [...new Set(labels.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ru'));
-  const used = [...RESERVED_SERIES_COLORS];
+  const unique = [...new Set(labels.filter(Boolean))];
   const map = new Map<string, string>();
-
-  for (const label of unique) {
-    let best = METER_SERIES_PALETTE[0];
-    let bestScore = -1;
-    for (const candidate of METER_SERIES_PALETTE) {
-      if (used.includes(candidate)) continue;
-      if (used.some(color => colorsCollide(candidate, color))) continue;
-      const score = Math.min(...used.map(color => chartColorDistance(candidate, color)));
-      if (score > bestScore) {
-        bestScore = score;
-        best = candidate;
-      }
-    }
-    if (bestScore < 0) {
-      for (const candidate of METER_SERIES_PALETTE) {
-        if (used.includes(candidate)) continue;
-        const score = Math.min(...used.map(color => chartColorDistance(candidate, color)));
-        if (score > bestScore) {
-          bestScore = score;
-          best = candidate;
-        }
-      }
-    }
-    map.set(label, best);
-    used.push(best);
-  }
-
+  unique.forEach((label, index) => {
+    map.set(label, METER_SERIES_PALETTE[index % METER_SERIES_PALETTE.length]);
+  });
   return map;
 }

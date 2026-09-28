@@ -1528,10 +1528,10 @@ const WaterDashboard: React.FC = () => {
     const domLabels = monthlyMeterRows.filter(r => r.role === 'domestic').map(r => r.label);
     const keys = [
       ...new Set([
-        ...prodLabels,
-        ...domLabels,
         ...productionDeviceNames,
         ...domesticDeviceNames,
+        ...prodLabels,
+        ...domLabels,
       ]),
     ];
     return buildMeterLabelColorMap(keys);
@@ -2010,6 +2010,8 @@ const WaterDashboard: React.FC = () => {
                         dataKey={name}
                         stackId="balance"
                         fill={balanceMeterColorMap.get(name) ?? '#64748b'}
+                        stroke="#ffffff"
+                        strokeWidth={1}
                         maxBarSize={balanceBarMaxSize}
                       />
                     ))}
@@ -2020,6 +2022,8 @@ const WaterDashboard: React.FC = () => {
                         dataKey={name}
                         stackId="balance"
                         fill={balanceMeterColorMap.get(name) ?? '#64748b'}
+                        stroke="#ffffff"
+                        strokeWidth={1}
                         maxBarSize={balanceBarMaxSize}
                       />
                     ))}
@@ -2029,6 +2033,8 @@ const WaterDashboard: React.FC = () => {
                       stackId="balance"
                       fill={LOSSES_COLOR}
                       fillOpacity={0.7}
+                      stroke="#ffffff"
+                      strokeWidth={1}
                       radius={[3, 3, 0, 0]}
                       maxBarSize={balanceBarMaxSize}
                     />
@@ -2069,7 +2075,7 @@ const WaterDashboard: React.FC = () => {
                   title={hiddenDevices.has('__source__') ? 'Показать' : 'Скрыть'}
                 >
                   <span className="wd-device-filter__dot wd-device-filter__dot--line" style={{ background: SOURCE_COLOR }} />
-                  <span className="wd-device-filter__name" style={{ color: SOURCE_COLOR }}>Скважина</span>
+                  <span className="wd-device-filter__name">Скважина</span>
                 </button>
                 {/* Потери — переключаемая */}
                 <button
@@ -2078,7 +2084,7 @@ const WaterDashboard: React.FC = () => {
                   title={hiddenDevices.has('__losses__') ? 'Показать' : 'Скрыть'}
                 >
                   <span className="wd-device-filter__dot" style={{ background: LOSSES_COLOR }} />
-                  <span className="wd-device-filter__name" style={{ color: LOSSES_COLOR }}>Потери</span>
+                  <span className="wd-device-filter__name">Потери</span>
                 </button>
                 {/* Счётчики — объекты */}
                 {[
@@ -2092,7 +2098,7 @@ const WaterDashboard: React.FC = () => {
                     title={hiddenDevices.has(name) ? 'Показать' : 'Скрыть'}
                   >
                     <span className="wd-device-filter__dot" style={{ background: color }} />
-                    <span className="wd-device-filter__name" style={{ color }}>{name}</span>
+                    <span className="wd-device-filter__name">{name}</span>
                   </button>
                 ))}
               </div>
