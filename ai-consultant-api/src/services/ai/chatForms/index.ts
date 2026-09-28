@@ -2,6 +2,7 @@
  * index.ts
  *
  * Единая точка входа бланков для chat и chat/stream.
+ * cancelChatForm снимает черновик, когда пользователь закрыл чат.
  */
 
 import { createDraftStore } from './draftStore.js';
@@ -17,6 +18,12 @@ const registry = createFormRegistry([maintenanceForm, waterQualityForm]);
 
 export async function handleChatForm(input: FormHandleInput): Promise<FormEngineResult> {
   return handleFormTurn(input, { store, registry, services: productionFormServices });
+}
+
+/** Закрытие чата снимает бланк. Следующая реплика снова идёт в обычный разговор. */
+export function cancelChatForm(userId: string): void {
+  if (!userId) return;
+  store.delete(userId);
 }
 
 /** Текст пользовательской реплики. Файлы и картинки в бланк не попадают. */

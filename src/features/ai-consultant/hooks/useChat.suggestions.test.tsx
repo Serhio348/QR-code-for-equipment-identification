@@ -12,6 +12,7 @@ import { useChat } from './useChat';
 vi.mock('../services/consultantApi', () => ({
   streamChatMessage: vi.fn(),
   uploadPhotoToDriveFolder: vi.fn(),
+  dismissChatForm: vi.fn().mockResolvedValue(undefined),
   fetchChatHistory: vi.fn().mockResolvedValue([]),
 }));
 

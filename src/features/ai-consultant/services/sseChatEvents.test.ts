@@ -10,6 +10,14 @@ describe('readSseBuffer', () => {
     expect(complete.protocolError).toBeNull();
   });
 
+  it('accepts a later empty read after the stream already finished', () => {
+    const full = 'data: {"type":"text_delta","delta":"ok"}\n\ndata: {"type":"done","toolsUsed":[]}\n\n';
+    const first = readSseBuffer(full, false);
+    expect(first.events.map(event => event.type)).toEqual(['text_delta', 'done']);
+    expect(first.protocolError).toBeNull();
+    expect(readSseBuffer(first.rest, true, true).protocolError).toBeNull();
+  });
+
   it('reports a damaged event and an unexpected end', () => {
     expect(readSseBuffer('data: {bad}\n\n', true).protocolError).toBe('Повреждённое событие потока');
     expect(readSseBuffer('data: {"type":"text_delta","delta":"a"}\n\n', true).protocolError).toBe('Ответ оборвался');

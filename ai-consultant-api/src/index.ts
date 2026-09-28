@@ -97,6 +97,9 @@ logProviderConfig();
 // ============================================
 
 const app = express();
+// Railway добавляет X-Forwarded-For. Без этого express-rate-limit отклоняет POST /api/chat/stream.
+// Число 1 — доверяем только ближайшему прокси. true нельзя: лимит тогда обходится поддельным заголовком.
+app.set('trust proxy', 1);
 
 // ============================================
 // Middleware

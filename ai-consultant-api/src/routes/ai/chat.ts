@@ -22,7 +22,7 @@ import { filterToolsByAccess, buildAppAccessPrompt } from '../../services/ai/too
 import { runWithToolContext } from '../../services/ai/toolContext.js';
 import { mergeConversation, type ConversationMode } from '../../services/ai/conversationHistory.js';
 import { validateChatMessages } from './chatRequestValidation.js';
-import { handleChatForm, textFromChatContent } from '../../services/ai/chatForms/index.js';
+import { cancelChatForm, handleChatForm, textFromChatContent } from '../../services/ai/chatForms/index.js';
 import { config } from '../../config/env.js';
 import { createFallbackProviders, runWithProviderFallback } from '../../services/ai/providerFallback.js';
 
@@ -151,6 +151,11 @@ router.post('/', chatRateLimit, authMiddleware, async (req: AuthenticatedRequest
             error: message,
         });
     }
+});
+
+router.post('/dismiss', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+    cancelChatForm(req.user?.id || '');
+    res.status(204).end();
 });
 
 router.get('/history', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {

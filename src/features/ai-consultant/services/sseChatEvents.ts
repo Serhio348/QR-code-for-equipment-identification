@@ -14,7 +14,7 @@ export interface SseRead {
   protocolError: string | null;
 }
 
-export function readSseBuffer(buffer: string, final: boolean): SseRead {
+export function readSseBuffer(buffer: string, final: boolean, alreadyTerminal = false): SseRead {
   const pieces = buffer.split('\n\n');
   const rest = final ? '' : (pieces.pop() ?? '');
   const events: SseEvent[] = [];
@@ -36,7 +36,7 @@ export function readSseBuffer(buffer: string, final: boolean): SseRead {
     }
   }
 
-  if (final && !sawTerminal) {
+  if (final && !sawTerminal && !alreadyTerminal) {
     return { events, rest, protocolError: 'Ответ оборвался' };
   }
   return { events, rest, protocolError: null };

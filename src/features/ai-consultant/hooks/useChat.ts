@@ -37,8 +37,8 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   ChatMessage,
   streamChatMessage,
+  dismissChatForm,
   uploadPhotoToDriveFolder,
-  fetchChatHistory,
   TextContentBlock,
   ImageContentBlock,
   EquipmentContext,
@@ -201,7 +201,7 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
   // useRef вместо useState — не нужен ре-рендер при смене контроллера.
   // Хранит текущий AbortController для отмены запроса при размонтировании
   const abortControllerRef = useRef<AbortController | null>(null);
-  const conversationModeRef = useRef<'continue' | 'fresh'>('continue');
+  const conversationModeRef = useRef<'continue' | 'fresh'>('fresh');
   const sawToolRef = useRef(false);
   const mountedRef = useRef(true);
   const suppressAbortNoticeRef = useRef(false);
@@ -210,25 +210,11 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
   // Предотвращает setState на размонтированном компоненте
   useEffect(() => {
     mountedRef.current = true;
+    void dismissChatForm();
     return () => {
       mountedRef.current = false;
       suppressAbortNoticeRef.current = true;
       abortControllerRef.current?.abort();
-    };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchChatHistory(20).then(history => {
-      if (cancelled || conversationModeRef.current === 'fresh' || history.length === 0) return;
-      setMessages(prev => (
-        prev.length > 0
-          ? prev
-          : history.map(message => createMessage(message.role, message.content))
-      ));
-    }).catch(() => {});
-    return () => {
-      cancelled = true;
     };
   }, []);
 
@@ -526,6 +512,7 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
     setSuggestions([]);
     setError(null);
     setLastFailed(null);
+    void dismissChatForm();
   }, []);
 
   /**
