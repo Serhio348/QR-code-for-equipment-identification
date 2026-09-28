@@ -436,6 +436,32 @@
   background: var(--ai-chat-bg);
 }
 
+.ai-chat-input__suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ai-chat-input__suggestion {
+  border: 1px solid var(--ai-chat-border);
+  background: var(--ai-chat-bg);
+  color: inherit;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.ai-chat-input__suggestion:hover:not(:disabled) {
+  border-color: var(--ai-chat-primary);
+}
+
+.ai-chat-input__suggestion:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .ai-chat-input__textarea {
   width: 100%;
   box-sizing: border-box;

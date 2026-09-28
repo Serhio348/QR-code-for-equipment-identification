@@ -37,7 +37,7 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({ initialOpen = false }) =
     maintenanceSheetId: equipmentContext.maintenanceSheetId,
   } : null;
 
-  const { messages, isLoading, error, activeToolName, sendMessage, clearMessages } = useChat(contextForChat, waterContext);
+  const { messages, isLoading, error, activeToolName, suggestions, sendMessage, clearMessages } = useChat(contextForChat, waterContext);
   const { alerts } = useAlerts();
   const { transcript, resetTranscript } = useSpeechRecognition();
   const { data: equipmentListData } = useEquipmentData();
@@ -313,6 +313,7 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({ initialOpen = false }) =
           <ChatInput
             onSend={sendMessage}
             isLoading={isLoading}
+            suggestions={suggestions}
             voiceTranscript={transcript}
             onVoiceTranscriptUsed={handleVoiceTranscriptUsed}
             onQRScanClick={handleQRScanClick}

@@ -20,6 +20,7 @@ export interface ChatInputMessage {
 interface ChatInputProps {
   onSend: (message: ChatInputMessage) => void;
   isLoading: boolean;
+  suggestions?: string[];
   voiceTranscript?: string;
   onVoiceTranscriptUsed?: () => void;
   onQRScanClick?: () => void;
@@ -29,6 +30,7 @@ interface ChatInputProps {
 export const ChatInput: React.FC<ChatInputProps> = ({
   onSend,
   isLoading,
+  suggestions = [],
   voiceTranscript,
   onVoiceTranscriptUsed,
   onQRScanClick,
@@ -102,6 +104,22 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   return (
     <form className="ai-chat-input" onSubmit={handleSubmit}>
+      {suggestions.length > 0 && (
+        <div className="ai-chat-input__suggestions" role="group" aria-label="Варианты ответа">
+          {suggestions.map((suggestion) => (
+            <button
+              key={suggestion}
+              type="button"
+              className="ai-chat-input__suggestion"
+              disabled={isLoading}
+              onClick={() => onSend({ text: suggestion })}
+            >
+              {suggestion}
+            </button>
+          ))}
+        </div>
+      )}
+
       {photoError && (
         <p id="ai-chat-photo-error" className="ai-chat-input__photo-error" role="alert">{photoError}</p>
       )}

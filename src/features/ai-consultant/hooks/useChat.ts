@@ -87,6 +87,8 @@ export interface UseChatReturn {
   canRetry: boolean;
   /** Название текущего инструмента или null */
   activeToolName: string | null;
+  /** Подписи кнопок следующего хода. Смысл определяет сервер. */
+  suggestions: string[];
   /** Отправить новое сообщение (с текстом и/или фото) */
   sendMessage: (message: ChatInputMessage) => Promise<void>;
   /** Повторить последнее неудачное сообщение */
@@ -187,6 +189,7 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeToolName, setActiveToolName] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
 
   // Последнее неудачное сообщение — для retry механизма.
   const [lastFailed, setLastFailed] = useState<{
@@ -256,6 +259,7 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
     if ((!inputMessage.text.trim() && !inputMessage.photos?.length) || isLoading) {
       return;
     }
+    setSuggestions([]);
 
     // Сбрасываем ошибку и retry
     setError(null);
@@ -362,6 +366,8 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
           setMessages(prev => prev.map(m =>
             m.id === streamingId ? { ...m, content: accText } : m
           ));
+        } else if (event.type === 'suggestions') {
+          setSuggestions(event.suggestions);
         } else if (event.type === 'done') {
           toolsUsed = event.toolsUsed || [];
           setActiveToolName(null);
@@ -437,6 +443,7 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
     }
 
     setError(null);
+    setSuggestions([]);
     setIsLoading(true);
     sawToolRef.current = false;
     suppressAbortNoticeRef.current = false;
@@ -479,6 +486,8 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
           setMessages(prev => prev.map(m =>
             m.id === streamingId ? { ...m, content: accText } : m
           ));
+        } else if (event.type === 'suggestions') {
+          setSuggestions(event.suggestions);
         } else if (event.type === 'done') {
           setActiveToolName(null);
           setLastFailed(null);
@@ -514,6 +523,7 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
     abortControllerRef.current?.abort();
     conversationModeRef.current = 'fresh';
     setMessages([]);
+    setSuggestions([]);
     setError(null);
     setLastFailed(null);
   }, []);
@@ -533,6 +543,7 @@ export function useChat(equipmentContext?: EquipmentContext | null, waterContext
     error,
     canRetry: lastFailed !== null,
     activeToolName,
+    suggestions,
     sendMessage,
     retryLastMessage,
     clearMessages,
