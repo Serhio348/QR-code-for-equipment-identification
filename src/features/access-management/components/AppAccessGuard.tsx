@@ -7,7 +7,8 @@
 import { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../auth/contexts/AuthContext';
-import { checkUserAccess } from '../services/supabaseAccessApi';
+import { getUserAccess } from '../services/supabaseAccessApi';
+import { readAccessSession, writeAccessSession } from '../services/accessSessionCache';
 import { guardDecision } from '../services/accessLoadState';
 import { ROUTES } from '@/shared/utils/routes';
 import LoadingSpinner from '../../common/components/LoadingSpinner';
@@ -22,11 +23,22 @@ interface AppAccessGuardProps {
  * Компонент для защиты доступа к приложениям
  * Проверяет, есть ли у пользователя доступ к указанному приложению
  */
+function sessionAllows(email: string, appId: 'equipment' | 'water'): boolean | undefined {
+  const cached = readAccessSession(email);
+  if (cached === undefined) return undefined;
+  return cached?.[appId] === true;
+}
+
 export default function AppAccessGuard({ children, appId }: AppAccessGuardProps) {
   const { user, isAuthenticated, loading: authLoading } = useAuth();
   const location = useLocation();
-  const [hasAccess, setHasAccess] = useState<boolean>(false);
-  const [checking, setChecking] = useState<boolean>(true);
+  const knownAccess = user && user.role !== 'admin' ? sessionAllows(user.email, appId) : undefined;
+  const [hasAccess, setHasAccess] = useState<boolean>(
+    user?.role === 'admin' || knownAccess === true,
+  );
+  const [checking, setChecking] = useState<boolean>(
+    user?.role !== 'admin' && knownAccess === undefined,
+  );
   const [failed, setFailed] = useState<boolean>(false);
   const [attempt, setAttempt] = useState(0);
 
@@ -47,10 +59,20 @@ export default function AppAccessGuard({ children, appId }: AppAccessGuardProps)
         return;
       }
 
+      const cached = attempt === 0 ? readAccessSession(user.email) : undefined;
+      if (cached !== undefined) {
+        setHasAccess(cached?.[appId] === true);
+        setFailed(false);
+        setChecking(false);
+        return;
+      }
+
       // Проверяем доступ для обычных пользователей
+      setChecking(true);
       try {
-        const access = await checkUserAccess(user.email, appId);
-        setHasAccess(access);
+        const access = await getUserAccess(user.email);
+        writeAccessSession(user.email, access);
+        setHasAccess(access?.[appId] === true);
         setFailed(false);
       } catch (error) {
         console.error('Ошибка проверки доступа:', error);
@@ -62,8 +84,7 @@ export default function AppAccessGuard({ children, appId }: AppAccessGuardProps)
     };
 
     if (!authLoading) {
-      setChecking(true);
-      checkAccess();
+      void checkAccess();
     }
   }, [isAuthenticated, user, appId, authLoading, attempt]);
 

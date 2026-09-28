@@ -175,6 +175,36 @@ export async function getLastBeliotReading(
   }
 }
 
+export interface LatestBeliotReading {
+  device_id: string;
+  reading_value: number;
+  reading_date: string;
+}
+
+/**
+ * Последнее показание сразу для списка счётчиков.
+ * Пустой список не ходит в базу.
+ */
+export async function getLatestBeliotReadings(
+  deviceIds: readonly string[],
+  options: { before?: string; readingType?: 'hourly' | 'daily' } = {},
+): Promise<LatestBeliotReading[]> {
+  if (deviceIds.length === 0) return [];
+
+  const { data, error } = await supabase.rpc('get_latest_beliot_readings', {
+    p_device_ids: [...deviceIds],
+    p_before: options.before ?? null,
+    p_reading_type: options.readingType ?? null,
+  });
+
+  if (error) {
+    console.error('Ошибка получения последних показаний:', error);
+    throw new Error(`Ошибка получения последних показаний: ${error.message}`);
+  }
+
+  return (data ?? []) as LatestBeliotReading[];
+}
+
 /**
  * Получить статистику по показаниям устройства
  * 

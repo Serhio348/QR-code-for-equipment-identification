@@ -89,7 +89,15 @@ vi.mock('@/shared/config/supabase', () => {
     return builder;
   }
 
-  return { supabase: { from } };
+  return {
+    supabase: {
+      from,
+      rpc: () => Promise.resolve({
+        data: [{ device_id: 'src-1', reading_value: 0, reading_date: '2020-01-01T00:00:00.000Z' }],
+        error: null,
+      }),
+    },
+  };
 });
 
 function pad(value: number): string {
