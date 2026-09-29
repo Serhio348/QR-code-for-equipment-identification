@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useEffect } from 'react';
+import React, { lazy, Suspense, useEffect, useState } from 'react';
 import { Routes, Route, Link, Outlet, useLocation, Navigate, useNavigate } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -61,10 +61,12 @@ const App: React.FC = () => {
   const isEquipmentPage = isEquipmentRoute(location.pathname);
   const isWaterPage = location.pathname === ROUTES.WATER
     || location.pathname === ROUTES.BELIOT_TEST
-    || location.pathname === ROUTES.BELIOT_DEVICES;
+    || location.pathname === ROUTES.BELIOT_DEVICES
+    || location.pathname.startsWith('/water-quality');
   const isMainMenuPage = location.pathname === ROUTES.HOME;
   const isAuthPage = location.pathname === ROUTES.LOGIN || location.pathname === ROUTES.REGISTER || location.pathname === ROUTES.RESET_PASSWORD;
   const { isAuthenticated, user, logout, loading } = useAuth();
+  const [loggingOut, setLoggingOut] = useState(false);
 
   // Восстанавливаем путь при загрузке приложения, если пользователь уже авторизован
   // НЕ восстанавливаем путь, если пользователь только что залогинился (путь будет очищен)
@@ -152,13 +154,18 @@ const App: React.FC = () => {
                 {user.role === 'admin' && (
                   <span className="user-role">Админ</span>
                 )}
-                <button 
-                  onClick={logout} 
+                <button
+                  onClick={() => {
+                    setLoggingOut(true);
+                    void logout().catch(() => {
+                      setLoggingOut(false);
+                    });
+                  }}
                   className="logout-button"
-                  disabled={loading}
+                  disabled={loggingOut || loading}
                   title="Выйти из системы"
                 >
-                  {loading ? (
+                  {loggingOut ? (
                     <>
                       <span className="button-spinner-small"></span>
                       Выход...
@@ -287,7 +294,7 @@ const App: React.FC = () => {
           <Route 
             path="/water-quality/norm/new" 
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requireAdmin>
                 <AppAccessGuard appId="water">
                   <WaterQualityNormFormPage />
                 </AppAccessGuard>
@@ -299,7 +306,7 @@ const App: React.FC = () => {
           <Route 
             path="/water-quality/norm/:id/edit" 
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requireAdmin>
                 <AppAccessGuard appId="water">
                   <WaterQualityNormFormPage />
                 </AppAccessGuard>
@@ -335,7 +342,7 @@ const App: React.FC = () => {
           <Route 
             path="/water-quality/sampling-point/new" 
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requireAdmin>
                 <AppAccessGuard appId="water">
                   <SamplingPointFormPage />
                 </AppAccessGuard>
@@ -347,7 +354,7 @@ const App: React.FC = () => {
           <Route 
             path="/water-quality/sampling-point/:id/edit" 
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requireAdmin>
                 <AppAccessGuard appId="water">
                   <SamplingPointFormPage />
                 </AppAccessGuard>

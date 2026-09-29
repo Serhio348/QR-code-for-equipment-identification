@@ -121,6 +121,26 @@ describe('equipment routes auth (SEC-01 / SEC-02)', () => {
     expect(gasGet).toHaveBeenCalled();
   });
 
+  it('forbids non-admin from changing the maintenance log', async () => {
+    const response = await fetch(`${baseUrl}/api/equipment/maintenance/add`, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer valid-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        equipmentId: 'eq-1',
+        date: '2026-09-29',
+        type: 'Осмотр',
+        description: 'Проверка',
+        performedBy: 'Иванов',
+      }),
+    });
+
+    expect(response.status).toBe(403);
+    expect(gasPost).not.toHaveBeenCalled();
+  });
+
   it('forbids non-admin from adding equipment', async () => {
     const response = await fetch(`${baseUrl}/api/equipment/add`, {
       method: 'POST',

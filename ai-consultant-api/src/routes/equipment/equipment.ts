@@ -4,8 +4,8 @@
  * Прокси-маршруты для операций с оборудованием через GAS.
  *
  * Все маршруты требуют валидную сессию Supabase (authMiddleware).
- * Чтение журнала доступно любому вошедшему пользователю (QR / запрос доступа),
- * запись и загрузка файлов — тоже только после входа (объектные права — SEC-05).
+ * Чтение журнала доступно любому вошедшему пользователю.
+ * Добавление, правка и удаление записей журнала — только администратор.
  */
 import { Router, Response } from 'express';
 import { gasClient } from '../../services/equipment/index.js';
@@ -130,7 +130,7 @@ router.get('/maintenance/log', async (req: AuthenticatedRequest, res: Response) 
   }
 });
 
-router.post('/maintenance/add', async (req: AuthenticatedRequest, res: Response) => {
+router.post('/maintenance/add', adminMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { equipmentId, date, type, description, performedBy, status, maintenanceSheetId } = req.body;
     if (!equipmentId || !date || !type || !description || !performedBy) {
@@ -151,7 +151,7 @@ router.post('/maintenance/add', async (req: AuthenticatedRequest, res: Response)
   }
 });
 
-router.post('/maintenance/update', async (req: AuthenticatedRequest, res: Response) => {
+router.post('/maintenance/update', adminMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { entryId, ...fields } = req.body;
     if (!entryId) {
@@ -169,7 +169,7 @@ router.post('/maintenance/update', async (req: AuthenticatedRequest, res: Respon
   }
 });
 
-router.post('/maintenance/delete', async (req: AuthenticatedRequest, res: Response) => {
+router.post('/maintenance/delete', adminMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { entryId } = req.body;
     if (!entryId) {
@@ -184,7 +184,7 @@ router.post('/maintenance/delete', async (req: AuthenticatedRequest, res: Respon
   }
 });
 
-router.post('/upload-file', async (req: AuthenticatedRequest, res: Response) => {
+router.post('/upload-file', adminMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { equipmentId, entryId, fileBase64, mimeType, originalFileName, date } = req.body;
     if (!equipmentId || !entryId || !fileBase64) {
@@ -226,7 +226,7 @@ router.post('/upload-file', async (req: AuthenticatedRequest, res: Response) => 
   }
 });
 
-router.post('/attach-files', async (req: AuthenticatedRequest, res: Response) => {
+router.post('/attach-files', adminMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { entryId, files } = req.body;
     if (!entryId || !files) {

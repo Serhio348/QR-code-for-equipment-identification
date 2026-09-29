@@ -8,11 +8,13 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useSamplingPoint } from '../hooks/useSamplingPoints';
 import { ROUTES } from '@/shared/utils/routes';
 import type { SamplingFrequency } from '../types/waterQuality';
+import { useAuth } from '@/features/auth/contexts/AuthContext';
 import './SamplingPointViewPage.css';
 
 const SamplingPointViewPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
   const { samplingPoint, loading, error } = useSamplingPoint(id || null);
 
   const formatDate = (dateString?: string) => {
@@ -79,11 +81,13 @@ const SamplingPointViewPage: React.FC = () => {
         <button className="back-button" onClick={handleBack} type="button">
           ← Назад к списку
         </button>
-        <div className="header-actions">
-          <button className="edit-button" onClick={handleEdit} type="button">
-            Редактировать
-          </button>
-        </div>
+        {isAdmin && (
+          <div className="header-actions">
+            <button className="edit-button" onClick={handleEdit} type="button">
+              Редактировать
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="view-content">

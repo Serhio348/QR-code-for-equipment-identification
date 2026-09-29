@@ -1158,8 +1158,6 @@ const WaterDashboard: React.FC = () => {
       }
       setProductionTodayM3ByName({ ...totalsByName });
 
-      // Сохраняем историю (upsert) — чтобы постепенно набрать последний месяц
-      // (требует прав администратора по RLS).
       const summaryRow: ProductionDaySummary = {
         summary_date: dayYmd,
         total_m3: parseFloat(productionTodayTotal.toFixed(2)),

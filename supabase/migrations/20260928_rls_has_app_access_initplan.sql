@@ -46,6 +46,31 @@ CREATE POLICY "Water users can read production day summaries"
   TO authenticated
   USING ((SELECT public.has_app_access('water')));
 
+DROP POLICY IF EXISTS "Only admins can modify production day summaries"
+  ON public.water_production_day_summaries;
+DROP POLICY IF EXISTS "Water users can insert production day summaries"
+  ON public.water_production_day_summaries;
+DROP POLICY IF EXISTS "Water users can update production day summaries"
+  ON public.water_production_day_summaries;
+DROP POLICY IF EXISTS "Admins can delete production day summaries"
+  ON public.water_production_day_summaries;
+
+CREATE POLICY "Water users can insert production day summaries"
+  ON public.water_production_day_summaries FOR INSERT
+  TO authenticated
+  WITH CHECK ((SELECT public.has_app_access('water')));
+
+CREATE POLICY "Water users can update production day summaries"
+  ON public.water_production_day_summaries FOR UPDATE
+  TO authenticated
+  USING ((SELECT public.has_app_access('water')))
+  WITH CHECK ((SELECT public.has_app_access('water')));
+
+CREATE POLICY "Admins can delete production day summaries"
+  ON public.water_production_day_summaries FOR DELETE
+  TO authenticated
+  USING ((SELECT public.is_admin()));
+
 -- ============================================
 -- sampling_points
 -- ============================================
@@ -54,23 +79,26 @@ DROP POLICY IF EXISTS "Water users can read sampling_points" ON public.sampling_
 DROP POLICY IF EXISTS "Water users can insert sampling_points" ON public.sampling_points;
 DROP POLICY IF EXISTS "Water users can update sampling_points" ON public.sampling_points;
 DROP POLICY IF EXISTS "Water users can delete sampling_points" ON public.sampling_points;
+DROP POLICY IF EXISTS "Admins can insert sampling_points" ON public.sampling_points;
+DROP POLICY IF EXISTS "Admins can update sampling_points" ON public.sampling_points;
+DROP POLICY IF EXISTS "Admins can delete sampling_points" ON public.sampling_points;
 
 CREATE POLICY "Water users can read sampling_points"
   ON public.sampling_points FOR SELECT TO authenticated
   USING ((SELECT public.has_app_access('water')));
 
-CREATE POLICY "Water users can insert sampling_points"
+CREATE POLICY "Admins can insert sampling_points"
   ON public.sampling_points FOR INSERT TO authenticated
-  WITH CHECK ((SELECT public.has_app_access('water')));
+  WITH CHECK ((SELECT public.is_admin()));
 
-CREATE POLICY "Water users can update sampling_points"
+CREATE POLICY "Admins can update sampling_points"
   ON public.sampling_points FOR UPDATE TO authenticated
-  USING ((SELECT public.has_app_access('water')))
-  WITH CHECK ((SELECT public.has_app_access('water')));
+  USING ((SELECT public.is_admin()))
+  WITH CHECK ((SELECT public.is_admin()));
 
-CREATE POLICY "Water users can delete sampling_points"
+CREATE POLICY "Admins can delete sampling_points"
   ON public.sampling_points FOR DELETE TO authenticated
-  USING ((SELECT public.has_app_access('water')));
+  USING ((SELECT public.is_admin()));
 
 -- ============================================
 -- water_analysis
@@ -132,20 +160,23 @@ DROP POLICY IF EXISTS "Water users can read water_quality_norms" ON public.water
 DROP POLICY IF EXISTS "Water users can insert water_quality_norms" ON public.water_quality_norms;
 DROP POLICY IF EXISTS "Water users can update water_quality_norms" ON public.water_quality_norms;
 DROP POLICY IF EXISTS "Water users can delete water_quality_norms" ON public.water_quality_norms;
+DROP POLICY IF EXISTS "Admins can insert water_quality_norms" ON public.water_quality_norms;
+DROP POLICY IF EXISTS "Admins can update water_quality_norms" ON public.water_quality_norms;
+DROP POLICY IF EXISTS "Admins can delete water_quality_norms" ON public.water_quality_norms;
 
 CREATE POLICY "Water users can read water_quality_norms"
   ON public.water_quality_norms FOR SELECT TO authenticated
   USING ((SELECT public.has_app_access('water')));
 
-CREATE POLICY "Water users can insert water_quality_norms"
+CREATE POLICY "Admins can insert water_quality_norms"
   ON public.water_quality_norms FOR INSERT TO authenticated
-  WITH CHECK ((SELECT public.has_app_access('water')));
+  WITH CHECK ((SELECT public.is_admin()));
 
-CREATE POLICY "Water users can update water_quality_norms"
+CREATE POLICY "Admins can update water_quality_norms"
   ON public.water_quality_norms FOR UPDATE TO authenticated
-  USING ((SELECT public.has_app_access('water')))
-  WITH CHECK ((SELECT public.has_app_access('water')));
+  USING ((SELECT public.is_admin()))
+  WITH CHECK ((SELECT public.is_admin()));
 
-CREATE POLICY "Water users can delete water_quality_norms"
+CREATE POLICY "Admins can delete water_quality_norms"
   ON public.water_quality_norms FOR DELETE TO authenticated
-  USING ((SELECT public.has_app_access('water')));
+  USING ((SELECT public.is_admin()));
