@@ -12,10 +12,12 @@ import { ROUTES } from '@/shared/utils/routes';
 import type { WaterQualityParameter } from '../types/waterQuality';
 import { PARAMETER_METADATA, getAllParameters } from '../types/waterQuality';
 import { toast } from 'react-toastify';
+import { useAuth } from '@/features/auth/contexts/AuthContext';
 import './WaterQualityNormsPage.css';
 
 const WaterQualityNormsPage: React.FC = () => {
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
   const { samplingPoints } = useSamplingPoints();
   const { remove } = useWaterQualityNormManagement();
 
@@ -89,9 +91,11 @@ const WaterQualityNormsPage: React.FC = () => {
             ← Назад
           </button>
           <h2 className="norms-title">Нормативы качества воды</h2>
-          <button className="create-norm-button" onClick={handleCreateNew} type="button">
-            + Создать норматив
-          </button>
+          {isAdmin && (
+            <button className="create-norm-button" onClick={handleCreateNew} type="button">
+              + Создать норматив
+            </button>
+          )}
         </div>
 
         {/* Фильтры */}
@@ -160,7 +164,9 @@ const WaterQualityNormsPage: React.FC = () => {
             <p className="empty-state-note">
               {Object.keys(filters).length > 0
                 ? 'Попробуйте изменить фильтры'
-                : 'Используйте кнопку "Создать норматив" для добавления первого норматива'}
+                : isAdmin
+                  ? 'Используйте кнопку "Создать норматив" для добавления первого норматива'
+                  : 'Нормативы ещё не заданы'}
             </p>
           </div>
         )}
@@ -233,20 +239,24 @@ const WaterQualityNormsPage: React.FC = () => {
                           >
                             Просмотр
                           </button>
-                          <button
-                            className="edit-button"
-                            onClick={() => handleEdit(norm.id)}
-                            type="button"
-                          >
-                            Редактировать
-                          </button>
-                          <button
-                            className="delete-button"
-                            onClick={() => handleDelete(norm.id, getParameterLabel(norm.parameterName))}
-                            type="button"
-                          >
-                            Удалить
-                          </button>
+                          {isAdmin && (
+                            <>
+                              <button
+                                className="edit-button"
+                                onClick={() => handleEdit(norm.id)}
+                                type="button"
+                              >
+                                Редактировать
+                              </button>
+                              <button
+                                className="delete-button"
+                                onClick={() => handleDelete(norm.id, getParameterLabel(norm.parameterName))}
+                                type="button"
+                              >
+                                Удалить
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>

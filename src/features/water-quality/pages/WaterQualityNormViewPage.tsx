@@ -9,11 +9,13 @@ import { useWaterQualityNorm } from '../hooks/useWaterQualityNorms';
 import { useSamplingPoints } from '../hooks/useSamplingPoints';
 import { ROUTES } from '@/shared/utils/routes';
 import { PARAMETER_METADATA } from '../types/waterQuality';
+import { useAuth } from '@/features/auth/contexts/AuthContext';
 import './WaterQualityNormViewPage.css';
 
 const WaterQualityNormViewPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
   const { norm, loading, error } = useWaterQualityNorm(id || null);
   const { samplingPoints } = useSamplingPoints();
 
@@ -87,11 +89,13 @@ const WaterQualityNormViewPage: React.FC = () => {
         <button className="back-button" onClick={handleBack} type="button">
           ← Назад к списку
         </button>
-        <div className="header-actions">
-          <button className="edit-button" onClick={handleEdit} type="button">
-            Редактировать
-          </button>
-        </div>
+        {isAdmin && (
+          <div className="header-actions">
+            <button className="edit-button" onClick={handleEdit} type="button">
+              Редактировать
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="view-content">

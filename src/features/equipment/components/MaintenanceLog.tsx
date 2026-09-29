@@ -18,6 +18,7 @@ import {
 } from '../services/equipmentApi';
 import { uploadMaintenanceFile, attachFilesToEntry } from '../services/maintenanceApi';
 import { formatDate } from '@/shared/utils/dateFormatting';
+import { useAuth } from '@/features/auth/contexts/AuthContext';
 import { exportToPDF } from '@/shared/utils/pdfExport';
 import { InspectionExportSettings } from '@/shared/types/inspectionExport';
 import { TechnicalInspectionForm } from './TechnicalInspectionForm';
@@ -55,6 +56,7 @@ interface MaintenanceLogProps {
 }
 
 const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanceSheetId, equipment: propEquipment, onActivityChange }) => {
+  const { isAdmin } = useAuth();
   const [entries, setEntries] = useState<MaintenanceEntry[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -626,7 +628,7 @@ ${data.notes ? `Примечания: ${data.notes}` : ''}`;
       )}
 
       {/* Кнопка для открытия формы технического освидетельствования (только для энергоисточников) */}
-      {equipment?.type === 'energy_source' && (
+      {isAdmin && equipment?.type === 'energy_source' && (
         <div style={{ marginBottom: '20px', textAlign: 'center' }}>
           <button
             type="button"
@@ -652,6 +654,7 @@ ${data.notes ? `Примечания: ${data.notes}` : ''}`;
         </div>
       )}
 
+      {isAdmin && (
       <form onSubmit={handleSubmit} className="maintenance-form">
         <div className="form-row">
           <div className="form-group">
@@ -764,6 +767,7 @@ ${data.notes ? `Примечания: ${data.notes}` : ''}`;
           {uploadingFiles ? 'Загрузка файлов...' : saving ? 'Сохранение...' : 'Добавить запись'}
         </button>
       </form>
+      )}
 
       {/* Форма технического освидетельствования */}
       {showInspectionForm && equipment && (
@@ -879,7 +883,7 @@ ${data.notes ? `Примечания: ${data.notes}` : ''}`;
                       </>
                     )}
                     <div className="entry-header-actions">
-                      {!isTempEntry && !isEditing && entry.status === 'completed' && (
+                      {isAdmin && !isTempEntry && !isEditing && entry.status === 'completed' && (
                         <button
                           type="button"
                           className="edit-entry-button"
@@ -890,7 +894,7 @@ ${data.notes ? `Примечания: ${data.notes}` : ''}`;
                           Изменить
                         </button>
                       )}
-                      {!isEditing && (
+                      {isAdmin && !isEditing && (
                         <button
                           type="button"
                           className="delete-button"

@@ -9,10 +9,12 @@ import { useSamplingPoints, useSamplingPointManagement } from '../hooks/useSampl
 import { ROUTES } from '@/shared/utils/routes';
 import type { SamplingFrequency } from '../types/waterQuality';
 import { toast } from 'react-toastify';
+import { useAuth } from '@/features/auth/contexts/AuthContext';
 import './SamplingPointsPage.css';
 
 const SamplingPointsPage: React.FC = () => {
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
   const { remove } = useSamplingPointManagement();
 
   // Фильтры
@@ -88,9 +90,11 @@ const SamplingPointsPage: React.FC = () => {
             ← Назад
           </button>
           <h2 className="points-title">Точки отбора проб</h2>
-          <button className="create-point-button" onClick={handleCreateNew} type="button">
-            + Создать точку отбора
-          </button>
+          {isAdmin && (
+            <button className="create-point-button" onClick={handleCreateNew} type="button">
+              + Создать точку отбора
+            </button>
+          )}
         </div>
 
         {/* Фильтры */}
@@ -152,7 +156,9 @@ const SamplingPointsPage: React.FC = () => {
             <p className="empty-state-note">
               {searchQuery.trim() || statusFilter !== 'all'
                 ? 'Попробуйте изменить фильтры'
-                : 'Используйте кнопку "Создать точку отбора" для добавления первой точки'}
+                : isAdmin
+                  ? 'Используйте кнопку "Создать точку отбора" для добавления первой точки'
+                  : 'Точки отбора ещё не заданы'}
             </p>
           </div>
         )}
@@ -201,20 +207,24 @@ const SamplingPointsPage: React.FC = () => {
                         >
                           Просмотр
                         </button>
-                        <button
-                          className="edit-button"
-                          onClick={() => handleEdit(point.id)}
-                          type="button"
-                        >
-                          Редактировать
-                        </button>
-                        <button
-                          className="delete-button"
-                          onClick={() => handleDelete(point.id, point.code, point.name)}
-                          type="button"
-                        >
-                          Удалить
-                        </button>
+                        {isAdmin && (
+                          <>
+                            <button
+                              className="edit-button"
+                              onClick={() => handleEdit(point.id)}
+                              type="button"
+                            >
+                              Редактировать
+                            </button>
+                            <button
+                              className="delete-button"
+                              onClick={() => handleDelete(point.id, point.code, point.name)}
+                              type="button"
+                            >
+                              Удалить
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
