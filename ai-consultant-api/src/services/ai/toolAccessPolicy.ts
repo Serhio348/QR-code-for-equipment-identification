@@ -22,6 +22,7 @@ const EQUIPMENT_TOOLS = new Set([
   'attach_files_to_entry',
   'search_files_in_folder',
   'read_file_content',
+  'search_indexed_documents',
   'ensure_drive_folder_path',
   'upload_photos_to_folder',
   'upload_maintenance_photo',

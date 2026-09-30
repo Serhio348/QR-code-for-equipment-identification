@@ -19,7 +19,7 @@ const CACHE_MAX_ENTRIES = 200;
 
 const CACHEABLE_TOOLS = new Set([
     'get_all_equipment', 'get_equipment_details', 'get_maintenance_log',
-    'search_files_in_folder', 'read_file_content',
+    'search_files_in_folder', 'read_file_content', 'search_indexed_documents',
     'get_maintenance_photos', 'search_maintenance_photos',
     'get_water_devices', 'get_water_readings', 'analyze_water_consumption',
     'get_water_quality_analyses', 'get_all_water_alerts', 'get_water_quality_alerts', 'get_water_meter_passport',

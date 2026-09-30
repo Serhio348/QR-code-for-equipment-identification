@@ -63,6 +63,7 @@ import helmet from 'helmet';
 // config — объект с конфигурацией из .env (порт, ключи API, CORS origins)
 // validateConfig — функция проверки обязательных переменных окружения
 import { config, validateConfig, logProviderConfig } from './config/env.js';
+import { startDocumentIndexWorker } from './services/ai/documentIndexWorker.js';
 
 // healthRouter — health-check эндпоинт (GET /health)
 import healthRouter from './routes/health.js';
@@ -260,4 +261,5 @@ app.listen(config.port, listenHost, () => {
     console.log(`   ${index + 1}. ${origin}`);
   });
   console.log('');
+  startDocumentIndexWorker();
 });
