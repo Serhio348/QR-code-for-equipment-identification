@@ -38,5 +38,10 @@ dist-ssr
 ai-consultant-api/downloads/
 ai-consultant-api/downloads/.session.json
 
+presentation/out/
+presentation/public/captures/*.webm
+presentation/public/captures/state.json
+presentation/public/voice/
+
 # Claude Code local settings
 .claude/settings.local.json

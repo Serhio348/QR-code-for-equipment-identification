@@ -42,6 +42,7 @@ export interface EquipmentContext {
   name: string;
   type: string;
   googleDriveUrl?: string;
+  maintenanceSheetId?: string;
 }
 
 /**

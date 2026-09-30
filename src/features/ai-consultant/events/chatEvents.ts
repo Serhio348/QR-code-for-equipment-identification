@@ -1,9 +1,9 @@
 /**
  * chatEvents.ts
  *
- * Событие для передачи контекста водного дашборда в AI-чат.
- * WaterDashboard диспатчит контекст при загрузке KPI-данных,
- * ChatWidget слушает событие и передаёт данные в системный промпт AI.
+ * События для передачи контекста текущего экрана в AI-чат.
+ * Страницы оборудования и воды устанавливают структурированный контекст,
+ * а ChatWidget передаёт его в системный промпт AI.
  *
  * Использование:
  *   import { setAIChatWaterContext } from '@/features/ai-consultant/events/chatEvents';
@@ -11,11 +11,37 @@
  *   setAIChatWaterContext(null); // очистить при уходе со страницы
  */
 
-import type { WaterDashboardContext } from '../services/consultantApi';
+import type {
+  EquipmentContext,
+  WaterDashboardContext,
+} from '../services/consultantApi';
 
-export { type WaterDashboardContext };
+export { type EquipmentContext, type WaterDashboardContext };
 
 export const SET_WATER_CONTEXT_EVENT = 'ai-chat:set-water-context';
+export const SET_EQUIPMENT_CONTEXT_EVENT = 'ai-chat:set-equipment-context';
+
+let currentEquipmentContext: EquipmentContext | null = null;
+
+/**
+ * Вернуть контекст уже открытой карточки.
+ * Нужен, если ChatWidget загрузился позже страницы оборудования.
+ */
+export function getAIChatEquipmentContext(): EquipmentContext | null {
+  return currentEquipmentContext;
+}
+
+/**
+ * Установить (или очистить) контекст открытой карточки оборудования.
+ */
+export function setAIChatEquipmentContext(ctx: EquipmentContext | null): void {
+  currentEquipmentContext = ctx;
+  window.dispatchEvent(
+    new CustomEvent<EquipmentContext | null>(SET_EQUIPMENT_CONTEXT_EVENT, {
+      detail: ctx,
+    })
+  );
+}
 
 /**
  * Установить (или очистить) контекст водного дашборда для AI-чата.
