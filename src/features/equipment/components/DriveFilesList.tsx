@@ -5,6 +5,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { DriveFile } from '../services/equipmentApi';
 import { getFolderFiles } from '../services/equipmentApi';
+import { getDocumentIndexStatuses, type DocumentIndexStatus } from '../services/driveApi';
 import { logUserActivity } from '@/features/user-activity/services/activityLogsApi';
 import './DriveFilesList.css';
 
@@ -15,6 +16,7 @@ interface DriveFilesListProps {
 
 const DriveFilesList: React.FC<DriveFilesListProps> = ({ folderUrl, equipmentName }) => {
   const [files, setFiles] = useState<DriveFile[]>([]);
+  const [indexStatuses, setIndexStatuses] = useState<Record<string, DocumentIndexStatus>>({});
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [isCheckingAccess, setIsCheckingAccess] = useState<boolean>(false);
@@ -134,6 +136,31 @@ const DriveFilesList: React.FC<DriveFilesListProps> = ({ folderUrl, equipmentNam
       }
     };
   }, [folderUrl, loadFiles]);
+
+  useEffect(() => {
+    const indexableIds = files.filter((file) => isIndexableFile(file.mimeType)).map((file) => file.id);
+    if (indexableIds.length === 0) {
+      setIndexStatuses({});
+      return;
+    }
+
+    let cancelled = false;
+    const refreshStatuses = async () => {
+      try {
+        const statuses = await getDocumentIndexStatuses(indexableIds);
+        if (!cancelled) setIndexStatuses(statuses);
+      } catch {
+        if (!cancelled) setIndexStatuses({});
+      }
+    };
+
+    void refreshStatuses();
+    const timer = window.setInterval(() => { void refreshStatuses(); }, 20000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [files]);
 
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 Б';
@@ -300,6 +327,9 @@ const DriveFilesList: React.FC<DriveFilesListProps> = ({ folderUrl, equipmentNam
                   <div className="file-name" title={file.name}>
                     {file.name}
                   </div>
+                  {isIndexableFile(file.mimeType) && (
+                    <IndexStatus status={indexStatuses[file.id]} />
+                  )}
                   <div className="file-meta">
                     {!isFolder && <span className="file-size">{formatFileSize(file.size)}</span>}
                     <span className="file-date">{formatDate(file.modifiedTime)}</span>
@@ -315,4 +345,41 @@ const DriveFilesList: React.FC<DriveFilesListProps> = ({ folderUrl, equipmentNam
 };
 
 export default DriveFilesList;
+
+const INDEXABLE_MIME_TYPES = new Set([
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.google-apps.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.google-apps.spreadsheet',
+  'text/plain',
+  'text/csv',
+]);
+
+function isIndexableFile(mimeType: string): boolean {
+  return INDEXABLE_MIME_TYPES.has(mimeType);
+}
+
+function IndexStatus({ status }: { status?: DocumentIndexStatus }) {
+  const label = status === 'ready'
+    ? 'Проиндексирован'
+    : status === 'pending' || status === 'indexing'
+      ? 'Индексируется'
+      : status === 'error'
+        ? 'Ошибка индексации'
+        : status === 'skipped'
+          ? 'Без текста'
+          : 'Не проиндексирован';
+  const tone = status === 'ready'
+    ? 'ready'
+    : status === 'error'
+      ? 'error'
+      : status === 'pending' || status === 'indexing'
+        ? 'progress'
+        : 'waiting';
+
+  return <span className={`file-index-status file-index-status--${tone}`}>{label}</span>;
+}
 

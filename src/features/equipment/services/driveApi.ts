@@ -82,6 +82,34 @@ export async function createDriveFolder(
  * 
  * @throws {Error} Если папка не найдена или произошла ошибка
  */
+export type DocumentIndexStatus = 'pending' | 'indexing' | 'ready' | 'error' | 'skipped';
+
+export async function getDocumentIndexStatuses(
+  fileIds: string[],
+): Promise<Record<string, DocumentIndexStatus>> {
+  const unique = [...new Set(fileIds.map((id) => id.trim()).filter(Boolean))].slice(0, 100);
+  if (unique.length === 0) return {};
+
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) return {};
+
+  const response = await fetch(
+    backendUrl(`/api/equipment/document-index?fileIds=${encodeURIComponent(unique.join(','))}`),
+    {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(API_CONFIG.TIMEOUT),
+    },
+  );
+  if (!response.ok) return {};
+
+  const json = await response.json() as {
+    success?: boolean;
+    data?: Record<string, DocumentIndexStatus>;
+  };
+  return json.success && json.data ? json.data : {};
+}
+
 export async function getFolderFiles(folderUrl: string): Promise<DriveFile[]> {
   if (!folderUrl || !folderUrl.trim()) {
     throw new Error('URL папки не указан');

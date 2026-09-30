@@ -97,6 +97,7 @@ describe('equipment routes auth (SEC-01 / SEC-02)', () => {
     ['POST', '/api/equipment/update'],
     ['POST', '/api/equipment/delete'],
     ['POST', '/api/equipment/create-folder'],
+    ['GET', '/api/equipment/document-index?fileIds=abc123456789'],
   ] as const)('rejects anonymous %s %s before GAS', async (method, path) => {
     const response = await fetch(`${baseUrl}${path}`, {
       method,
