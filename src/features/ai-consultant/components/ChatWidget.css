@@ -255,10 +255,25 @@
   font-size: 18px;
 }
 
+.ai-chat-widget__context-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ai-chat-widget__context-label {
+  color: #15803d;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
 .ai-chat-widget__context-text {
   font-size: 14px;
   font-weight: 500;
   color: #166534;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ai-chat-widget__context-clear {

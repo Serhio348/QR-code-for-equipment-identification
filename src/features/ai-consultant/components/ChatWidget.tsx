@@ -7,7 +7,13 @@ import { ChatInput } from './ChatInput';
 import QRScanner from '../../common/components/QRScanner/QRScanner';
 import { useEquipmentData } from '../../equipment/hooks/useEquipmentData';
 import { logUserActivity } from '../../user-activity/services/activityLogsApi';
-import { SET_WATER_CONTEXT_EVENT, type WaterDashboardContext } from '../events/chatEvents';
+import {
+  getAIChatEquipmentContext,
+  SET_EQUIPMENT_CONTEXT_EVENT,
+  SET_WATER_CONTEXT_EVENT,
+  type EquipmentContext,
+  type WaterDashboardContext,
+} from '../events/chatEvents';
 import type { Equipment } from '../../equipment/types/equipment';
 import { isIOS } from '@/shared/utils/deviceDetection';
 import {
@@ -23,7 +29,9 @@ interface ChatWidgetProps {
 export const ChatWidget: React.FC<ChatWidgetProps> = ({ initialOpen = false }) => {
   const [isOpen, setIsOpen] = useState(initialOpen);
   const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
-  const [equipmentContext, setEquipmentContext] = useState<Equipment | null>(null);
+  const [equipmentContext, setEquipmentContext] = useState<EquipmentContext | null>(
+    getAIChatEquipmentContext
+  );
   const [waterContext, setWaterContext] = useState<WaterDashboardContext | null>(null);
   const [alertsBannerDismissed, setAlertsBannerDismissed] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -41,6 +49,20 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({ initialOpen = false }) =
   const { alerts } = useAlerts();
   const { transcript, resetTranscript } = useSpeechRecognition();
   const { data: equipmentListData } = useEquipmentData();
+
+  // Карточка оборудования задаёт контекст независимо от истории диалога.
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const context = (event as CustomEvent<EquipmentContext | null>).detail;
+      if (equipmentContext?.id !== context?.id) {
+        clearMessages();
+      }
+      setEquipmentContext(context);
+    };
+
+    window.addEventListener(SET_EQUIPMENT_CONTEXT_EVENT, handler);
+    return () => window.removeEventListener(SET_EQUIPMENT_CONTEXT_EVENT, handler);
+  }, [clearMessages, equipmentContext?.id]);
 
   // Слушаем событие установки контекста водного дашборда
   useEffect(() => {
@@ -234,8 +256,13 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({ initialOpen = false }) =
             <div className="ai-chat-widget__context">
               <div className="ai-chat-widget__context-info">
                 <span className="ai-chat-widget__context-icon">🔧</span>
-                <span className="ai-chat-widget__context-text">
-                  {equipmentContext.name} ({equipmentContext.type})
+                <span className="ai-chat-widget__context-copy">
+                  <span className="ai-chat-widget__context-label">
+                    Контекст оборудования
+                  </span>
+                  <span className="ai-chat-widget__context-text">
+                    {equipmentContext.name} ({equipmentContext.type})
+                  </span>
                 </span>
               </div>
               <button

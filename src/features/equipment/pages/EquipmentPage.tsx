@@ -20,6 +20,7 @@ import { useEquipmentDates } from '../hooks/useEquipmentDates';
 import { equipmentCardState } from '../services/equipmentCardState';
 import { ROUTES } from '@/shared/utils/routes';
 import { logUserActivity } from '@/features/user-activity/services/activityLogsApi';
+import { setAIChatEquipmentContext } from '@/features/ai-consultant/events/chatEvents';
 import './EquipmentPage.css';
 
 const EquipmentPage: React.FC = () => {
@@ -55,6 +56,22 @@ const EquipmentPage: React.FC = () => {
     loadError,
     hasEquipment: currentEquipment !== null,
   });
+
+  useEffect(() => {
+    if (!currentEquipment) {
+      return;
+    }
+
+    setAIChatEquipmentContext({
+      id: currentEquipment.id,
+      name: currentEquipment.name,
+      type: currentEquipment.type,
+      googleDriveUrl: currentEquipment.googleDriveUrl,
+      maintenanceSheetId: currentEquipment.maintenanceSheetId,
+    });
+
+    return () => setAIChatEquipmentContext(null);
+  }, [currentEquipment]);
 
   useEffect(() => {
     if (!currentEquipment) {
