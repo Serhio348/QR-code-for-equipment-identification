@@ -215,6 +215,43 @@ export async function markDocumentIndexResult(
   if (saveError) throw new Error(saveError.message);
 }
 
+export type DocumentIndexStatus = 'pending' | 'indexing' | 'ready' | 'error' | 'skipped';
+
+const STATUS_PRIORITY: Record<DocumentIndexStatus, number> = {
+  ready: 5,
+  indexing: 4,
+  pending: 3,
+  error: 2,
+  skipped: 1,
+};
+
+export async function getDocumentIndexStatuses(
+  fileIds: string[],
+): Promise<Record<string, DocumentIndexStatus>> {
+  const unique = [...new Set(fileIds.map((id) => id.trim()).filter(Boolean))].slice(0, 100);
+  if (unique.length === 0) return {};
+
+  const { data, error } = await supabase()
+    .from('document_index_files')
+    .select('drive_file_id, status')
+    .in('drive_file_id', unique);
+  if (error) throw new Error(error.message);
+
+  const statuses: Record<string, DocumentIndexStatus> = {};
+  for (const row of (data ?? []) as Array<{ drive_file_id: string; status: string }>) {
+    if (!isDocumentIndexStatus(row.status)) continue;
+    const current = statuses[row.drive_file_id];
+    if (!current || STATUS_PRIORITY[row.status] > STATUS_PRIORITY[current]) {
+      statuses[row.drive_file_id] = row.status;
+    }
+  }
+  return statuses;
+}
+
+function isDocumentIndexStatus(status: string): status is DocumentIndexStatus {
+  return status === 'pending' || status === 'indexing' || status === 'ready' || status === 'error' || status === 'skipped';
+}
+
 export async function searchIndexedChunks(
   equipmentId: string,
   query: string,

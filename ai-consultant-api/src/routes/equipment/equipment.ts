@@ -12,6 +12,7 @@ import { gasClient } from '../../services/equipment/index.js';
 import multer from 'multer';
 import { authMiddleware, type AuthenticatedRequest } from '../../middleware/auth.js';
 import { adminMiddleware } from '../../middleware/admin.js';
+import { getDocumentIndexStatuses } from '../../services/ai/documentIndexStore.js';
 
 const router = Router();
 const MAX_MAINTENANCE_FILE_BYTES = 25 * 1024 * 1024;
@@ -27,6 +28,22 @@ const upload = multer({
 
 // SEC-01: анонимные запросы к журналу/файлам отклоняются до вызова GAS.
 router.use(authMiddleware);
+
+router.get('/document-index', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const rawIds = typeof req.query.fileIds === 'string' ? req.query.fileIds : '';
+    const fileIds = rawIds.split(',').map((id) => id.trim()).filter(Boolean);
+    if (fileIds.length === 0 || fileIds.length > 100 || fileIds.some((id) => !/^[a-zA-Z0-9_-]{8,}$/.test(id))) {
+      res.status(400).json({ success: false, error: 'Укажите от 1 до 100 корректных fileIds' });
+      return;
+    }
+    const statuses = await getDocumentIndexStatuses(fileIds);
+    res.json({ success: true, data: statuses });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Неизвестная ошибка';
+    res.status(500).json({ success: false, error: message });
+  }
+});
 
 // ============================================
 // SEC-02: мутации оборудования — только admin через backend
