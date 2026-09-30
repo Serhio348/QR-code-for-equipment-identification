@@ -86,6 +86,7 @@ import { memoryTools, executeMemoryTool } from './memoryTools.js';
 // - documentSessionTools: set/clear/get pending и сессии документа
 // - executeDocumentSessionTool: in-memory session на userId
 import { documentSessionTools, executeDocumentSessionTool } from './documentSessionTools.js';
+import { documentIndexTools, executeDocumentIndexTool } from './documentIndexTools.js';
 
 import { getToolContext } from '../services/ai/toolContext.js';
 import {
@@ -141,6 +142,7 @@ export const tools: Anthropic.Tool[] = [
     ...browserTools,
     ...memoryTools,
     ...documentSessionTools,
+    ...documentIndexTools,
 ];
 
 // ============================================
@@ -214,6 +216,8 @@ const toolExecutors: Record<string, (name: string, input: Record<string, unknown
     'set_pending_document_read': executeDocumentSessionTool,
     'clear_pending_document_read': executeDocumentSessionTool,
     'get_document_session': executeDocumentSessionTool,
+
+    'search_indexed_documents': executeDocumentIndexTool,
 };
 
 // ============================================

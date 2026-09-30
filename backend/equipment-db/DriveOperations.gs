@@ -1199,14 +1199,14 @@ function extractTextFromGoogleDoc(docId) {
     var child = body.getChild(i);
     var type = child.getType();
 
-    if (type === DocumentApp.ElementType.TABLE) {
+    if (type === DocumentApp.ElementType.PAGE_BREAK) {
+      parts.push('\f');
+    } else if (type === DocumentApp.ElementType.TABLE) {
       parts.push(formatDocTableAsText(child.asTable()));
     } else if (type === DocumentApp.ElementType.PARAGRAPH) {
-      var pText = child.asParagraph().getText();
-      if (pText && pText.trim()) parts.push(pText);
+      appendParagraphText(parts, child.asParagraph(), false);
     } else if (type === DocumentApp.ElementType.LIST_ITEM) {
-      var lText = child.asListItem().getText();
-      if (lText && lText.trim()) parts.push('- ' + lText);
+      appendParagraphText(parts, child.asListItem(), true);
     } else {
       try {
         var anyText = child.asText ? child.asText().getText() : '';
@@ -1227,6 +1227,17 @@ function extractTextFromGoogleDoc(docId) {
   var joined = parts.join('\n');
   Logger.log('  - Извлечено символов: ' + joined.length);
   return joined;
+}
+
+function appendParagraphText(parts, paragraph, asList) {
+  var children = paragraph.getNumChildren();
+  for (var i = 0; i < children; i++) {
+    if (paragraph.getChild(i).getType() === DocumentApp.ElementType.PAGE_BREAK) {
+      parts.push('\f');
+    }
+  }
+  var text = paragraph.getText();
+  if (text && String(text).trim()) parts.push(asList ? '- ' + text : text);
 }
 
 /**

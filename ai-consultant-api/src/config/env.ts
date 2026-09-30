@@ -22,6 +22,12 @@ export const config = {
   // Google Gemini API
   geminiApiKey: process.env.GEMINI_API_KEY || '',
   geminiModel: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+  embeddingModel: process.env.EMBEDDING_MODEL || 'gemini-embedding-001',
+  embeddingDimensions: 768,
+  documentIndexEnabled: process.env.DOCUMENT_INDEX_ENABLED
+    ? process.env.DOCUMENT_INDEX_ENABLED === 'true'
+    : Boolean(process.env.GEMINI_API_KEY),
+  documentIndexIntervalMs: parseInt(process.env.DOCUMENT_INDEX_INTERVAL_MS || '45000', 10),
 
   // DeepSeek API
   deepseekApiKey: process.env.DEEPSEEK_API_KEY || '',
