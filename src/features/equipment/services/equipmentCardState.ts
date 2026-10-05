@@ -15,11 +15,10 @@ export function equipmentCardState(input: {
   loadError: string | null;
   hasEquipment: boolean;
 }): EquipmentCardState {
+  if (input.hasEquipment && !input.notFound) return 'ready';
   if (input.loading) return 'loading';
-  if (input.notFound || !input.hasEquipment) {
-    return input.loadError ? 'error' : 'not-found';
-  }
-  return 'ready';
+  if (input.loadError) return 'error';
+  return 'not-found';
 }
 
 export function verifiedQrUrl(qrCodeUrl: string | null | undefined): string | null {

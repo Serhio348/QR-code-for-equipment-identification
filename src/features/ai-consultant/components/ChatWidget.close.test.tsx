@@ -31,8 +31,14 @@ vi.mock('../hooks/useSpeechRecognition', () => ({
   useSpeechRecognition: () => ({ transcript: '', resetTranscript: vi.fn() }),
 }));
 
-vi.mock('../../equipment/hooks/useEquipmentData', () => ({
-  useEquipmentData: () => ({ data: [] }),
+const equipmentApi = vi.hoisted(() => ({
+  getAllEquipment: vi.fn(),
+  getEquipmentById: vi.fn(),
+}));
+
+vi.mock('../../equipment/services/equipmentApi', () => ({
+  getAllEquipment: equipmentApi.getAllEquipment,
+  getEquipmentById: equipmentApi.getEquipmentById,
 }));
 
 vi.mock('../../user-activity/services/activityLogsApi', () => ({
@@ -49,5 +55,7 @@ describe('ChatWidget close', () => {
     await user.click(screen.getByTitle('Закрыть консультанта'));
 
     expect(clearMessages).toHaveBeenCalledOnce();
+    expect(equipmentApi.getAllEquipment).not.toHaveBeenCalled();
+    expect(equipmentApi.getEquipmentById).not.toHaveBeenCalled();
   });
 });

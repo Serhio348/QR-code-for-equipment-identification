@@ -134,14 +134,17 @@ export async function getFolderFiles(folderUrl: string): Promise<DriveFile[]> {
 
     if (!response.ok) {
       const errorText = await response.text();
+      const preview = errorText.trim().startsWith('<') ? 'html' : errorText.slice(0, 180);
       console.error('❌ HTTP ошибка:', {
         status: response.status,
         statusText: response.statusText,
-        body: errorText
+        body: preview,
       });
-      
-      // Создаем ошибку с информацией о статусе для лучшей диагностики
-      const error: any = new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+      const error: any = new Error(
+        response.status === 404
+          ? 'Сервер оборудования временно недоступен: Google не открыл файл. Повторите попытку.'
+          : `HTTP error! status: ${response.status}`,
+      );
       error.status = response.status;
       error.statusText = response.statusText;
       throw error;

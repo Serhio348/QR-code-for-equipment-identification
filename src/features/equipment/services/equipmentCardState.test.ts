@@ -33,6 +33,15 @@ describe('equipmentCardState', () => {
       hasEquipment: true,
     })).toBe('ready');
   });
+
+  it('keeps the plate on screen while a refresh is still running', () => {
+    expect(equipmentCardState({
+      loading: true,
+      notFound: false,
+      loadError: null,
+      hasEquipment: true,
+    })).toBe('ready');
+  });
 });
 
 describe('verifiedQrUrl', () => {

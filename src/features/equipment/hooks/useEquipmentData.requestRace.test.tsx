@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Equipment } from '../types/equipment';
-import { getEquipmentById } from '../services/equipmentApi';
+import { getAllEquipment, getEquipmentById } from '../services/equipmentApi';
 import { clearEquipmentCache, useEquipmentData } from './useEquipmentData';
 
 vi.mock('../services/equipmentApi', () => ({
@@ -41,6 +41,7 @@ describe('useEquipmentData request race', () => {
   beforeEach(() => {
     clearEquipmentCache();
     vi.mocked(getEquipmentById).mockReset();
+    vi.mocked(getAllEquipment).mockReset();
   });
 
   it('keeps B when the request for A finishes later', async () => {
@@ -108,5 +109,58 @@ describe('useEquipmentData request race', () => {
     expect(result.current.data).toMatchObject({ id: 'equip-b', name: 'Насос B' });
     expect(result.current.error).toBeNull();
     expect(result.current.loading).toBe(false);
+  });
+
+  it('opens a card from the loaded list without another request', async () => {
+    vi.mocked(getAllEquipment).mockResolvedValue([equipment('equip-a', 'Насос A')]);
+
+    const list = renderHook(() => useEquipmentData());
+    await waitFor(() => expect(list.result.current.loading).toBe(false));
+
+    vi.mocked(getEquipmentById).mockClear();
+    const card = renderHook(() => useEquipmentData('equip-a'));
+
+    await waitFor(() => {
+      expect(card.result.current.data).toMatchObject({ id: 'equip-a', name: 'Насос A' });
+    });
+    expect(card.result.current.loading).toBe(false);
+    expect(getEquipmentById).not.toHaveBeenCalled();
+  });
+
+  it('opens a card from the list request already in flight', async () => {
+    const listRequest = deferred<Equipment[]>();
+    vi.mocked(getAllEquipment).mockReturnValue(listRequest.promise);
+
+    const list = renderHook(() => useEquipmentData());
+    await waitFor(() => expect(getAllEquipment).toHaveBeenCalled());
+
+    const card = renderHook(() => useEquipmentData('equip-a'));
+    await waitFor(() => expect(card.result.current.loading).toBe(true));
+
+    await act(async () => {
+      listRequest.resolve([equipment('equip-a', 'Насос A')]);
+    });
+
+    await waitFor(() => {
+      expect(card.result.current.data).toMatchObject({ id: 'equip-a', name: 'Насос A' });
+    });
+    expect(card.result.current.loading).toBe(false);
+    expect(getEquipmentById).not.toHaveBeenCalled();
+    expect(list.result.current.loading).toBe(false);
+  });
+
+  it('keeps the list on screen when a refresh fails', async () => {
+    vi.mocked(getAllEquipment).mockResolvedValue([equipment('equip-a', 'Насос A')]);
+    const list = renderHook(() => useEquipmentData());
+    await waitFor(() => expect(list.result.current.loading).toBe(false));
+
+    vi.mocked(getAllEquipment).mockRejectedValue(new Error('timeout'));
+    await act(async () => {
+      await list.result.current.refetch();
+    });
+
+    expect(list.result.current.data).toEqual([expect.objectContaining({ id: 'equip-a', name: 'Насос A' })]);
+    expect(list.result.current.error).toBeNull();
+    expect(list.result.current.loading).toBe(false);
   });
 });

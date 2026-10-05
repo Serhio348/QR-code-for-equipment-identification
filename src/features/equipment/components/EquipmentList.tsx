@@ -260,7 +260,7 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
     }
   }, [filterType, filterStatus, filterWorkshop, filteredEquipment.length]);
 
-  if (loading) {
+  if (loading && equipmentList.length === 0) {
     return (
       <div className="equipment-list">
         <div className="loading-message">
@@ -284,7 +284,7 @@ const EquipmentList: React.FC<EquipmentListProps> = ({ onSelectEquipment }) => {
     );
   }
 
-  if (error) {
+  if (error && equipmentList.length === 0) {
     return (
       <div className="equipment-list">
         <div className="error-message">

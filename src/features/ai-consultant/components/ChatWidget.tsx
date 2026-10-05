@@ -5,7 +5,7 @@ import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import QRScanner from '../../common/components/QRScanner/QRScanner';
-import { useEquipmentData } from '../../equipment/hooks/useEquipmentData';
+import { getAllEquipment, getEquipmentById } from '../../equipment/services/equipmentApi';
 import { logUserActivity } from '../../user-activity/services/activityLogsApi';
 import {
   getAIChatEquipmentContext,
@@ -48,7 +48,6 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({ initialOpen = false }) =
   const { messages, isLoading, error, activeToolName, suggestions, sendMessage, clearMessages } = useChat(contextForChat, waterContext);
   const { alerts } = useAlerts();
   const { transcript, resetTranscript } = useSpeechRecognition();
-  const { data: equipmentListData } = useEquipmentData();
 
   // Карточка оборудования задаёт контекст независимо от истории диалога.
   useEffect(() => {
@@ -103,33 +102,32 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({ initialOpen = false }) =
   };
 
   // Обработка успешного сканирования QR-кода
-  const handleQRScanSuccess = (equipmentId: string) => {
+  const handleQRScanSuccess = async (equipmentId: string) => {
     console.log('[ChatWidget] QR сканирование успешно, ID:', equipmentId);
     console.log('[ChatWidget] Тип ID:', typeof equipmentId);
 
-    // Ищем оборудование в списке
-    const equipmentList = Array.isArray(equipmentListData) ? equipmentListData : [];
-    console.log('[ChatWidget] Список оборудования:', equipmentList.length, 'записей');
-    console.log('[ChatWidget] Первые 3 ID в списке:', equipmentList.slice(0, 3).map(eq => ({ id: eq.id, type: typeof eq.id, name: eq.name })));
-
     // Поддерживаем два варианта поиска:
-    // 1. По обычному ID (UUID)
-    // 2. По Google Drive ID (если отсканирован QR-код папки Drive)
-    let foundEquipment: Equipment | undefined;
+    // 1. По обычному ID (UUID) — грузим только эту карточку
+    // 2. По Google Drive ID — нужен список, потому что папка хранится внутри записи
+    let foundEquipment: Equipment | null = null;
 
-    if (equipmentId.startsWith('DRIVE:')) {
-      // Извлекаем ID папки Drive
-      const driveId = equipmentId.replace('DRIVE:', '');
-      console.log('[ChatWidget] Поиск по Google Drive ID:', driveId);
-
-      // Ищем по googleDriveUrl
-      foundEquipment = equipmentList.find(eq =>
-        eq.googleDriveUrl?.includes(driveId)
-      );
-    } else {
-      // Ищем по обычному ID
-      console.log('[ChatWidget] Поиск по ID оборудования:', equipmentId);
-      foundEquipment = equipmentList.find(eq => eq.id === equipmentId);
+    try {
+      if (equipmentId.startsWith('DRIVE:')) {
+        const driveId = equipmentId.replace('DRIVE:', '');
+        console.log('[ChatWidget] Поиск по Google Drive ID:', driveId);
+        const equipmentList = await getAllEquipment();
+        foundEquipment = equipmentList.find(eq =>
+          eq.googleDriveUrl?.includes(driveId)
+        ) ?? null;
+      } else {
+        console.log('[ChatWidget] Поиск по ID оборудования:', equipmentId);
+        foundEquipment = await getEquipmentById(equipmentId);
+      }
+    } catch (err) {
+      console.error('[ChatWidget] Ошибка загрузки оборудования по QR:', err);
+      alert('Не удалось загрузить оборудование по QR-коду. Повторите попытку.');
+      setIsQRScannerOpen(false);
+      return;
     }
 
     if (foundEquipment) {
