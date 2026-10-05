@@ -8,10 +8,12 @@
  */
 
 import { config } from '../../config/env.js';
+import { EmbeddingQuotaPause } from './embeddingClient.js';
 import { discoverEquipmentDocuments, indexNextDocument } from './documentIndexer.js';
 
 let started = false;
 let running = false;
+let pausedUntil = 0;
 
 export function startDocumentIndexWorker(): void {
   if (started || !config.documentIndexEnabled) return;
@@ -29,7 +31,7 @@ export function startDocumentIndexWorker(): void {
 }
 
 async function runIndexTick(): Promise<void> {
-  if (running) return;
+  if (running || Date.now() < pausedUntil) return;
   running = true;
   try {
     const indexed = await indexNextDocument();
@@ -38,6 +40,11 @@ async function runIndexTick(): Promise<void> {
       if (discovered > 0) console.log(`[DocumentIndex] В очередь добавлено файлов: ${discovered}`);
     }
   } catch (error) {
+    if (error instanceof EmbeddingQuotaPause) {
+      pausedUntil = error.retryAt;
+      console.warn(`[DocumentIndex] ${error.message}`);
+      return;
+    }
     console.error('[DocumentIndex] Ошибка фонового прохода:', error);
   } finally {
     running = false;
