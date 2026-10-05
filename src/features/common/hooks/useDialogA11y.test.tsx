@@ -43,4 +43,28 @@ describe('useDialogA11y', () => {
     expect(outside).toHaveFocus();
     outside.remove();
   });
+
+  it('keeps the cursor in the field when the close handler changes', async () => {
+    const user = userEvent.setup();
+
+    function FieldDialog({ onClose }: { onClose: () => void }) {
+      const { dialogRef, titleId } = useDialogA11y(true, onClose);
+      return (
+        <div ref={dialogRef} role="dialog" aria-labelledby={titleId} tabIndex={-1}>
+          <h2 id={titleId}>Журнал</h2>
+          <input aria-label="Описание" />
+        </div>
+      );
+    }
+
+    const view = render(<FieldDialog onClose={() => {}} />);
+    const field = screen.getByRole('textbox', { name: 'Описание' });
+    await user.click(field);
+    await user.type(field, 'а');
+    expect(field).toHaveFocus();
+
+    view.rerender(<FieldDialog onClose={() => {}} />);
+    expect(field).toHaveFocus();
+    expect(field).toHaveValue('а');
+  });
 });

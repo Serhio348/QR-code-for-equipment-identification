@@ -19,6 +19,8 @@ export function useDialogA11y(active: boolean, onClose: () => void): {
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!active) return;
@@ -30,7 +32,7 @@ export function useDialogA11y(active: boolean, onClose: () => void): {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== 'Tab' || !dialog) return;
@@ -57,7 +59,7 @@ export function useDialogA11y(active: boolean, onClose: () => void): {
       document.removeEventListener('keydown', onKeyDown);
       previousFocusRef.current?.focus();
     };
-  }, [active, onClose]);
+  }, [active]);
 
   return { dialogRef, titleId };
 }
