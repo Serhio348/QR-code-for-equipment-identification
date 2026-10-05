@@ -48,27 +48,45 @@ export async function getEquipmentById(id: string, preventCache: boolean = false
     url.searchParams.append('_t', Date.now().toString());
   }
 
-  try {
-    const response = await fetch(url.toString(), {
-      signal: AbortSignal.timeout(API_CONFIG.TIMEOUT),
-      cache: preventCache ? 'no-store' : 'default',
-    });
+  const attempts = (API_CONFIG.MAX_RETRIES ?? 0) + 1;
+  let lastError: unknown;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      const response = await fetch(url.toString(), {
+        signal: AbortSignal.timeout(API_CONFIG.TIMEOUT),
+        cache: preventCache ? 'no-store' : 'default',
+      });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data: ApiResponse<Equipment> = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || 'Не удалось загрузить оборудование');
+      }
+
+      return data.data ?? null;
+    } catch (error) {
+      lastError = error;
+      const status = error instanceof Error
+        ? Number(error.message.match(/status: (\d+)/)?.[1])
+        : Number.NaN;
+      const retryable = error instanceof TypeError
+        || status === 404
+        || status === 408
+        || status === 429
+        || status >= 500;
+      if (attempt + 1 < attempts && retryable) {
+        await new Promise((resolve) => setTimeout(resolve, API_CONFIG.RETRY_DELAY ?? 0));
+        continue;
+      }
+      console.error('Error getting equipment by ID:', error);
+      throw error;
     }
-
-    const data: ApiResponse<Equipment> = await response.json();
-
-    if (!data.success) {
-      throw new Error(data.error || 'Не удалось загрузить оборудование');
-    }
-
-    return data.data ?? null;
-  } catch (error) {
-    console.error('Error getting equipment by ID:', error);
-    throw error;
   }
+  throw lastError;
 }
 
 /**

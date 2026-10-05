@@ -26,6 +26,30 @@ function isTimeoutError(error: any): boolean {
          error?.stack?.includes('TimeoutError');
 }
 
+/** Страница Google «файл не найден» и обрывы связи у Apps Script часто проходят со следующей попытки. */
+function isTransientHttpStatus(status: number): boolean {
+  return status === 404 || status === 408 || status === 429 || status >= 500;
+}
+
+function isFetchNetworkError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return error.name === 'TypeError'
+    && /fetch|network|cors/i.test(error.message);
+}
+
+function httpFailureMessage(status: number): string {
+  if (status === 404) {
+    return 'Сервер оборудования временно недоступен: Google не открыл файл. Повторите попытку.';
+  }
+  return `Сервер оборудования ответил ошибкой ${status}. Повторите попытку.`;
+}
+
+function responsePreview(text: string): string {
+  const trimmed = text.trim();
+  if (trimmed.startsWith('<') || trimmed.includes('<!DOCTYPE')) return 'html';
+  return trimmed.slice(0, 180);
+}
+
 /**
  * Базовый запрос к API с автоматическим повтором при таймауте
  * 
@@ -105,9 +129,19 @@ export async function apiRequest<T>(
       console.error('❌ HTTP ошибка:', {
         status: response.status,
         statusText: response.statusText,
-        message: errorText
+        message: responsePreview(errorText),
       });
-      throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+      if (
+        method === 'GET'
+        && isTransientHttpStatus(response.status)
+        && retryCount < API_CONFIG.MAX_RETRIES
+      ) {
+        const nextRetry = retryCount + 1;
+        console.warn(`Повтор запроса после ответа ${response.status} (${nextRetry}/${API_CONFIG.MAX_RETRIES})`, { action });
+        await delay(API_CONFIG.RETRY_DELAY);
+        return apiRequest<T>(action, method, body, params, nextRetry);
+      }
+      throw new Error(httpFailureMessage(response.status));
     }
 
     // Парсим JSON ответ
@@ -122,19 +156,7 @@ export async function apiRequest<T>(
     });
     
     if (action === 'getAll' && data.data && Array.isArray(data.data)) {
-      const equipmentArray = data.data as any[];
-      console.log('📋 Получено оборудования:', equipmentArray.length);
-      equipmentArray.forEach((eq: any) => {
-        console.log('📅 Оборудование с сервера (getAll):', {
-          id: eq.id,
-          name: eq.name,
-          commissioningDate: eq.commissioningDate || '(пусто)',
-          commissioningDateType: typeof eq.commissioningDate,
-          lastMaintenanceDate: eq.lastMaintenanceDate || '(пусто)',
-          lastMaintenanceDateType: typeof eq.lastMaintenanceDate,
-          все_поля: Object.keys(eq)
-        });
-      });
+      console.log('📋 Получено оборудования:', data.data.length);
     } else if (action === 'getById' && data.data) {
       const equipment = data.data as any;
       console.log('📅 Оборудование с сервера (getById):', {
@@ -171,20 +193,17 @@ export async function apiRequest<T>(
   } catch (error: any) {
     // Проверяем, является ли это таймаутом
     const isTimeout = isTimeoutError(error);
-    
-    // Если это таймаут и есть попытки повтора - повторяем запрос
-    if (isTimeout && retryCount < API_CONFIG.MAX_RETRIES) {
+    const network = isFetchNetworkError(error);
+
+    // Таймаут повторяем всегда. Обрыв связи — только у чтения, чтобы не отправить запись дважды.
+    if ((isTimeout || (method === 'GET' && network)) && retryCount < API_CONFIG.MAX_RETRIES) {
       const nextRetry = retryCount + 1;
-      console.warn(`⏱️ Таймаут запроса (попытка ${nextRetry}/${API_CONFIG.MAX_RETRIES}). Повтор через ${API_CONFIG.RETRY_DELAY}ms...`, {
+      console.warn(`Повтор запроса (${nextRetry}/${API_CONFIG.MAX_RETRIES})`, {
         action,
         method,
-        retryCount: nextRetry
+        retryCount: nextRetry,
       });
-      
-      // Ждем перед повтором
       await delay(API_CONFIG.RETRY_DELAY);
-      
-      // Повторяем запрос
       return apiRequest<T>(action, method, body, params, nextRetry);
     }
     
@@ -223,7 +242,7 @@ export async function apiRequest<T>(
     }
     
     if (isCorsError && method === 'GET') {
-      throw new Error(`Не удалось подключиться к API. Проверьте:\n1. URL в src/config/api.ts\n2. Доступность интернета\n3. Настройки CORS в Google Apps Script\n\nURL: ${API_CONFIG.EQUIPMENT_API_URL}`);
+      throw new Error('Не удалось подключиться к серверу оборудования. Повторите попытку.');
     }
     
     // Пробрасываем ошибку дальше
