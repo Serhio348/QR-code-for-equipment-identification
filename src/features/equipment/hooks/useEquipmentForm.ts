@@ -8,7 +8,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Equipment, EquipmentType, EquipmentStatus, EquipmentSpecs } from '../types/equipment';
 import { addEquipment, updateEquipment, getEquipmentById } from '../services/equipmentApi';
-import { generateQRCodeUrl } from '@/shared/utils/urlGenerator';
+import { getEquipmentQrUrl } from '@/shared/utils/urlGenerator';
 import { getEquipmentViewUrl } from '@/shared/utils/routes';
 import { normalizeDate } from '@/shared/utils/dateNormalization';
 import { updateEquipmentCache } from './useEquipmentData';
@@ -143,15 +143,8 @@ export function useEquipmentForm({ equipmentId, onSave, onCancel }: UseEquipment
       let finalGoogleDriveUrl = googleDriveUrl.trim();
       let finalQrCodeUrl = qrCodeUrl.trim();
 
-      // Если URL для QR-кода не указан, используем Google Drive URL или генерируем
-      if (!finalQrCodeUrl) {
-        if (finalGoogleDriveUrl) {
-          finalQrCodeUrl = finalGoogleDriveUrl;
-        } else if (isEditMode && equipmentId) {
-          finalQrCodeUrl = generateQRCodeUrl(equipmentId, finalGoogleDriveUrl);
-        } else {
-          finalQrCodeUrl = '';
-        }
+      if (isEditMode && equipmentId) {
+        finalQrCodeUrl = getEquipmentQrUrl(equipmentId, finalQrCodeUrl);
       }
 
       // input type="date" уже возвращает YYYY-MM-DD
@@ -180,14 +173,9 @@ export function useEquipmentForm({ equipmentId, onSave, onCancel }: UseEquipment
       } else {
         savedEquipment = await addEquipment(equipmentData as any);
         
-        // После создания обновляем QR-код URL с правильным ID, если нужно
-        const driveUrl = savedEquipment.googleDriveUrl || finalGoogleDriveUrl;
-        if (!savedEquipment.qrCodeUrl && driveUrl) {
-          savedEquipment = await updateEquipment(savedEquipment.id, {
-            qrCodeUrl: driveUrl
-          });
-        } else if (!savedEquipment.qrCodeUrl) {
-          const generatedUrl = generateQRCodeUrl(savedEquipment.id, driveUrl);
+        // После создания ID уже известен, поэтому QR всегда ведёт в приложение.
+        const generatedUrl = getEquipmentQrUrl(savedEquipment.id, savedEquipment.qrCodeUrl);
+        if (savedEquipment.qrCodeUrl !== generatedUrl) {
           savedEquipment = await updateEquipment(savedEquipment.id, {
             qrCodeUrl: generatedUrl
           });

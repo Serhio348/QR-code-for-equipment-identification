@@ -21,6 +21,7 @@ import { equipmentCardState } from '../services/equipmentCardState';
 import { ROUTES } from '@/shared/utils/routes';
 import { logUserActivity } from '@/features/user-activity/services/activityLogsApi';
 import { setAIChatEquipmentContext } from '@/features/ai-consultant/events/chatEvents';
+import { getEquipmentQrUrl } from '@/shared/utils/urlGenerator';
 import './EquipmentPage.css';
 
 const EquipmentPage: React.FC = () => {
@@ -56,6 +57,9 @@ const EquipmentPage: React.FC = () => {
     loadError,
     hasEquipment: currentEquipment !== null,
   });
+  const equipmentQrUrl = currentEquipment
+    ? getEquipmentQrUrl(currentEquipment.id, currentEquipment.qrCodeUrl)
+    : undefined;
 
   useEffect(() => {
     if (!currentEquipment) {
@@ -187,7 +191,7 @@ const EquipmentPage: React.FC = () => {
           equipmentType: currentEquipment.type,
           commissioningDate,
           lastMaintenanceDate,
-          qrCodeUrl: currentEquipment.qrCodeUrl,
+          qrCodeUrl: equipmentQrUrl,
         },
         settings,
         filename,
@@ -260,7 +264,7 @@ const EquipmentPage: React.FC = () => {
               filterNumber={getFilterNumber()}
               commissioningDate={commissioningDate}
               lastMaintenanceDate={lastMaintenanceDate}
-              qrCodeUrl={currentEquipment.qrCodeUrl}
+              qrCodeUrl={equipmentQrUrl}
             />
             
             {currentEquipment && isMaintenanceLogOpen && (

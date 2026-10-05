@@ -6,26 +6,33 @@
  * Генерирует URL для QR-кода оборудования
  * 
  * @param equipmentId - ID оборудования
- * @param googleDriveUrl - URL папки Google Drive (опционально)
  * @param baseUrl - Базовый URL приложения (опционально, по умолчанию берется из window.location)
  * @returns URL для QR-кода
  */
 export function generateQRCodeUrl(
   equipmentId: string,
-  googleDriveUrl?: string,
   baseUrl?: string
 ): string {
-  // Если указан Google Drive URL, используем его
-  if (googleDriveUrl && googleDriveUrl.trim()) {
-    return googleDriveUrl.trim();
-  }
-  
-  // Иначе генерируем ссылку на страницу оборудования в приложении
   const appBaseUrl = baseUrl || (typeof window !== 'undefined' 
     ? `${window.location.protocol}//${window.location.host}` 
     : '');
   
   return `${appBaseUrl}/equipment/${equipmentId}`;
+}
+
+export function isGoogleDriveUrl(url: string | null | undefined): boolean {
+  const value = url?.trim().toLowerCase() ?? '';
+  return value.includes('drive.google.com') || value.includes('docs.google.com');
+}
+
+export function getEquipmentQrUrl(
+  equipmentId: string,
+  storedQrCodeUrl?: string | null,
+  baseUrl?: string,
+): string {
+  const stored = storedQrCodeUrl?.trim() ?? '';
+  if (stored && !isGoogleDriveUrl(stored)) return stored;
+  return generateQRCodeUrl(equipmentId, baseUrl);
 }
 
 /**
