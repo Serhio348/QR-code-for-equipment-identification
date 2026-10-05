@@ -10,13 +10,14 @@
 
 import { gasClient } from '../equipment/index.js';
 import { chunkDocumentText } from './documentChunker.js';
-import { embedDocumentChunks } from './embeddingClient.js';
+import { EmbeddingQuotaPause, embedDocumentChunks } from './embeddingClient.js';
 import {
   claimNextDocument,
   completeDocumentIndex,
   documentContentHash,
   markDocumentIndexResult,
   markDocumentReady,
+  releaseDocumentToPending,
   upsertDiscoveredFile,
   type DiscoveredDocument,
 } from './documentIndexStore.js';
@@ -99,6 +100,10 @@ export async function indexNextDocument(): Promise<boolean> {
     });
     return true;
   } catch (error) {
+    if (error instanceof EmbeddingQuotaPause) {
+      await releaseDocumentToPending(file.id, error.message);
+      throw error;
+    }
     await markDocumentIndexResult(
       file.id,
       'error',

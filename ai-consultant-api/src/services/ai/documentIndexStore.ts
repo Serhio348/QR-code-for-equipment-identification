@@ -203,6 +203,19 @@ export async function completeDocumentIndex(params: {
   if (error) throw new Error(error.message);
 }
 
+export async function releaseDocumentToPending(fileId: string, note: string): Promise<void> {
+  const { error } = await supabase()
+    .from('document_index_files')
+    .update({
+      status: 'pending',
+      error: note.slice(0, 1000),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', fileId)
+    .eq('status', 'indexing');
+  if (error) throw new Error(error.message);
+}
+
 export async function markDocumentIndexResult(
   fileId: string,
   status: 'error' | 'skipped',
