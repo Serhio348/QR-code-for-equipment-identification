@@ -121,10 +121,6 @@ function addEquipment(data) {
             Logger.log('📁 parentFolderId: ' + (data.parentFolderId || 'не указан'));
             const folderResult = createDriveFolder(trimmedName, data.parentFolderId);
             googleDriveUrl = folderResult.folderUrl;
-            // Используем URL папки для QR-кода, если не указан отдельный URL
-            if (!qrCodeUrl) {
-              qrCodeUrl = folderResult.folderUrl;
-            }
             Logger.log('✅ УСПЕШНО создана папка для оборудования: ' + trimmedName);
             Logger.log('✅ URL папки: ' + googleDriveUrl);
             Logger.log('✅ Folder ID: ' + folderResult.folderId);
@@ -141,9 +137,6 @@ function addEquipment(data) {
           }
         }
       }
-    } else if (!qrCodeUrl) {
-      // Если Google Drive URL указан, но QR Code URL нет, используем Google Drive URL
-      qrCodeUrl = googleDriveUrl;
     }
     
     // Формируем строку для добавления в таблицу

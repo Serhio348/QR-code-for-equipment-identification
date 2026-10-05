@@ -137,18 +137,18 @@ const EquipmentForm: React.FC<EquipmentFormProps> = ({ equipmentId, onSave, onCa
           </div>
 
           <div className="form-group">
-            <label>URL для QR-кода {isEditMode ? '*' : '(заполнится автоматически)'}</label>
+            <label>URL для QR-кода (заполнится автоматически)</label>
             <input
               type="url"
               value={qrCodeUrl}
               onChange={(e) => setQrCodeUrl(e.target.value)}
               placeholder={isEditMode 
-                ? "https://drive.google.com/drive/folders/..." 
-                : "Заполнится автоматически на основе Google Drive URL"}
-              required={isEditMode}
+                ? "https://example.com/equipment/..." 
+                : "Заполнится ссылкой на карточку в приложении"}
+              required={false}
               disabled={!isEditMode && !googleDriveUrl.trim()}
             />
-            <small>Обычно совпадает с URL Google Drive. {!isEditMode && 'Заполнится автоматически при создании папки.'}</small>
+            <small>QR должен вести на карточку в приложении, а не напрямую в Google Drive.</small>
           </div>
 
           <div className="form-group">
