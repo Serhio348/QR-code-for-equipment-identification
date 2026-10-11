@@ -61,13 +61,12 @@ const resolveInspectionPdfSize = (
 };
 
 /**
- * Экспорт акта освидетельствования в PDF
+ * Формирует jsPDF-документ акта освидетельствования из DOM-элемента
  */
-export const exportToPDF = async (
+const buildInspectionPdf = async (
   elementId: string,
-  filename: string,
   settings: InspectionExportSettings,
-): Promise<void> => {
+): Promise<jsPDF> => {
   const element = document.getElementById(elementId);
   if (!element) {
     throw new Error(`Element with id "${elementId}" not found`);
@@ -133,8 +132,7 @@ export const exportToPDF = async (
         undefined,
         'FAST',
       );
-      pdf.save(filename);
-      return;
+      return pdf;
     }
 
     let currentYPx = 0;
@@ -198,11 +196,36 @@ export const exportToPDF = async (
       pageNumber++;
     }
 
-    pdf.save(filename);
+    return pdf;
   } catch (error) {
     console.error('Error exporting to PDF:', error);
     throw error;
   }
+};
+
+/**
+ * Экспорт акта освидетельствования в PDF (скачивание в браузере)
+ */
+export const exportToPDF = async (
+  elementId: string,
+  filename: string,
+  settings: InspectionExportSettings,
+): Promise<void> => {
+  const pdf = await buildInspectionPdf(elementId, settings);
+  pdf.save(filename);
+};
+
+/**
+ * Генерирует PDF-файл акта освидетельствования без скачивания.
+ * Используется для сохранения отчёта в журнале обслуживания.
+ */
+export const generateInspectionPdfFile = async (
+  elementId: string,
+  filename: string,
+  settings: InspectionExportSettings,
+): Promise<File> => {
+  const pdf = await buildInspectionPdf(elementId, settings);
+  return new File([pdf.output('blob')], filename, { type: 'application/pdf' });
 };
 
 /**
