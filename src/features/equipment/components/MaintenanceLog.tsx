@@ -5,7 +5,7 @@
  * для конкретного оборудования через API
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MaintenanceEntry, MaintenanceEntryInput, MaintenanceFile, Equipment } from '../types/equipment';
 import { TechnicalInspectionData } from '../types/technicalInspection';
 import {
@@ -19,8 +19,8 @@ import {
 import { uploadMaintenanceFile, attachFilesToEntry } from '../services/maintenanceApi';
 import { formatDate } from '@/shared/utils/dateFormatting';
 import { useAuth } from '@/features/auth/contexts/AuthContext';
-import { exportToPDF } from '@/shared/utils/pdfExport';
-import { InspectionExportSettings } from '@/shared/types/inspectionExport';
+import { exportToPDF, generateInspectionPdfFile } from '@/shared/utils/pdfExport';
+import { InspectionExportSettings, DEFAULT_INSPECTION_EXPORT_SETTINGS } from '@/shared/types/inspectionExport';
 import { TechnicalInspectionForm } from './TechnicalInspectionForm';
 import { TechnicalInspectionPDF } from './TechnicalInspectionPDF';
 import InspectionExportSettingsModal from './InspectionExportSettingsModal';
@@ -43,6 +43,30 @@ const MAINTENANCE_TYPE_OPTIONS = [
 /** Документы и фото для журнала обслуживания */
 const MAINTENANCE_FILE_ACCEPT =
   '.pdf,.doc,.docx,.xls,.xlsx,.txt,.png,.jpg,.jpeg,.webp,image/*';
+
+/** ID скрытого DOM-элемента с актом освидетельствования для генерации PDF */
+const INSPECTION_PDF_ELEMENT_ID = 'technical-inspection-pdf';
+
+/**
+ * Ожидает появления скрытого DOM-элемента акта освидетельствования после setState
+ */
+const waitForInspectionPdfElement = (timeoutMs = 5000): Promise<HTMLElement> =>
+  new Promise((resolve, reject) => {
+    const startedAt = Date.now();
+    const check = () => {
+      const element = document.getElementById(INSPECTION_PDF_ELEMENT_ID);
+      if (element) {
+        resolve(element);
+        return;
+      }
+      if (Date.now() - startedAt >= timeoutMs) {
+        reject(new Error('Не удалось подготовить акт освидетельствования'));
+        return;
+      }
+      setTimeout(check, 50);
+    };
+    check();
+  });
 
 interface MaintenanceLogProps {
   /** ID оборудования, для которого отображается журнал */
@@ -73,6 +97,8 @@ const MaintenanceLog: React.FC<MaintenanceLogProps> = ({ equipmentId, maintenanc
   const [showInspectionPDF, setShowInspectionPDF] = useState<boolean>(false);
   const [showInspectionExportSettings, setShowInspectionExportSettings] = useState<boolean>(false);
   const [inspectionData, setInspectionData] = useState<TechnicalInspectionData | null>(null);
+  /** Последние использованные настройки экспорта — PDF в журнале делаем с теми же параметрами */
+  const lastInspectionExportSettingsRef = useRef<InspectionExportSettings>(DEFAULT_INSPECTION_EXPORT_SETTINGS);
 
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadingFiles, setUploadingFiles] = useState<boolean>(false);
@@ -397,10 +423,44 @@ ${data.notes ? `Примечания: ${data.notes}` : ''}`;
 
       // Шаг 2: Сохранение записи в журнал (40%)
       setSavingProgress(40);
-      await addMaintenanceEntry(equipmentId, entryData, effectiveMaintenanceSheetId);
+      const newEntry = await addMaintenanceEntry(equipmentId, entryData, effectiveMaintenanceSheetId);
 
-      // Шаг 3: Обновление даты следующего испытания (70%)
-      setSavingProgress(70);
+      // Шаг 3: Генерация и прикрепление PDF акта к записи (60%)
+      setSavingProgress(60);
+      if (!newEntry.id.startsWith('temp-')) {
+        try {
+          setInspectionData(data);
+          setShowInspectionPDF(true);
+          await waitForInspectionPdfElement();
+          // Даём DOM применить стили перед снимком в canvas
+          await new Promise((resolve) => setTimeout(resolve, 500));
+
+          const pdfFilename = `Акт_освидетельствования_${equipment.name.replace(/[^a-zA-Z0-9]/g, '_')}_${data.actNumber.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+          const pdfFile = await generateInspectionPdfFile(
+            INSPECTION_PDF_ELEMENT_ID,
+            pdfFilename,
+            lastInspectionExportSettingsRef.current
+          );
+
+          setSavingProgress(75);
+          const uploadedFile = await uploadMaintenanceFile(
+            equipmentId,
+            newEntry.id,
+            pdfFile,
+            data.inspectionDate
+          );
+          await attachFilesToEntry(newEntry.id, [uploadedFile]);
+          newEntry.files = [uploadedFile];
+        } catch (pdfError) {
+          console.warn('⚠️ Не удалось сохранить PDF акта в журнал:', pdfError);
+        } finally {
+          setShowInspectionPDF(false);
+          setInspectionData(null);
+        }
+      }
+
+      // Шаг 4: Обновление даты следующего испытания (80%)
+      setSavingProgress(80);
 
       // Обновляем дату следующего испытания в характеристиках оборудования
       // Автоматически устанавливаем дату следующего освидетельствования (текущая дата + 1 год)
@@ -419,8 +479,8 @@ ${data.notes ? `Примечания: ${data.notes}` : ''}`;
         console.warn('⚠️ Не удалось обновить дату следующего испытания:', updateError);
       }
 
-      // Шаг 4: Обновление журнала (90%)
-      setSavingProgress(90);
+      // Шаг 5: Обновление журнала (95%)
+      setSavingProgress(95);
       await loadMaintenanceLog();
 
       // Шаг 5: Завершение (100%)
@@ -430,7 +490,7 @@ ${data.notes ? `Примечания: ${data.notes}` : ''}`;
       setShowInspectionForm(false);
 
       // Показываем уведомление об успехе
-      showSuccess('✅ Акт технического освидетельствования успешно сохранен в журнал!');
+      showSuccess('✅ Акт технического освидетельствования сохранен в журнал вместе с PDF-отчетом!');
     } catch (err: any) {
       console.error('Ошибка сохранения освидетельствования:', err);
       setError(`Не удалось сохранить освидетельствование: ${err.message || 'Неизвестная ошибка'}`);
@@ -459,6 +519,7 @@ ${data.notes ? `Примечания: ${data.notes}` : ''}`;
   const handleExportInspectionWithSettings = async (settings: InspectionExportSettings) => {
     if (!equipment || !inspectionData) return;
 
+    lastInspectionExportSettingsRef.current = settings;
     setShowInspectionExportSettings(false);
     setShowInspectionPDF(true);
 
@@ -467,7 +528,7 @@ ${data.notes ? `Примечания: ${data.notes}` : ''}`;
       try {
         console.log('Начинаем экспорт акта освидетельствования...');
         const filename = `Акт_освидетельствования_${equipment.name.replace(/[^a-zA-Z0-9]/g, '_')}_${inspectionData.actNumber.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
-        await exportToPDF('technical-inspection-pdf', filename, settings);
+        await exportToPDF(INSPECTION_PDF_ELEMENT_ID, filename, settings);
         console.log('Экспорт успешно завершен');
         setShowInspectionPDF(false);
         setInspectionData(null);
