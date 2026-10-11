@@ -4,10 +4,11 @@
  * Прокси-маршруты для операций с оборудованием через GAS.
  *
  * Все маршруты требуют валидную сессию Supabase (authMiddleware).
- * Чтение журнала доступно любому вошедшему пользователю.
- * Добавление, правка и удаление записей журнала — только администратор.
+ * Чтение журнала и создание карточки оборудования доступны любому вошедшему пользователю.
+ * Правка, удаление оборудования и записей журнала — только администратор.
+ * Исключение: не-админ может дозаписать qrCodeUrl сразу после создания карточки.
  */
-import { Router, Response } from 'express';
+import { Router, Response, type NextFunction } from 'express';
 import { gasClient } from '../../services/equipment/index.js';
 import multer from 'multer';
 import { authMiddleware, type AuthenticatedRequest } from '../../middleware/auth.js';
@@ -46,10 +47,39 @@ router.get('/document-index', async (req: AuthenticatedRequest, res: Response) =
 });
 
 // ============================================
-// SEC-02: мутации оборудования — только admin через backend
+// SEC-02: мутации оборудования — только admin через backend,
+// кроме создания карточки (доступно всем авторизованным)
 // ============================================
 
-router.post('/add', adminMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+/**
+ * Поля, которые не-админ может менять через /update.
+ * После создания карточки фронт дозаписывает QR-ссылку с уже известным id.
+ */
+const QR_FIX_UPDATE_FIELDS = new Set(['id', 'qrCodeUrl']);
+
+/**
+ * Пропускает не-админа, только если /update меняет исключительно qrCodeUrl
+ * и ссылка ведёт на страницу этого же оборудования (.../equipment/<id>).
+ */
+function qrCodeFixOrAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction): void {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const keys = Object.keys(body);
+  const isQrFixOnly =
+    keys.length === QR_FIX_UPDATE_FIELDS.size &&
+    keys.every((key) => QR_FIX_UPDATE_FIELDS.has(key)) &&
+    typeof body.id === 'string' &&
+    typeof body.qrCodeUrl === 'string' &&
+    body.qrCodeUrl.includes(`/equipment/${body.id}`);
+
+  if (isQrFixOnly) {
+    next();
+    return;
+  }
+
+  void adminMiddleware(req, res, next);
+}
+
+router.post('/add', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const equipment = req.body;
     if (!equipment?.name || !equipment?.type) {
@@ -67,7 +97,7 @@ router.post('/add', adminMiddleware, async (req: AuthenticatedRequest, res: Resp
   }
 });
 
-router.post('/update', adminMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/update', qrCodeFixOrAdmin, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id, ...updates } = req.body ?? {};
     if (!id || typeof id !== 'string') {
