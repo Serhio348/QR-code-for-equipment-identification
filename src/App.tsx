@@ -212,11 +212,11 @@ const App: React.FC = () => {
             } 
           />
           
-          {/* Создание нового оборудования - только для администраторов */}
+          {/* Создание нового оборудования - для всех авторизованных с доступом к разделу */}
           <Route 
             path={ROUTES.EQUIPMENT_NEW} 
             element={
-              <ProtectedRoute requireAdmin>
+              <ProtectedRoute>
                 <AppAccessGuard appId="equipment">
                   <EquipmentFormPage />
                 </AppAccessGuard>

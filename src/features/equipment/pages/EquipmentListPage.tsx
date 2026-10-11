@@ -51,12 +51,18 @@ const EquipmentListPage: React.FC = () => {
   }
 
   // Если не администратор, показываем список оборудования для просмотра документации и журнала
-  // (и на мобильных, и на десктопе)
+  // (и на мобильных, и на десктопе). Создавать карточки могут все пользователи.
   if (!isAdmin) {
     return (
       <div className="home-page">
         <div className="home-page-header">
           <h1>Оборудование</h1>
+          <button
+            className="add-button"
+            onClick={() => navigate(ROUTES.EQUIPMENT_NEW)}
+          >
+            + Добавить оборудование
+          </button>
         </div>
         <div className="home-page-content">
           <div style={{ 

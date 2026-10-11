@@ -2,6 +2,7 @@
  * equipment.auth.test.ts
  *
  * SEC-01 / SEC-02: auth на журнале; admin на мутациях оборудования до GAS.
+ * Создание карточки и дозапись qrCodeUrl доступны любому авторизованному.
  */
 
 import express, { type Express } from 'express';
@@ -142,7 +143,9 @@ describe('equipment routes auth (SEC-01 / SEC-02)', () => {
     expect(gasPost).not.toHaveBeenCalled();
   });
 
-  it('forbids non-admin from adding equipment', async () => {
+  it('allows non-admin to add equipment', async () => {
+    gasPost.mockResolvedValue({ id: 'eq-new', name: 'Насос', type: 'pump' });
+
     const response = await fetch(`${baseUrl}/api/equipment/add`, {
       method: 'POST',
       headers: {
@@ -150,6 +153,48 @@ describe('equipment routes auth (SEC-01 / SEC-02)', () => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ name: 'Насос', type: 'pump' }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(gasPost).toHaveBeenCalledWith(
+      'add',
+      expect.objectContaining({ name: 'Насос', type: 'pump' }),
+    );
+  });
+
+  it('allows non-admin to set qrCodeUrl after creating a card', async () => {
+    const response = await fetch(`${baseUrl}/api/equipment/update`, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer valid-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        id: 'eq-1',
+        qrCodeUrl: 'https://app.example.com/equipment/eq-1',
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(gasPost).toHaveBeenCalledWith(
+      'update',
+      expect.objectContaining({ id: 'eq-1', qrCodeUrl: expect.any(String) }),
+    );
+  });
+
+  it.each([
+    ['other fields', { id: 'eq-1', name: 'Подмена' }],
+    ['qrCodeUrl of another equipment', { id: 'eq-1', qrCodeUrl: 'https://app.example.com/equipment/eq-2' }],
+    ['qrCodeUrl with external url', { id: 'eq-1', qrCodeUrl: 'https://evil.example.com/phish' }],
+    ['qrCodeUrl plus extra fields', { id: 'eq-1', qrCodeUrl: 'https://app.example.com/equipment/eq-1', status: 'archived' }],
+  ] as const)('forbids non-admin update with %s', async (_label, payload) => {
+    const response = await fetch(`${baseUrl}/api/equipment/update`, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer valid-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
     });
 
     expect(response.status).toBe(403);
