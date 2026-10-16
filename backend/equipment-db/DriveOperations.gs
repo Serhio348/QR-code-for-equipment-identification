@@ -271,8 +271,8 @@ function createDocument(name, docType, content, folderId) {
     if (!name) {
       throw new Error('Название документа не указано');
     }
-    if (!docType || (docType !== 'doc' && docType !== 'sheet')) {
-      throw new Error('Тип документа должен быть "doc" или "sheet"');
+    if (!docType || (docType !== 'doc' && docType !== 'docx' && docType !== 'sheet')) {
+      throw new Error('Тип документа должен быть "doc", "docx" или "sheet"');
     }
     if (!content) {
       throw new Error('Содержимое документа не указано');
@@ -281,41 +281,51 @@ function createDocument(name, docType, content, folderId) {
     var file;
     var fileUrl;
     var fileId;
+    var placedInFolder = false;
 
-    if (docType === 'doc') {
-      // === Создание Google Doc ===
+    if (docType === 'doc' || docType === 'docx') {
+      // === Создание Google Doc (для docx — промежуточный, конвертируется) ===
       var doc = DocumentApp.create(name);
       var body = doc.getBody();
 
       // Очищаем документ (удаляем пустой абзац по умолчанию)
       body.clear();
 
-      // Разбиваем содержимое на строки и добавляем абзацы
-      var lines = String(content).split('\n');
-      for (var i = 0; i < lines.length; i++) {
-        var line = lines[i];
-
-        // Заголовки: строки начинающиеся с # (markdown-стиль)
-        if (line.match(/^### /)) {
-          body.appendParagraph(line.replace(/^### /, '')).setHeading(DocumentApp.ParagraphHeading.HEADING3);
-        } else if (line.match(/^## /)) {
-          body.appendParagraph(line.replace(/^## /, '')).setHeading(DocumentApp.ParagraphHeading.HEADING2);
-        } else if (line.match(/^# /)) {
-          body.appendParagraph(line.replace(/^# /, '')).setHeading(DocumentApp.ParagraphHeading.HEADING1);
-        } else if (line.trim() === '') {
-          body.appendParagraph('');
-        } else {
-          body.appendParagraph(line);
-        }
-      }
+      appendMarkdownToDocBody_(body, String(content));
 
       doc.saveAndClose();
 
-      fileId = doc.getId();
-      fileUrl = doc.getUrl();
-      file = DriveApp.getFileById(fileId);
+      if (docType === 'doc') {
+        fileId = doc.getId();
+        fileUrl = doc.getUrl();
+        file = DriveApp.getFileById(fileId);
 
-      Logger.log('  - Google Doc создан: ' + fileId);
+        Logger.log('  - Google Doc создан: ' + fileId);
+      } else {
+        // === Экспорт в Word .docx ===
+        var docFile = DriveApp.getFileById(doc.getId());
+        var docxBlob = docFile.getAs('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        docxBlob.setName(name + '.docx');
+
+        var docxTargetFolder = null;
+        if (folderId) {
+          try {
+            docxTargetFolder = DriveApp.getFolderById(folderId);
+          } catch (folderError) {
+            Logger.log('  ⚠️ Целевая папка недоступна, сохраняем в корень: ' + folderError);
+          }
+        }
+        file = (docxTargetFolder || DriveApp.getRootFolder()).createFile(docxBlob);
+        placedInFolder = true;
+
+        // Временный Google Doc больше не нужен
+        docFile.setTrashed(true);
+
+        fileId = file.getId();
+        fileUrl = file.getUrl();
+
+        Logger.log('  - Word .docx создан: ' + fileId);
+      }
 
     } else if (docType === 'sheet') {
       // === Создание Google Sheet ===
@@ -361,8 +371,8 @@ function createDocument(name, docType, content, folderId) {
       Logger.log('  - Google Sheet создан: ' + fileId);
     }
 
-    // Перемещаем в целевую папку (если указана)
-    if (folderId && file) {
+    // Перемещаем в целевую папку (если указана и файл ещё не там)
+    if (folderId && file && !placedInFolder) {
       try {
         var targetFolder = DriveApp.getFolderById(folderId);
         targetFolder.addFile(file);
@@ -388,6 +398,84 @@ function createDocument(name, docType, content, folderId) {
     Logger.log('❌ Ошибка createDocument: ' + error.toString());
     Logger.log('  - Stack: ' + (error.stack || 'нет стека'));
     throw error;
+  }
+}
+
+/**
+ * Записывает текст с markdown-разметкой в тело Google Doc.
+ *
+ * Поддерживается:
+ * - заголовки: строки "# ", "## ", "### "
+ * - абзацы: обычные строки, пустая строка — пустой абзац
+ * - таблицы: markdown-таблицы вида | Колонка | Колонка | со строкой |---|---|
+ *
+ * @param {Body} body - тело документа DocumentApp
+ * @param {string} text - исходный текст с разметкой
+ */
+function appendMarkdownToDocBody_(body, text) {
+  var lines = String(text).split('\n');
+  var i = 0;
+
+  while (i < lines.length) {
+    var line = lines[i];
+
+    // Таблица: блок строк вида | ячейка | ячейка |
+    if (/^\s*\|.*\|\s*$/.test(line)) {
+      var tableRows = [];
+      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) {
+        var cells = lines[i].trim().replace(/^\|/, '').replace(/\|$/, '').split('|');
+        for (var ci = 0; ci < cells.length; ci++) {
+          cells[ci] = cells[ci].trim();
+        }
+        // Пропускаем строку-разделитель заголовка (|---|---|)
+        var isSeparator = cells.length > 0;
+        for (var si = 0; si < cells.length; si++) {
+          if (!/^:?-{3,}:?$/.test(cells[si])) {
+            isSeparator = false;
+            break;
+          }
+        }
+        if (!isSeparator) {
+          tableRows.push(cells);
+        }
+        i++;
+      }
+
+      if (tableRows.length > 0) {
+        // appendTable требует одинаковое число колонок во всех строках
+        var colCount = 0;
+        for (var r = 0; r < tableRows.length; r++) {
+          if (tableRows[r].length > colCount) colCount = tableRows[r].length;
+        }
+        for (var r2 = 0; r2 < tableRows.length; r2++) {
+          while (tableRows[r2].length < colCount) tableRows[r2].push('');
+        }
+
+        var table = body.appendTable(tableRows);
+        // Первая строка — заголовок таблицы
+        var headerRow = table.getRow(0);
+        for (var hc = 0; hc < headerRow.getNumCells(); hc++) {
+          headerRow.getCell(hc).editAsText().setBold(true);
+        }
+        // Пустой абзац после таблицы отделяет её от следующего контента
+        body.appendParagraph('');
+      }
+      continue;
+    }
+
+    // Заголовки: строки начинающиеся с # (markdown-стиль)
+    if (line.match(/^### /)) {
+      body.appendParagraph(line.replace(/^### /, '')).setHeading(DocumentApp.ParagraphHeading.HEADING3);
+    } else if (line.match(/^## /)) {
+      body.appendParagraph(line.replace(/^## /, '')).setHeading(DocumentApp.ParagraphHeading.HEADING2);
+    } else if (line.match(/^# /)) {
+      body.appendParagraph(line.replace(/^# /, '')).setHeading(DocumentApp.ParagraphHeading.HEADING1);
+    } else if (line.trim() === '') {
+      body.appendParagraph('');
+    } else {
+      body.appendParagraph(line);
+    }
+    i++;
   }
 }
 

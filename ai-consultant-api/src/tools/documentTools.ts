@@ -1,10 +1,12 @@
 /**
  * documentTools.ts
  *
- * Tool для создания документов (Google Doc / Google Sheet) через GAS API.
+ * Tool для создания документов (Google Doc / Word .docx / Google Sheet) через GAS API.
  *
  * Один универсальный инструмент create_document позволяет ИИ создавать
  * любые документы: графики ТО, инструкции, акты, отчёты и т.д.
+ * type="docx" создаёт файл Word — подходит для печати и для копии
+ * существующего документа (PDF/Word) с изменённым текстом.
  * Новый тип документа = обновление промпта, код не трогается.
  *
  * Цепочка взаимодействия:
@@ -42,12 +44,12 @@ import { gasClient } from '../services/equipment/index.js';
  * Массив инструментов для создания документов.
  *
  * Один универсальный tool: create_document
- * Поддерживает создание Google Doc и Google Sheet.
+ * Поддерживает создание Google Doc, Word .docx и Google Sheet.
  */
 export const documentTools: Anthropic.Tool[] = [
     {
         name: 'create_document',
-        description: 'Создать документ в Google Drive. Для текстовых документов (инструкции, акты, отчёты) используй type="doc" и передай текст с markdown-заголовками (# ## ###). Для таблиц (графики ТО, расписания, списки) используй type="sheet" и передай JSON массив массивов.',
+        description: 'Создать документ в Google Drive. type="doc" — Google Doc для просмотра и редактирования онлайн; type="docx" — файл Word (.docx) для скачивания и печати; type="sheet" — Google Sheet для таблиц. Используй "docx", когда пользователь просит документ в формате Word или копию существующего документа с изменениями: сначала прочитай оригинал через read_file_content, затем передай переработанный текст. Для "doc"/"docx" поддерживаются markdown-заголовки (# ## ###) и markdown-таблицы (| колонка | колонка |).',
         input_schema: {
             type: 'object' as const,
             properties: {
@@ -56,18 +58,18 @@ export const documentTools: Anthropic.Tool[] = [
                     type: 'string',
                     description: 'Название документа. Примеры: "График ТО — Котельная — Q1 2026", "Инструкция по замене фильтра", "Акт выполненных работ"',
                 },
-                // Тип документа: doc (текст) или sheet (таблица)
+                // Тип документа: doc (текст), docx (Word) или sheet (таблица)
                 type: {
                     type: 'string',
-                    enum: ['doc', 'sheet'],
-                    description: 'Тип документа: "doc" для Google Doc (текст), "sheet" для Google Sheet (таблица)',
+                    enum: ['doc', 'docx', 'sheet'],
+                    description: 'Тип документа: "doc" для Google Doc (текст), "docx" для файла Word (скачивание и печать), "sheet" для Google Sheet (таблица)',
                 },
                 // Содержимое документа
-                // Для doc: текст с # заголовками, абзацы через \n
+                // Для doc/docx: текст с # заголовками, абзацы через \n, таблицы как markdown | a | b |
                 // Для sheet: JSON массив массивов [["Header1", "Header2"], ["val1", "val2"]]
                 content: {
                     type: 'string',
-                    description: 'Содержимое документа. Для doc: текст с markdown-заголовками (#, ##, ###), абзацы через перенос строки. Для sheet: JSON массив массивов, первая строка — заголовки.',
+                    description: 'Содержимое документа. Для doc/docx: текст с markdown-заголовками (#, ##, ###), абзацы через перенос строки, таблицы в формате markdown (| Колонка | Колонка | + строка |---|---|). Для sheet: JSON массив массивов, первая строка — заголовки.',
                 },
                 // URL или ID папки Google Drive для сохранения (опционально)
                 // Если не указан — сохраняется в корень Drive
@@ -89,7 +91,7 @@ export const documentTools: Anthropic.Tool[] = [
  * Выполняет tool create_document.
  *
  * Отправляет POST запрос к GAS API action=createDocument.
- * GAS создаёт Google Doc или Google Sheet и возвращает ссылку.
+ * GAS создаёт Google Doc, файл Word (.docx) или Google Sheet и возвращает ссылку.
  *
  * @param name - Имя tool (create_document)
  * @param input - Параметры от Claude

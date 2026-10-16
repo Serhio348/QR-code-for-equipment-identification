@@ -658,7 +658,7 @@ function doPost(e) {
           return createErrorResponse('Название документа не указано');
         }
         if (!data.docType) {
-          return createErrorResponse('Тип документа не указан (doc или sheet)');
+          return createErrorResponse('Тип документа не указан (doc, docx или sheet)');
         }
         if (!data.content) {
           return createErrorResponse('Содержимое документа не указано');
