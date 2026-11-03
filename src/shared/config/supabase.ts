@@ -16,6 +16,7 @@
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { processLock } from '@supabase/auth-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -42,6 +43,10 @@ export const supabase: SupabaseClient = createClient(
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
+      // navigator.locks ненадёжен на Android/PWA: свёрнутая вкладка держит лок,
+      // и все запросы падают с "AbortError: signal is aborted without reason".
+      // processLock сериализует операции только внутри страницы.
+      lock: processLock,
       storageKey: 'sb-auth-token', // Единый ключ для хранения токенов (предотвращает множественные экземпляры)
       storage: typeof window !== 'undefined' ? window.localStorage : undefined,
       // Настройки для более длительных сессий
